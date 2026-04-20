@@ -98,6 +98,7 @@ This repository is currently in the **planning phase**. All documents below are 
 | [arabic/README_AR.md](docs/arabic/README_AR.md) | 🇸🇦 Arabic | نظرة عامة عربية للمشروع |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 🇬🇧 English | Technical architecture, DB schema, API endpoints |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | 🇬🇧 English | Phase-by-phase deployment plan with costs |
+| [EXECUTION_PLAYBOOK.md](docs/EXECUTION_PLAYBOOK.md) | 🇬🇧 English | CEO/PM execution system: MVP cut, decision sprint, GTM, KPIs, RACI |
 | [SYNC_GUIDE.md](docs/SYNC_GUIDE.md) | 🇬🇧🇸🇦 Bilingual | Guide for keeping Arabic/English docs in sync |
 
 ---

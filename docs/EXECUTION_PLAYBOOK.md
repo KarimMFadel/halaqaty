@@ -1,0 +1,175 @@
+# Halaqaty — Execution Playbook
+
+> Version: 1.0  
+> Status: Active operating playbook  
+> Related: [PRD.md](PRD.md) · [PLAN.md](PLAN.md) · [FEATURES.md](FEATURES.md)
+
+---
+
+## 1) Purpose
+
+This playbook defines **how we execute** week by week:
+- what ships now (MVP cut),
+- how decisions are made quickly (decision sprint),
+- how we go to market (GTM),
+- how performance is measured (KPIs),
+- who owns what (RACI).
+
+---
+
+## 2) MVP Cut (What we ship first)
+
+### MVP Definition
+**MVP (Minimum Viable Product)** = the smallest version that delivers real value.
+
+For Halaqaty MVP:
+1. Create circle
+2. Run live session
+3. Use queue + grading
+4. View basic progress
+
+### In MVP
+- Authentication + role-based access
+- Circle creation and membership
+- Recitation queue with rounds/statuses
+- Real-time chat + voice notes
+- Live sessions (audio-first, optional video)
+- Schedule, reminders, attendance basics
+
+### Out of MVP (deferred)
+- Session recording (post-MVP)
+- AI tajweed scoring
+- AI memorization planning
+- Institutional control center
+- Desktop app
+
+---
+
+## 3) Decision Sprint (Fast product decisions)
+
+Every week, unresolved items are handled in one short decision sprint:
+
+1. **Collect** open items (from PRD/FEATURES open questions)
+2. **Evaluate** user impact, effort, and launch risk
+3. **Decide** now / later / reject
+4. **Record** final decision in source docs
+5. **Assign** owner + due date
+
+Decision rule: if a decision blocks MVP delivery, resolve it in the current sprint.
+
+---
+
+## 4) Weekly Operating Cadence
+
+### Monday — Plan
+- Confirm weekly objectives
+- Freeze this week’s MVP scope
+
+### Midweek — Execute
+- Deliver priority items
+- Surface blockers early
+
+### Friday — Review
+- KPI review
+- Decision review
+- Scope corrections for next week
+
+---
+
+## 5) GTM (Go-To-Market) Execution
+
+### Phase A: Pilot
+- 10–20 teachers in a controlled cohort
+- Weekly feedback loop
+
+### Phase B: Early Public
+- Android-first expansion
+- Referral and teacher ambassador motion
+
+### Phase C: Trust Expansion
+- Strengthen dashboards and retention
+- Start selective institution pilots
+
+---
+
+## 6) KPI System
+
+### KPI Definition
+**KPI (Key Performance Indicator)** = measurable numbers used to track progress.
+
+### North Star
+- Weekly completed recitation rounds
+
+### Core KPI Set
+- Teacher activation rate
+- Student WAU/MAU ratio
+- Session attendance rate
+- Queue completion rate
+- 90-day teacher retention
+
+KPI rule: each KPI must have an owner, target, and review frequency.
+
+---
+
+## 7) Team Accountability (RACI)
+
+### RACI Definition
+- **R** = Responsible (does the work)
+- **A** = Accountable (final owner)
+- **C** = Consulted (gives input)
+- **I** = Informed (kept updated)
+
+| Workstream | R | A | C | I |
+|---|---|---|---|---|
+| MVP scope control | Product Manager | CEO/Founder | Tech Lead | Team |
+| Queue + session flow | Tech Lead | Product Manager | Teacher advisors | Team |
+| KPI dashboard and review | Product Analyst | Product Manager | Tech Lead | Team |
+| GTM pilot operations | Growth Lead | CEO/Founder | Product Manager | Team |
+
+---
+
+## 8) Role Clarification: Co-Teacher
+
+A **co-teacher role** is an assistant role that helps run sessions (queue, attendance, operational moderation) without full owner/admin power.
+
+Current Halaqaty policy:
+- implemented through assignable supervisor/co-teacher behavior,
+- teacher remains the final authority,
+- this is optional, not required for MVP launch.
+
+---
+
+## 9) Abbreviation Glossary
+
+| Abbreviation | Meaning | Practical meaning in Halaqaty |
+|---|---|---|
+| MVP | Minimum Viable Product | Smallest useful launch scope |
+| KPI | Key Performance Indicator | Metrics to evaluate execution |
+| GTM | Go-To-Market | Pilot-to-public launch strategy |
+| RACI | Responsible, Accountable, Consulted, Informed | Ownership model for decisions and delivery |
+| PRD | Product Requirements Document | Business and product requirements |
+| WAU | Weekly Active Users | Weekly recurring usage |
+| MAU | Monthly Active Users | Monthly recurring usage |
+| JTBD | Jobs To Be Done | User goals/tasks the product must solve |
+| B2B | Business to Business | Institution-facing business model |
+| P0 / P1 / P2 / P3 | Priority levels | Launch-now to future backlog |
+| OQ | Open Question | Unresolved product decision |
+| DD | Design Decision | Documented technical/product decision |
+| BR | Business Requirement | Business-level requirement |
+| API | Application Programming Interface | Backend endpoints and integrations |
+| JWT | JSON Web Token | Session/auth token format |
+| OTP | One-Time Password | Phone verification code |
+| FCM | Firebase Cloud Messaging | Push notification service |
+| WS | WebSocket | Real-time update channel |
+| DB | Database | Persistent application data |
+| ERD | Entity Relationship Diagram | Database relationship map |
+
+---
+
+## 10) Update Policy
+
+When a decision changes:
+1. update the source document (PRD/PLAN/FEATURES),
+2. update this playbook if execution behavior changes,
+3. keep English/Arabic documentation aligned.
+

@@ -354,12 +354,11 @@ final audioConstraints = {
 │ avatar_url    │     └───────────────────┘     │ invite_code   │
 │ fcm_token     │                               │ max_members   │
 │ preferred_lang│     ┌───────────────────┐     │ privacy       │
-│ created_at    │     │    parent_links    │     │ gender_spec   │
-│ updated_at    │────►│───────────────────│     │ created_at    │
-└──────┬────────┘     │ parent_user_id(FK)│     └───────┬───────┘
-       │              │ student_user_id(FK│             │
-       │              │ created_at        │     ┌───────▼───────┐
-       │              └───────────────────┘     │   schedules   │
+│ created_at    │                               │ gender_spec   │
+│ updated_at    │                               │ created_at    │
+└──────┬────────┘                               └───────┬───────┘
+       │                                        ┌───────▼───────┐
+       │                                        │   schedules   │
        │                                        │───────────────│
        │              ┌───────────────────┐     │ id (PK)       │
        │              │   notifications   │     │ circle_id (FK)│
@@ -586,14 +585,7 @@ final audioConstraints = {
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
 
 #### `parent_links`
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| parent_user_id | UUID | FK → users.id NOT NULL | |
-| student_user_id | UUID | FK → users.id NOT NULL | |
-| status | VARCHAR(20) | CHECK IN ('pending','accepted','rejected') | Student must accept |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
-| UNIQUE | (parent_user_id, student_user_id) | | |
+Removed from MVP scope. The product currently supports direct student and teacher accounts without parent-linked account management.
 
 #### `institutions` *(Future)*
 | Column | Type | Constraints | Description |

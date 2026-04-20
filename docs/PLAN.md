@@ -48,13 +48,13 @@ Halaqaty is a **unified, Quran-native platform** that brings together:
 - An intelligent recitation queue system — the platform's killer feature
 - Structured memorization progress tracking
 - Smart scheduling with push notifications
-- Role-based access for teachers, students, supervisors, and parents
+- Role-based access for teachers, students, and supervisors
 
 All in a single mobile-first application with full iOS, Android, and Web support from a single Flutter codebase.
 
 ### 1.4 Target Market
 
-**Primary:** Individual Quran memorization teachers running circles of 5–50 students, primarily in Arabic-speaking countries (Egypt, Saudi Arabia, UAE, Jordan, Morocco) and Muslim diaspora communities worldwide.
+**Primary:** Individual Quran memorization teachers (solo-teacher first) running circles of 5–7 students initially, starting with Egypt and later expanding across Arabic-speaking countries and Muslim diaspora communities worldwide.
 
 **Secondary:** Quran memorization schools, Islamic centers, and mosques that run multiple circles simultaneously.
 
@@ -71,7 +71,7 @@ The institutional tier of Halaqaty will allow organizations to:
 - Set institution-wide schedules and academic calendars
 - Custom branding (institution logo, colors)
 - Bulk enrollment of students from spreadsheets
-- Generate reports for parents, donors, or regulatory bodies
+- Generate reports for students, donors, or regulatory bodies
 
 This opens a **B2B revenue model** that is more predictable and higher-value than individual subscriptions.
 
@@ -86,7 +86,6 @@ This opens a **B2B revenue model** that is more predictable and higher-value tha
 | Teacher / Reciter | مُقرئ / محفظ | Creates and manages circles; conducts sessions; evaluates students |
 | Student | طالب | Joins circles; recites; tracks progress |
 | Supervisor | مُشرف | Assigned by teacher; helps manage sessions and queue |
-| Parent | ولي أمر | Monitors child's progress and attendance |
 | Institution Admin | مدير مؤسسة | Manages entire institution (future) |
 
 ### 2.2 Teacher (مُقرئ/محفظ)
@@ -120,6 +119,7 @@ The primary power user of Halaqaty.
 ### 2.4 Supervisor (مُشرف)
 
 A trusted student or assistant appointed by the teacher to help manage sessions.
+Optional co-teacher behavior can be handled through this assignable role model.
 
 **Key design decision: A supervisor can be assigned at any point** — before the session is created, before the session starts, or during a live session. The teacher retains full authority.
 
@@ -131,17 +131,7 @@ A trusted student or assistant appointed by the teacher to help manage sessions.
 - Cannot grade students (grading is teacher-only)
 - Cannot remove the teacher from the circle
 
-### 2.5 Parent (ولي أمر)
-
-A monitoring-only role linked to one or more student accounts.
-
-**Capabilities:**
-- View linked child's attendance record
-- View grades and teacher notes
-- Receive notifications about session attendance and new grades
-- Cannot participate in sessions or chat
-
-### 2.6 Institution Admin (مدير مؤسسة) — *Future*
+### 2.5 Institution Admin (مدير مؤسسة) — *Future*
 
 - Manages the entire institution's presence on Halaqaty
 - Onboards teachers and students in bulk
@@ -172,7 +162,7 @@ Each feature is documented with: Description, User Stories, Acceptance Criteria,
 - As a new user, I can register with email/password, Google, Apple, or phone OTP so I can start using Halaqaty quickly
 - As a registered user, I can log in securely from any device
 - As a user, I can set and update my profile (name, avatar, bio)
-- As a teacher, I am verified through phone number to build trust with students
+- As a teacher, I can optionally complete verification to build trust with students
 
 **Acceptance Criteria:**
 - [ ] Email/password registration with email verification
@@ -381,7 +371,7 @@ Zoom and Google Meet apply heavy audio processing optimized for speech — this 
 - [ ] Teacher controls: mute all, mute individual, remove participant, lock room
 - [ ] Hand raise feature (synced with recitation queue)
 - [ ] Screen sharing (for Mushaf pages or written exercises)
-- [ ] Session recording — stored in MinIO, accessible to teacher (optional, must be enabled)
+- [ ] Session recording deferred (not in MVP)
 - [ ] Noise suppression OFF by default; auto-gain OFF by default
 - [ ] Opus codec at 48kbps minimum
 - [ ] LiveKit room name tied to session ID; room created by Go backend using LiveKit Go SDK
@@ -441,7 +431,6 @@ Zoom and Google Meet apply heavy audio processing optimized for speech — this 
 | Circle invitation | ✅ | ✅ |
 | Queue turn — "You're next!" | ✅ | ✅ |
 | Queue turn — "You're reciting now!" | ✅ | ✅ |
-| Session recording available | ✅ | ✅ |
 
 **Acceptance Criteria:**
 - [ ] FCM for background/closed app
@@ -461,13 +450,12 @@ Zoom and Google Meet apply heavy audio processing optimized for speech — this 
 
 ---
 
-### F-010 · Parent Dashboard | P2 | 🔵 Proposed
+### F-010 · Student & Teacher Dashboards | P2 | 🔵 Proposed
 
-- Link parent account to student account (via invitation)
-- View child's attendance history
-- View grades and teacher notes
-- Receive push notifications for session events
-- Cannot access circle chat or sessions
+- Student dashboard for own attendance, grades, notes, and memorization progress
+- Teacher dashboard for all members learning with the teacher
+- Circle-level dashboard for progress and attendance per circle
+- No parent-linked accounts in MVP
 
 ---
 
@@ -475,7 +463,7 @@ Zoom and Google Meet apply heavy audio processing optimized for speech — this 
 
 - Teacher: per-student report covering attendance %, grades distribution, memorization progress
 - Student: self-view of own report
-- PDF export for sharing with parents or institutions
+- PDF export for sharing with students or institutions
 - Charts: line graphs, heatmaps, Quran completion wheels
 
 ---
@@ -617,7 +605,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full phase-by-phase plan with server 
 
 | Tier | Price | Features |
 |------|-------|---------|
-| **Free** | $0/month | 1 circle, up to 15 students, basic chat, sessions (no recording) |
+| **Free** | $0/month | 1 circle, open student count for now, basic chat, sessions (no recording) |
 | **Teacher Pro** | $5–8/month | Unlimited circles, unlimited students, recording, AI features (future), advanced reports |
 | **Institution** | Custom/year | All Pro features for all teachers + institution dashboard + custom branding |
 
@@ -680,7 +668,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full phase-by-phase plan with server 
 ### Month 9–10: Post-Beta Improvements
 - [ ] User feedback integration
 - [ ] Performance tuning (WebSocket scalability)
-- [ ] Parent dashboard (P2)
+- [ ] Student + teacher dashboards (P2)
 - [ ] Multi-language: English + Arabic complete
 
 ### Month 11: App Store Launch

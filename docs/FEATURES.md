@@ -33,7 +33,7 @@ This is a **living document**. It tracks every feature from proposal through del
 | [F-007](#f-007-memorization-progress-tracking) | Memorization Progress Tracking | P1 | 🔵 Proposed | 3 | Full Stack |
 | [F-008](#f-008-notification-system) | Notification System | P1 | 🔵 Proposed | 2 | Backend |
 | [F-009](#f-009-built-in-digital-mushaf) | Built-in Digital Mushaf | P2 | 🔵 Proposed | 4 | Mobile |
-| [F-010](#f-010-parent-dashboard) | Parent Dashboard | P2 | 🔵 Proposed | 3 | Full Stack |
+| [F-010](#f-010-student--teacher-dashboards) | Student & Teacher Dashboards | P2 | 🔵 Proposed | 3 | Full Stack |
 | [F-011](#f-011-reports--statistics) | Reports & Statistics (PDF) | P2 | 🔵 Proposed | 3 | Backend |
 | [F-012](#f-012-multi-language-support) | Multi-language Support | P2 | 🔵 Proposed | 3 | Mobile |
 | [F-013](#f-013-ai-tajweed-assessment) | AI Tajweed Assessment | P3 | 🔵 Proposed | 5 | AI/Backend |
@@ -74,6 +74,8 @@ Secure, multi-method user registration and authentication system with role-based
 #### Design Decisions
 - **DD-001:** Firebase Auth chosen over custom auth to avoid managing credential storage and OAuth provider integrations from scratch. Firebase handles token refresh and device sessions.
 - **DD-002:** Role is stored in our PostgreSQL `users` table, not in Firebase. Firebase Auth is only for identity; our backend controls authorization.
+- **DD-003:** Teacher identity verification is optional (configurable) and not required in MVP.
+- **DD-004:** Phone-only signup remains under long-term investigation; keep signup open with current methods for now.
 
 #### Dependencies
 - None (this is foundational)
@@ -107,8 +109,9 @@ Circles are the core organizational unit. A circle is a Quran memorization group
 - **OQ-006:** What happens to a circle if the teacher deletes their account? Transfer to another teacher? Archive?
 
 #### Design Decisions
-- **DD-003:** Roles are per-circle (stored in `circle_members` table), not per-user globally. A user can be teacher in one circle and student in another.
-- **DD-004:** Max 5 circles per student is a soft policy initially. Revisit based on user behavior.
+- **DD-005:** Roles are per-circle (stored in `circle_members` table), not per-user globally. A user can be teacher in one circle and student in another.
+- **DD-006:** Max 5 circles per student is a soft policy initially. Revisit based on user behavior.
+- **DD-007:** Co-teacher remains optional. Teacher can assign an eligible member as co-teacher/supervisor, including at scheduling time.
 
 #### Edge Cases
 - Teacher invites someone who is already a member → Show "already a member" message, do not create duplicate
@@ -196,6 +199,7 @@ When teacher resets the queue:
 - [ ] Full session log persisted after session ends
 - [ ] Queue handles students who join the session late (added to end of queue)
 - [ ] Queue handles network disconnections gracefully (state preserved server-side)
+- [ ] Student can request a temporary skip/opt-out for current turn (e.g., mic issue, permission break), approved by teacher/supervisor
 
 #### Open Questions
 - **OQ-007:** Should students be able to "opt out" of a specific round? (e.g., "I didn't prepare for revision today") → Teacher could mark as excused?
@@ -208,6 +212,7 @@ When teacher resets the queue:
 - **DD-005:** Queue state is stored server-side in PostgreSQL (not just in-memory). This ensures history is preserved and reconnecting clients can recover state.
 - **DD-006:** WebSocket events are the delivery mechanism, but PostgreSQL is the source of truth.
 - **DD-007:** Grading is optional per entry — teacher can grade all at once at the end or grade each student immediately.
+- **DD-008:** Temporary student opt-out is allowed for operational issues and is logged in queue history.
 
 #### Dependencies
 - F-001 (User Auth)
@@ -245,8 +250,8 @@ Full-featured messaging within circles, replacing WhatsApp/Telegram group chats 
 - **OQ-014:** Should we support emoji reactions?
 
 #### Design Decisions
-- **DD-008:** Voice messages are stored in MinIO with a pre-signed URL returned to clients. URLs expire after 7 days (renewable).
-- **DD-009:** No end-to-end encryption in V1 (complex to implement with group messages). Encryption in transit (TLS) is sufficient for V1. E2E encryption is a P3 item.
+- **DD-009:** Voice messages are stored in MinIO with a pre-signed URL returned to clients. URLs expire after 7 days (renewable).
+- **DD-010:** No end-to-end encryption in V1 (complex to implement with group messages). Encryption in transit (TLS) is sufficient for V1. E2E encryption is a P3 item.
 
 #### Dependencies
 - F-001 (User Auth)
@@ -318,7 +323,7 @@ Step 4: Media Routing
 - [ ] Teacher controls: mute all, mute individual, remove participant, lock room (no new joiners)
 - [ ] Hand raise: students tap 🤚 → appears in teacher's UI; integrated with recitation queue
 - [ ] Screen sharing: teacher or student can share screen (Mushaf, written exercises)
-- [ ] Session recording: optional; teacher enables; recorded via LiveKit → stored in MinIO
+- [ ] Session recording is excluded from MVP and deferred to a later phase
 - [ ] Audio: Opus 48kbps+, noise suppression OFF, auto-gain OFF
 - [ ] Maximum 50 participants (scalable with server resources)
 - [ ] Graceful reconnection on network drop (LiveKit SDK handles this)
@@ -326,7 +331,7 @@ Step 4: Media Routing
 #### Open Questions
 - **OQ-015:** Should students be able to request video on? Or is audio-only the default with no override?
 - **OQ-016:** What is the maximum session duration we should target for testing? (For LiveKit server sizing)
-- **OQ-017:** Should session recordings be automatically shared with all circle members, or teacher-only?
+- **OQ-017:** If recording returns post-MVP, should it be teacher-only by default or shareable to members?
 
 #### Dependencies
 - F-001 (User Auth)
@@ -401,7 +406,6 @@ Multi-channel notification system ensuring no important event is missed.
 | Circle invitation | ✅ | ✅ | ❌ |
 | Queue: "You're next!" | ✅ | ✅ | ❌ |
 | Queue: "Your turn!" | ✅ | ✅ | ❌ |
-| Session recording ready | ✅ | ✅ | ✅ |
 | Student joined session (→ teacher) | ❌ | ✅ | ✅ |
 
 #### Acceptance Criteria
@@ -427,19 +431,18 @@ Integrated Quran text (Uthmani script) with Ayah-level interaction tied to memor
 
 ---
 
-### F-010: Parent Dashboard
+### F-010: Student & Teacher Dashboards
 
 **Priority:** P2 | **Status:** 🔵 Proposed | **Phase:** 3
 
 #### Description
-Monitoring-only dashboard for parents to track their children's Quran memorization progress.
+Role-based dashboards for student self-tracking and teacher oversight across circles.
 
 #### Acceptance Criteria
-- [ ] Link parent account to student via invitation (student approves)
-- [ ] View child's attendance history for all circles
-- [ ] View grades and teacher notes (read-only)
-- [ ] Receive push notifications for: session attended/missed, new grade, teacher note
-- [ ] Cannot access circle chat, sessions, or other students' data
+- [ ] Student dashboard shows own attendance, grades, notes, and memorization progress
+- [ ] Teacher dashboard shows all students taught by that teacher with summary metrics
+- [ ] Circle dashboard shows per-circle progress, attendance, and queue history
+- [ ] No parent-linked account management in MVP scope
 
 ---
 
@@ -586,13 +589,13 @@ All open questions from feature discussions, consolidated:
 
 | ID | Question | Feature | Status | Decision |
 |----|---------|---------|--------|---------|
-| OQ-001 | Phone-only accounts (no email)? | F-001 | Open | — |
-| OQ-002 | Teacher identity verification? | F-001 | Open | — |
+| OQ-001 | Phone-only accounts (no email)? | F-001 | Investigating | Long-term investigation; no strict signup blocking in MVP |
+| OQ-002 | Teacher identity verification? | F-001 | Decided | Optional (not required in MVP) |
 | OQ-003 | Session token expiry policy? | F-001 | Open | — |
-| OQ-004 | Co-teacher role distinct from supervisor? | F-002 | Open | — |
+| OQ-004 | Co-teacher role distinct from supervisor? | F-002 | Decided | Optional role assignable by teacher, including via scheduling |
 | OQ-005 | Cross-circle role combinations? | F-002 | Open | Likely yes |
 | OQ-006 | Circle ownership transfer on account deletion? | F-002 | Open | — |
-| OQ-007 | Student "opt-out" of a round? | F-003 | Open | — |
+| OQ-007 | Student "opt-out" of a round? | F-003 | Decided | Allowed for temporary issues with teacher/supervisor approval |
 | OQ-008 | Per-student recitation timer? | F-003 | Open | — |
 | OQ-009 | Pre-set queue before session starts? | F-003 | Open | — |
 | OQ-010 | Late-joining student added to current round? | F-003 | Open | Tentatively: end of current round |
@@ -602,7 +605,7 @@ All open questions from feature discussions, consolidated:
 | OQ-014 | Emoji reactions? | F-004 | Open | — |
 | OQ-015 | Student video permission model? | F-005 | Open | — |
 | OQ-016 | Max session duration for server sizing? | F-005 | Open | — |
-| OQ-017 | Recording visibility (teacher-only vs all)? | F-005 | Open | — |
+| OQ-017 | Recording visibility (teacher-only vs all)? | F-005 | Deferred | Recording removed from MVP; revisit post-MVP |
 | OQ-018 | Non-recurring (one-off) sessions? | F-006 | Open | — |
 | OQ-019 | Timezone storage strategy? | F-006 | Open | UTC storage + local display |
 | OQ-020 | Student self-logging (outside sessions)? | F-007 | Open | — |

@@ -28,7 +28,7 @@ Halaqaty replaces all of that with a single, purpose-built application designed 
 | 📅 **Schedule & Calendar** | Recurring weekly schedules, reminders, attendance tracking |
 | 📊 **Progress Tracking** | Per-student memorization logs with grades and visual Quran maps |
 | 🔔 **Smart Notifications** | FCM push + in-app real-time notifications |
-| 👨‍👩‍👧 **Parent Dashboard** | Parents monitor child progress and attendance |
+| 📊 **Student & Teacher Dashboards** | Students track own progress; teachers track all members and each circle |
 | 🏢 **Institutional Platform** *(future)* | Onboard entire Quran schools and organizations |
 
 ---

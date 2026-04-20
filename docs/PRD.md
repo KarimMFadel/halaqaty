@@ -21,7 +21,7 @@ Today’s Quran circles suffer from:
 - fragmented communication and meeting tools
 - time-limited free video platforms
 - no structured recitation workflow
-- poor progress visibility for teachers, students, and parents
+- poor progress visibility for teachers and students
 
 This creates low retention, operational friction, and limited scalability for teachers and organizations.
 
@@ -46,15 +46,14 @@ This creates low retention, operational friction, and limited scalability for te
    - JTBD: run circles efficiently, evaluate students, track outcomes
 2. **Student (طالب)**
    - JTBD: attend sessions, recite in order, track progress
-3. **Parent (ولي أمر)**
-   - JTBD: monitor child attendance and improvement
-4. **Institution Admin (future)**
+3. **Institution Admin (future)**
    - JTBD: operate many circles with centralized reporting
 
 ### Core User Insights
 - Students may belong to **multiple circles** with different teachers.
 - Teachers need audio quality suitable for Quran recitation, not generic voice chat.
-- Parents need trustworthy, simple reporting—not operational controls.
+- Solo teachers are the initial priority, while preserving a future path for institutions.
+- Pilot circles will start small (5–7 students) with size-limit policy left open for now.
 
 ---
 
@@ -86,6 +85,7 @@ This creates low retention, operational friction, and limited scalability for te
 - AI tajweed scoring
 - AI memorization planning
 - Full institution control center
+- Session recording
 - Desktop applications
 
 ---
@@ -107,7 +107,7 @@ This creates low retention, operational friction, and limited scalability for te
 ### BR-4 Trust & Brand Fit
 - no ads model
 - respectful UX for religious/educational context
-- clear privacy boundaries for parent/student data
+- clear privacy boundaries for teacher/student data
 
 ---
 
@@ -142,7 +142,7 @@ This creates low retention, operational friction, and limited scalability for te
 ## 10) Go-To-Market (GTM)
 
 ### Phase A — Pilot
-- recruit 10–20 Quran teachers in Arabic-speaking markets
+- recruit 10–20 Quran teachers in Egypt first
 - run closed cohort with weekly feedback cycles
 
 ### Phase B — Early Public
@@ -150,7 +150,7 @@ This creates low retention, operational friction, and limited scalability for te
 - teacher ambassador program
 
 ### Phase C — Trust Expansion
-- parent-facing reporting and selective institution pilots
+- student + teacher dashboards and selective institution pilots
 - partnerships with Quran centers and online academies
 
 ---
@@ -180,9 +180,9 @@ This creates low retention, operational friction, and limited scalability for te
 ## 13) Open Product Decisions
 
 1. free tier caps (students/circles) before paywall
-2. premium packaging sequence (recording vs analytics first)
+2. premium packaging sequence once recording returns post-MVP (recording vs analytics first)
 3. institution onboarding model (self-serve vs assisted)
-4. parent dashboard default visibility boundaries
+4. co-teacher model details (distinct role vs supervisor permissions)
 
 ---
 

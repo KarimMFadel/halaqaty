@@ -132,7 +132,7 @@ This creates low retention, operational friction, and limited scalability for te
 | Tier | Target | Value | Pricing direction |
 |---|---|---|---|
 | Free | Individual/small circles | core operations | $0 |
-| Premium | Active teachers | recordings, advanced reports, future AI | subscription |
+| Premium | Active teachers | recordings (post-MVP), advanced reports, future AI | subscription |
 | Institutional | schools/centers | centralized management + branding + analytics | annual contract |
 
 **Policy:** No ads in any tier.

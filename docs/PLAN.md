@@ -606,7 +606,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full phase-by-phase plan with server 
 | Tier | Price | Features |
 |------|-------|---------|
 | **Free** | $0/month | 1 circle, open student count for now, basic chat, sessions (no recording) |
-| **Teacher Pro** | $5–8/month | Unlimited circles, unlimited students, recording, AI features (future), advanced reports |
+| **Teacher Pro** | $5–8/month | Unlimited circles, unlimited students, recording (post-MVP), AI features (future), advanced reports |
 | **Institution** | Custom/year | All Pro features for all teachers + institution dashboard + custom branding |
 
 **No ads.** Ever. This is non-negotiable for a Quran-focused platform.

@@ -2,7 +2,7 @@
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
-**Related Documents:** [ARCHITECTURE_AR.md](ARCHITECTURE_AR.md) · [PLAN.md](PLAN.md) · [DEPLOYMENT.md](DEPLOYMENT.md)
+**Related Documents:** [PRD.md](PRD.md) · [PLAN.md](PLAN.md) · [DEPLOYMENT.md](DEPLOYMENT.md)
 
 ---
 
@@ -787,6 +787,6 @@ final audioConstraints = {
 
 ---
 
-*This document is the source of truth for technical architecture. See [ARCHITECTURE_AR.md](ARCHITECTURE_AR.md) for the Arabic version.*
+*This document is the source of truth for technical architecture.*
 
 *See [DEPLOYMENT.md](DEPLOYMENT.md) for infrastructure and deployment details.*

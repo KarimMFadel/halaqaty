@@ -2,7 +2,7 @@
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
-**Related Documents:** [DEPLOYMENT_AR.md](DEPLOYMENT_AR.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [PLAN.md](PLAN.md)
+**Related Documents:** [PRD.md](PRD.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [PLAN.md](PLAN.md)
 
 ---
 
@@ -589,4 +589,4 @@ jobs:
 
 ---
 
-*This document pairs with [DEPLOYMENT_AR.md](DEPLOYMENT_AR.md). See [ARCHITECTURE.md](ARCHITECTURE.md) for the technical system design.*
+*See [ARCHITECTURE.md](ARCHITECTURE.md) for the technical system design.*

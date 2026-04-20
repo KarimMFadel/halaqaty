@@ -2,7 +2,7 @@
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
-**Related Documents:** [FEATURES_AR.md](FEATURES_AR.md) · [PLAN.md](PLAN.md) · [ARCHITECTURE.md](ARCHITECTURE.md)
+**Related Documents:** [arabic/FEATURES_AR.md](arabic/FEATURES_AR.md) · [PLAN.md](PLAN.md) · [ARCHITECTURE.md](ARCHITECTURE.md)
 
 This is a **living document**. It tracks every feature from proposal through delivery, hosts design discussions, and captures open questions for the team.
 
@@ -627,6 +627,6 @@ Ideas from the broader community will be logged here for team review:
 
 ---
 
-*This document is maintained alongside [FEATURES_AR.md](FEATURES_AR.md). Any changes here must be mirrored there.*
+*This document is maintained alongside [arabic/FEATURES_AR.md](arabic/FEATURES_AR.md). Any business-facing changes here must be mirrored there.*
 
 *See [SYNC_GUIDE.md](SYNC_GUIDE.md) for the documentation sync policy.*

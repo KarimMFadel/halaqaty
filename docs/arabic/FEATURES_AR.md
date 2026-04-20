@@ -2,7 +2,7 @@
 
 > **الإصدار:** 1.0 | **الحالة:** مرحلة التخطيط | **آخر تحديث:** 2026
 
-**الوثائق ذات الصلة:** [FEATURES.md](FEATURES.md) · [PLAN_AR.md](PLAN_AR.md) · [ARCHITECTURE_AR.md](ARCHITECTURE_AR.md)
+**الوثائق ذات الصلة:** [FEATURES.md](../FEATURES.md) · [PLAN_AR.md](PLAN_AR.md) · [PRD.md](../PRD.md)
 
 هذه **وثيقة حية** تتبع كل ميزة من الاقتراح حتى التسليم، وتحتضن نقاشات التصميم والأسئلة المفتوحة.
 
@@ -504,6 +504,6 @@ Flutter Desktop لـ ويندوز وماك ولينكس، مستهدفاً ال�
 
 ---
 
-*تُصان هذه الوثيقة جنباً لجنب مع [FEATURES.md](FEATURES.md). أي تغيير هنا يجب أن ينعكس هناك.*
+*تُصان هذه الوثيقة جنباً لجنب مع [FEATURES.md](../FEATURES.md). أي تغيير هنا يجب أن ينعكس هناك.*
 
-*راجع [SYNC_GUIDE.md](SYNC_GUIDE.md) لسياسة مزامنة الوثائق.*
+*راجع [SYNC_GUIDE.md](../SYNC_GUIDE.md) لسياسة مزامنة الوثائق.*

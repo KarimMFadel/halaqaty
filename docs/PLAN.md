@@ -2,7 +2,7 @@
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
-**Related Documents:** [PLAN_AR.md](PLAN_AR.md) · [FEATURES.md](FEATURES.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [DEPLOYMENT.md](DEPLOYMENT.md)
+**Related Documents:** [PRD.md](PRD.md) · [arabic/PLAN_AR.md](arabic/PLAN_AR.md) · [FEATURES.md](FEATURES.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [DEPLOYMENT.md](DEPLOYMENT.md)
 
 ---
 
@@ -697,6 +697,6 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full phase-by-phase plan with server 
 
 ---
 
-*This document is the source of truth for project planning. All changes must be reflected in [PLAN_AR.md](PLAN_AR.md).*
+*This document is the source of truth for project planning. Business-facing updates should be reflected in [arabic/PLAN_AR.md](arabic/PLAN_AR.md).*
 
 *See [SYNC_GUIDE.md](SYNC_GUIDE.md) for the documentation synchronization policy.*

@@ -70,16 +70,16 @@ halaqaty/
 ├── LICENSE                    ← MIT License
 ├── .gitignore
 └── docs/
-    ├── README_AR.md            ← Arabic version of this README
+    ├── PRD.md                  ← Product Requirements Document (business)
     ├── PLAN.md                 ← Master project plan (English)
-    ├── PLAN_AR.md              ← Master project plan (Arabic)
     ├── FEATURES.md             ← Feature spec & status board (English)
-    ├── FEATURES_AR.md          ← Feature spec & status board (Arabic)
     ├── ARCHITECTURE.md         ← Technical architecture (English)
-    ├── ARCHITECTURE_AR.md      ← Technical architecture (Arabic)
     ├── DEPLOYMENT.md           ← Deployment strategy (English)
-    ├── DEPLOYMENT_AR.md        ← Deployment strategy (Arabic)
-    └── SYNC_GUIDE.md           ← Bilingual document sync guide
+    ├── SYNC_GUIDE.md           ← Bilingual document sync guide
+    └── arabic/
+        ├── README_AR.md        ← Arabic overview
+        ├── PLAN_AR.md          ← Arabic business plan
+        └── FEATURES_AR.md      ← Arabic feature board
 ```
 
 ---
@@ -90,14 +90,14 @@ This repository is currently in the **planning phase**. All documents below are 
 
 | Document | Language | Description |
 |----------|----------|-------------|
+| [PRD.md](docs/PRD.md) | 🇬🇧 English | Product requirements document (business-first) |
 | [PLAN.md](docs/PLAN.md) | 🇬🇧 English | Master project plan — vision, features, architecture, roadmap |
-| [PLAN_AR.md](docs/PLAN_AR.md) | 🇸🇦 Arabic | الخطة الرئيسية للمشروع |
+| [arabic/PLAN_AR.md](docs/arabic/PLAN_AR.md) | 🇸🇦 Arabic | الخطة التجارية للمشروع |
 | [FEATURES.md](docs/FEATURES.md) | 🇬🇧 English | Detailed feature specifications and status tracking |
-| [FEATURES_AR.md](docs/FEATURES_AR.md) | 🇸🇦 Arabic | مواصفات المميزات التفصيلية |
+| [arabic/FEATURES_AR.md](docs/arabic/FEATURES_AR.md) | 🇸🇦 Arabic | مواصفات المميزات التفصيلية |
+| [arabic/README_AR.md](docs/arabic/README_AR.md) | 🇸🇦 Arabic | نظرة عامة عربية للمشروع |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 🇬🇧 English | Technical architecture, DB schema, API endpoints |
-| [ARCHITECTURE_AR.md](docs/ARCHITECTURE_AR.md) | 🇸🇦 Arabic | المعمارية التقنية للنظام |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | 🇬🇧 English | Phase-by-phase deployment plan with costs |
-| [DEPLOYMENT_AR.md](docs/DEPLOYMENT_AR.md) | 🇸🇦 Arabic | خطة النشر والبنية التحتية |
 | [SYNC_GUIDE.md](docs/SYNC_GUIDE.md) | 🇬🇧🇸🇦 Bilingual | Guide for keeping Arabic/English docs in sync |
 
 ---

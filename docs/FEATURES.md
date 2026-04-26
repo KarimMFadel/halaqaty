@@ -24,12 +24,12 @@ This is a **living document**. It tracks every feature from proposal through del
 
 | ID | Feature | Priority | Status | Phase | Owner |
 |----|---------|----------|--------|-------|-------|
-| [F-001](#f-001-user-management--authentication) | User Management & Authentication | P0 | 🔵 Proposed | 1 | Backend |
-| [F-002](#f-002-circle-management) | Circle Management | P0 | 🔵 Proposed | 1 | Full Stack |
-| [F-003](#f-003-recitation-queue-system) | 🔥 Recitation Queue System | P0 | 🔵 Proposed | 2 | Full Stack |
-| [F-004](#f-004-real-time-chat) | Real-time Chat | P0 | 🔵 Proposed | 1 | Backend |
-| [F-005](#f-005-live-sessions-livekit) | Live Sessions (Audio-only, LiveKit) | P0 | 🔵 Proposed | 2 | Full Stack |
-| [F-006](#f-006-schedule--calendar) | Schedule & Calendar | P0 | 🔵 Proposed | 2 | Full Stack |
+| [F-001](#f-001-user-management--authentication) | User Management & Authentication | P0 | 🟡 Approved | 1 | Backend |
+| [F-002](#f-002-circle-management) | Circle Management | P0 | 🟡 Approved | 1 | Full Stack |
+| [F-003](#f-003-recitation-queue-system) | 🔥 Recitation Queue System | P0 | 🟡 Approved | 2 | Full Stack |
+| [F-004](#f-004-real-time-chat) | Real-time Chat | P0 | 🟡 Approved | 1 | Backend |
+| [F-005](#f-005-live-sessions-livekit) | Live Sessions (Audio-only, LiveKit) | P0 | 🟡 Approved | 2 | Full Stack |
+| [F-006](#f-006-schedule--calendar) | Schedule & Calendar | P0 | 🟡 Approved | 2 | Full Stack |
 | [F-007](#f-007-memorization-progress-tracking) | Memorization Progress Tracking | P1 | 🔵 Proposed | 3 | Full Stack |
 | [F-008](#f-008-notification-system) | Notification System | P1 | 🔵 Proposed | 2 | Backend |
 | [F-009](#f-009-built-in-digital-mushaf) | Built-in Digital Mushaf | P2 | 🔵 Proposed | 4 | Mobile |

@@ -2,7 +2,9 @@
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
-**Related Documents:** [PRD.md](PRD.md) · [PLAN.md](PLAN.md) · [DEPLOYMENT.md](DEPLOYMENT.md)
+**Related Documents:** [PRD.md](PRD.md) · [PLAN.md](PLAN.md) · [DEPLOYMENT.md](DEPLOYMENT.md) · [adr/README.md](adr/README.md)
+
+> **Key architectural decisions** (framework choice, state management, auth boundary, migrations) are documented as ADRs in [`docs/adr/`](adr/README.md).
 
 ---
 
@@ -49,7 +51,7 @@
 ║  │                                                          │     ║
 ║  │  ┌─────────────────┐    ┌──────────────────────────┐    │     ║
 ║  │  │   REST API       │    │    WebSocket Hub          │    │     ║
-║  │  │  (Gin / Echo)    │    │                          │    │     ║
+║  │  │  (Echo v4)        │    │                          │    │     ║
 ║  │  │                 │    │  ┌──────────────────┐    │    │     ║
 ║  │  │  /api/v1/auth   │    │  │ Chat Handler     │    │    │     ║
 ║  │  │  /api/v1/circles│    │  ├──────────────────┤    │    │     ║
@@ -341,6 +343,8 @@ final audioConstraints = {
 ---
 
 ## 4. Database Schema
+
+> **Migration tool:** [golang-migrate v4](https://github.com/golang-migrate/migrate) — sequential SQL files in `migrations/`. See [ADR-006](adr/ADR-006-db-migrations.md) for rationale.
 
 ### 4.1 Entity-Relationship Diagram (ASCII)
 

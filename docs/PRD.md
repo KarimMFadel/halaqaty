@@ -184,14 +184,18 @@ This creates low retention, operational friction, and limited scalability for te
 
 ---
 
-## 13) Open Product Decisions
+## 13) Product Decisions (Resolved)
 
-1. free tier caps (students/circles) before paywall
-2. premium packaging sequence once recording returns post-MVP (recording vs analytics first)
-3. institution onboarding model (self-serve vs assisted)
-4. co-teacher model details (distinct role vs supervisor permissions)
-5. feature-flag rollout model for video (per-user, per-circle, or per-tier) with default OFF
-6. recording consent and retention model before any post-MVP activation
+All six open product decisions have been resolved. Full rationale is in [`docs/MVP_DECISION_REGISTER.md`](MVP_DECISION_REGISTER.md).
+
+| # | Decision | Resolution |
+|---|---|---|
+| 1 | Free tier caps | **3 circles, 30 students/circle.** Pro removes all caps. |
+| 2 | Premium packaging sequence | **Recording before analytics** (post-MVP, once privacy framework approved). |
+| 3 | Institution onboarding model | **Self-serve in MVP.** Admin receives invite code, manages own school. |
+| 4 | Co-teacher model | **Deferred post-pilot.** MVP: teacher + supervisor only. |
+| 5 | Video feature-flag rollout | **Per-tier once enabled.** Free: no video. Pro/Institution: video requires both global master flag AND tier flag = true. |
+| 6 | Recording consent and retention | **Explicit consent screen before every session.** Consent stored per-session. Default retention: 7 days. |
 
 ---
 

@@ -67,26 +67,75 @@ The queue can be **reset and reused multiple times** in a single session — for
 
 ```
 halaqaty/
-├── README.md                  ← You are here
-├── LICENSE                    ← MIT License
-├── .gitignore
-└── docs/
-    ├── PRD.md                  ← Product Requirements Document (business)
-    ├── PLAN.md                 ← Master project plan (English)
-    ├── FEATURES.md             ← Feature spec & status board (English)
-    ├── ARCHITECTURE.md         ← Technical architecture (English)
-    ├── DEPLOYMENT.md           ← Deployment strategy (English)
-    ├── SYNC_GUIDE.md           ← Bilingual document sync guide
-    └── arabic/
-        ├── README_AR.md        ← Arabic overview
-        ├── PRD_AR.md           ← Arabic PRD mirror
-        ├── PLAN_AR.md          ← Arabic business plan
-        └── FEATURES_AR.md      ← Arabic feature board
+├── README.md                      ← You are here
+├── DEVELOPMENT.md                 ← Developer guide (Spec-Kit, workflow, commands)
+├── LICENSE                        ← MIT License
+├── .specify/                      ← Spec-Kit configuration
+│   └── memory/
+│       └── constitution.md        ← Governing document — read before writing any code
+├── .github/
+│   ├── prompts/                   ← Spec-Kit slash command definitions
+│   └── agents/                    ← Copilot agent configurations
+├── docs/
+│   ├── FEATURES.md                ← Feature status board
+│   ├── ARCHITECTURE.md            ← DB schema, API endpoints, security model
+│   ├── JOURNEY.md                 ← Full user journey (teacher-first, screen-by-screen)
+│   ├── MVP_DECISION_REGISTER.md   ← All frozen MVP decisions (binding on implementation)
+│   ├── PRD.md                     ← Product Requirements Document
+│   ├── PLAN.md                    ← Master project plan
+│   ├── DEPLOYMENT.md              ← Deployment strategy
+│   ├── adr/                       ← Architecture Decision Records
+│   │   ├── README.md              ← ADR index
+│   │   ├── ADR-001-modular-monolith.md
+│   │   ├── ADR-002-go-framework.md
+│   │   ├── ADR-003-flutter-state-management.md
+│   │   ├── ADR-004-auth-boundary.md
+│   │   ├── ADR-005-feature-flags.md
+│   │   └── ADR-006-db-migrations.md
+│   ├── SYNC_GUIDE.md              ← Bilingual doc sync guide
+│   └── arabic/                    ← Arabic business doc mirrors
+│       ├── README_AR.md
+│       ├── PRD_AR.md
+│       ├── PLAN_AR.md
+│       └── FEATURES_AR.md
+└── specs/                         ← Spec-Kit per-feature specs (generated, do not edit manually)
+    └── NNN-feature-name/
+        ├── spec.md
+        ├── plan.md
+        ├── data-model.md
+        ├── contracts/
+        ├── tasks.md
+        └── quickstart.md
 ```
 
 ---
 
-## 📚 Planning Documents
+## 🛠️ Development Workflow
+
+Halaqaty uses **[Spec-Kit](https://github.com/github/spec-kit)** (`v0.8.1`) for spec-driven development with GitHub Copilot. All code is generated from frozen specs — not from ad-hoc prompts.
+
+**Read before writing any code:**
+
+| Document | Purpose |
+|---|---|
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Full developer guide: setup, Spec-Kit commands, workflow steps, quality gates |
+| [`.specify/memory/constitution.md`](.specify/memory/constitution.md) | Governing principles — every Copilot agent reads this first |
+| [`docs/MVP_DECISION_REGISTER.md`](docs/MVP_DECISION_REGISTER.md) | All frozen business and technical decisions |
+
+**Spec-Kit quick reference (VS Code Copilot Chat):**
+
+| Command | Purpose |
+|---|---|
+| `/speckit.specify` | Create a feature spec from product docs |
+| `/speckit.plan` | Generate technical plan, data model, and API contracts |
+| `/speckit.tasks` | Break plan into parallelizable implementation tasks |
+| `/speckit.implement` | Copilot executes all tasks |
+| `/speckit.git.commit` | Create a traceable commit linked to the spec |
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the full command table, step-by-step workflow, and PR requirements.
+
+---
+
 
 This repository is currently in the **planning phase**. All documents below are comprehensive planning artifacts authored from the perspective of the full leadership team.
 
@@ -119,13 +168,14 @@ This repository is currently in the **planning phase**. All documents below are 
 
 ## 🤝 Contributing
 
-Contributions are welcome once the codebase is established. For now:
+Before writing any code, read [DEVELOPMENT.md](DEVELOPMENT.md) for the full Spec-Kit workflow.
 
-1. Read the planning documents in `docs/`
-2. Open an issue to discuss ideas or improvements
-3. Follow the bilingual documentation standard (see [SYNC_GUIDE.md](docs/SYNC_GUIDE.md))
-
-*Detailed contribution guidelines will be added when development begins.*
+1. Read `.specify/memory/constitution.md` — the governing document for all decisions.
+2. Verify the feature is `🟡 Approved` in `docs/FEATURES.md`.
+3. Run `/speckit.specify` in VS Code Copilot Chat to create the feature spec.
+4. Follow the pipeline: **specify → plan → tasks → implement → PR**.
+5. All PRs require green quality gates (see [DEVELOPMENT.md](DEVELOPMENT.md#step-8--verify-quality-gates)).
+6. Arabic documentation mirrors business/product docs only. Technical docs (ARCHITECTURE, ADRs) remain English. See [docs/SYNC_GUIDE.md](docs/SYNC_GUIDE.md).
 
 ---
 

@@ -28,7 +28,7 @@ This is a **living document**. It tracks every feature from proposal through del
 | [F-002](#f-002-circle-management) | Circle Management | P0 | 🔵 Proposed | 1 | Full Stack |
 | [F-003](#f-003-recitation-queue-system) | 🔥 Recitation Queue System | P0 | 🔵 Proposed | 2 | Full Stack |
 | [F-004](#f-004-real-time-chat) | Real-time Chat | P0 | 🔵 Proposed | 1 | Backend |
-| [F-005](#f-005-live-sessions-livekit) | Live Sessions (LiveKit) | P0 | 🔵 Proposed | 2 | Full Stack |
+| [F-005](#f-005-live-sessions-livekit) | Live Sessions (Audio-only, LiveKit) | P0 | 🔵 Proposed | 2 | Full Stack |
 | [F-006](#f-006-schedule--calendar) | Schedule & Calendar | P0 | 🔵 Proposed | 2 | Full Stack |
 | [F-007](#f-007-memorization-progress-tracking) | Memorization Progress Tracking | P1 | 🔵 Proposed | 3 | Full Stack |
 | [F-008](#f-008-notification-system) | Notification System | P1 | 🔵 Proposed | 2 | Backend |
@@ -265,7 +265,7 @@ Full-featured messaging within circles, replacing WhatsApp/Telegram group chats 
 **Priority:** P0 | **Status:** 🔵 Proposed | **Phase:** 2
 
 #### Description
-Unlimited-time audio/video sessions powered by LiveKit (open-source, self-hosted WebRTC SFU). This is the primary replacement for Zoom/Google Meet.
+Unlimited-time audio-only sessions powered by LiveKit (open-source, self-hosted WebRTC SFU). This is the primary replacement for Zoom/Google Meet in MVP. Video is deferred to post-MVP behind a feature flag.
 
 #### Why LiveKit?
 - **Open-source:** No per-minute costs; self-hosted = full control
@@ -303,7 +303,7 @@ Step 1: Session Creation
 Step 2: Token Generation (Go Backend)
   Using livekit-server-sdk-go:
   at := auth.NewAccessToken(lkApiKey, lkApiSecret)
-  grant := &auth.VideoGrant{RoomJoin: true, Room: roomName}
+  grant := &auth.VideoGrant{RoomJoin: true, Room: roomName, CanPublishVideo: false} // MVP audio-only
   at.AddGrant(grant).SetIdentity(userID).SetValidFor(time.Hour)
   token, _ := at.ToJWT()
 
@@ -312,27 +312,27 @@ Step 3: Flutter Connects
   room = await LiveKitClient.connect(livekitUrl, token, roomOptions)
 
 Step 4: Media Routing
-  LiveKit SFU routes audio/video streams between all participants
+  LiveKit SFU routes audio streams between all participants
   Teacher controls (mute, remove) via Flutter → REST → Go → LiveKit API
 ```
 
 #### Acceptance Criteria
 - [ ] Flutter package: `livekit_client` (official) integrated
 - [ ] Token generation exclusively on Go backend (never client-side)
-- [ ] Audio-first by default; video is optional toggle
+- [ ] Audio-only in MVP (no video toggle in app)
 - [ ] No time limits
 - [ ] Teacher controls: mute all, mute individual, remove participant, lock room (no new joiners)
 - [ ] Hand raise: students tap 🤚 → appears in teacher's UI; integrated with recitation queue
-- [ ] Screen sharing: teacher or student can share screen (Mushaf, written exercises)
-- [ ] Session recording is excluded from MVP and deferred to a later phase
+- [ ] Screen sharing is deferred to post-MVP (same feature-flag family as video)
+- [ ] Session recording is disabled in MVP and deferred until a privacy consent/retention framework is approved
 - [ ] Audio: Opus 48kbps+, noise suppression OFF, auto-gain OFF
 - [ ] Maximum 50 participants (scalable with server resources)
 - [ ] Graceful reconnection on network drop (LiveKit SDK handles this)
 
 #### Open Questions
-- **OQ-015:** Should students be able to request video on? Or is audio-only the default with no override?
+- **OQ-015:** Resolved — MVP is audio-only. No student video request path until post-MVP feature flag rollout.
 - **OQ-016:** What is the maximum session duration we should target for testing? (For LiveKit server sizing)
-- **OQ-017:** If recording returns post-MVP, should it be teacher-only by default or shareable to members?
+- **OQ-017:** Deferred — recording stays disabled until privacy framework is approved; sharing model decided before activation.
 
 #### Dependencies
 - F-001 (User Auth)
@@ -488,6 +488,8 @@ Comprehensive reporting for teachers and students, with PDF export capability.
 
 **Priority:** P3 | **Status:** 🔵 Proposed | **Phase:** 5
 
+> **Dependency note:** This feature is blocked until post-MVP recording is available with an approved privacy consent/retention framework.
+
 #### Description
 AI-powered analysis of student recitation audio to detect tajweed errors and assist teachers in grading.
 
@@ -604,9 +606,9 @@ All open questions from feature discussions, consolidated:
 | OQ-012 | Announcement-only channels? | F-004 | Open | — |
 | OQ-013 | Voice message maximum length? | F-004 | Open | Tentatively: 5 minutes |
 | OQ-014 | Emoji reactions? | F-004 | Open | — |
-| OQ-015 | Student video permission model? | F-005 | Open | — |
+| OQ-015 | Student video permission model? | F-005 | Decided | MVP is audio-only; no video permission in MVP |
 | OQ-016 | Max session duration for server sizing? | F-005 | Open | — |
-| OQ-017 | Recording visibility (teacher-only vs all)? | F-005 | Deferred | Recording removed from MVP; revisit post-MVP |
+| OQ-017 | Recording visibility (teacher-only vs all)? | F-005 | Deferred | Recording disabled until privacy framework approval; finalize model before activation |
 | OQ-018 | Non-recurring (one-off) sessions? | F-006 | Open | — |
 | OQ-019 | Timezone storage strategy? | F-006 | Open | UTC storage + local display |
 | OQ-020 | Student self-logging (outside sessions)? | F-007 | Open | — |

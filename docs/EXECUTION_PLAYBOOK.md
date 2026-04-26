@@ -33,17 +33,22 @@ For Halaqaty MVP:
 - Circle creation and membership
 - Recitation queue with rounds/statuses
 - Real-time chat + voice notes
-- Live sessions (audio-first, optional video)
+- Live sessions (audio-only)
 - Schedule, reminders, attendance basics
 - Basic session-level progress visibility (history + grades)
 
 ### Out of MVP (deferred)
-- Session recording (post-MVP)
+- Session video (post-MVP, feature-flagged rollout)
+- Session recording (post-MVP, privacy-sensitive/high-risk feature)
 - AI tajweed scoring
 - AI memorization planning
 - Institutional control center
 - Desktop app
 - Advanced progress analytics (Quran map, trend charts, comparative dashboards)
+
+### Privacy and trust policy for deferred recording
+- Recording remains disabled in MVP for privacy reasons.
+- Any future recording rollout requires explicit participant consent UX, retention policy, and access-control rules.
 
 ---
 
@@ -58,6 +63,7 @@ Every week, unresolved items are handled in one short decision sprint:
 5. **Assign** owner + due date
 
 Decision rule: if a decision blocks MVP delivery, resolve it in the current sprint.
+Policy rule: `live_session_video` and `session_recording` feature flags must remain OFF in MVP and require PM + architect sign-off before activation.
 
 ---
 

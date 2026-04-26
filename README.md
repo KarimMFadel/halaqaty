@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-blue.svg)](https://flutter.dev)
 [![Go](https://img.shields.io/badge/Go-1.22+-00ADD8.svg)](https://golang.org)
-[![LiveKit](https://img.shields.io/badge/Video-LiveKit-orange.svg)](https://livekit.io)
+[![LiveKit](https://img.shields.io/badge/Audio-LiveKit-orange.svg)](https://livekit.io)
 
 ---
 
@@ -24,10 +24,11 @@ Halaqaty replaces all of that with a single, purpose-built application designed 
 | 🕌 **Circle Management** | Create circles, invite students with codes/links, assign supervisors |
 | 🎙️ **Recitation Queue System** | The killer feature — ordered queue for live sessions with per-round tracking |
 | 💬 **Real-time Chat** | Group and private messages with voice notes, files, and pinning |
-| 📹 **Live Sessions** | No-time-limit audio/video via LiveKit (WebRTC), optimized for Quran audio |
+| 🎙️ **Live Sessions** | No-time-limit audio-only sessions via LiveKit (WebRTC), optimized for Quran recitation quality (video post-MVP behind feature flag) |
 | 📅 **Schedule & Calendar** | Recurring weekly schedules, reminders, attendance tracking |
 | 📊 **Progress Tracking** | Session-level memorization logs with grades in MVP; advanced Quran maps/analytics post-MVP |
 | 🔔 **Smart Notifications** | FCM push + in-app real-time notifications |
+| 🔒 **Privacy-First Sessions** | Live-session recording is disabled in MVP; any future recording requires explicit consent and strict privacy controls |
 | 📊 **Student & Teacher Dashboards** | Post-MVP dashboards for students and teachers across members/circles |
 | 🏢 **Institutional Platform** *(future)* | Onboard entire Quran schools and organizations |
 
@@ -54,7 +55,7 @@ The queue can be **reset and reused multiple times** in a single session — for
 | **Backend** | Go (Golang) | High performance, excellent concurrency for WebSocket/chat |
 | **Database** | PostgreSQL | Robust relational data, JSONB for flexible fields |
 | **Real-time Chat** | WebSocket (native Go) | Low latency, full control |
-| **Video/Audio** | LiveKit (WebRTC, self-hosted) | Open-source, no time limits, Quran audio optimization |
+| **Audio Sessions** | LiveKit (WebRTC, self-hosted) | Open-source, no time limits, Quran audio optimization (video feature-flagged post-MVP) |
 | **File Storage** | MinIO (S3-compatible, self-hosted) | Cost-effective, self-hosted, no vendor lock-in |
 | **Push Notifications** | Firebase Cloud Messaging (FCM) | Industry standard, cross-platform |
 | **Auth** | Firebase Auth | Social sign-in (Google, Apple), phone OTP |

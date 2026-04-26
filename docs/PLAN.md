@@ -44,7 +44,7 @@ Across the Muslim world, tens of thousands of Quran memorization circles operate
 
 Halaqaty is a **unified, Quran-native platform** that brings together:
 - Real-time group chat and voice notes
-- Unlimited-time audio/video sessions (powered by LiveKit WebRTC)
+- Unlimited-time audio sessions (powered by LiveKit WebRTC in MVP; video is post-MVP behind feature flag)
 - An intelligent recitation queue system — the platform's killer feature
 - Structured memorization progress tracking
 - Smart scheduling with push notifications
@@ -95,7 +95,7 @@ The primary power user of Halaqaty.
 **Capabilities:**
 - Create and configure circles (name, rules, capacity, privacy settings)
 - Generate and share invite codes/links
-- Conduct live audio/video sessions
+- Conduct live audio sessions (video is post-MVP)
 - Manage the recitation queue during sessions (order, skip, grade)
 - Assign and revoke the Supervisor role to any circle member at any time
 - Grade students' recitations (Excellent → Repeat scale)
@@ -316,9 +316,9 @@ Session: "Sunday Halaqa — Week 23"
 
 ---
 
-### F-005 · Live Sessions (Audio/Video via LiveKit) | P0 | 🔵 Proposed
+### F-005 · Live Sessions (Audio via LiveKit) | P0 | 🔵 Proposed
 
-**Description:** Unlimited-time audio/video sessions integrated with the recitation queue system, powered by LiveKit (open-source, self-hosted WebRTC SFU).
+**Description:** Unlimited-time audio-only sessions integrated with the recitation queue system, powered by LiveKit (open-source, self-hosted WebRTC SFU). Video is explicitly deferred to post-MVP and gated by feature flag.
 
 **Flutter ↔ LiveKit Integration Flow:**
 
@@ -338,9 +338,9 @@ Session: "Sunday Halaqa — Week 23"
 ┌─────────────────────────────────────────────────────┐
 │              LiveKit Server (SFU)                    │
 │  - Handles WebRTC connections                       │
-│  - Routes audio/video streams between participants  │
-│  - Manages codec negotiation (VP8/VP9/AV1, Opus)   │
-│  - Simulcast for adaptive quality                   │
+│  - Routes audio streams between participants         │
+│  - Manages Opus codec in MVP (VP8/VP9/AV1 post-MVP)│
+│  - Simulcast deferred with post-MVP video rollout  │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -363,17 +363,16 @@ Zoom and Google Meet apply heavy audio processing optimized for speech — this 
 - As a teacher, I can mute/unmute individual participants
 - As a teacher, I can lock the room to prevent new joiners mid-session
 - As a participant, I can raise my hand to signal the teacher
-- As a teacher, I can share my screen to show a Mushaf page
-- As a teacher, I can optionally record the session
+- As a teacher, I can trust that live-session audio is not recorded in MVP
 
 **Acceptance Criteria:**
 - [ ] Flutter package: `livekit_client` integrated
-- [ ] Audio-first by default; video optional (to save bandwidth)
+- [ ] Audio-only in MVP; no video toggle exposed to users
 - [ ] No time limits on sessions
 - [ ] Teacher controls: mute all, mute individual, remove participant, lock room
 - [ ] Hand raise feature (synced with recitation queue)
-- [ ] Screen sharing (for Mushaf pages or written exercises)
-- [ ] Session recording deferred (not in MVP)
+- [ ] Screen sharing deferred to post-MVP (same feature-flag family as video)
+- [ ] Session recording is disabled in MVP and deferred due to privacy risk; future rollout requires explicit consent framework
 - [ ] Noise suppression OFF by default; auto-gain OFF by default
 - [ ] Opus codec at 48kbps minimum
 - [ ] LiveKit room name tied to session ID; room created by Go backend using LiveKit Go SDK
@@ -526,7 +525,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete technical specification.
 |----------|---------|
 | HTTPS / REST | All standard CRUD: auth, circle management, user profiles, progress records |
 | WebSocket (Go) | Real-time chat, presence/online status, queue updates, in-app notifications |
-| WebRTC (via LiveKit) | Audio/video streaming in live sessions |
+| WebRTC (via LiveKit) | Audio streaming in live sessions (video is post-MVP, feature-flagged) |
 | FCM | Push notifications when app is in background or closed |
 
 ### 4.2 High-Level System Diagram
@@ -607,8 +606,8 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full phase-by-phase plan with server 
 
 | Tier | Price | Features |
 |------|-------|---------|
-| **Free** | $0/month | Core operations; circle/student caps remain open until pilot outcomes; sessions (no recording) |
-| **Teacher Pro** | $5–8/month | Unlimited circles, unlimited students, recording (post-MVP), AI features (future), advanced reports |
+| **Free** | $0/month | Core operations; circle/student caps remain open until pilot outcomes; audio sessions (no recording, no video) |
+| **Teacher Pro** | $5–8/month | Unlimited circles, unlimited students, video (post-MVP, feature-flagged), recording (post-MVP after privacy framework), AI features (future), advanced reports |
 | **Institution** | Custom/year | All Pro features for all teachers + institution dashboard + custom branding |
 
 **No ads.** Ever. This is non-negotiable for a Quran-focused platform.
@@ -638,7 +637,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full phase-by-phase plan with server 
 - [ ] Go backend: LiveKit room creation + JWT token generation
 - [ ] Flutter: `livekit_client` integration
 - [ ] Basic audio session (teacher-controlled mute, hand raise)
-- [ ] Screen sharing
+- [ ] Audio-only hardening (no video publish paths in MVP clients/tokens)
 
 ### Month 5: Recitation Queue System
 - [ ] Queue backend: real-time queue state via WebSocket

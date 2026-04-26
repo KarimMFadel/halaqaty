@@ -37,7 +37,7 @@
 ╚══════════╦═══════════════════╦═══════════════════╦═══════════════╝
            ║                   ║                   ║
      HTTPS/REST           WebSocket            WebRTC
-     (Auth, CRUD)      (Chat, Queue,        (Audio/Video
+     (Auth, CRUD)      (Chat, Queue,        (Audio in MVP
                         Presence,            via LiveKit)
                         Notifications)
            ║                   ║                   ║
@@ -158,7 +158,7 @@ Client disconnects → Hub removes registration → Presence update broadcast
 
 ### 2.3 WebRTC via LiveKit
 
-**Used for:** Audio and video streaming in live sessions.
+**Used for:** Audio streaming in live sessions for MVP (video remains post-MVP behind feature flag).
 
 - LiveKit is a Selective Forwarding Unit (SFU) — it receives each participant's stream and forwards it to all others, without mixing
 - This is more scalable than peer-to-peer WebRTC (which doesn't scale beyond ~4 participants)
@@ -167,7 +167,7 @@ Client disconnects → Hub removes registration → Presence update broadcast
 
 **Quality levels supported:**
 - Audio: Opus codec, 48–64 kbps, mono (sufficient for voice)
-- Video (optional): VP8/VP9, simulcast (low/medium/high), adaptive bitrate
+- Video (post-MVP feature flag): VP8/VP9, simulcast (low/medium/high), adaptive bitrate
 
 ### 2.4 Firebase Cloud Messaging (FCM)
 
@@ -270,10 +270,11 @@ func generateLiveKitToken(
     at := auth.NewAccessToken(apiKey, apiSecret)
     
     grant := &auth.VideoGrant{
-        RoomJoin:     true,
-        Room:         roomName,
-        CanPublish:   canPublishAudio,
-        CanSubscribe: true,
+        RoomJoin:       true,
+        Room:           roomName,
+        CanPublish:     canPublishAudio, // microphone publish only in MVP turns
+        CanPublishVideo: false,          // MVP hard-stop; enable post-MVP via feature flag
+        CanSubscribe:   true,
         CanPublishData: isTeacher, // only teachers send data messages
     }
     
@@ -285,7 +286,7 @@ func generateLiveKitToken(
     at.AddGrant(grant).
         SetIdentity(identity).  // userID
         SetName(name).          // display name
-        SetValidFor(4 * time.Hour)
+        SetValidFor(1 * time.Hour)
     
     return at.ToJWT()
 }
@@ -310,9 +311,8 @@ Future<Room> connectToSession({
       // Note: noise suppression and auto-gain are handled
       // at the platform level via AudioProcessingOptions
     ),
-    defaultVideoPublishOptions: const VideoPublishOptions(
-      simulcast: true,         // adaptive quality for video
-    ),
+    // MVP intentionally omits video publish options.
+    // Post-MVP video can be enabled behind a feature flag without re-architecting.
     adaptiveStream: true,      // auto-adjust quality to bandwidth
   );
   
@@ -477,6 +477,7 @@ final audioConstraints = {
 | actual_start | TIMESTAMPTZ | | When teacher actually started |
 | actual_end | TIMESTAMPTZ | | When session actually ended |
 | status | VARCHAR(20) | CHECK IN ('scheduled','live','completed','cancelled') | |
+| media_mode | VARCHAR(20) | CHECK IN ('audio_only','audio_video'), DEFAULT 'audio_only' | Session media policy (MVP always audio_only) |
 | livekit_room_name | VARCHAR(200) | UNIQUE | LiveKit room identifier |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
 
@@ -738,8 +739,8 @@ Removed from MVP scope. The product currently supports direct student and teache
 - Room names are not publicly guessable
 - Each participant needs a JWT from Go backend to join — no anonymous access
 - Teacher's JWT includes `RoomAdmin: true` (can mute, remove)
-- Student's JWT defaults to `CanPublish: false` and never includes `RoomAdmin`
-- Backend grants `CanPublish: true` only for the active reciter turn, then revokes after the turn
+- Student's JWT defaults to `CanPublish: false`, `CanPublishVideo: false`, and never includes `RoomAdmin`
+- Backend grants `CanPublish: true` only for the active reciter turn, then revokes after the turn (audio-only in MVP)
 - Room is deleted from LiveKit server when session ends
 
 ### 6.3 Rate Limiting
@@ -760,10 +761,10 @@ Removed from MVP scope. The product currently supports direct student and teache
 
 ### 6.5 Data Privacy
 
-- Voice messages and recordings stored in MinIO with access-controlled bucket policies
+- Voice messages (chat voice notes) stored in MinIO with access-controlled bucket policies
 - File URLs are pre-signed and expire after 7 days (renewable on access)
 - Personal data (email, phone) not returned in group-visible APIs
-- Session recordings require explicit teacher opt-in
+- Live-session recording is disabled in MVP (no session audio/video storage)
 
 ### 6.6 Transport Security
 
@@ -778,6 +779,12 @@ Removed from MVP scope. The product currently supports direct student and teache
 - **Two-factor authentication** for teacher accounts (P2)
 - **Audit logging** for sensitive actions (remove member, delete messages)
 - **GDPR data export** — allow users to download all their data
+
+### 6.8 Privacy Risk Register for Recording (Post-MVP)
+
+- Recording introduces high privacy sensitivity, especially for circles with minors.
+- Any future recording rollout requires explicit participant consent UX, retention limits, and strict access controls.
+- Recording feature flag must remain OFF until privacy/legal framework is approved.
 
 ---
 

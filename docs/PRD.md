@@ -78,7 +78,7 @@ This creates low retention, operational friction, and limited scalability for te
 - Circle creation and membership
 - Recitation queue with rounds and statuses
 - Real-time chat + voice notes
-- Live sessions (audio-first, optional video)
+- Live sessions (audio-only via LiveKit for MVP)
 - Scheduling + reminders + attendance basics
 - Basic session-level progress visibility (session history + grades)
 
@@ -86,7 +86,8 @@ This creates low retention, operational friction, and limited scalability for te
 - AI tajweed scoring
 - AI memorization planning
 - Full institution control center
-- Session recording
+- Live session video (post-MVP, feature-flagged rollout)
+- Session recording (post-MVP only; high privacy risk and explicit consent framework required)
 - Desktop applications
 - Advanced progress analytics (Quran map, trend charts, comparative dashboards)
 
@@ -111,6 +112,7 @@ This creates low retention, operational friction, and limited scalability for te
 - no ads model
 - respectful UX for religious/educational context
 - clear privacy boundaries for teacher/student data
+- no server-side live-session recording in MVP
 
 ---
 
@@ -135,7 +137,7 @@ This creates low retention, operational friction, and limited scalability for te
 | Tier | Target | Value | Pricing direction |
 |---|---|---|---|
 | Free | Individual/small circles | core operations | $0 |
-| Premium | Active teachers | recordings (post-MVP), advanced reports, future AI | subscription |
+| Premium | Active teachers | video sessions (post-MVP, feature-flagged), recordings (deferred until privacy framework), advanced reports, future AI | subscription |
 | Institutional | schools/centers | centralized management + branding + analytics | annual contract |
 
 **Policy:** No ads in any tier.
@@ -163,7 +165,9 @@ This creates low retention, operational friction, and limited scalability for te
 | Risk | Impact | Mitigation |
 |---|---|---|
 | Low teacher activation | High | improve first-session setup, templates, concierge onboarding |
-| Audio quality complaints | High | audio-first defaults, device guidance, session diagnostics |
+| Audio quality complaints | High | audio-only defaults, device guidance, session diagnostics |
+| Audio-only perceived as "less than Zoom/Meet" | Medium | message queue-centric value in onboarding and GTM, and position video as intentional post-MVP upgrade |
+| Premature enablement of video/recording | High | keep both behind feature flags off by default; require privacy framework sign-off before rollout |
 | Multi-circle scheduling conflicts | Medium | conflict warnings, unified student calendar |
 | Slow institutional sales cycle | Medium | prove teacher traction first, then package B2B pilots |
 
@@ -186,6 +190,8 @@ This creates low retention, operational friction, and limited scalability for te
 2. premium packaging sequence once recording returns post-MVP (recording vs analytics first)
 3. institution onboarding model (self-serve vs assisted)
 4. co-teacher model details (distinct role vs supervisor permissions)
+5. feature-flag rollout model for video (per-user, per-circle, or per-tier) with default OFF
+6. recording consent and retention model before any post-MVP activation
 
 ---
 

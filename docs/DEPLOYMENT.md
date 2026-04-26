@@ -91,7 +91,7 @@ All services run in Docker containers on a single server:
 
 | Resource | Estimate | Notes |
 |----------|---------|-------|
-| Concurrent live sessions | 2–5 | Limited by RAM (LiveKit ~200MB per session) |
+| Concurrent live sessions | 2–5 | MVP assumes audio-only sessions; video remains post-MVP feature-flagged |
 | Simultaneous WebSocket connections | 100 | Go handles this easily |
 | Database connections | 50 | PostgreSQL on same server |
 | Daily active users | 50 | Phase 1 target |
@@ -102,6 +102,7 @@ All services run in Docker containers on a single server:
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|-----------|
 | RAM exhaustion during large sessions | Low | High | Monitor; add swap; upgrade to CX32 if needed |
+| Accidental video enablement in MVP | Low | High | Keep video feature flag OFF by default until post-MVP capacity upgrade |
 | Server downtime | Medium | High | Take daily snapshots (Hetzner feature, free) |
 | LiveKit + Go + PostgreSQL on same server | Accepted | Medium | Acceptable for pilot; separate in Phase 2 |
 
@@ -167,6 +168,8 @@ LiveKit SFU is CPU and bandwidth intensive during active sessions. By separating
 | Daily active users | 200–500 |
 | Concurrent WebSocket connections | 500 |
 | Storage | 50–200 GB (add Hetzner Volumes: ~$5/month per 100 GB) |
+
+> Note: The above estimates assume audio-only sessions in MVP. Enabling video post-MVP materially increases bandwidth and SFU CPU needs; re-baseline before toggling the video feature flag.
 
 ---
 

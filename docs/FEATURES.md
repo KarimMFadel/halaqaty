@@ -592,32 +592,32 @@ All open questions from feature discussions, consolidated:
 
 | ID | Question | Feature | Status | Decision |
 |----|---------|---------|--------|---------|
-| OQ-001 | Phone-only accounts (no email)? | F-001 | Investigating | Long-term investigation; no strict signup blocking in MVP |
+| OQ-001 | Phone-only accounts (no email)? | F-001 | Decided | No phone-only accounts in MVP. Require email or social provider. Phone is supplementary verification only. |
 | OQ-002 | Teacher identity verification? | F-001 | Decided | Optional (not required in MVP) |
-| OQ-003 | Session token expiry policy? | F-001 | Open | — |
-| OQ-004 | Co-teacher role distinct from supervisor? | F-002 | Open | Deferred until post-pilot; MVP uses teacher + supervisor permissions |
-| OQ-005 | Cross-circle role combinations? | F-002 | Open | Likely yes |
-| OQ-006 | Circle ownership transfer on account deletion? | F-002 | Open | — |
+| OQ-003 | Session token expiry policy? | F-001 | Decided | Firebase default 1hr auto-refresh. Backend enforces 30-day inactivity logout. |
+| OQ-004 | Co-teacher role distinct from supervisor? | F-002 | Decided | Deferred post-pilot. MVP uses teacher + supervisor only. No co-teacher role in MVP. |
+| OQ-005 | Cross-circle role combinations? | F-002 | Decided | Yes — roles are fully independent per circle. A user can be teacher in one circle and student in another. |
+| OQ-006 | Circle ownership transfer on account deletion? | F-002 | Decided | Circle is archived on teacher account deletion; members are notified. Teacher must assign a supervisor before deletion. No automatic transfer. |
 | OQ-007 | Student "opt-out" of a round? | F-003 | Decided | Allowed for temporary issues with teacher/supervisor approval |
-| OQ-008 | Per-student recitation timer? | F-003 | Open | — |
-| OQ-009 | Pre-set queue before session starts? | F-003 | Open | — |
+| OQ-008 | Per-student recitation timer? | F-003 | Decided | No timer in MVP. Teacher manages timing verbally. |
+| OQ-009 | Pre-set queue before session starts? | F-003 | Decided | Yes — teacher can pre-order the queue before starting the session. |
 | OQ-010 | Late-joining student added to current round? | F-003 | Decided | Added to end of current active round |
-| OQ-011 | Double-queue per student per round? | F-003 | Open | — |
-| OQ-012 | Announcement-only channels? | F-004 | Open | — |
-| OQ-013 | Voice message maximum length? | F-004 | Open | Tentatively: 5 minutes |
-| OQ-014 | Emoji reactions? | F-004 | Open | — |
+| OQ-011 | Double-queue per student per round? | F-003 | Decided | No. One position per student per round. Use sequential rounds for multiple recitations. |
+| OQ-012 | Announcement-only channels? | F-004 | Decided | No announcement channels in MVP. Use pinned messages for circle-wide announcements. |
+| OQ-013 | Voice message maximum length? | F-004 | Decided | Max 5 minutes (300 seconds). Max file size: 20 MB. |
+| OQ-014 | Emoji reactions? | F-004 | Decided | Deferred to post-MVP (P2). Not in MVP scope. |
 | OQ-015 | Student video permission model? | F-005 | Decided | MVP is audio-only; no video permission in MVP |
-| OQ-016 | Max session duration for server sizing? | F-005 | Open | — |
+| OQ-016 | Max session duration for server sizing? | F-005 | Decided | Max 4 hours per session. Idle room timeout: 30 minutes after last participant leaves. |
 | OQ-017 | Recording visibility (teacher-only vs all)? | F-005 | Deferred | Recording disabled until privacy framework approval; finalize model before activation |
-| OQ-018 | Non-recurring (one-off) sessions? | F-006 | Open | — |
-| OQ-019 | Timezone storage strategy? | F-006 | Open | UTC storage + local display |
-| OQ-020 | Student self-logging (outside sessions)? | F-007 | Open | — |
-| OQ-021 | Multiple passes on same section? | F-007 | Open | — |
-| OQ-022 | Open-source vs licensed Mushaf text? | F-009 | Open | — |
-| OQ-023 | Audio recitation playback in Mushaf? | F-009 | Open | — |
-| OQ-024 | Auto-generated monthly reports via email? | F-011 | Open | — |
-| OQ-025 | In-house AI model vs licensed for Tajweed? | F-013 | Open | — |
-| OQ-026 | Audio privacy/consent for AI processing? | F-013 | Open | — |
+| OQ-018 | Non-recurring (one-off) sessions? | F-006 | Decided | Yes — teacher can create one-off sessions not linked to a recurring schedule. |
+| OQ-019 | Timezone storage strategy? | F-006 | Decided | UTC stored in DB. IANA timezone string stored per user profile. All display in user's local timezone. |
+| OQ-020 | Student self-logging (outside sessions)? | F-007 | Decided | No in MVP. Progress records are generated from session-based recitations only. |
+| OQ-021 | Multiple passes on same section? | F-007 | Decided | Yes — each queue entry creates a new progress record. Full history of all passes is retained. |
+| OQ-022 | Open-source vs licensed Mushaf text? | F-009 | Decided | Tanzil.net (CC BY 3.0, open-source). No licensing cost. |
+| OQ-023 | Audio recitation playback in Mushaf? | F-009 | Decided | No in MVP. Mushaf viewer is reading-only. Audio playback deferred to P2. |
+| OQ-024 | Auto-generated monthly reports via email? | F-011 | Decided | No in MVP. Manual PDF export only. |
+| OQ-025 | In-house AI model vs licensed for Tajweed? | F-013 | Decided | Fully deferred. No AI architecture decision until recording feature is unblocked and privacy framework is approved. |
+| OQ-026 | Audio privacy/consent for AI processing? | F-013 | Decided | Fully deferred. No AI architecture decision until recording feature is unblocked and privacy framework is approved. |
 
 ---
 

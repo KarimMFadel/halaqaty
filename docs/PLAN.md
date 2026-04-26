@@ -100,7 +100,7 @@ The primary power user of Halaqaty.
 - Assign and revoke the Supervisor role to any circle member at any time
 - Grade students' recitations (Excellent → Repeat scale)
 - Send private messages and voice notes to students
-- View comprehensive progress reports per student
+- View session-level progress per student in MVP (comprehensive analytics later)
 - Set and manage weekly schedules
 - Pin important announcements in circle chat
 
@@ -112,14 +112,14 @@ The primary power user of Halaqaty.
 - Join multiple circles with different teachers
 - Participate in live sessions; join recitation queue
 - Send and receive messages (group and private)
-- View own memorization progress and grades
+- View own session-level progress and grades in MVP (advanced analytics later)
 - Receive schedule reminders and turn notifications (when it's their time to recite)
 - View Quran map of memorized portions
 
 ### 2.4 Supervisor (مُشرف)
 
 A trusted student or assistant appointed by the teacher to help manage sessions.
-Optional co-teacher behavior can be handled through this assignable role model.
+MVP uses this assignable role model; distinct co-teacher role details remain open until after pilot.
 
 **Key design decision: A supervisor can be assigned at any point** — before the session is created, before the session starts, or during a live session. The teacher retains full authority.
 
@@ -225,7 +225,7 @@ Each feature is documented with: Description, User Stories, Acceptance Criteria,
 |--------|------|---------|
 | Waiting | ⏳ | Hasn't recited yet; position N in queue |
 | Currently Reciting | 🎙️ | Highlighted for all participants; audio unmuted |
-| Completed | ✅ | Recited; grade recorded |
+| Completed | ✅ | Recited; grade recorded based on circle grading policy |
 | Skipped | ⏭️ | Absent or skipped by teacher; can re-add |
 
 **Queue Round System:**
@@ -256,7 +256,8 @@ Session: "Sunday Halaqa — Week 23"
 - **Advance:** Teacher marks current student as ✅ Done → next student is auto-notified
 - **Skip:** Teacher moves a student to ⏭️ Skipped (student can be re-added)
 - **Reorder:** Drag-and-drop queue reordering by teacher/supervisor
-- **Add Late-Joiner:** Students who join the session late are added to the end of the queue
+- **Add Late-Joiner:** Students who join the session late are added to the end of the current round queue
+- **Turn-based Audio Publish:** Student audio publish permission is granted for the active turn and revoked after the turn (teacher-controlled)
 - **Emergency Mute:** When student's turn starts, their microphone is unmuted; all others are muted
 
 **Grading Scale:**
@@ -282,7 +283,8 @@ Session: "Sunday Halaqa — Week 23"
 - [ ] Teacher can reset queue unlimited times per session
 - [ ] When student's turn starts: notification sent, microphone auto-unmuted
 - [ ] All other participants muted when a student begins reciting (unless teacher disables)
-- [ ] Grading is immediately available after marking Complete
+- [ ] Grading mode is configurable per circle (required or optional per completed turn)
+- [ ] Student audio publish permission is teacher-controlled per turn (grant on turn start, revoke on turn end)
 - [ ] Full session log accessible after session ends
 - [ ] Queue updates must be idempotent and handle network reconnections gracefully
 
@@ -404,7 +406,7 @@ Zoom and Google Meet apply heavy audio processing optimized for speech — this 
 
 ### F-007 · Memorization Progress Tracking | P1 | 🔵 Proposed
 
-**Description:** Detailed per-student Quran memorization records linked to the recitation queue history.
+**Description:** Advanced per-student Quran memorization analytics layer linked to recitation queue history. MVP baseline remains session-level progress visibility (history + grades).
 
 **Acceptance Criteria:**
 - [ ] Automatic log creation from recitation queue entries (Surah, Ayah range, grade, date, session)
@@ -605,7 +607,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full phase-by-phase plan with server 
 
 | Tier | Price | Features |
 |------|-------|---------|
-| **Free** | $0/month | 1 circle, open student count for now, basic chat, sessions (no recording) |
+| **Free** | $0/month | Core operations; circle/student caps remain open until pilot outcomes; sessions (no recording) |
 | **Teacher Pro** | $5–8/month | Unlimited circles, unlimited students, recording (post-MVP), AI features (future), advanced reports |
 | **Institution** | Custom/year | All Pro features for all teachers + institution dashboard + custom branding |
 

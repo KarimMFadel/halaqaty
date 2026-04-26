@@ -26,7 +26,7 @@ For Halaqaty MVP:
 1. Create circle
 2. Run live session
 3. Use queue + grading
-4. View basic progress
+4. View basic session-level progress
 
 ### In MVP
 - Authentication + role-based access
@@ -35,6 +35,7 @@ For Halaqaty MVP:
 - Real-time chat + voice notes
 - Live sessions (audio-first, optional video)
 - Schedule, reminders, attendance basics
+- Basic session-level progress visibility (history + grades)
 
 ### Out of MVP (deferred)
 - Session recording (post-MVP)
@@ -42,6 +43,7 @@ For Halaqaty MVP:
 - AI memorization planning
 - Institutional control center
 - Desktop app
+- Advanced progress analytics (Quran map, trend charts, comparative dashboards)
 
 ---
 
@@ -128,14 +130,14 @@ KPI rule: each KPI must have an owner, target, and review frequency.
 
 ---
 
-## 8) Role Clarification: Co-Teacher
+## 8) Role Clarification: Co-Teacher (Pending)
 
-A **co-teacher role** is an assistant role that helps run sessions (queue, attendance, operational moderation) without full owner/admin power.
+A **co-teacher role** is an assistant role concept for session operations (queue, attendance, moderation) without full owner/admin power.
 
 Current Halaqaty policy:
-- implemented through assignable supervisor/co-teacher behavior,
-- teacher remains the final authority,
-- this is optional, not required for MVP launch.
+- MVP operations run with teacher + assignable supervisor permissions,
+- final co-teacher model remains open and is deferred until after pilot outcomes,
+- teacher remains the final authority.
 
 ---
 

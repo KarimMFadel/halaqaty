@@ -3,7 +3,7 @@
 > Version: 1.0  
 > Status: Draft for alignment  
 > Owner: Product Management (**GPT-5.3-Codex acting as Project Manager**)  
-> Related: [PLAN.md](PLAN.md) · [FEATURES.md](FEATURES.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [DEPLOYMENT.md](DEPLOYMENT.md)
+> Related: [arabic/PRD_AR.md](arabic/PRD_AR.md) · [PLAN.md](PLAN.md) · [FEATURES.md](FEATURES.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [DEPLOYMENT.md](DEPLOYMENT.md)
 
 ---
 
@@ -80,6 +80,7 @@ This creates low retention, operational friction, and limited scalability for te
 - Real-time chat + voice notes
 - Live sessions (audio-first, optional video)
 - Scheduling + reminders + attendance basics
+- Basic session-level progress visibility (session history + grades)
 
 ### Out of Scope (MVP)
 - AI tajweed scoring
@@ -87,6 +88,7 @@ This creates low retention, operational friction, and limited scalability for te
 - Full institution control center
 - Session recording
 - Desktop applications
+- Advanced progress analytics (Quran map, trend charts, comparative dashboards)
 
 ---
 
@@ -99,6 +101,7 @@ This creates low retention, operational friction, and limited scalability for te
 ### BR-2 Retention
 - teachers must get weekly progress visibility for each student
 - students must receive clear turn reminders and session reminders
+- grading policy must be configurable per circle (required vs optional per completed turn)
 
 ### BR-3 Monetization Readiness
 - architecture and packaging must support a free tier + paid tier transition

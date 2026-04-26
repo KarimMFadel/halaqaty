@@ -26,9 +26,9 @@ Halaqaty replaces all of that with a single, purpose-built application designed 
 | 💬 **Real-time Chat** | Group and private messages with voice notes, files, and pinning |
 | 📹 **Live Sessions** | No-time-limit audio/video via LiveKit (WebRTC), optimized for Quran audio |
 | 📅 **Schedule & Calendar** | Recurring weekly schedules, reminders, attendance tracking |
-| 📊 **Progress Tracking** | Per-student memorization logs with grades and visual Quran maps |
+| 📊 **Progress Tracking** | Session-level memorization logs with grades in MVP; advanced Quran maps/analytics post-MVP |
 | 🔔 **Smart Notifications** | FCM push + in-app real-time notifications |
-| 📊 **Student & Teacher Dashboards** | Students track own progress; teachers track all members and each circle |
+| 📊 **Student & Teacher Dashboards** | Post-MVP dashboards for students and teachers across members/circles |
 | 🏢 **Institutional Platform** *(future)* | Onboard entire Quran schools and organizations |
 
 ---
@@ -78,6 +78,7 @@ halaqaty/
     ├── SYNC_GUIDE.md           ← Bilingual document sync guide
     └── arabic/
         ├── README_AR.md        ← Arabic overview
+        ├── PRD_AR.md           ← Arabic PRD mirror
         ├── PLAN_AR.md          ← Arabic business plan
         └── FEATURES_AR.md      ← Arabic feature board
 ```
@@ -91,6 +92,7 @@ This repository is currently in the **planning phase**. All documents below are 
 | Document | Language | Description |
 |----------|----------|-------------|
 | [PRD.md](docs/PRD.md) | 🇬🇧 English | Product requirements document (business-first) |
+| [arabic/PRD_AR.md](docs/arabic/PRD_AR.md) | 🇸🇦 Arabic | وثيقة متطلبات المنتج بالعربية |
 | [PLAN.md](docs/PLAN.md) | 🇬🇧 English | Master project plan — vision, features, architecture, roadmap |
 | [arabic/PLAN_AR.md](docs/arabic/PLAN_AR.md) | 🇸🇦 Arabic | الخطة التجارية للمشروع |
 | [FEATURES.md](docs/FEATURES.md) | 🇬🇧 English | Detailed feature specifications and status tracking |

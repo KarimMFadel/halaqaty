@@ -264,6 +264,7 @@ Device shows notification even if app is closed
 func generateLiveKitToken(
     apiKey, apiSecret, roomName, identity, name string,
     isTeacher bool,
+    canPublishAudio bool, // for students: true only when teacher grants current turn
 ) (string, error) {
     
     at := auth.NewAccessToken(apiKey, apiSecret)
@@ -271,7 +272,7 @@ func generateLiveKitToken(
     grant := &auth.VideoGrant{
         RoomJoin:     true,
         Room:         roomName,
-        CanPublish:   isTeacher,    // students can publish their audio
+        CanPublish:   canPublishAudio,
         CanSubscribe: true,
         CanPublishData: isTeacher, // only teachers send data messages
     }
@@ -729,7 +730,7 @@ Removed from MVP scope. The product currently supports direct student and teache
 - **Identity:** Firebase Auth issues JWTs; our Go backend validates them on every request
 - **Authorization:** Role-based per circle. After JWT validation, Go backend checks `circle_members` table for user's role in the requested circle
 - **Token lifecycle:** Firebase tokens expire after 1 hour; `firebase_client` SDK auto-refreshes silently
-- **LiveKit tokens:** Generated exclusively by Go backend; never by the Flutter client. Token scope is limited (room join permission, not admin) for students
+- **LiveKit tokens:** Generated exclusively by Go backend; never by the Flutter client. Student publish scope is turn-based and non-admin.
 
 ### 6.2 LiveKit Room Security
 
@@ -737,7 +738,8 @@ Removed from MVP scope. The product currently supports direct student and teache
 - Room names are not publicly guessable
 - Each participant needs a JWT from Go backend to join — no anonymous access
 - Teacher's JWT includes `RoomAdmin: true` (can mute, remove)
-- Student's JWT includes `CanPublish: true` but not `RoomAdmin`
+- Student's JWT defaults to `CanPublish: false` and never includes `RoomAdmin`
+- Backend grants `CanPublish: true` only for the active reciter turn, then revokes after the turn
 - Room is deleted from LiveKit server when session ends
 
 ### 6.3 Rate Limiting

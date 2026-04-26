@@ -20,9 +20,9 @@ Technical deep-dive docs are maintained in English only.
 | Type | English | Arabic |
 |---|---|---|
 | Project intro | [`README.md`](../README.md) | [`docs/arabic/README_AR.md`](arabic/README_AR.md) |
+| Product requirements | [`PRD.md`](PRD.md) | [`docs/arabic/PRD_AR.md`](arabic/PRD_AR.md) |
 | Master plan (business) | [`PLAN.md`](PLAN.md) | [`docs/arabic/PLAN_AR.md`](arabic/PLAN_AR.md) |
 | Feature board | [`FEATURES.md`](FEATURES.md) | [`docs/arabic/FEATURES_AR.md`](arabic/FEATURES_AR.md) |
-| Product requirements | [`PRD.md`](PRD.md) | — |
 | Technical architecture | [`ARCHITECTURE.md`](ARCHITECTURE.md) | — |
 | Deployment strategy | [`DEPLOYMENT.md`](DEPLOYMENT.md) | — |
 
@@ -34,7 +34,7 @@ Technical deep-dive docs are maintained in English only.
 
 ### Update rules
 
-1. If you change `PLAN.md` or `FEATURES.md`, update Arabic mirrors in `docs/arabic/`.
+1. If you change `PRD.md`, `PLAN.md`, or `FEATURES.md`, update Arabic mirrors in `docs/arabic/`.
 2. If you change technical docs (`ARCHITECTURE.md`, `DEPLOYMENT.md`), no Arabic mirror is required.
 3. Keep links valid after any file move.
 
@@ -56,14 +56,14 @@ Technical deep-dive docs are maintained in English only.
 | النوع | الإنجليزية | العربية |
 |---|---|---|
 | تعريف المشروع | [`README.md`](../README.md) | [`docs/arabic/README_AR.md`](arabic/README_AR.md) |
+| وثيقة متطلبات المنتج | [`PRD.md`](PRD.md) | [`docs/arabic/PRD_AR.md`](arabic/PRD_AR.md) |
 | الخطة الرئيسية (تجارية) | [`PLAN.md`](PLAN.md) | [`docs/arabic/PLAN_AR.md`](arabic/PLAN_AR.md) |
 | لوحة المميزات | [`FEATURES.md`](FEATURES.md) | [`docs/arabic/FEATURES_AR.md`](arabic/FEATURES_AR.md) |
-| وثيقة متطلبات المنتج | [`PRD.md`](PRD.md) | — |
 | المعمارية التقنية | [`ARCHITECTURE.md`](ARCHITECTURE.md) | — |
 | استراتيجية النشر | [`DEPLOYMENT.md`](DEPLOYMENT.md) | — |
 
 ### قواعد المزامنة
 
-1. عند تعديل `PLAN.md` أو `FEATURES.md` يجب تحديث النسخ العربية في `docs/arabic/`.
+1. عند تعديل `PRD.md` أو `PLAN.md` أو `FEATURES.md` يجب تحديث النسخ العربية في `docs/arabic/`.
 2. عند تعديل الوثائق التقنية (`ARCHITECTURE.md` و `DEPLOYMENT.md`) لا حاجة لمرآة عربية.
 3. تأكد من سلامة الروابط بعد أي نقل للملفات.

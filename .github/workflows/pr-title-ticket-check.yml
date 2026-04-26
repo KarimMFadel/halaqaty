@@ -1,0 +1,28 @@
+name: PR Title Ticket Check
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+jobs:
+  validate-pr-title:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Validate title format
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          TICKET_PREFIX_REGEX: "^(#\\d+|[A-Z][A-Z0-9]+-\\d+)\\s*[:\\-]\\s+.+$"
+        run: |
+          if [[ "$PR_TITLE" =~ $TICKET_PREFIX_REGEX ]]; then
+            echo "PR title is valid: $PR_TITLE"
+          else
+            echo "Invalid PR title: '$PR_TITLE'"
+            echo "Expected: '<ticket-id>: <summary>' or '<ticket-id> - <summary>'"
+            echo "Examples:"
+            echo "  #123: Implement recitation queue reset"
+            echo "  HLQ-42: Add authentication middleware"
+            exit 1
+          fi

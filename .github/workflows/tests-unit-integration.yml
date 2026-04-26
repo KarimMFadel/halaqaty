@@ -1,0 +1,101 @@
+name: Tests (Unit & Integration)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  detect-test-targets:
+    runs-on: ubuntu-latest
+    outputs:
+      go_enabled: ${{ steps.detect.outputs.go_enabled }}
+      flutter_enabled: ${{ steps.detect.outputs.flutter_enabled }}
+      flutter_unit_enabled: ${{ steps.detect.outputs.flutter_unit_enabled }}
+      flutter_integration_enabled: ${{ steps.detect.outputs.flutter_integration_enabled }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect available stacks and test folders
+        id: detect
+        shell: bash
+        run: |
+          if [[ -f "go.mod" ]]; then
+            echo "go_enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "go_enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [[ -f "pubspec.yaml" ]]; then
+            echo "flutter_enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "flutter_enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [[ -d "test" ]]; then
+            echo "flutter_unit_enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "flutter_unit_enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [[ -d "integration_test" ]]; then
+            echo "flutter_integration_enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "flutter_integration_enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  go-unit-tests:
+    needs: detect-test-targets
+    if: needs.detect-test-targets.outputs.go_enabled == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run Go unit tests
+        run: go test -short ./...
+
+  go-integration-tests:
+    needs: detect-test-targets
+    if: needs.detect-test-targets.outputs.go_enabled == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run Go integration tests
+        run: go test -tags=integration ./...
+
+  flutter-unit-tests:
+    needs: detect-test-targets
+    if: needs.detect-test-targets.outputs.flutter_enabled == 'true' && needs.detect-test-targets.outputs.flutter_unit_enabled == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install Flutter dependencies
+        run: flutter pub get
+      - name: Run Flutter unit/widget tests
+        run: flutter test test
+
+  flutter-integration-tests:
+    needs: detect-test-targets
+    if: needs.detect-test-targets.outputs.flutter_enabled == 'true' && needs.detect-test-targets.outputs.flutter_integration_enabled == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install Flutter dependencies
+        run: flutter pub get
+      - name: Run Flutter integration tests
+        run: flutter test integration_test

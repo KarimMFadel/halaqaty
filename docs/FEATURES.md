@@ -111,7 +111,7 @@ Circles are the core organizational unit. A circle is a Quran memorization group
 #### Design Decisions
 - **DD-005:** Roles are per-circle (stored in `circle_members` table), not per-user globally. A user can be teacher in one circle and student in another.
 - **DD-006:** Max 5 circles per student is a soft policy initially. Revisit based on user behavior.
-- **DD-007:** Co-teacher remains optional. Teacher can assign an eligible member as co-teacher/supervisor, including at scheduling time.
+- **DD-007 (Interim):** MVP uses teacher + supervisor permissions. Distinct co-teacher role details are deferred until after pilot outcomes.
 
 #### Edge Cases
 - Teacher invites someone who is already a member → Show "already a member" message, do not create duplicate
@@ -194,10 +194,11 @@ When teacher resets the queue:
 - [ ] Queue can be reset unlimited times per session
 - [ ] When student's turn starts: in-app and push notification sent immediately
 - [ ] Teacher can mute all → unmute only current reciter when their turn starts
-- [ ] Grading available immediately after marking Complete (not required; can be added later)
+- [ ] Grading mode configurable per circle (required or optional per completed turn)
+- [ ] Student audio publish permission is teacher-controlled per turn (grant on turn start, revoke after turn)
 - [ ] Teacher notes field per grading entry (free text, max 500 chars)
 - [ ] Full session log persisted after session ends
-- [ ] Queue handles students who join the session late (added to end of queue)
+- [ ] Queue handles students who join the session late (added to end of current round queue)
 - [ ] Queue handles network disconnections gracefully (state preserved server-side)
 - [ ] Student can request a temporary skip/opt-out for current turn (e.g., mic issue, permission break), approved by teacher/supervisor
 
@@ -205,14 +206,14 @@ When teacher resets the queue:
 - **OQ-007:** Should students be able to "opt out" of a specific round? (e.g., "I didn't prepare for revision today") → Teacher could mark as excused?
 - **OQ-008:** Should there be a timer per student? (e.g., teacher sets 5-minute limit per recitation) → Useful but adds complexity
 - **OQ-009:** Can the queue be pre-set before the session starts? Or only after session begins?
-- **OQ-010:** If a student joins mid-session during Round 2, are they added to Round 2 or the next round only?
 - **OQ-011:** Should there be a "double queue" — student appears twice (once for new memorization, once for revision) in the same round?
 
 #### Design Decisions
 - **DD-005:** Queue state is stored server-side in PostgreSQL (not just in-memory). This ensures history is preserved and reconnecting clients can recover state.
 - **DD-006:** WebSocket events are the delivery mechanism, but PostgreSQL is the source of truth.
-- **DD-007:** Grading is optional per entry — teacher can grade all at once at the end or grade each student immediately.
+- **DD-007:** Grading mode is configured per circle (required vs optional per completed turn).
 - **DD-008:** Temporary student opt-out is allowed for operational issues and is logged in queue history.
+- **DD-009:** Late-joining students are appended to the end of the current active round.
 
 #### Dependencies
 - F-001 (User Auth)
@@ -371,7 +372,7 @@ Recurring weekly schedule management with smart reminders and integrated attenda
 **Priority:** P1 | **Status:** 🔵 Proposed | **Phase:** 3
 
 #### Description
-Detailed per-student Quran memorization records, automatically populated from recitation queue history with teacher grading.
+Advanced per-student Quran memorization analytics, automatically populated from recitation queue history with teacher grading. MVP baseline remains session-level progress visibility (history + grades).
 
 #### Acceptance Criteria
 - [ ] Auto-create memorization record from each completed recitation queue entry
@@ -592,13 +593,13 @@ All open questions from feature discussions, consolidated:
 | OQ-001 | Phone-only accounts (no email)? | F-001 | Investigating | Long-term investigation; no strict signup blocking in MVP |
 | OQ-002 | Teacher identity verification? | F-001 | Decided | Optional (not required in MVP) |
 | OQ-003 | Session token expiry policy? | F-001 | Open | — |
-| OQ-004 | Co-teacher role distinct from supervisor? | F-002 | Decided | Optional role assignable by teacher, including via scheduling |
+| OQ-004 | Co-teacher role distinct from supervisor? | F-002 | Open | Deferred until post-pilot; MVP uses teacher + supervisor permissions |
 | OQ-005 | Cross-circle role combinations? | F-002 | Open | Likely yes |
 | OQ-006 | Circle ownership transfer on account deletion? | F-002 | Open | — |
 | OQ-007 | Student "opt-out" of a round? | F-003 | Decided | Allowed for temporary issues with teacher/supervisor approval |
 | OQ-008 | Per-student recitation timer? | F-003 | Open | — |
 | OQ-009 | Pre-set queue before session starts? | F-003 | Open | — |
-| OQ-010 | Late-joining student added to current round? | F-003 | Open | Tentatively: end of current round |
+| OQ-010 | Late-joining student added to current round? | F-003 | Decided | Added to end of current active round |
 | OQ-011 | Double-queue per student per round? | F-003 | Open | — |
 | OQ-012 | Announcement-only channels? | F-004 | Open | — |
 | OQ-013 | Voice message maximum length? | F-004 | Open | Tentatively: 5 minutes |

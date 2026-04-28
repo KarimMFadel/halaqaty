@@ -275,6 +275,23 @@ Implements: specs/NNN-feature-name/
 
 PRs are **opened by Copilot**, reviewed and **merged by Karim only**. No merge without all green gates.
 
+### Code Review Policy (Solo Founder)
+
+Halaqaty is currently a solo-founder project with AI agent assistance. Review process:
+
+**Standard flow:** Copilot AI agents open PRs following the Spec-Kit workflow. The Tech Lead agent performs automated review as the first layer. Karim reviews and merges all PRs as the sole human reviewer.
+
+**Security-sensitive code — mandatory manual deep-review by Karim:**
+- Authentication and JWT validation (`/auth/*` handlers, middleware)
+- Authorization and RBAC (circle membership, role validation)
+- Data deletion paths (account, circle, message deletion)
+- Firebase Auth integration points
+- File upload and MinIO access controls
+
+**Accepted risk (solo context):** Logic errors in non-security code may not be caught before merge. Mitigated by: comprehensive automated tests, feature flags for rollback without deployment, and incremental release strategy (alpha → pilot → beta).
+
+**Escalation:** When unsure about security implications — do not merge until sure. Consult the Tech Lead agent for security-specific review.
+
 ---
 
 ## 🤝 Agent Collaboration Model

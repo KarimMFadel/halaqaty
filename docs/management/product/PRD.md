@@ -142,6 +142,11 @@ This creates low retention, operational friction, and limited scalability for te
 
 **Policy:** No ads in any tier.
 
+**Paywall Activation Decision (TBD):**  
+The free tier is the default through MVP and pilot. The paywall activates when the 300+ MAT target is reached **or** at the public App Store launch (M4), whichever comes later. This trigger must be explicitly confirmed by Karim before M3.
+
+The feature-flag architecture (ADR-005) allows per-user and per-feature activation without deployment.
+
 ---
 
 ## 10) Go-To-Market (GTM)
@@ -170,17 +175,18 @@ This creates low retention, operational friction, and limited scalability for te
 | Premature enablement of video/recording | High | keep both behind feature flags off by default; require privacy framework sign-off before rollout |
 | Multi-circle scheduling conflicts | Medium | conflict warnings, unified student calendar |
 | Slow institutional sales cycle | Medium | prove teacher traction first, then package B2B pilots |
+| App Store / Play Store rejection | High | Pre-submission checklist for audio/video apps; minimum 2-week TestFlight beta before App Store submission; follow Apple HIG for religious/educational apps; avoid keywords that trigger automatic review holds |
 
 ---
 
 ## 12) Milestones
 
-| Milestone | Outcome |
-|---|---|
-| M1 | MVP scope sign-off + pilot readiness |
-| M2 | Pilot launch with queue-centric workflows |
-| M3 | Public beta with retention instrumentation |
-| M4 | Monetization experiment + institution pilot package |
+| Milestone | Outcome | Acceptance Gates |
+|---|---|---|
+| M1 | MVP scope sign-off + pilot readiness | F-001 through F-006 all `✅ Shipped`; internal alpha APK tested by ≥1 pilot teacher with ≥5 students; zero P0 bugs open; Hetzner server live with all services running |
+| M2 | Pilot launch with queue-centric workflows | Google Play Open Beta deployed; 5–10 active pilot teachers onboarded; queue used in ≥3 real sessions; session audio quality rated ≥4/5 by pilot teachers; error rate <1% on auth + queue + session paths |
+| M3 | Public beta with retention instrumentation | Apple TestFlight deployed; 50+ MAT; student WAU/MAU ≥40%; analytics instrumented (circles, session count, queue completion rate); P0 bug SLA <48 h |
+| M4 | Monetization experiment + institution pilot | 150+ MAT; ≥1 paid tier activated (feature-flagged); 2–3 institution pilots running; teacher churn <15%/month; infrastructure scaled to Phase 2 (DEPLOYMENT.md) |
 
 ---
 

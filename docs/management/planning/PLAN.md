@@ -154,7 +154,7 @@ Each feature is documented with: Description, User Stories, Acceptance Criteria,
 
 ---
 
-### F-001 · User Management & Auth | P0 | 🔵 Proposed
+### F-001 · User Management & Auth | P0 | 🟡 Approved
 
 **Description:** Secure user registration and authentication with role assignment.
 
@@ -176,7 +176,7 @@ Each feature is documented with: Description, User Stories, Acceptance Criteria,
 
 ---
 
-### F-002 · Circle Management | P0 | 🔵 Proposed
+### F-002 · Circle Management | P0 | 🟡 Approved
 
 **Description:** The core organizational unit. A circle represents a Quran memorization group led by a teacher.
 
@@ -201,7 +201,7 @@ Each feature is documented with: Description, User Stories, Acceptance Criteria,
 
 ---
 
-### F-003 · 🔥 Recitation Queue System | P0 | 🔵 Proposed
+### F-003 · 🔥 Recitation Queue System | P0 | 🟡 Approved
 
 **Description:** The most unique and critical feature of Halaqaty. An intelligent, real-time ordered queue for students to recite during a live session — structured, transparent, and historically recorded.
 
@@ -290,7 +290,7 @@ Session: "Sunday Halaqa — Week 23"
 
 ---
 
-### F-004 · Real-time Chat System | P0 | 🔵 Proposed
+### F-004 · Real-time Chat System | P0 | 🟡 Approved
 
 **Description:** Full-featured messaging within each circle, with private teacher-student channels.
 
@@ -316,7 +316,7 @@ Session: "Sunday Halaqa — Week 23"
 
 ---
 
-### F-005 · Live Sessions (Audio via LiveKit) | P0 | 🔵 Proposed
+### F-005 · Live Sessions (Audio via LiveKit) | P0 | 🟡 Approved
 
 **Description:** Unlimited-time audio-only sessions integrated with the recitation queue system, powered by LiveKit (open-source, self-hosted WebRTC SFU). Video is explicitly deferred to post-MVP and gated by feature flag.
 
@@ -382,7 +382,7 @@ Zoom and Google Meet apply heavy audio processing optimized for speech — this 
 
 ---
 
-### F-006 · Schedule & Calendar | P0 | 🔵 Proposed
+### F-006 · Schedule & Calendar | P0 | 🟡 Approved
 
 **Description:** Recurring weekly schedule management with smart reminders and attendance tracking.
 
@@ -640,6 +640,9 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full phase-by-phase plan with server 
 - [ ] Audio-only hardening (no video publish paths in MVP clients/tokens)
 
 ### Month 5: Recitation Queue System
+
+> **Dependency note:** Queue work starts after Month 4 LiveKit basic session (audio connect, teacher mute control) is functional end-to-end. Months 4–5 may overlap by 2–3 weeks: LiveKit core stabilises in Month 4 while queue backend work begins in parallel in early Month 5.
+
 - [ ] Queue backend: real-time queue state via WebSocket
 - [ ] Queue ordering modes (join order, manual)
 - [ ] Student status (waiting/reciting/completed/skipped)
@@ -653,11 +656,12 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full phase-by-phase plan with server 
 - [ ] Auto-attendance from LiveKit room join events
 - [ ] Manual attendance override
 
-### Month 7: Progress Tracking & Reports
-- [ ] Memorization log (linked to queue history)
-- [ ] Visual Quran map
-- [ ] Progress charts (weekly/monthly)
-- [ ] Basic PDF report export
+### Month 7: Progress Tracking (Session-Level)
+- [ ] Memorization log linked to queue history (session-level visibility)
+- [ ] Teacher notes per student per session
+- [ ] Session history view: past sessions with grades per student
+
+> **Scope note:** Visual Quran map, progress charts, and PDF export are P1/P2 features moved to Month 9–10. See FEATURES.md F-007 and F-011 for priority classification.
 
 ### Month 8: Beta Launch Preparation
 - [ ] Google Play Beta deployment
@@ -671,6 +675,9 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full phase-by-phase plan with server 
 - [ ] Performance tuning (WebSocket scalability)
 - [ ] Student + teacher dashboards (P2)
 - [ ] Multi-language: English + Arabic complete
+- [ ] Visual Quran map — color-coded memorized portions (F-007, P1)
+- [ ] Progress charts: weekly/monthly trend views (F-007, P1)
+- [ ] Basic PDF report export (F-011, P2)
 
 ### Month 11: App Store Launch
 - [ ] Apple App Store submission and review
@@ -683,6 +690,16 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full phase-by-phase plan with server 
 - [ ] AI Tajweed assessment research spike
 - [ ] Flutter Web deployment (PWA)
 - [ ] Analytics dashboard
+
+### ⚠️ Timeline Realism — Solo Developer
+
+This 12-month plan is aggressive for a solo build. Calibration notes:
+- **15–20% buffer** should be expected for debugging, App Store review, pilot feedback, and integration surprises.
+- **Month 10–12 items are stretch goals.** If earlier phases slip, these are the first to be deferred.
+- **Hard milestones:** M1 (internal alpha) and M2 (pilot launch with 5–10 teachers) are non-negotiable targets. M3 and M4 are aspirational.
+- **Realistic range:** 12 months if velocity is strong; 14–15 months is equally valid and preferred over shipping incomplete features.
+
+If in doubt, extend the timeline — do not cut quality gates.
 
 ---
 

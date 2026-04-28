@@ -340,6 +340,24 @@ final audioConstraints = {
 };
 ```
 
+### 3.x Network Requirements
+
+Halaqaty sessions are hosted on **Hetzner Nuremberg (EU)**. Target audience is primarily MENA region (Saudi Arabia, UAE, Egypt).
+
+| Route | Approximate RTT | Assessment |
+|-------|----------------|------------|
+| Riyadh → Hetzner Nuremberg | ~60 ms | ✅ Acceptable for real-time audio |
+| Cairo → Hetzner Nuremberg | ~55 ms | ✅ Acceptable |
+| Dubai → Hetzner Nuremberg | ~65 ms | ✅ Acceptable |
+| Jakarta → Hetzner Nuremberg | ~160 ms | ⚠️ Degraded; acceptable for V1, monitor |
+
+**Bandwidth requirements per session:**
+- Audio only (Opus 48 kbps per participant): ~50 kbps upstream per student
+- 30-student circle: ~1.5 Mbps total downstream at the server
+- LiveKit SFU handles fan-out; individual student only sends ~50 kbps and receives the teacher stream (~50 kbps)
+
+**Decision:** Stay with Hetzner Nuremberg for Phase 1. 60 ms RTT is within LiveKit's acceptable threshold for voice (< 150 ms). Revisit geographic expansion (Hetzner Ashburn or Singapore) at 500+ concurrent users.
+
 ---
 
 ## 4. Database Schema
@@ -440,9 +458,20 @@ final audioConstraints = {
 | phone | VARCHAR(20) | UNIQUE | Phone number with country code |
 | avatar_url | TEXT | | MinIO object URL |
 | preferred_lang | VARCHAR(10) | DEFAULT 'ar' | ISO 639-1 language code |
-| fcm_token | TEXT | | Current device FCM token |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
 | updated_at | TIMESTAMPTZ | DEFAULT NOW() | |
+
+#### `device_tokens`
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK, DEFAULT gen_random_uuid() | |
+| user_id | UUID | FK → users.id NOT NULL ON DELETE CASCADE | Token owner |
+| token | TEXT | NOT NULL | FCM device token |
+| platform | VARCHAR(10) | CHECK IN ('ios','android','web') NOT NULL | Device platform |
+| device_name | VARCHAR(100) | | Optional human-readable label |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+| last_seen_at | TIMESTAMPTZ | DEFAULT NOW() | Updated on each successful FCM delivery |
+| UNIQUE | (user_id, token) | | One entry per device per user |
 
 #### `circles`
 | Column | Type | Constraints | Description |
@@ -457,6 +486,7 @@ final audioConstraints = {
 | privacy | VARCHAR(20) | CHECK IN ('public','private') | |
 | gender_spec | VARCHAR(20) | CHECK IN ('male','female','mixed','unspecified') | |
 | language | VARCHAR(10) | DEFAULT 'ar' | Primary language |
+| grading_policy | VARCHAR(20) | CHECK IN ('required','optional') DEFAULT 'required' | Whether grading is required after each completed turn |
 | is_archived | BOOLEAN | DEFAULT FALSE | |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
 
@@ -527,7 +557,8 @@ final audioConstraints = {
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | UUID | PK | |
-| circle_id | UUID | FK → circles.id NOT NULL | Null for DMs |
+| circle_id | UUID | FK → circles.id | NULL for direct messages |
+| CHECK | (circle_id IS NOT NULL OR dm_recipient_id IS NOT NULL) | | At least one must be set |
 | dm_recipient_id | UUID | FK → users.id | For direct messages |
 | sender_id | UUID | FK → users.id NOT NULL | |
 | content | TEXT | | Text content (empty for voice/files) |
@@ -584,9 +615,9 @@ final audioConstraints = {
 | id | UUID | PK | |
 | circle_id | UUID | FK → circles.id NOT NULL | |
 | day_of_week | INTEGER | CHECK BETWEEN 0 AND 6 | 0=Sunday, 6=Saturday |
-| start_time | TIME | NOT NULL | Local time |
-| end_time | TIME | NOT NULL | Local time |
-| timezone | VARCHAR(50) | NOT NULL | IANA timezone (e.g., 'Asia/Riyadh') |
+| start_time | TIME | NOT NULL | Stored in local time; use timezone column to convert to UTC |
+| end_time | TIME | NOT NULL | Stored in local time; use timezone column to convert to UTC |
+| timezone | VARCHAR(50) | NOT NULL | IANA timezone string; used to interpret start_time/end_time as local and convert to UTC |
 | is_active | BOOLEAN | DEFAULT TRUE | |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
 
@@ -613,6 +644,18 @@ Removed from MVP scope. The product currently supports direct student and teache
 | role | VARCHAR(20) | CHECK IN ('admin','teacher','student') | |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
 
+#### `quran_surahs` *(Reference — Static Seed Data)*
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK | Surah number 1–114 |
+| name_arabic | VARCHAR(100) | NOT NULL | Arabic name (e.g., البقرة) |
+| name_transliterated | VARCHAR(100) | NOT NULL | Latin transliteration (e.g., Al-Baqarah) |
+| ayah_count | INTEGER | NOT NULL | Total Ayahs in this Surah |
+| juz_start | INTEGER | NOT NULL | Juz number where this Surah begins (1–30) |
+| revelation_type | VARCHAR(10) | CHECK IN ('meccan','medinan') | |
+
+> **Usage:** Pre-populated by seed migration (all 114 Surahs). Never modified by the application. Ayah range validation in queue API uses this table: `from_ayah >= 1 AND to_ayah <= surah.ayah_count AND from_ayah <= to_ayah`. Invalid ranges return HTTP 422.
+
 ---
 
 ## 5. API Endpoint Planning
@@ -627,7 +670,7 @@ Removed from MVP scope. The product currently supports direct student and teache
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/auth/register` | Create user profile after Firebase registration |
-| POST | `/auth/fcm-token` | Update device FCM token |
+| POST | `/auth/fcm-token` | Register or update a device FCM token (upsert by user_id + token) |
 | GET | `/auth/me` | Get current user profile |
 | PUT | `/auth/me` | Update profile (name, avatar, language) |
 | DELETE | `/auth/me` | Delete account and all data |
@@ -757,7 +800,7 @@ Removed from MVP scope. The product currently supports direct student and teache
 ### 6.4 Input Validation
 
 - All API inputs validated and sanitized server-side (never trust client)
-- Ayah numbers validated against known Surah lengths
+- Ayah numbers validated against `quran_surahs` reference table (e.g., Al-Baqarah has 286 Ayahs; `to_ayah: 300` returns HTTP 422)
 - File type validation (MIME type, not just extension)
 - Max file sizes enforced server-side (not just client-side)
 - SQL injection prevention via parameterized queries (Go `database/sql` with `pgx`)
@@ -789,6 +832,64 @@ Removed from MVP scope. The product currently supports direct student and teache
 - Recording introduces high privacy sensitivity, especially for circles with minors.
 - Any future recording rollout requires explicit participant consent UX, retention limits, and strict access controls.
 - Recording feature flag must remain OFF until privacy/legal framework is approved.
+
+### 6.9 Firebase Auth Availability & Degraded Mode
+
+Firebase Auth has a 99.95% SLA but has experienced brief outages historically. Behavior during unavailability:
+
+| Scenario | System Behavior |
+|----------|----------------|
+| Firebase down — active session in progress | Valid JWTs (< 1 hour old) continue to work; sessions are uninterrupted |
+| Firebase down — new login attempt | Login fails gracefully: "Authentication temporarily unavailable, try again shortly" |
+| Token refresh fails (Firebase down) | Go backend returns HTTP 401; Flutter SDK retries up to 3× before prompting re-login |
+| Firebase down — token < 1 hour old | User continues uninterrupted (cached token still valid) |
+| Extended outage (> 1 hour) | Users with expired tokens must wait for Firebase recovery before re-authenticating |
+
+**Cached Token Policy:** Firebase tokens have a 1-hour TTL. The FlutterFire SDK caches and auto-refreshes silently. During a brief outage, users authenticated within the last hour are unaffected.
+
+**Migration Path Away from Firebase Auth:** Firebase Auth is the identity layer only (ADR-001). Authorization lives in our PostgreSQL `users` table. Migrating to another provider (e.g., Auth0, Supabase Auth, custom JWT) requires:
+1. New JWT validation middleware in Go (swap Firebase public key URL)
+2. New Flutter auth package
+3. One-time migration of `users.firebase_uid` values
+
+The architecture isolates this change to two files: the Go middleware and the Flutter auth service.
+
+---
+
+## 7. Dependency Version Matrix
+
+Pin versions here. Update this table when bumping a dependency.
+
+### Flutter
+
+| Package | Pinned Version | Notes |
+|---------|---------------|-------|
+| `livekit_client` | `^2.4.0` | Official LiveKit Flutter SDK; breaking changes between major versions |
+| `firebase_auth` | `^5.3.0` | Firebase Auth (FlutterFire) |
+| `firebase_messaging` | `^15.1.0` | FCM push notifications |
+| `flutter_riverpod` | `^2.6.0` | State management (ADR-003) |
+| `go_router` | `^14.6.0` | Navigation |
+
+### Go Backend
+
+| Module | Pinned Version | Notes |
+|--------|---------------|-------|
+| `labstack/echo/v4` | `v4.13.x` | HTTP framework (ADR-002) |
+| `livekit/server-sdk-go` | `v1.7.x` | LiveKit room + token management |
+| `golang-jwt/jwt/v5` | `v5.2.x` | JWT validation |
+| `jackc/pgx/v5` | `v5.7.x` | PostgreSQL driver |
+| `golang-migrate/migrate/v4` | `v4.18.x` | Schema migrations (ADR-006) |
+| `firebase.google.com/go/v4` | `v4.14.x` | Firebase Admin SDK (FCM) |
+
+### Infrastructure
+
+| Component | Minimum Version | Notes |
+|-----------|----------------|-------|
+| LiveKit Server | `v1.8.x` | Must match `server-sdk-go` major version |
+| PostgreSQL | `16.x` | Requires `gen_random_uuid()` (PG 13+) |
+| Docker | `26.x` | Local dev and production |
+
+> **Policy:** Use `^` (caret) pinning in `pubspec.yaml` and `go.mod`. Pin LiveKit Server version explicitly in `docker-compose.yml`. Version bumps require test run and PR description callout.
 
 ---
 

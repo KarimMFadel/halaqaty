@@ -1,0 +1,1170 @@
+openapi: 3.0.3
+info:
+  title: Halaqaty API
+  description: |
+    REST API for the Halaqaty Quran memorization circle management platform.
+
+    **Authentication:** All endpoints except `/auth/*` require a Firebase JWT in the `Authorization: Bearer <token>` header.
+
+    **Base URL:** `https://api.halaqaty.app/api/v1`
+
+    **WebSocket:** Real-time events (queue, session, chat) are delivered over WebSocket. See [ws_events.md](ws_events.md) for the full event catalogue.
+  version: 1.0.0
+  contact:
+    name: Halaqaty
+    url: https://halaqaty.app
+
+servers:
+  - url: https://api.halaqaty.app/api/v1
+    description: Production
+  - url: https://staging.api.halaqaty.app/api/v1
+    description: Staging
+  - url: http://localhost:8080/api/v1
+    description: Local development
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Auth
+    description: User registration, profile, and device management
+  - name: Circles
+    description: Circle (halaqah) CRUD and membership
+  - name: Sessions
+    description: Live session management
+  - name: Queue
+    description: Recitation queue within a session
+  - name: Chat
+    description: Circle and direct messages
+  - name: Schedules
+    description: Weekly recurring schedules
+
+# ─────────────────────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────────────────────
+paths:
+
+  # ── Auth ──────────────────────────────────────────────────
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Create user profile after Firebase registration
+      security: []
+      description: |
+        Called once after a successful Firebase Auth sign-up to create the user
+        record in our PostgreSQL `users` table. Idempotent — safe to call again
+        if the first call failed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User profile created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: User already exists (idempotent — returns existing profile)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+
+  /auth/fcm-token:
+    post:
+      tags: [Auth]
+      summary: Register or update a device FCM token (upsert by user_id + token)
+      description: |
+        Registers a new device FCM token for push notifications. Uses upsert
+        semantics — if the token already exists for this user, updates `last_seen_at`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, platform]
+              properties:
+                token:
+                  type: string
+                  description: FCM device registration token
+                platform:
+                  type: string
+                  enum: [ios, android, web]
+                device_name:
+                  type: string
+                  maxLength: 100
+                  description: Optional human-readable device label
+      responses:
+        '200':
+          description: Token registered or updated
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user profile
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags: [Auth]
+      summary: Update profile (name, avatar, language)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags: [Auth]
+      summary: Delete account and all associated data
+      description: |
+        Permanently deletes the account, all circles owned by the user (archiving
+        them for members), all messages sent by the user, and all progress records.
+        This operation is irreversible and GDPR-compliant.
+      responses:
+        '204':
+          description: Account deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── Circles ───────────────────────────────────────────────
+  /circles:
+    get:
+      tags: [Circles]
+      summary: List circles the authenticated user is a member of
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [teacher, student, supervisor]
+          description: Filter by the user's role in the circle
+      responses:
+        '200':
+          description: List of circles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CircleSummary'
+    post:
+      tags: [Circles]
+      summary: Create a new circle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCircleRequest'
+      responses:
+        '201':
+          description: Circle created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Circle'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /circles/{circleId}:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    get:
+      tags: [Circles]
+      summary: Get circle details
+      responses:
+        '200':
+          description: Circle details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Circle'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Circles]
+      summary: Update circle settings (teacher only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCircleRequest'
+      responses:
+        '200':
+          description: Updated circle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Circle'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Circles]
+      summary: Archive a circle (teacher only)
+      responses:
+        '204':
+          description: Circle archived
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /circles/{circleId}/members:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    get:
+      tags: [Circles]
+      summary: List circle members
+      responses:
+        '200':
+          description: Circle members
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CircleMember'
+
+  /circles/{circleId}/members/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      tags: [Circles]
+      summary: Remove a member from the circle (teacher only)
+      responses:
+        '204':
+          description: Member removed
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /circles/join:
+    post:
+      tags: [Circles]
+      summary: Join a circle using an invite code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invite_code]
+              properties:
+                invite_code:
+                  type: string
+                  pattern: '^[A-Z0-9]{3}-[A-Z0-9]{4}$'
+                  example: HLQ-7X2K
+      responses:
+        '200':
+          description: Joined the circle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Circle'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Invite code not found or expired
+        '409':
+          description: User is already a member
+
+  # ── Sessions ──────────────────────────────────────────────
+  /circles/{circleId}/sessions:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    get:
+      tags: [Sessions]
+      summary: List sessions for a circle
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [scheduled, active, ended]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Pagination cursor (opaque, from previous response)
+      responses:
+        '200':
+          description: Session list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSessions'
+    post:
+      tags: [Sessions]
+      summary: Create a new session (teacher only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+
+  /sessions/{sessionId}/start:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      tags: [Sessions]
+      summary: Start a session — creates LiveKit room and returns token (teacher only)
+      responses:
+        '200':
+          description: Session started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionStartResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Session already started
+
+  /sessions/{sessionId}/join:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      tags: [Sessions]
+      summary: Join an active session — returns LiveKit token (members only)
+      responses:
+        '200':
+          description: LiveKit token for this session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionJoinResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Session is not active
+
+  /sessions/{sessionId}/end:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      tags: [Sessions]
+      summary: End a session (teacher only)
+      responses:
+        '200':
+          description: Session ended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Queue ─────────────────────────────────────────────────
+  /sessions/{sessionId}/queue:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      tags: [Queue]
+      summary: Get current queue state
+      responses:
+        '200':
+          description: Full queue snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueState'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /sessions/{sessionId}/queue/rounds:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      tags: [Queue]
+      summary: Start a new recitation round (teacher/supervisor only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartRoundRequest'
+      responses:
+        '201':
+          description: Round started, queue populated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueState'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: Invalid Ayah range (e.g., to_ayah exceeds Surah length)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /sessions/{sessionId}/queue/entries/{entryId}/grade:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - name: entryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [Queue]
+      summary: Submit grade for a completed recitation turn (teacher/supervisor only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GradeRequest'
+      responses:
+        '200':
+          description: Grade recorded
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Entry is not in a gradeable state
+
+  /sessions/{sessionId}/queue/opt-out:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      tags: [Queue]
+      summary: Opt out of the current round (student only, requires teacher/supervisor approval)
+      responses:
+        '200':
+          description: Opt-out recorded; entry status set to opted_out
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: No active round or user is not in the queue
+
+  # ── Chat ──────────────────────────────────────────────────
+  /circles/{circleId}/messages:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    get:
+      tags: [Chat]
+      summary: List recent messages in a circle chat
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: before
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Return messages before this message ID (for pagination)
+      responses:
+        '200':
+          description: Messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMessages'
+    post:
+      tags: [Chat]
+      summary: Send a text, image, or file message to circle chat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '201':
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /circles/{circleId}/messages/{messageId}:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+      - name: messageId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      tags: [Chat]
+      summary: Delete a message (own messages within 10 min; teacher can delete any)
+      responses:
+        '204':
+          description: Message deleted
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Message is older than 10 minutes (for non-teacher users)
+
+  # ── Schedules ─────────────────────────────────────────────
+  /circles/{circleId}/schedules:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    get:
+      tags: [Schedules]
+      summary: List schedules for a circle
+      responses:
+        '200':
+          description: Schedules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Schedule'
+    post:
+      tags: [Schedules]
+      summary: Create a recurring schedule entry (teacher only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateScheduleRequest'
+      responses:
+        '201':
+          description: Schedule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+# ─────────────────────────────────────────────────────────────
+# Components
+# ─────────────────────────────────────────────────────────────
+components:
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase JWT
+
+  parameters:
+    CircleId:
+      name: circleId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Invalid request body or parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Missing or invalid Firebase JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Authenticated user lacks required role for this action
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+
+    # ── Users ──────────────────────────────────────────────
+    RegisterRequest:
+      type: object
+      required: [firebase_uid, display_name]
+      properties:
+        firebase_uid:
+          type: string
+          description: Firebase Auth UID
+        display_name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        preferred_language:
+          type: string
+          enum: [ar, en]
+          default: ar
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        display_name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        bio:
+          type: string
+          maxLength: 500
+        preferred_language:
+          type: string
+          enum: [ar, en]
+        avatar_url:
+          type: string
+          format: uri
+          description: Pre-signed MinIO URL returned by the upload endpoint
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        firebase_uid:
+          type: string
+        display_name:
+          type: string
+        bio:
+          type: string
+          nullable: true
+        avatar_url:
+          type: string
+          nullable: true
+        preferred_language:
+          type: string
+          enum: [ar, en]
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Circles ────────────────────────────────────────────
+    CreateCircleRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        rules:
+          type: string
+          maxLength: 1000
+        max_capacity:
+          type: integer
+          minimum: 2
+          maximum: 200
+          default: 50
+        is_private:
+          type: boolean
+          default: false
+        gender_restriction:
+          type: string
+          enum: [male, female, mixed]
+          default: mixed
+        language:
+          type: string
+          default: ar
+        grading_policy:
+          type: string
+          enum: [required, optional]
+          default: required
+
+    UpdateCircleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        rules:
+          type: string
+          maxLength: 1000
+        max_capacity:
+          type: integer
+          minimum: 2
+          maximum: 200
+        is_private:
+          type: boolean
+        grading_policy:
+          type: string
+          enum: [required, optional]
+
+    CircleSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        member_count:
+          type: integer
+        my_role:
+          type: string
+          enum: [teacher, student, supervisor]
+        is_private:
+          type: boolean
+        is_archived:
+          type: boolean
+
+    Circle:
+      allOf:
+        - $ref: '#/components/schemas/CircleSummary'
+        - type: object
+          properties:
+            description:
+              type: string
+              nullable: true
+            rules:
+              type: string
+              nullable: true
+            invite_code:
+              type: string
+            max_capacity:
+              type: integer
+            language:
+              type: string
+            grading_policy:
+              type: string
+              enum: [required, optional]
+            created_at:
+              type: string
+              format: date-time
+
+    CircleMember:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        avatar_url:
+          type: string
+          nullable: true
+        role:
+          type: string
+          enum: [teacher, student, supervisor]
+        joined_at:
+          type: string
+          format: date-time
+
+    # ── Sessions ───────────────────────────────────────────
+    CreateSessionRequest:
+      type: object
+      properties:
+        notes:
+          type: string
+          maxLength: 500
+        scheduled_at:
+          type: string
+          format: date-time
+          description: Optional — if null, session is ad-hoc
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        circle_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [scheduled, active, ended]
+        created_by:
+          type: string
+          format: uuid
+        livekit_room_name:
+          type: string
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+        participant_count:
+          type: integer
+
+    SessionStartResponse:
+      type: object
+      properties:
+        session:
+          $ref: '#/components/schemas/Session'
+        livekit_url:
+          type: string
+          format: uri
+        livekit_token:
+          type: string
+          description: LiveKit room JWT for this user
+
+    SessionJoinResponse:
+      type: object
+      properties:
+        session:
+          $ref: '#/components/schemas/Session'
+        livekit_url:
+          type: string
+          format: uri
+        livekit_token:
+          type: string
+
+    PaginatedSessions:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
+        next_cursor:
+          type: string
+          nullable: true
+
+    # ── Queue ──────────────────────────────────────────────
+    StartRoundRequest:
+      type: object
+      required: [surah_id, from_ayah, to_ayah]
+      properties:
+        surah_id:
+          type: integer
+          minimum: 1
+          maximum: 114
+          description: Surah number (1–114)
+        from_ayah:
+          type: integer
+          minimum: 1
+        to_ayah:
+          type: integer
+          minimum: 1
+          description: Validated against quran_surahs.ayah_count; returns 422 if exceeded
+        grading_required:
+          type: boolean
+          description: Override circle's default grading_policy for this round
+        student_order:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Optional pre-defined student order; defaults to join order
+
+    GradeRequest:
+      type: object
+      required: [grade]
+      properties:
+        grade:
+          type: string
+          enum: [excellent, good, needs_improvement, repeat]
+        notes:
+          type: string
+          maxLength: 500
+
+    QueueEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        student_name:
+          type: string
+        position:
+          type: integer
+        status:
+          type: string
+          enum: [waiting, reciting, completed, skipped, opted_out]
+        surah_id:
+          type: integer
+        from_ayah:
+          type: integer
+        to_ayah:
+          type: integer
+        grade:
+          type: string
+          enum: [excellent, good, needs_improvement, repeat]
+          nullable: true
+        grade_notes:
+          type: string
+          nullable: true
+
+    QueueState:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        round_number:
+          type: integer
+        status:
+          type: string
+          enum: [active, paused, ended]
+        surah_id:
+          type: integer
+          nullable: true
+        from_ayah:
+          type: integer
+          nullable: true
+        to_ayah:
+          type: integer
+          nullable: true
+        grading_required:
+          type: boolean
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/QueueEntry'
+
+    # ── Chat ───────────────────────────────────────────────
+    SendMessageRequest:
+      type: object
+      required: [message_type]
+      properties:
+        message_type:
+          type: string
+          enum: [text, image, file, voice]
+        content:
+          type: string
+          maxLength: 4000
+          description: Required for message_type=text
+        media_key:
+          type: string
+          description: Required for image/file/voice — MinIO object key from upload endpoint
+        reply_to_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        circle_id:
+          type: string
+          format: uuid
+          nullable: true
+        dm_recipient_id:
+          type: string
+          format: uuid
+          nullable: true
+        sender_id:
+          type: string
+          format: uuid
+        sender_name:
+          type: string
+        message_type:
+          type: string
+          enum: [text, image, file, voice]
+        content:
+          type: string
+          nullable: true
+        media_url:
+          type: string
+          nullable: true
+          description: Pre-signed MinIO URL (expires in 7 days)
+        reply_to_id:
+          type: string
+          format: uuid
+          nullable: true
+        sent_at:
+          type: string
+          format: date-time
+
+    PaginatedMessages:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        has_more:
+          type: boolean
+
+    # ── Schedules ──────────────────────────────────────────
+    CreateScheduleRequest:
+      type: object
+      required: [day_of_week, start_time, end_time, timezone]
+      properties:
+        day_of_week:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: 0 = Sunday, 6 = Saturday
+        start_time:
+          type: string
+          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          description: Local time in HH:MM format (interpreted using timezone)
+          example: "20:00"
+        end_time:
+          type: string
+          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          example: "21:30"
+        timezone:
+          type: string
+          description: IANA timezone string
+          example: Asia/Riyadh
+        is_recurring:
+          type: boolean
+          default: true
+
+    Schedule:
+      allOf:
+        - $ref: '#/components/schemas/CreateScheduleRequest'
+        - type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            circle_id:
+              type: string
+              format: uuid
+            next_occurrence:
+              type: string
+              format: date-time
+              description: UTC datetime of the next occurrence
+
+    # ── Errors ─────────────────────────────────────────────
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Machine-readable error code
+              example: FORBIDDEN
+            message:
+              type: string
+              description: Human-readable description
+
+    ValidationError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: VALIDATION_FAILED
+            message:
+              type: string
+            fields:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  message:
+                    type: string

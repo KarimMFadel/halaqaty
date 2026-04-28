@@ -56,7 +56,7 @@ This is a **living document**. It tracks every feature from proposal through del
 
 ### F-001: User Management & Authentication
 
-**Priority:** P0 | **Status:** 🔵 Proposed | **Phase:** 1
+**Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 1
 
 #### Description
 Secure, multi-method user registration and authentication system with role-based access control. This is the foundation everything else depends on.
@@ -90,7 +90,7 @@ Secure, multi-method user registration and authentication system with role-based
 
 ### F-002: Circle Management
 
-**Priority:** P0 | **Status:** 🔵 Proposed | **Phase:** 1
+**Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 1
 
 #### Description
 Circles are the core organizational unit. A circle is a Quran memorization group with a teacher, students, optional supervisors, and associated sessions, chat, and progress records.
@@ -131,7 +131,7 @@ Circles are the core organizational unit. A circle is a Quran memorization group
 
 ### F-003: Recitation Queue System
 
-**Priority:** P0 | **Status:** 🔵 Proposed | **Phase:** 2
+**Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 2
 
 #### Description
 The most unique and differentiating feature of Halaqaty. An intelligent, real-time ordered queue for student recitation during live sessions. This replaces the chaotic verbal ordering common in circles today.
@@ -215,11 +215,11 @@ When teacher resets the queue:
 - **OQ-011:** Should there be a "double queue" — student appears twice (once for new memorization, once for revision) in the same round?
 
 #### Design Decisions
-- **DD-005:** Queue state is stored server-side in PostgreSQL (not just in-memory). This ensures history is preserved and reconnecting clients can recover state.
-- **DD-006:** WebSocket events are the delivery mechanism, but PostgreSQL is the source of truth.
-- **DD-007:** Grading mode is configured per circle (required vs optional per completed turn).
-- **DD-008:** Temporary student opt-out is allowed for operational issues and is logged in queue history.
-- **DD-009:** Late-joining students are appended to the end of the current active round.
+- **DD-020:** Queue state is stored server-side in PostgreSQL (not just in-memory). This ensures history is preserved and reconnecting clients can recover state.
+- **DD-021:** WebSocket events are the delivery mechanism, but PostgreSQL is the source of truth.
+- **DD-022:** Grading mode is configured per circle (required vs optional per completed turn).
+- **DD-023:** Temporary student opt-out is allowed for operational issues and is logged in queue history.
+- **DD-024:** Late-joining students are appended to the end of the current active round.
 
 #### Dependencies
 - F-001 (User Auth)
@@ -231,7 +231,7 @@ When teacher resets the queue:
 
 ### F-004: Real-time Chat
 
-**Priority:** P0 | **Status:** 🔵 Proposed | **Phase:** 1
+**Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 1
 
 #### Description
 Full-featured messaging within circles, replacing WhatsApp/Telegram group chats and enabling structured communication between teachers and students.
@@ -257,8 +257,8 @@ Full-featured messaging within circles, replacing WhatsApp/Telegram group chats 
 - **OQ-014:** Should we support emoji reactions?
 
 #### Design Decisions
-- **DD-009:** Voice messages are stored in MinIO with a pre-signed URL returned to clients. URLs expire after 7 days (renewable).
-- **DD-010:** No end-to-end encryption in V1 (complex to implement with group messages). Encryption in transit (TLS) is sufficient for V1. E2E encryption is a P3 item.
+- **DD-025:** Voice messages are stored in MinIO with a pre-signed URL returned to clients. URLs expire after 7 days (renewable).
+- **DD-026:** No end-to-end encryption in V1 (complex to implement with group messages). Encryption in transit (TLS) is sufficient for V1. E2E encryption is a P3 item.
 
 #### Dependencies
 - F-001 (User Auth)
@@ -268,7 +268,7 @@ Full-featured messaging within circles, replacing WhatsApp/Telegram group chats 
 
 ### F-005: Live Sessions (LiveKit)
 
-**Priority:** P0 | **Status:** 🔵 Proposed | **Phase:** 2
+**Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 2
 
 #### Description
 Unlimited-time audio-only sessions powered by LiveKit (open-source, self-hosted WebRTC SFU). This is the primary replacement for Zoom/Google Meet in MVP. Video is deferred to post-MVP behind a feature flag.
@@ -349,7 +349,7 @@ Step 4: Media Routing
 
 ### F-006: Schedule & Calendar
 
-**Priority:** P0 | **Status:** 🔵 Proposed | **Phase:** 2
+**Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 2
 
 #### Description
 Recurring weekly schedule management with smart reminders and integrated attendance tracking.
@@ -636,6 +636,21 @@ Ideas from the broader community will be logged here for team review:
 | # | Suggestion | Source | Date | Status |
 |---|-----------|--------|------|--------|
 | CS-001 | *(placeholder)* | — | — | — |
+
+---
+
+## Appendix: Competitor Analysis Alignment
+
+The [Competitor Analysis](../business/QURAN_MEMORIZATION_COMPETITOR_ANALYSIS.md) recommends several immediate actions. This table maps each recommendation to the current feature backlog:
+
+| Competitor Rec | Status in Halaqaty |
+|---------------|-------------------|
+| Hifz mode UX | Addressed by F-003 (Recitation Queue System, P0) — turn-based queue replaces ad-hoc verbal ordering |
+| Script profile parity (Hafs, Warsh) | Not in current backlog — add as P2 item in F-009 (Digital Mushaf) if pilot teachers request |
+| Free correction quota | MVP is fully free; correction/grading is unrestricted in all tiers |
+| Audio quality for recitation | Addressed by F-005 LiveKit config (noise suppression OFF, Opus 48 kbps min) |
+
+**Note:** The competitor analysis is treated as **strategic input**, not committed scope. Items not mapped above are deferred to the post-pilot backlog.
 
 ---
 

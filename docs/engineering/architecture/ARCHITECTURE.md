@@ -340,7 +340,7 @@ final audioConstraints = {
 };
 ```
 
-### 3.x Network Requirements
+### 3.5 Network Requirements
 
 Halaqaty sessions are hosted on **Hetzner Nuremberg (EU)**. Target audience is primarily MENA region (Saudi Arabia, UAE, Egypt).
 
@@ -357,6 +357,8 @@ Halaqaty sessions are hosted on **Hetzner Nuremberg (EU)**. Target audience is p
 - LiveKit SFU handles fan-out; individual student only sends ~50 kbps and receives the teacher stream (~50 kbps)
 
 **Decision:** Stay with Hetzner Nuremberg for Phase 1. 60 ms RTT is within LiveKit's acceptable threshold for voice (< 150 ms). Revisit geographic expansion (Hetzner Ashburn or Singapore) at 500+ concurrent users.
+
+> **⚠️ Investigation pending — server location not yet validated:** No systematic latency benchmarking or region testing has been performed. The 60 ms figure above is an estimate from public ping data, not from actual Hetzner load tests. If pilot teachers in Egypt or Gulf report noticeable audio lag, the first corrective action is to evaluate alternative Hetzner regions (e.g., Helsinki, Singapore) or other providers (e.g., Fly.io, Railway, Vultr) for lower-latency MENA routing. This is a known open item for Phase 1 evaluation.
 
 ---
 
@@ -375,8 +377,7 @@ Halaqaty sessions are hosted on **Hetzner Nuremberg (EU)**. Target audience is p
 │ email         │     │ role              │     │ description   │
 │ phone         │     │ joined_at         │     │ teacher_id(FK)│
 │ avatar_url    │     └───────────────────┘     │ invite_code   │
-│ fcm_token     │                               │ max_members   │
-│ preferred_lang│     ┌───────────────────┐     │ privacy       │
+│ preferred_lang│     ┌───────────────────┐     │ max_members   │
 │ created_at    │                               │ gender_spec   │
 │ updated_at    │                               │ created_at    │
 └──────┬────────┘                               └───────┬───────┘

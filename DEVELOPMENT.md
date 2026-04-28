@@ -86,16 +86,16 @@ Every feature in Halaqaty follows this exact pipeline. **No shortcuts.**
 
 **Phase 1: Specify** → **Phase 2: Clarify** → **Phase 3: Checklist** → **Phase 4: Plan** → **Phase 5: Tasks** → **Phase 6: Analyze** → **Phase 7: Implement**
 
-All agents (Senior Golang Developer, Senior Flutter Mobile Engineer, Architect, Tech Lead, Team Leader) collaborate throughout all phases. See [`docs/AGENT_COLLABORATION_GUIDE.md`](docs/AGENT_COLLABORATION_GUIDE.md) for agent roles and collaboration patterns.
+All agents (Senior Golang Developer, Senior Flutter Mobile Engineer, Architect, Tech Lead, Team Leader) collaborate throughout all phases. See [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) for agent roles and collaboration patterns.
 
 ### ✅ Pre-flight checklist
 
 Before running any Spec-Kit command, verify:
 
 ```
-[ ] Feature is listed in docs/FEATURES.md with status ≥ 🟡 Approved
-[ ] All open questions for this feature are Decided in docs/MVP_DECISION_REGISTER.md
-[ ] User journey for this feature is documented in docs/JOURNEY.md
+[ ] Feature is listed in docs/management/product/FEATURES.md with status ≥ 🟡 Approved
+[ ] All open questions for this feature are Decided in docs/management/product/MVP_DECISION_REGISTER.md
+[ ] User journey for this feature is documented in docs/management/product/JOURNEY.md
 [ ] You are on main branch, up to date (git pull)
 ```
 
@@ -114,7 +114,7 @@ Open Copilot Chat in VS Code and run:
 /speckit.specify
 User authentication: email/password, Google Sign-In, and Apple Sign-In (required on iOS).
 Flows: register, login, email verification, password reset, silent token refresh, logout.
-See docs/FEATURES.md F-001 and docs/JOURNEY.md T-01 to T-04 for acceptance criteria.
+See docs/management/product/FEATURES.md F-001 and docs/management/product/JOURNEY.md T-01 to T-04 for acceptance criteria.
 ```
 
 This automatically:
@@ -122,8 +122,8 @@ This automatically:
 - Creates `specs/001-auth/spec.md` with structured user stories and acceptance criteria
 
 **Review before continuing.** Check:
-- User stories match `docs/FEATURES.md` acceptance criteria
-- Edge cases from `docs/JOURNEY.md` are covered
+- User stories match `docs/management/product/FEATURES.md` acceptance criteria
+- Edge cases from `docs/management/product/JOURNEY.md` are covered
 - No `[NEEDS CLARIFICATION]` markers remain
 
 ---
@@ -178,9 +178,9 @@ This creates:
 - `specs/001-auth/quickstart.md` — key validation scenarios
 
 **Review the plan.** Check:
-- DB migration matches `docs/ARCHITECTURE.md` schema exactly
+- DB migration matches `docs/engineering/architecture/ARCHITECTURE.md` schema exactly
 - No new tables or columns invented without an ADR
-- API endpoints match planned contract in `docs/contracts/openapi.yaml`
+- API endpoints match planned contract in `specs/001-auth/contracts/openapi.yaml`
 
 ---
 
@@ -324,7 +324,7 @@ Each agent can ask Karim 5-7 focused questions when unclear:
 
 ### Full Collaboration Guide
 
-See [`docs/AGENT_COLLABORATION_GUIDE.md`](docs/AGENT_COLLABORATION_GUIDE.md) for:
+See [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) for:
 - Detailed agent responsibilities
 - Autonomous decision boundaries
 - Escalation paths
@@ -371,20 +371,33 @@ halaqaty/
 │   ├── agents/                      ← Spec-Kit + custom Copilot agents
 │   └── workflows/                   ← GitHub Actions CI/CD
 ├── docs/                            ← Human-readable strategy & product docs
-│   ├── FEATURES.md                  ← Feature status board (index)
-│   ├── ARCHITECTURE.md              ← DB schema, API endpoints, security
-│   ├── JOURNEY.md                   ← Full user journey (teacher-first)
-│   ├── MVP_DECISION_REGISTER.md     ← All frozen MVP decisions
-│   ├── adr/                         ← Architecture Decision Records
-│   │   ├── README.md                ← ADR index
-│   │   ├── ADR-001-modular-monolith.md
-│   │   ├── ADR-002-go-framework.md
-│   │   ├── ADR-003-flutter-state-management.md
-│   │   ├── ADR-004-auth-boundary.md
-│   │   ├── ADR-005-feature-flags.md
-│   │   └── ADR-006-db-migrations.md
-│   ├── contracts/                   ← OpenAPI spec + WebSocket event catalog
-│   └── arabic/                      ← Arabic business doc mirrors
+│   ├── management/                  ← Business & product strategy
+│   │   ├── product/
+│   │   │   ├── FEATURES.md          ← Feature status board (index)
+│   │   │   ├── PRD.md               ← Product Requirements Document
+│   │   │   ├── JOURNEY.md           ← Full user journey (teacher-first)
+│   │   │   └── MVP_DECISION_REGISTER.md ← All frozen MVP decisions
+│   │   ├── planning/
+│   │   │   └── PLAN.md              ← Master project plan
+│   │   ├── business/
+│   │   └── arabic/
+│   └── engineering/                 ← Technical architecture & deployment
+│       ├── architecture/
+│       │   ├── ARCHITECTURE.md      ← DB schema, API endpoints, security
+│       │   └── adr/                 ← Architecture Decision Records
+│       │       ├── README.md        ← ADR index
+│       │       ├── ADR-001-modular-monolith.md
+│       │       ├── ADR-002-go-framework.md
+│       │       ├── ADR-003-flutter-state-management.md
+│       │       ├── ADR-004-auth-boundary.md
+│       │       ├── ADR-005-feature-flags.md
+│       │       └── ADR-006-db-migrations.md
+│       ├── deployment/
+│       │   └── DEPLOYMENT.md        ← Deployment strategy
+│       ├── development/
+│       │   └── EXECUTION_PLAYBOOK.md ← Development execution workflow
+│       └── collaboration/
+│           └── AGENT_COLLABORATION_GUIDE.md
 ├── specs/                           ← Spec-Kit generated (per feature) — DO NOT EDIT MANUALLY
 │   ├── 001-auth/
 │   │   ├── spec.md
@@ -428,13 +441,13 @@ halaqaty/
 | Document | Purpose |
 |---|---|
 | [`.specify/memory/constitution.md`](.specify/memory/constitution.md) | **Read first.** Governing principles for all code. Defines Spec-Kit workflow (all 7 phases), agent collaboration, and tech stack. |
-| [`docs/AGENT_COLLABORATION_GUIDE.md`](docs/AGENT_COLLABORATION_GUIDE.md) | **Agent workflows.** How 5 engineering agents collaborate, clarification protocols, autonomous decision boundaries, escalation paths. |
-| [`docs/FEATURES.md`](docs/FEATURES.md) | Feature status board — what's Approved vs Proposed |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | DB schema, API endpoints, security model |
-| [`docs/JOURNEY.md`](docs/JOURNEY.md) | Screen-by-screen user journey with error/offline states |
-| [`docs/MVP_DECISION_REGISTER.md`](docs/MVP_DECISION_REGISTER.md) | All frozen MVP rules — binding on implementation |
-| [`docs/adr/`](docs/adr/) | Architecture Decision Records — why we chose each technology |
-| [`docs/contracts/`](docs/contracts/) | OpenAPI spec + WebSocket event catalog |
+| [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) | **Agent workflows.** How 5 engineering agents collaborate, clarification protocols, autonomous decision boundaries, escalation paths. |
+| [`docs/management/product/FEATURES.md`](docs/management/product/FEATURES.md) | Feature status board — what's Approved vs Proposed |
+| [`docs/engineering/architecture/ARCHITECTURE.md`](docs/engineering/architecture/ARCHITECTURE.md) | DB schema, API endpoints, security model |
+| [`docs/management/product/JOURNEY.md`](docs/management/product/JOURNEY.md) | Screen-by-screen user journey with error/offline states |
+| [`docs/management/product/MVP_DECISION_REGISTER.md`](docs/management/product/MVP_DECISION_REGISTER.md) | All frozen MVP rules — binding on implementation |
+| [`docs/engineering/architecture/adr/`](docs/engineering/architecture/adr/) | Architecture Decision Records — why we chose each technology |
+| [`specs/NNN-feature/contracts/`](specs/NNN-feature/contracts/) | OpenAPI spec + WebSocket event catalog |
 
 ---
 

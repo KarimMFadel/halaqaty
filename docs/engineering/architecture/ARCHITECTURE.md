@@ -2,9 +2,9 @@
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
-**Related Documents:** [PRD.md](PRD.md) · [PLAN.md](PLAN.md) · [DEPLOYMENT.md](DEPLOYMENT.md) · [adr/README.md](adr/README.md) · [../DEVELOPMENT.md](../DEVELOPMENT.md) · [AGENT_COLLABORATION_GUIDE.md](AGENT_COLLABORATION_GUIDE.md)
+**Related Documents:** [product/PRD.md](../../management/product/PRD.md) · [planning/PLAN.md](../../management/planning/PLAN.md) · [deployment/DEPLOYMENT.md](../deployment/DEPLOYMENT.md) · [adr/README.md](./adr/README.md) · [../../DEVELOPMENT.md](../../DEVELOPMENT.md) · [collaboration/AGENT_COLLABORATION_GUIDE.md](../collaboration/AGENT_COLLABORATION_GUIDE.md)
 
-> **Key architectural decisions** (framework choice, state management, auth boundary, migrations) are documented as ADRs in [`docs/adr/`](adr/README.md).
+> **Key architectural decisions** (framework choice, state management, auth boundary, migrations) are documented as ADRs in [`./adr/`](./adr/README.md).
 
 ---
 

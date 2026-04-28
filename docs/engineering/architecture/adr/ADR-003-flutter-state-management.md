@@ -64,5 +64,5 @@ We will use **Riverpod 2.x** with `riverpod_generator` for code generation and `
 
 ## References
 
-- `docs/ARCHITECTURE.md` — Flutter app layer architecture diagram
+- `../ARCHITECTURE.md` — Flutter app layer architecture diagram
 - `.specify/memory/constitution.md` — "Flutter + Riverpod 2.x" as mandatory tech stack entry

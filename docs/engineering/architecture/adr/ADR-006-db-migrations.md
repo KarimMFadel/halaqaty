@@ -80,6 +80,6 @@ migrate-status:  # show current migration version
 
 ## References
 
-- `docs/ARCHITECTURE.md` — full DB schema (all tables that migrations will create)
+- `../ARCHITECTURE.md` — full DB schema (all tables that migrations will create)
 - `.specify/memory/constitution.md` — "golang-migrate v4 for schema evolution" entry
 - `Makefile` — `migrate-*` targets

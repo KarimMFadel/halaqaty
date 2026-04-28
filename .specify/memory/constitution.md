@@ -14,7 +14,7 @@ No code is written without a completed and approved Spec-Kit spec. Every feature
 6. **`/speckit.analyze`** — Cross-artifact consistency check before implementation
 7. **`/speckit.implement`** — Execute tasks with tests, reviews, quality gates
 
-**Key Principle**: Agents (Golang Developer, Flutter Engineer, Architect, Tech Lead, Team Leader) collaborate throughout all phases. When ambiguous, **agents ask Karim clarifying questions** rather than guess. See `docs/AGENT_COLLABORATION_GUIDE.md` for full agent collaboration model.
+**Key Principle**: Agents (Golang Developer, Flutter Engineer, Architect, Tech Lead, Team Leader) collaborate throughout all phases. When ambiguous, **agents ask Karim clarifying questions** rather than guess. See `docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md` for full agent collaboration model.
 
 ### II. Spiritual Mission Above All
 Halaqaty is a Quran memorization platform. Every decision — UX, monetization, data retention — must respect the spiritual and educational nature of the product. **No advertisements. Ever.** No dark patterns. No engagement-maximizing tricks. The platform serves the memorizers and their teachers, not the other way around.
@@ -32,7 +32,7 @@ Halaqaty is a Quran memorization platform. Every decision — UX, monetization, 
 - **DNS/TLS**: Cloudflare
 - **Deployment (MVP)**: Docker Compose on a single Hetzner CX22 (~$8–12/month)
 
-No library, framework, or infrastructure change may be introduced without a new ADR in `docs/adr/`.
+No library, framework, or infrastructure change may be introduced without a new ADR in `docs/engineering/architecture/adr/`.
 
 ### IV. Security Invariants (NON-NEGOTIABLE)
 These rules are never broken, in any environment, under any circumstances:

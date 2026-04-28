@@ -77,27 +77,57 @@ halaqaty/
 │   ├── prompts/                   ← Spec-Kit slash command definitions
 │   └── agents/                    ← Copilot agent configurations
 ├── docs/
-│   ├── FEATURES.md                ← Feature status board
-│   ├── ARCHITECTURE.md            ← DB schema, API endpoints, security model
-│   ├── JOURNEY.md                 ← Full user journey (teacher-first, screen-by-screen)
-│   ├── MVP_DECISION_REGISTER.md   ← All frozen MVP decisions (binding on implementation)
-│   ├── PRD.md                     ← Product Requirements Document
-│   ├── PLAN.md                    ← Master project plan
-│   ├── DEPLOYMENT.md              ← Deployment strategy
-│   ├── adr/                       ← Architecture Decision Records
-│   │   ├── README.md              ← ADR index
-│   │   ├── ADR-001-modular-monolith.md
-│   │   ├── ADR-002-go-framework.md
-│   │   ├── ADR-003-flutter-state-management.md
-│   │   ├── ADR-004-auth-boundary.md
-│   │   ├── ADR-005-feature-flags.md
-│   │   └── ADR-006-db-migrations.md
-│   ├── SYNC_GUIDE.md              ← Bilingual doc sync guide
-│   └── arabic/                    ← Arabic business doc mirrors
-│       ├── README_AR.md
-│       ├── PRD_AR.md
-│       ├── PLAN_AR.md
-│       └── FEATURES_AR.md
+│   ├── README.md                  ← Docs overview and navigation
+│   ├── management/                ← Business & product strategy
+│   │   ├── README.md
+│   │   ├── product/               ← PRD, features, user journeys, MVP decisions
+│   │   │   ├── README.md
+│   │   │   ├── PRD.md
+│   │   │   ├── FEATURES.md
+│   │   │   ├── JOURNEY.md
+│   │   │   └── MVP_DECISION_REGISTER.md
+│   │   ├── planning/              ← Master project plan
+│   │   │   ├── README.md
+│   │   │   └── PLAN.md
+│   │   ├── business/              ← Market analysis, competitor research
+│   │   │   ├── README.md
+│   │   │   └── QURAN_MEMORIZATION_COMPETITOR_ANALYSIS.md
+│   │   └── arabic/                ← Arabic business documentation
+│   │       ├── README.md
+│   │       ├── SYNC_GUIDE.md
+│   │       ├── PRD_AR.md
+│   │       ├── PLAN_AR.md
+│   │       └── FEATURES_AR.md
+│   └── engineering/               ← Technical architecture & deployment
+│       ├── README.md
+│       ├── architecture/          ← System design & ADRs
+│       │   ├── README.md
+│       │   ├── ARCHITECTURE.md
+│       │   └── adr/
+│       │       ├── README.md
+│       │       ├── ADR-001-modular-monolith.md
+│       │       ├── ADR-002-go-framework.md
+│       │       ├── ADR-003-flutter-state-management.md
+│       │       ├── ADR-004-auth-boundary.md
+│       │       ├── ADR-005-feature-flags.md
+│       │       └── ADR-006-db-migrations.md
+│       ├── deployment/            ← Deployment strategy & infrastructure
+│       │   ├── README.md
+│       │   └── DEPLOYMENT.md
+│       ├── development/           ← Development setup & execution playbook
+│       │   ├── README.md
+│       │   └── EXECUTION_PLAYBOOK.md
+│       ├── collaboration/         ← Agent collaboration & team coordination
+│       │   ├── README.md
+│       │   ├── AGENT_COLLABORATION_GUIDE.md
+│       │   ├── AGENT_SETUP_REFINEMENT_SUMMARY.md
+│       │   └── DOCUMENTATION_UPDATE_SUMMARY.md
+│       ├── system-design/         ← (Future: Detailed system design)
+│       │   └── README.md
+│       ├── api-docs/              ← (Future: API reference)
+│       │   └── README.md
+│       └── guides/                ← (Future: How-to guides)
+│           └── README.md
 └── specs/                         ← Spec-Kit per-feature specs (generated, do not edit manually)
     └── NNN-feature-name/
         ├── spec.md

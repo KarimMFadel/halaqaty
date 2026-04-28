@@ -61,6 +61,6 @@ Firebase Authentication is already mandated by the tech stack for its cross-plat
 
 ## References
 
-- `docs/ARCHITECTURE.md` — Security Considerations section
-- `docs/MVP_DECISION_REGISTER.md` — OQ-003 (Firebase 1hr refresh), OQ-015 (video disabled)
+- `../ARCHITECTURE.md` — Security Considerations section
+- `../../management/product/MVP_DECISION_REGISTER.md` — OQ-003 (Firebase 1hr refresh), OQ-015 (video disabled)
 - `.specify/memory/constitution.md` — Security invariants 1–3

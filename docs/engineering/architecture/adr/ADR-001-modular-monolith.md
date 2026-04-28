@@ -67,5 +67,5 @@ internal/
 
 ## References
 
-- `docs/ARCHITECTURE.md` — full domain model and DB schema
+- `../ARCHITECTURE.md` — full domain model and DB schema
 - `.specify/memory/constitution.md` — "Build as modular monolith" principle

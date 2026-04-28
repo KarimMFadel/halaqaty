@@ -2,7 +2,7 @@
 
 > Teacher-first, student-aware. Every screen a student sees is downstream of a teacher decision.
 
-**Related Documents:** [PRD.md](PRD.md) · [FEATURES.md](FEATURES.md) · [../DEVELOPMENT.md](../DEVELOPMENT.md)
+**Related Documents:** [PRD.md](./PRD.md) · [FEATURES.md](./FEATURES.md) · [../../../DEVELOPMENT.md](../../../DEVELOPMENT.md)
 
 **Scope:** MVP only. Post-MVP features (recording, AI Tajweed, video) are noted but not detailed.  
 **Format:** `[Screen / Event] → Actor: action → System: response → Outcome`
@@ -408,4 +408,4 @@ Cross-Cutting: Offline Behavior
 
 ---
 
-*This document describes the MVP journey. Features marked (P2) are planned but not in scope for the initial release. See `docs/FEATURES.md` for the full feature status board.*
+*This document describes the MVP journey. Features marked (P2) are planned but not in scope for the initial release. See [FEATURES.md](./FEATURES.md) for the full feature status board.*

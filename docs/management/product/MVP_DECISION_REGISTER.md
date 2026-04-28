@@ -1,6 +1,6 @@
 # MVP Decision Register
 
-> All frozen decisions for the Halaqaty MVP. Binding on all implementation. To change a decision, create an ADR in `docs/adr/` and update this file with an entry in the Amendment Log.
+> All frozen decisions for the Halaqaty MVP. Binding on all implementation. To change a decision, create an ADR in [`../../../engineering/architecture/adr/`](../../../engineering/architecture/adr/) and update this file with an entry in the Amendment Log.
 
 **Last updated:** 2026-04-26
 
@@ -55,7 +55,7 @@
 |---|---|---|---|
 | OQ-015 | Student video permission? | **Audio-only in MVP.** `CanPublishVideo: false` always in LiveKit tokens. | Quran recitation is audio-first; video adds bandwidth, complexity, and privacy risk. |
 | OQ-016 | Max session duration? | **4 hours.** Idle room timeout: 30 min after last participant leaves. | Covers standard Friday halaqa length; idle timeout reclaims LiveKit resources. |
-| OQ-017 | Recording visibility? | **Deferred.** Recording disabled until privacy framework is formally approved and merged. | See Privacy section in `docs/ARCHITECTURE.md`. This is non-negotiable. |
+| OQ-017 | Recording visibility? | **Deferred.** Recording disabled until privacy framework is formally approved and merged. | See Privacy section in `../../engineering/architecture/ARCHITECTURE.md`. This is non-negotiable. |
 | PRD-5 | Video feature flag rollout model? | **Per-tier once enabled.** Free: no video. Pro/Institution: video only if both the global master flag AND the tier flag are true. | Aligns with monetization; prevents accidental activation via a single-flag change. |
 | PRD-6 | Recording consent and retention model? | **Explicit participant consent screen before every session.** Consent stored per-session in DB. Teacher must acknowledge liability. Default retention: 7 days. | Protects minors who may be in circles; GDPR-aligned. |
 
@@ -115,4 +115,4 @@
 
 ---
 
-*Any change requires: (1) a new or updated ADR in `docs/adr/`, (2) an entry in the Amendment Log above, (3) approval from Karim.*
+*Any change requires: (1) a new or updated ADR in `../../engineering/architecture/adr/`, (2) an entry in the Amendment Log above, (3) approval from Karim.*

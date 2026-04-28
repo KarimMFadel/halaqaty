@@ -25,5 +25,5 @@ This directory records the key architectural decisions made for Halaqaty. Each A
 1. Create `ADR-NNN-short-title.md` in this directory (next sequential number).
 2. Use the structure: **Status**, **Date**, **Deciders**, **Context**, **Decision**, **Consequences**, **Alternatives Considered**.
 3. Add a row to the index table above.
-4. Reference the ADR from the relevant section of `docs/ARCHITECTURE.md` or `docs/MVP_DECISION_REGISTER.md`.
+4. Reference the ADR from the relevant section of `../ARCHITECTURE.md` or `../../management/product/MVP_DECISION_REGISTER.md`.
 5. If the ADR changes an existing decision, mark the superseded ADR as `Superseded by ADR-NNN`.

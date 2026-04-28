@@ -301,7 +301,7 @@ All agents can communicate asynchronously without explicit user prompting:
 
 All agents should reference this guide and related documents:
 
-- **This File**: `docs/AGENT_COLLABORATION_GUIDE.md` — How agents collaborate
+- **This File**: `docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md` — How agents collaborate
 - **Constitution**: `.specify/memory/constitution.md` — Halaqaty principles, tech stack, security invariants
 - **Spec-Kit Agents**: `.github/agents/speckit.*.agent.md` — Individual Spec-Kit workflow agents
 - **Engineering Agents**: `.github/agents/senior-*.agent.md` and `.github/agents/architect.agent.md` — This team
@@ -391,7 +391,7 @@ All agents should reference this guide and related documents:
 - `.github/agents/tech-lead.agent.md` (MODIFIED)
 - `.github/agents/team-leader.agent.md` (MODIFIED)
 - `.specify/memory/constitution.md` (Project principles and constraints)
-- `docs/AGENT_COLLABORATION_GUIDE.md` (This file — reference for all agents)
+- `docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md` (This file — reference for all agents)
 
 ---
 

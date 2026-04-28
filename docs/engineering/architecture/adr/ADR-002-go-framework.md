@@ -55,5 +55,5 @@ We will use **Echo v4** (`github.com/labstack/echo/v4`).
 
 ## References
 
-- `docs/ARCHITECTURE.md` — API endpoint definitions use Echo route group naming convention
+- `../ARCHITECTURE.md` — API endpoint definitions use Echo route group naming convention
 - `.specify/memory/constitution.md` — "Go + Echo v4" as mandatory tech stack entry

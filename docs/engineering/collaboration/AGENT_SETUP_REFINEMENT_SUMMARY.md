@@ -14,7 +14,7 @@
 ### Solution
 
 **The guide is now part of the repository:**
-- 📍 **Location**: `docs/AGENT_COLLABORATION_GUIDE.md` (in the actual repository, not session state)
+- 📍 **Location**: `docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md` (in the actual repository, not session state)
 - 📋 **Referenced in**: `.specify/memory/constitution.md` (Spec-First principle now points to guide)
 
 **How agents access it:**
@@ -27,13 +27,13 @@
 ### I. Spec-First (NON-NEGOTIABLE)
 Key Principle: Agents collaborate throughout all phases. 
 When ambiguous, agents ask Karim clarifying questions. 
-See `docs/AGENT_COLLABORATION_GUIDE.md` for full agent collaboration model.
+See `docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md` for full agent collaboration model.
 ```
 
 **How to Refer in Prompts**:
 - Users don't need to reference it manually
 - Agents reference it naturally when explaining collaboration
-- If needed, mention it once: "See `docs/AGENT_COLLABORATION_GUIDE.md` for collaboration details"
+- If needed, mention it once: "See `docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md` for collaboration details"
 
 ---
 
@@ -168,7 +168,7 @@ DO NOT PROCEED if scope is ambiguous — Ask before planning."
 ## Summary: What Changed
 
 ### Files Created
-✅ `docs/AGENT_COLLABORATION_GUIDE.md` (now in repo, not session state)
+✅ `docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md` (now in repo, not session state)
 
 ### Files Modified
 ✅ `.specify/memory/constitution.md`
@@ -254,7 +254,7 @@ When prompting agents about collaboration:
 
 **Direct Reference** (if needed):
 ```
-"See docs/AGENT_COLLABORATION_GUIDE.md for agent collaboration details"
+"See docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md for agent collaboration details"
 ```
 
 **Via Constitution** (automatic):

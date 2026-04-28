@@ -2,7 +2,7 @@
 
 > Version: 1.0  
 > Status: Active operating playbook  
-> Related: [PRD.md](PRD.md) · [PLAN.md](PLAN.md) · [FEATURES.md](FEATURES.md) · [DEVELOPMENT.md](../DEVELOPMENT.md) · [docs/AGENT_COLLABORATION_GUIDE.md](AGENT_COLLABORATION_GUIDE.md)
+> Related: [../../management/product/PRD.md](../../management/product/PRD.md) · [../../management/planning/PLAN.md](../../management/planning/PLAN.md) · [../../management/product/FEATURES.md](../../management/product/FEATURES.md) · [../../../DEVELOPMENT.md](../../../DEVELOPMENT.md) · [AGENT_COLLABORATION_GUIDE.md](./AGENT_COLLABORATION_GUIDE.md)
 
 ---
 
@@ -16,7 +16,7 @@ Halaqaty features are built by **5 specialized engineering agents** working coll
 - **Tech Lead** → Code quality, security, performance, testing (hard gate before merge)
 - **Team Leader** → Coordination, delivery tracking, Spec-Kit workflow enforcement
 
-**Key principle**: When ambiguous, agents ask 5-7 clarifying questions rather than guessing. See [`docs/AGENT_COLLABORATION_GUIDE.md`](AGENT_COLLABORATION_GUIDE.md) for detailed collaboration patterns.
+**Key principle**: When ambiguous, agents ask 5-7 clarifying questions rather than guessing. See [AGENT_COLLABORATION_GUIDE.md](./AGENT_COLLABORATION_GUIDE.md) for detailed collaboration patterns.
 
 ---
 

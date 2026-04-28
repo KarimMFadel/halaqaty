@@ -83,5 +83,5 @@ When video is enabled globally (`FEATURE_VIDEO_ENABLED=true`), the endpoint retu
 
 ## References
 
-- `docs/MVP_DECISION_REGISTER.md` — PRD-5 (video flag rollout model), OQ-017 (recording disabled)
+- `../../management/product/MVP_DECISION_REGISTER.md` — PRD-5 (video flag rollout model), OQ-017 (recording disabled)
 - `.specify/memory/constitution.md` — Feature flag strategy section

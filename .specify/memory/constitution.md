@@ -4,7 +4,17 @@
 ## Core Principles
 
 ### I. Spec-First (NON-NEGOTIABLE)
-No code is written without a completed and approved Spec-Kit spec. Every feature must complete `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` before `/speckit.implement` is run. Implementation without a merged spec violates this constitution.
+No code is written without a completed and approved Spec-Kit spec. Every feature must follow the **complete Spec-Kit workflow** before `/speckit.implement`:
+
+1. **`/speckit.specify`** — Product requirements → Technical specifications
+2. **`/speckit.clarify`** — Ask 5-7 targeted questions; resolve ambiguities
+3. **`/speckit.checklist`** — Unit test spec quality (completeness, clarity, consistency)
+4. **`/speckit.plan`** — Architecture design, schema, API contracts, testing strategy
+5. **`/speckit.tasks`** — Break design into actionable, testable tasks with dependencies
+6. **`/speckit.analyze`** — Cross-artifact consistency check before implementation
+7. **`/speckit.implement`** — Execute tasks with tests, reviews, quality gates
+
+**Key Principle**: Agents (Golang Developer, Flutter Engineer, Architect, Tech Lead, Team Leader) collaborate throughout all phases. When ambiguous, **agents ask Karim clarifying questions** rather than guess. See `docs/AGENT_COLLABORATION_GUIDE.md` for full agent collaboration model.
 
 ### II. Spiritual Mission Above All
 Halaqaty is a Quran memorization platform. Every decision — UX, monetization, data retention — must respect the spiritual and educational nature of the product. **No advertisements. Ever.** No dark patterns. No engagement-maximizing tricks. The platform serves the memorizers and their teachers, not the other way around.

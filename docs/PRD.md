@@ -3,7 +3,7 @@
 > Version: 1.0  
 > Status: Draft for alignment  
 > Owner: Product Management (**GPT-5.3-Codex acting as Project Manager**)  
-> Related: [arabic/PRD_AR.md](arabic/PRD_AR.md) · [PLAN.md](PLAN.md) · [FEATURES.md](FEATURES.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [DEPLOYMENT.md](DEPLOYMENT.md)
+> Related: [arabic/PRD_AR.md](arabic/PRD_AR.md) · [PLAN.md](PLAN.md) · [FEATURES.md](FEATURES.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [DEPLOYMENT.md](DEPLOYMENT.md) · [../DEVELOPMENT.md](../DEVELOPMENT.md) · [AGENT_COLLABORATION_GUIDE.md](AGENT_COLLABORATION_GUIDE.md)
 
 ---
 

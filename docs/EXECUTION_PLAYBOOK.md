@@ -2,11 +2,23 @@
 
 > Version: 1.0  
 > Status: Active operating playbook  
-> Related: [PRD.md](PRD.md) · [PLAN.md](PLAN.md) · [FEATURES.md](FEATURES.md)
+> Related: [PRD.md](PRD.md) · [PLAN.md](PLAN.md) · [FEATURES.md](FEATURES.md) · [DEVELOPMENT.md](../DEVELOPMENT.md) · [docs/AGENT_COLLABORATION_GUIDE.md](AGENT_COLLABORATION_GUIDE.md)
 
 ---
 
-## 1) Purpose
+## 0) Agent-Driven Development
+
+Halaqaty features are built by **5 specialized engineering agents** working collaboratively:
+
+- **Senior Golang Developer** → Backend services, APIs, concurrency, database
+- **Senior Flutter Mobile Engineer** → Mobile UI, state management, RTL/Arabic support
+- **Architect** → System design, service boundaries, technology choices
+- **Tech Lead** → Code quality, security, performance, testing (hard gate before merge)
+- **Team Leader** → Coordination, delivery tracking, Spec-Kit workflow enforcement
+
+**Key principle**: When ambiguous, agents ask 5-7 clarifying questions rather than guessing. See [`docs/AGENT_COLLABORATION_GUIDE.md`](AGENT_COLLABORATION_GUIDE.md) for detailed collaboration patterns.
+
+---
 
 This playbook defines **how we execute** week by week:
 - what ships now (MVP cut),

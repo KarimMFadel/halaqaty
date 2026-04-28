@@ -2,7 +2,7 @@
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
-**Related Documents:** [PRD.md](PRD.md) · [arabic/PLAN_AR.md](arabic/PLAN_AR.md) · [FEATURES.md](FEATURES.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [DEPLOYMENT.md](DEPLOYMENT.md)
+**Related Documents:** [PRD.md](PRD.md) · [arabic/PLAN_AR.md](arabic/PLAN_AR.md) · [FEATURES.md](FEATURES.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [DEPLOYMENT.md](DEPLOYMENT.md) · [../DEVELOPMENT.md](../DEVELOPMENT.md) · [AGENT_COLLABORATION_GUIDE.md](AGENT_COLLABORATION_GUIDE.md)
 
 ---
 

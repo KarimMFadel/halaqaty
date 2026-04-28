@@ -114,23 +114,32 @@ halaqaty/
 
 Halaqaty uses **[Spec-Kit](https://github.com/github/spec-kit)** (`v0.8.1`) for spec-driven development with GitHub Copilot. All code is generated from frozen specs — not from ad-hoc prompts.
 
+**Five specialized engineering agents collaborate autonomously:**
+- **Senior Golang Developer** — Backend services, APIs, concurrency, database
+- **Senior Flutter Mobile Engineer** — Mobile UI, state management, RTL/Arabic support
+- **Architect** — System design, service boundaries, technology choices
+- **Tech Lead** — Code quality, security, performance, testing standards (hard gate)
+- **Team Leader** — Coordination, delivery tracking, Spec-Kit enforcement
+
 **Read before writing any code:**
 
 | Document | Purpose |
 |---|---|
-| [DEVELOPMENT.md](DEVELOPMENT.md) | Full developer guide: setup, Spec-Kit commands, workflow steps, quality gates |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Full developer guide: setup, Spec-Kit commands, workflow steps, quality gates, agent roles |
 | [`.specify/memory/constitution.md`](.specify/memory/constitution.md) | Governing principles — every Copilot agent reads this first |
+| [`docs/AGENT_COLLABORATION_GUIDE.md`](docs/AGENT_COLLABORATION_GUIDE.md) | How agents collaborate: roles, clarification protocols, escalation paths |
 | [`docs/MVP_DECISION_REGISTER.md`](docs/MVP_DECISION_REGISTER.md) | All frozen business and technical decisions |
 
-**Spec-Kit quick reference (VS Code Copilot Chat):**
-
-| Command | Purpose |
-|---|---|
-| `/speckit.specify` | Create a feature spec from product docs |
-| `/speckit.plan` | Generate technical plan, data model, and API contracts |
-| `/speckit.tasks` | Break plan into parallelizable implementation tasks |
-| `/speckit.implement` | Copilot executes all tasks |
-| `/speckit.git.commit` | Create a traceable commit linked to the spec |
+**Spec-Kit workflow (7 phases):**
+```
+1. /speckit.specify      → Create feature spec
+2. /speckit.clarify      → Resolve ambiguities (agents ask you clarifying questions)
+3. /speckit.checklist    → Validate spec quality
+4. /speckit.plan         → Design architecture
+5. /speckit.tasks        → Generate implementation tasks
+6. /speckit.analyze      → Check consistency
+7. /speckit.implement    → Agents execute with tests and reviews
+```
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for the full command table, step-by-step workflow, and PR requirements.
 
@@ -168,14 +177,16 @@ This repository is currently in the **planning phase**. All documents below are 
 
 ## 🤝 Contributing
 
-Before writing any code, read [DEVELOPMENT.md](DEVELOPMENT.md) for the full Spec-Kit workflow.
+Before writing any code, read [DEVELOPMENT.md](DEVELOPMENT.md) for the full Spec-Kit workflow and agent collaboration model.
 
 1. Read `.specify/memory/constitution.md` — the governing document for all decisions.
-2. Verify the feature is `🟡 Approved` in `docs/FEATURES.md`.
-3. Run `/speckit.specify` in VS Code Copilot Chat to create the feature spec.
-4. Follow the pipeline: **specify → plan → tasks → implement → PR**.
-5. All PRs require green quality gates (see [DEVELOPMENT.md](DEVELOPMENT.md#step-8--verify-quality-gates)).
-6. Arabic documentation mirrors business/product docs only. Technical docs (ARCHITECTURE, ADRs) remain English. See [docs/SYNC_GUIDE.md](docs/SYNC_GUIDE.md).
+2. Read `docs/AGENT_COLLABORATION_GUIDE.md` — how agents collaborate and when they ask you clarifying questions.
+3. Verify the feature is `🟡 Approved` in `docs/FEATURES.md`.
+4. Run `/speckit.specify` in VS Code Copilot Chat to start the 7-phase workflow.
+5. Follow the pipeline: **specify → clarify → checklist → plan → tasks → analyze → implement**.
+6. Agents will ask you 5-7 clarifying questions if requirements are ambiguous — **answer clearly**.
+7. All PRs require green quality gates and **Tech Lead approval** (see [DEVELOPMENT.md](DEVELOPMENT.md)).
+8. Arabic documentation mirrors business/product docs only. Technical docs (ARCHITECTURE, ADRs) remain English. See [docs/SYNC_GUIDE.md](docs/SYNC_GUIDE.md).
 
 ---
 

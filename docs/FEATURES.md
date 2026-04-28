@@ -2,9 +2,15 @@
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
-**Related Documents:** [arabic/FEATURES_AR.md](arabic/FEATURES_AR.md) · [PLAN.md](PLAN.md) · [ARCHITECTURE.md](ARCHITECTURE.md)
+**Related Documents:** [arabic/FEATURES_AR.md](arabic/FEATURES_AR.md) · [PLAN.md](PLAN.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [../DEVELOPMENT.md](../DEVELOPMENT.md) · [AGENT_COLLABORATION_GUIDE.md](AGENT_COLLABORATION_GUIDE.md)
 
 This is a **living document**. It tracks every feature from proposal through delivery, hosts design discussions, and captures open questions for the team.
+
+**Workflow Note**: Features marked `🟡 Approved` are ready for development using Spec-Kit. To start building:
+1. Run `/speckit.specify` in VS Code Copilot Chat for the feature
+2. Follow all 7 Spec-Kit phases: specify → clarify → checklist → plan → tasks → analyze → implement
+3. The 5 specialized agents (Golang Developer, Flutter Engineer, Architect, Tech Lead, Team Leader) will collaborate autonomously
+4. See [DEVELOPMENT.md](../DEVELOPMENT.md) and [AGENT_COLLABORATION_GUIDE.md](AGENT_COLLABORATION_GUIDE.md) for detailed workflow
 
 ---
 

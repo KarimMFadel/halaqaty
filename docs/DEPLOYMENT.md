@@ -2,7 +2,7 @@
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
-**Related Documents:** [PRD.md](PRD.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [PLAN.md](PLAN.md)
+**Related Documents:** [PRD.md](PRD.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [PLAN.md](PLAN.md) · [../DEVELOPMENT.md](../DEVELOPMENT.md) · [AGENT_COLLABORATION_GUIDE.md](AGENT_COLLABORATION_GUIDE.md)
 
 ---
 

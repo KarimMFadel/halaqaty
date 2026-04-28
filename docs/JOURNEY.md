@@ -2,6 +2,8 @@
 
 > Teacher-first, student-aware. Every screen a student sees is downstream of a teacher decision.
 
+**Related Documents:** [PRD.md](PRD.md) · [FEATURES.md](FEATURES.md) · [../DEVELOPMENT.md](../DEVELOPMENT.md)
+
 **Scope:** MVP only. Post-MVP features (recording, AI Tajweed, video) are noted but not detailed.  
 **Format:** `[Screen / Event] → Actor: action → System: response → Outcome`
 

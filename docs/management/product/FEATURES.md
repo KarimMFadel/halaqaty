@@ -1,4 +1,4 @@
-# Halaqaty — Feature Specification & Status Board
+﻿# Halaqaty — Feature Specification & Status Board
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
@@ -7,10 +7,22 @@
 This is a **living document**. It tracks every feature from proposal through delivery, hosts design discussions, and captures open questions for the team.
 
 **Workflow Note**: Features marked `🟡 Approved` are ready for development using Spec-Kit. To start building:
+
 1. Run `/speckit.specify` in VS Code Copilot Chat for the feature
 2. Follow all 7 Spec-Kit phases: specify → clarify → checklist → plan → tasks → analyze → implement
 3. The 5 specialized agents (Golang Developer, Flutter Engineer, Architect, Tech Lead, Team Leader) will collaborate autonomously
 4. See [DEVELOPMENT.md](../../../DEVELOPMENT.md) and [AGENT_COLLABORATION_GUIDE.md](../../engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) for detailed workflow
+
+---
+
+## Priority Levels
+
+| Level | Meaning |
+|-------|---------|
+| P0 | Core MVP: must launch with this |
+| P1 | Important: ship in first major update |
+| P2 | Enhancement: valuable but not urgent |
+| P3 | Future: long-term roadmap |
 
 ---
 
@@ -59,9 +71,18 @@ This is a **living document**. It tracks every feature from proposal through del
 **Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 1
 
 #### Description
+
 Secure, multi-method user registration and authentication system with role-based access control. This is the foundation everything else depends on.
 
+#### User Stories
+
+- As a new user, I can register with email/password, Google, Apple, or phone OTP so I can start using Halaqaty quickly
+- As a registered user, I can log in securely from any device
+- As a user, I can set and update my profile (name, avatar, bio)
+- As a teacher, I can optionally complete verification to build trust with students
+
 #### Acceptance Criteria
+
 - [ ] Email/password registration with email verification link
 - [ ] Google Sign-In (OAuth 2.0)
 - [ ] Apple Sign-In (required for iOS App Store policy compliance)
@@ -73,18 +94,8 @@ Secure, multi-method user registration and authentication system with role-based
 - [ ] Device token registration for FCM push notifications
 
 #### Open Questions
-- **OQ-001:** Should we support phone-only accounts (no email)? Common in some markets.
-- **OQ-002:** Should teachers require identity verification (Quran credentials) to build trust? Or keep it open?
-- **OQ-003:** Session expiry policy? Firebase default is long-lived; should we enforce shorter TTLs for security?
 
-#### Design Decisions
-- **DD-001:** Firebase Auth chosen over custom auth to avoid managing credential storage and OAuth provider integrations from scratch. Firebase handles token refresh and device sessions.
-- **DD-002:** Role is stored in our PostgreSQL `users` table, not in Firebase. Firebase Auth is only for identity; our backend controls authorization.
-- **DD-003:** Teacher identity verification is optional (configurable) and not required in MVP.
-- **DD-004:** Phone-only signup remains under long-term investigation; keep signup open with current methods for now.
-
-#### Dependencies
-- None (this is foundational)
+> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
 
 ---
 
@@ -93,9 +104,19 @@ Secure, multi-method user registration and authentication system with role-based
 **Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 1
 
 #### Description
+
 Circles are the core organizational unit. A circle is a Quran memorization group with a teacher, students, optional supervisors, and associated sessions, chat, and progress records.
 
+#### User Stories
+
+- As a teacher, I can create a circle with a name, description, and rules so students know what to expect
+- As a teacher, I can generate an invite code/link to share with students
+- As a student, I can join multiple circles simultaneously with different teachers
+- As a teacher, I can assign the Supervisor role to a trusted member at any time
+- As a teacher, I can set circle privacy (public/discoverable vs private/invite-only)
+
 #### Acceptance Criteria
+
 - [ ] Create circle: name (required, max 100 chars), description (optional, max 500 chars), circle rules (optional, max 1000 chars), max capacity (default 50, max 200)
 - [ ] Auto-generate unique 8-character invite code on creation
 - [ ] Shareable deep link: `halaqaty.app/join/{code}`
@@ -110,22 +131,8 @@ Circles are the core organizational unit. A circle is a Quran memorization group
 - [ ] Circle member list shows all members with roles, visible to all members
 
 #### Open Questions
-- **OQ-004:** Should there be a "co-teacher" role, distinct from supervisor? Some circles have two qualified teachers.
-- **OQ-005:** Can a student be a supervisor in Circle A while being a student in Circle B? (Likely yes — roles are per-circle)
-- **OQ-006:** What happens to a circle if the teacher deletes their account? Transfer to another teacher? Archive?
 
-#### Design Decisions
-- **DD-005:** Roles are per-circle (stored in `circle_members` table), not per-user globally. A user can be teacher in one circle and student in another.
-- **DD-006:** Max 5 circles per student is a soft policy initially. Revisit based on user behavior.
-- **DD-007 (Interim):** MVP uses teacher + supervisor permissions. Distinct co-teacher role details are deferred until after pilot outcomes.
-
-#### Edge Cases
-- Teacher invites someone who is already a member → Show "already a member" message, do not create duplicate
-- Student tries to join a 6th circle → Error message explaining the limit
-- Invite code collision (extremely unlikely with 8 chars) → Regenerate automatically
-
-#### Dependencies
-- F-001 (User Auth)
+> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
 
 ---
 
@@ -134,9 +141,21 @@ Circles are the core organizational unit. A circle is a Quran memorization group
 **Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 2
 
 #### Description
+
 The most unique and differentiating feature of Halaqaty. An intelligent, real-time ordered queue for student recitation during live sessions. This replaces the chaotic verbal ordering common in circles today.
 
+#### User Stories
+
+- As a teacher, I can see all students in an ordered queue during a live session
+- As a student, I can see my position in the queue and know when it's my turn
+- As a teacher, I can start a new recitation round specifying Surah and Ayah range
+- As a teacher, I can reset the queue to start a new round (e.g., switch from new memorization to revision)
+- As a teacher/supervisor, I can reorder, skip, or move students in the queue
+- As a student, I receive a notification when it's my turn to recite
+- As a teacher, I can grade a student's recitation immediately after they finish
+
 #### Why This is the Killer Feature
+
 Current pain point: In a typical online Quran circle, the teacher verbally says "now it's Ali's turn, then Fatima, then Omar..." — this is unstructured, hard to track, and leaves no record. Halaqaty makes the queue visible, interactive, and fully logged.
 
 #### Queue States
@@ -174,6 +193,7 @@ Current pain point: In a typical online Quran circle, the teacher verbally says 
 #### Round System — Detailed Specification
 
 Each session consists of one or more **rounds**. A round defines:
+
 - `round_number` — 1, 2, 3, ...
 - `round_type` — `new_memorization` | `revision` | `old_revision` | `test`
 - `surah_name` — e.g., "Al-Baqarah"
@@ -181,12 +201,27 @@ Each session consists of one or more **rounds**. A round defines:
 - `to_ayah` — integer, e.g., 20
 
 When teacher resets the queue:
+
 1. All entries in current round are marked as final
 2. A new round record is created with new Surah/Ayah range
 3. All students' statuses reset to ⏳ Waiting
 4. Queue ordering can be re-configured for the new round
 
+#### Grading Scale
+
+The following 6-grade scale applies to all recitation entries in this circle. This is the canonical product definition; database enum values and Arabic display labels are in [ARCHITECTURE.md §4.0](../../engineering/architecture/ARCHITECTURE.md#40-domain-enumerations).
+
+| Grade | DB Value | Arabic | Meaning |
+|-------|----------|--------|---------|
+| Excellent | `excellent` | ممتاز | Perfect recitation, excellent tajweed |
+| Very Good | `very_good` | جيد جداً | Minor errors, good tajweed |
+| Good | `good` | جيد | Some errors, acceptable tajweed |
+| Acceptable | `acceptable` | مقبول | Notable errors, basic tajweed |
+| Needs Review | `needs_review` | يحتاج مراجعة | Significant errors; review required |
+| Repeat | `repeat` | إعادة | Must fully repeat before advancing |
+
 #### Real-Time Sync Requirements
+
 - Queue state must be visible to all session participants simultaneously
 - Latency target: < 500ms from teacher action to all clients reflecting update
 - Technology: WebSocket broadcast to all session participants
@@ -194,6 +229,7 @@ When teacher resets the queue:
 - Idempotency: duplicate WebSocket events must not cause double-state changes
 
 #### Acceptance Criteria
+
 - [ ] Queue visible to all session participants in real-time via WebSocket
 - [ ] Minimum 3 ordering modes: join order, teacher manual, supervisor manual
 - [ ] Per-round metadata: Surah name, from Ayah, to Ayah, round type
@@ -209,19 +245,20 @@ When teacher resets the queue:
 - [ ] Student can request a temporary skip/opt-out for current turn (e.g., mic issue, permission break), approved by teacher/supervisor
 
 #### Open Questions
-- **OQ-007:** Should students be able to "opt out" of a specific round? (e.g., "I didn't prepare for revision today") → Teacher could mark as excused?
-- **OQ-008:** Should there be a timer per student? (e.g., teacher sets 5-minute limit per recitation) → Useful but adds complexity
-- **OQ-009:** Can the queue be pre-set before the session starts? Or only after session begins?
-- **OQ-011:** Should there be a "double queue" — student appears twice (once for new memorization, once for revision) in the same round?
+
+> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
 
 #### Design Decisions
+
 - **DD-020:** Queue state is stored server-side in PostgreSQL (not just in-memory). This ensures history is preserved and reconnecting clients can recover state.
 - **DD-021:** WebSocket events are the delivery mechanism, but PostgreSQL is the source of truth.
 - **DD-022:** Grading mode is configured per circle (required vs optional per completed turn).
 - **DD-023:** Temporary student opt-out is allowed for operational issues and is logged in queue history.
 - **DD-024:** Late-joining students are appended to the end of the current active round.
+- **DD-025:** A 6-grade recitation scale was chosen over simpler alternatives (4-grade or binary pass/fail) to reflect the nuanced evaluation used in traditional Quranic teaching. The granularity between "needs targeted revision" (Needs Review) and "must fully repeat" (Repeat) is pedagogically significant in tajweed assessment, and aligns with established practice in Quran circles and the ijazah tradition.
 
 #### Dependencies
+
 - F-001 (User Auth)
 - F-002 (Circle Management)
 - F-005 (Live Sessions — queue exists within a session)
@@ -234,9 +271,18 @@ When teacher resets the queue:
 **Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 1
 
 #### Description
+
 Full-featured messaging within circles, replacing WhatsApp/Telegram group chats and enabling structured communication between teachers and students.
 
+#### User Stories
+
+- As a member, I can send messages in the circle group chat
+- As a teacher, I can send a private message or voice note to a student
+- As a teacher, I can pin important messages for all members to see
+- As a student, I can record and send a voice note with my recitation for practice
+
 #### Acceptance Criteria
+
 - [ ] Group chat: one per circle, all members can participate
 - [ ] Direct messages: teacher ↔ student (one-on-one); supervisor ↔ student
 - [ ] **Voice messages** — record in-app, send, visualize waveform, playback; stored in MinIO
@@ -252,17 +298,8 @@ Full-featured messaging within circles, replacing WhatsApp/Telegram group chats 
 - [ ] Offline mode: messages queued locally and sent when connection restored
 
 #### Open Questions
-- **OQ-012:** Should there be "announcement-only" channels where only teachers can send? (Similar to Telegram channels)
-- **OQ-013:** Should voice message length be limited? (e.g., max 5 minutes)
-- **OQ-014:** Should we support emoji reactions?
 
-#### Design Decisions
-- **DD-025:** Voice messages are stored in MinIO with a pre-signed URL returned to clients. URLs expire after 7 days (renewable).
-- **DD-026:** No end-to-end encryption in V1 (complex to implement with group messages). Encryption in transit (TLS) is sufficient for V1. E2E encryption is a P3 item.
-
-#### Dependencies
-- F-001 (User Auth)
-- F-002 (Circle Management)
+> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
 
 ---
 
@@ -271,9 +308,20 @@ Full-featured messaging within circles, replacing WhatsApp/Telegram group chats 
 **Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 2
 
 #### Description
+
 Unlimited-time audio-only sessions powered by LiveKit (open-source, self-hosted WebRTC SFU). This is the primary replacement for Zoom/Google Meet in MVP. Video is deferred to post-MVP behind a feature flag.
 
+#### User Stories
+
+- As a teacher, I can start a live session from the circle page with one tap
+- As a student, I can join a session from a push notification or calendar reminder
+- As a teacher, I can mute/unmute individual participants
+- As a teacher, I can lock the room to prevent new joiners mid-session
+- As a participant, I can raise my hand to signal the teacher
+- As a teacher, I can trust that live-session audio is not recorded in MVP
+
 #### Why LiveKit?
+
 - **Open-source:** No per-minute costs; self-hosted = full control
 - **WebRTC-based:** Industry-standard, browser and mobile compatible
 - **Official Flutter SDK:** `livekit_client` package with active maintenance
@@ -323,6 +371,7 @@ Step 4: Media Routing
 ```
 
 #### Acceptance Criteria
+
 - [ ] Flutter package: `livekit_client` (official) integrated
 - [ ] Token generation exclusively on Go backend (never client-side)
 - [ ] Audio-only in MVP (no video toggle in app)
@@ -336,14 +385,8 @@ Step 4: Media Routing
 - [ ] Graceful reconnection on network drop (LiveKit SDK handles this)
 
 #### Open Questions
-- **OQ-015:** Resolved — MVP is audio-only. No student video request path until post-MVP feature flag rollout.
-- **OQ-016:** What is the maximum session duration we should target for testing? (For LiveKit server sizing)
-- **OQ-017:** Deferred — recording stays disabled until privacy framework is approved; sharing model decided before activation.
 
-#### Dependencies
-- F-001 (User Auth)
-- F-002 (Circle Management)
-- F-003 (Recitation Queue — queue is embedded in sessions)
+> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
 
 ---
 
@@ -352,9 +395,18 @@ Step 4: Media Routing
 **Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 2
 
 #### Description
+
 Recurring weekly schedule management with smart reminders and integrated attendance tracking.
 
+#### User Stories
+
+- As a teacher, I can set a recurring weekly schedule for my circle
+- As a student in multiple circles, I can see a unified calendar of all my sessions
+- As a student, I receive configurable push notification reminders before sessions
+- As a teacher, I can record manual attendance (override for students who called ahead)
+
 #### Acceptance Criteria
+
 - [ ] Weekly recurring schedule per circle: day(s) of week, start time, end time, timezone
 - [ ] A circle can have multiple schedule entries (e.g., Sun + Wed)
 - [ ] Push notifications: configurable reminder intervals (1hr, 30min, 15min, 5min before session)
@@ -365,11 +417,8 @@ Recurring weekly schedule management with smart reminders and integrated attenda
 - [ ] Session lifecycle: Scheduled → Live (auto when teacher starts) → Completed (auto after end) → Cancelled (manual)
 
 #### Open Questions
-- **OQ-018:** Should we support non-recurring sessions (one-off makeup sessions)?
-- **OQ-019:** Timezone handling: store in UTC, display in user's local timezone?
 
-#### Dependencies
-- F-001, F-002, F-005, F-008
+> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
 
 ---
 
@@ -378,9 +427,11 @@ Recurring weekly schedule management with smart reminders and integrated attenda
 **Priority:** P1 | **Status:** 🔵 Proposed | **Phase:** 3
 
 #### Description
+
 Advanced per-student Quran memorization analytics, automatically populated from recitation queue history with teacher grading. MVP baseline remains session-level progress visibility (history + grades).
 
 #### Acceptance Criteria
+
 - [ ] Auto-create memorization record from each completed recitation queue entry
 - [ ] Fields per record: student, circle, session, round type (new/revision), surah, from_ayah, to_ayah, grade, teacher notes, date
 - [ ] Separate views: New Memorization tab vs Revision tab
@@ -390,8 +441,8 @@ Advanced per-student Quran memorization analytics, automatically populated from 
 - [ ] Teacher dashboard: side-by-side comparison of all students' progress
 
 #### Open Questions
-- **OQ-020:** Should students be able to self-log memorization done outside of sessions (home practice)?
-- **OQ-021:** How do we handle a student memorizing the same section multiple times (multiple passes)?
+
+> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
 
 ---
 
@@ -400,6 +451,7 @@ Advanced per-student Quran memorization analytics, automatically populated from 
 **Priority:** P1 | **Status:** 🔵 Proposed | **Phase:** 2
 
 #### Description
+
 Multi-channel notification system ensuring no important event is missed.
 
 #### Notification Matrix
@@ -416,6 +468,7 @@ Multi-channel notification system ensuring no important event is missed.
 | Student joined session (→ teacher) | ❌ | ✅ | ✅ |
 
 #### Acceptance Criteria
+
 - [ ] FCM integration for background/closed state
 - [ ] WebSocket-based in-app notification bell for foreground state
 - [ ] Per-notification-type preferences in Settings
@@ -430,11 +483,19 @@ Multi-channel notification system ensuring no important event is missed.
 **Priority:** P2 | **Status:** 🔵 Proposed | **Phase:** 4
 
 #### Description
+
 Integrated Quran text (Uthmani script) with Ayah-level interaction tied to memorization records.
 
+#### Acceptance Criteria
+
+- [ ] Full Quran text (Uthmani script) displayed page-by-page
+- [ ] Tap any Ayah to link to memorization records
+- [ ] Highlight memorized portions visually
+- [ ] Teacher can share specific Mushaf pages during sessions (screen share)
+
 #### Open Questions
-- **OQ-022:** Use open-source Quran text (Tanzil.net) or license a digital Mushaf?
-- **OQ-023:** Should the Mushaf support audio recitation playback (e.g., Sheikh Sudais)? This is a large feature that could be scoped as P3.
+
+> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
 
 ---
 
@@ -443,9 +504,11 @@ Integrated Quran text (Uthmani script) with Ayah-level interaction tied to memor
 **Priority:** P2 | **Status:** 🔵 Proposed | **Phase:** 3
 
 #### Description
+
 Role-based dashboards for student self-tracking and teacher oversight across circles.
 
 #### Acceptance Criteria
+
 - [ ] Student dashboard shows own attendance, grades, notes, and memorization progress
 - [ ] Teacher dashboard shows all students taught by that teacher with summary metrics
 - [ ] Circle dashboard shows per-circle progress, attendance, and queue history
@@ -458,15 +521,25 @@ Role-based dashboards for student self-tracking and teacher oversight across cir
 **Priority:** P2 | **Status:** 🔵 Proposed | **Phase:** 3
 
 #### Description
+
 Comprehensive reporting for teachers and students, with PDF export capability.
 
+#### Acceptance Criteria
+
+- [ ] Teacher: per-student report covering attendance %, grades distribution, memorization progress
+- [ ] Student: self-view of own report
+- [ ] PDF export for sharing with students or institutions
+- [ ] Charts: line graphs, heatmaps, Quran completion wheels
+
 #### Report Types
+
 - **Student Progress Report:** Attendance %, grades distribution, memorization progress, trend charts
 - **Circle Overview Report:** All students side-by-side, session history, top performers
 - **Custom Date Range Reports**
 
 #### Open Questions
-- **OQ-024:** Should reports be auto-generated monthly and emailed to teachers?
+
+> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
 
 ---
 
@@ -475,6 +548,7 @@ Comprehensive reporting for teachers and students, with PDF export capability.
 **Priority:** P2 | **Status:** 🔵 Proposed | **Phase:** 3
 
 #### Languages (Priority Order)
+
 1. Arabic (default, RTL) — core market
 2. English (LTR)
 3. Urdu (RTL) — large Muslim community in Pakistan, India, UK
@@ -483,6 +557,7 @@ Comprehensive reporting for teachers and students, with PDF export capability.
 6. French (LTR) — North Africa diaspora
 
 #### Acceptance Criteria
+
 - [ ] Full RTL layout support for Arabic and Urdu
 - [ ] Locale-aware date/time formatting
 - [ ] Locale-aware number formatting (Eastern Arabic numerals option)
@@ -496,10 +571,21 @@ Comprehensive reporting for teachers and students, with PDF export capability.
 
 > **Dependency note:** This feature is blocked until post-MVP recording is available with an approved privacy consent/retention framework.
 
+#### Acceptance Criteria
+
+- [ ] Integration with post-MVP recording (when available)
+- [ ] AI-powered tajweed error detection with timestamp references
+- [ ] Grade suggestion for teacher (teacher can override)
+- [ ] Error report with makhraj, madd, tanwin, noon sakinah, waqf analysis
+- [ ] Grade suggestion to assist teacher, not replace teacher's grading
+- [ ] Support for different recitation schools (Qira'at)
+
 #### Description
+
 AI-powered analysis of student recitation audio to detect tajweed errors and assist teachers in grading.
 
 #### How It Works
+
 1. Session recording (or dedicated recitation recording) is processed
 2. Audio segmented per student turn (using recitation queue timestamps)
 3. AI model analyzes:
@@ -511,8 +597,8 @@ AI-powered analysis of student recitation audio to detect tajweed errors and ass
 5. Grade suggestion provided to teacher (teacher can override)
 
 #### Open Questions
-- **OQ-025:** Train our own model or license an existing AI Quran recitation system?
-- **OQ-026:** Privacy implications: storing audio for AI processing. Need explicit consent.
+
+> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
 
 ---
 
@@ -521,9 +607,17 @@ AI-powered analysis of student recitation audio to detect tajweed errors and ass
 **Priority:** P3 | **Status:** 🔵 Proposed | **Phase:** 5
 
 #### Description
+
 Personalized memorization schedule based on student's historical pace.
 
+#### Acceptance Criteria
+
+- [ ] Analyze student's historical pace (Ayahs memorized per week)
+- [ ] Suggest a personalized memorization plan to complete a target (e.g., 1 Juz in 3 months)
+- [ ] Adaptive: adjust plan based on actual performance
+
 #### Algorithm (Conceptual)
+
 - Analyze: Ayahs memorized per session, session frequency, grade distribution
 - Apply spaced repetition principles (adapted for Quran, not generic flashcards)
 - Generate: weekly plan (e.g., "Memorize 5 Ayahs from Al-Imran on Mon/Wed/Fri; Revise Al-Fatiha on Tue/Thu")
@@ -536,14 +630,23 @@ Personalized memorization schedule based on student's historical pace.
 **Priority:** P3 | **Status:** 🔵 Proposed | **Phase:** 4
 
 #### Description
+
 Digitally-signed completion certificates for Juz, Khatm al-Quran, or custom milestones.
 
+#### Acceptance Criteria
+
+- [ ] Teacher awards certificate upon completion of Juz, full Quran (Khatm), or milestone
+- [ ] Digitally signed certificate with QR code for verification
+- [ ] Shareable as PDF or image
+
 #### Certificate Types
+
 - Juz completion (30 types)
 - Complete Quran (Khatm)
 - Custom milestone (teacher-defined)
 
 #### Technical Approach
+
 - PDF certificate generated server-side with teacher's signature and circle name
 - QR code embedded → verifiable link showing student name, teacher, date, milestone
 - Shareable: student can download and share on social media
@@ -555,7 +658,15 @@ Digitally-signed completion certificates for Juz, Khatm al-Quran, or custom mile
 **Priority:** P3 | **Status:** 🔵 Proposed | **Phase:** 5
 
 #### Description
+
 Flutter Desktop builds providing a native experience for teachers who prefer desktop.
+
+#### Acceptance Criteria
+
+- [ ] Flutter Desktop builds for Windows, macOS, Linux
+- [ ] Targeted at teachers who prefer desktop for session management
+- [ ] Optimized for performance on desktop
+- [ ] Full feature parity with mobile apps
 
 **Platforms:** Windows, macOS, Linux
 
@@ -568,9 +679,11 @@ Flutter Desktop builds providing a native experience for teachers who prefer des
 **Priority:** P3 | **Status:** 🔵 Proposed | **Phase:** 5
 
 #### Description
+
 The most significant long-term business feature. Enables Quran memorization institutions to manage all their circles and teachers centrally.
 
 #### Target Institutions
+
 - Quran memorization schools (مدارس تحفيظ القرآن)
 - Mosque-affiliated circles
 - Islamic universities and colleges
@@ -578,6 +691,7 @@ The most significant long-term business feature. Enables Quran memorization inst
 - Online Quran academies
 
 #### Features
+
 - Institution registration with approval process
 - Centralized teacher onboarding (invite teachers, assign them circles)
 - Centralized student enrollment (bulk import via CSV)
@@ -588,6 +702,7 @@ The most significant long-term business feature. Enables Quran memorization inst
 - Billing: institution pays per teacher (B2B model)
 
 #### Business Impact
+
 This single feature could generate more revenue than all individual subscriptions combined, while serving the organizations that most need a solution.
 
 ---
@@ -656,4 +771,4 @@ The [Competitor Analysis](../business/QURAN_MEMORIZATION_COMPETITOR_ANALYSIS.md)
 
 *This document is maintained alongside [arabic/FEATURES_AR.md](arabic/FEATURES_AR.md). Any business-facing changes here must be mirrored there.*
 
-*See [SYNC_GUIDE.md](SYNC_GUIDE.md) for the documentation sync policy.*
+*See [SYNC_GUIDE.md](../arabic/SYNC_GUIDE.md) for the documentation sync policy.*

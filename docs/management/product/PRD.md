@@ -17,13 +17,18 @@ Halaqaty (حِلْقَتي) is a mobile-first platform built specifically for Qu
 
 ## 2) Business Problem
 
-Today’s Quran circles suffer from:
-- fragmented communication and meeting tools
-- time-limited free video platforms
-- no structured recitation workflow
-- poor progress visibility for teachers and students
+Across the Muslim world, tens of thousands of Quran memorization circles operate today using a patchwork of general-purpose tools:
 
-This creates low retention, operational friction, and limited scalability for teachers and organizations.
+| Pain Point | Current Workaround | Cost/Limitation |
+|------------|-------------------|-----------------|
+| Group communication | WhatsApp / Telegram groups | No role hierarchy, no structured data |
+| Live sessions | Zoom / Google Meet | **40-minute limit** on free Zoom; expensive paid plans |
+| Progress tracking | Paper notebooks / Excel | Manual, error-prone, not shared in real-time |
+| Recitation management | Verbal ordering during session | Chaotic; no records; hard to scale |
+| Attendance tracking | Manual headcount | Forgotten entries; no historical data |
+| Quran-specific features | None | None of these apps understand Surahs or Ayahs |
+
+**The result:** Teachers spend significant time managing logistics rather than teaching. Students miss sessions without automated reminders. Progress data is scattered or lost entirely.
 
 ---
 
@@ -42,6 +47,7 @@ This creates low retention, operational friction, and limited scalability for te
 ## 4) Target Users and Jobs-to-be-Done
 
 ### Primary Segments
+
 1. **Teacher / Reciter (مُقرئ/محفظ)**
    - JTBD: run circles efficiently, evaluate students, track outcomes
 2. **Student (طالب)**
@@ -50,16 +56,36 @@ This creates low retention, operational friction, and limited scalability for te
    - JTBD: operate many circles with centralized reporting
 
 ### Core User Insights
+
 - Students may belong to **multiple circles** with different teachers.
 - Teachers need audio quality suitable for Quran recitation, not generic voice chat.
 - Solo teachers are the initial priority, while preserving a future path for institutions.
 - Pilot circles will start small (5–7 students) with size-limit policy left open for now.
+
+### Future: Institutional Platform (منصة المؤسسات)
+
+> **See [ROLES.md](./ROLES.md)** for detailed role capabilities, authorization rules, and the full permission matrix.
+
+One of the most significant long-term growth vectors is the **Institutional Platform**.Quran memorization institutions — schools, centers, mosques, and national organizations — manage dozens or hundreds of circles simultaneously.
+
+The institutional tier of Halaqaty will allow organizations to:
+
+- Register as an institution with centralized admin control
+- Onboard all teachers and students under one roof
+- View institution-wide analytics: memorization rates, attendance, teacher performance
+- Set institution-wide schedules and academic calendars
+- Custom branding (institution logo, colors)
+- Bulk enrollment of students from spreadsheets
+- Generate reports for students, donors, or regulatory bodies
+
+This opens a **B2B revenue model** that is more predictable and higher-value than individual subscriptions.
 
 ---
 
 ## 5) Value Proposition
 
 ### Why users choose Halaqaty
+
 - One app for circle operations end-to-end
 - No arbitrary session limits
 - Quran-native recitation workflow
@@ -67,6 +93,7 @@ This creates low retention, operational friction, and limited scalability for te
 - Institution-ready growth path
 
 ### Differentiator
+
 **Recitation Queue System** is the core wedge: structured turns, live status, repeatable rounds, grading history.
 
 ---
@@ -74,6 +101,7 @@ This creates low retention, operational friction, and limited scalability for te
 ## 6) Scope
 
 ### In Scope (MVP / P0)
+
 - Authentication and role-based access
 - Circle creation and membership
 - Recitation queue with rounds and statuses
@@ -83,6 +111,7 @@ This creates low retention, operational friction, and limited scalability for te
 - Basic session-level progress visibility (session history + grades)
 
 ### Out of Scope (MVP)
+
 - AI tajweed scoring
 - AI memorization planning
 - Full institution control center
@@ -91,24 +120,33 @@ This creates low retention, operational friction, and limited scalability for te
 - Desktop applications
 - Advanced progress analytics (Quran map, trend charts, comparative dashboards)
 
+### Feature Flag & Privacy Policies
+
+- **Recording Policy**: Recording remains disabled in MVP for privacy reasons. Any future recording rollout requires explicit participant consent UX, retention policy, and access-control rules.
+- **Rollout Control**: `live_session_video` and `session_recording` feature flags must remain OFF in MVP and require PM + architect sign-off before activation.
+
 ---
 
 ## 7) Business Requirements
 
 ### BR-1 Growth & Adoption
+
 - onboarding must allow first circle creation in <10 minutes
 - invite flow must support link/code sharing in common messaging apps
 
 ### BR-2 Retention
+
 - teachers must get weekly progress visibility for each student
 - students must receive clear turn reminders and session reminders
 - grading policy must be configurable per circle (required vs optional per completed turn)
 
 ### BR-3 Monetization Readiness
+
 - architecture and packaging must support a free tier + paid tier transition
 - premium flags must be definable per feature (recording, advanced analytics, future AI)
 
 ### BR-4 Trust & Brand Fit
+
 - no ads model
 - respectful UX for religious/educational context
 - clear privacy boundaries for teacher/student data
@@ -119,9 +157,11 @@ This creates low retention, operational friction, and limited scalability for te
 ## 8) Success Metrics (North Star + Supporting)
 
 ### North Star
+
 **Weekly completed recitation rounds**
 
 ### Supporting KPIs
+
 - circles created per week
 - average active students per circle
 - session attendance rate
@@ -152,14 +192,17 @@ The feature-flag architecture (ADR-005) allows per-user and per-feature activati
 ## 10) Go-To-Market (GTM)
 
 ### Phase A — Pilot
+
 - recruit 10–20 Quran teachers in Egypt first
 - run closed cohort with weekly feedback cycles
 
 ### Phase B — Early Public
+
 - Android-first launch and referral-driven invites
 - teacher ambassador program
 
 ### Phase C — Trust Expansion
+
 - student + teacher dashboards and selective institution pilots
 - partnerships with Quran centers and online academies
 
@@ -208,5 +251,6 @@ All six open product decisions have been resolved. Full rationale is in [`docs/M
 ## 14) PM Notes
 
 This PRD is intentionally business-first. Detailed technical implementation remains in:
+
 - [ARCHITECTURE.md](ARCHITECTURE.md)
 - [DEPLOYMENT.md](DEPLOYMENT.md)

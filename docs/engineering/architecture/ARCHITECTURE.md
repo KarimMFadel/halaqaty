@@ -1,4 +1,4 @@
-# Halaqaty — Technical Architecture
+﻿# Halaqaty — Technical Architecture
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
@@ -366,6 +366,23 @@ Halaqaty sessions are hosted on **Hetzner Nuremberg (EU)**. Target audience is p
 
 > **Migration tool:** [golang-migrate v4](https://github.com/golang-migrate/migrate) — sequential SQL files in `migrations/`. See [ADR-006](adr/ADR-006-db-migrations.md) for rationale.
 
+### 4.0 Domain Enumerations
+
+These are the canonical enum values used in PostgreSQL CHECK constraints and Go backend constants. Product-level human labels are in [FEATURES.md F-003](../../management/product/FEATURES.md#f-003-recitation-queue-system).
+
+#### Recitation Grade (`grade` column)
+
+| DB Value | English Label | Arabic Label | Meaning |
+|----------|--------------|--------------|---------|
+| `excellent` | Excellent | ممتاز | Perfect recitation, excellent tajweed |
+| `very_good` | Very Good | جيد جداً | Minor errors, good tajweed |
+| `good` | Good | جيد | Some errors, acceptable tajweed |
+| `acceptable` | Acceptable | مقبول | Notable errors, basic tajweed |
+| `needs_review` | Needs Review | يحتاج مراجعة | Significant errors; review required |
+| `repeat` | Repeat | إعادة | Must fully repeat before advancing |
+
+Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
+
 ### 4.1 Entity-Relationship Diagram (ASCII)
 
 ```
@@ -593,7 +610,7 @@ Halaqaty sessions are hosted on **Hetzner Nuremberg (EU)**. Target audience is p
 | from_ayah | INTEGER | NOT NULL | |
 | to_ayah | INTEGER | NOT NULL | |
 | type | VARCHAR(30) | CHECK IN ('new_memorization','revision','old_revision') | |
-| grade | VARCHAR(30) | | Same grade enum as queue entries |
+| grade | VARCHAR(30) | CHECK IN ('excellent','very_good','good','acceptable','needs_review','repeat') | Same grade enum as queue entries |
 | notes | TEXT | | Teacher notes |
 | date | DATE | NOT NULL | Session date |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
@@ -897,3 +914,4 @@ Pin versions here. Update this table when bumping a dependency.
 *This document is the source of truth for technical architecture.*
 
 *See [DEPLOYMENT.md](DEPLOYMENT.md) for infrastructure and deployment details.*
+

@@ -153,7 +153,7 @@ This guide documents the collaborative framework for Halaqaty's 5 core engineeri
    └─ Unit test spec quality (completeness, clarity, consistency)
    └─ Validate requirements are implementation-ready
 
-4. PLAN (/speckit.plan)
+4. PROJECT_PLAN.md (/speckit.plan)
    └─ Architecture design, schema, API contracts, testing strategy
    └─ Golang Dev + Flutter Eng + Architect collaborate
    └─ Tech Lead validates for quality implications

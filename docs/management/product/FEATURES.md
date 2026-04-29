@@ -1,8 +1,8 @@
-﻿# Halaqaty — Feature Specification & Status Board
+# Halaqaty — Feature Specification & Status Board
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
-**Related Documents:** [FEATURES_AR.md](../arabic/FEATURES_AR.md) · [PLAN.md](../planning/PLAN.md) · [ARCHITECTURE.md](../../engineering/architecture/ARCHITECTURE.md) · [DEVELOPMENT.md](../../../DEVELOPMENT.md) · [AGENT_COLLABORATION_GUIDE.md](../../engineering/collaboration/AGENT_COLLABORATION_GUIDE.md)
+**Related Documents:** [FEATURES_AR.md](../arabic/FEATURES_AR.md) · [PROJECT_PLAN.md](../planning/PROJECT_PLAN.md) · [ARCHITECTURE.md](../../engineering/architecture/ARCHITECTURE.md) · [DEVELOPMENT.md](../../../DEVELOPMENT.md) · [AGENT_COLLABORATION_GUIDE.md](../../engineering/collaboration/AGENT_COLLABORATION_GUIDE.md)
 
 This is a **living document**. It tracks every feature from proposal through delivery, hosts design discussions, and captures open questions for the team.
 
@@ -93,9 +93,9 @@ Secure, multi-method user registration and authentication system with role-based
 - [ ] Account deletion with data erasure (GDPR/privacy compliance)
 - [ ] Device token registration for FCM push notifications
 
-#### Open Questions
 
-> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
+
+
 
 ---
 
@@ -130,9 +130,9 @@ Circles are the core organizational unit. A circle is a Quran memorization group
 - [ ] Teacher can delete a circle (with confirmation; permanently deletes all data)
 - [ ] Circle member list shows all members with roles, visible to all members
 
-#### Open Questions
 
-> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
+
+
 
 ---
 
@@ -244,9 +244,9 @@ The following 6-grade scale applies to all recitation entries in this circle. Th
 - [ ] Queue handles network disconnections gracefully (state preserved server-side)
 - [ ] Student can request a temporary skip/opt-out for current turn (e.g., mic issue, permission break), approved by teacher/supervisor
 
-#### Open Questions
 
-> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
+
+
 
 #### Design Decisions
 
@@ -297,9 +297,9 @@ Full-featured messaging within circles, replacing WhatsApp/Telegram group chats 
 - [ ] WebSocket delivery when app is open; FCM push when app is in background
 - [ ] Offline mode: messages queued locally and sent when connection restored
 
-#### Open Questions
 
-> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
+
+
 
 ---
 
@@ -384,9 +384,9 @@ Step 4: Media Routing
 - [ ] Maximum 50 participants (scalable with server resources)
 - [ ] Graceful reconnection on network drop (LiveKit SDK handles this)
 
-#### Open Questions
 
-> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
+
+
 
 ---
 
@@ -416,9 +416,9 @@ Recurring weekly schedule management with smart reminders and integrated attenda
 - [ ] Conflict detection: alert if two circles have overlapping scheduled times
 - [ ] Session lifecycle: Scheduled → Live (auto when teacher starts) → Completed (auto after end) → Cancelled (manual)
 
-#### Open Questions
 
-> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
+
+
 
 ---
 
@@ -440,9 +440,9 @@ Advanced per-student Quran memorization analytics, automatically populated from 
 - [ ] Attendance correlation: days attended vs progress made
 - [ ] Teacher dashboard: side-by-side comparison of all students' progress
 
-#### Open Questions
 
-> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
+
+
 
 ---
 
@@ -493,9 +493,9 @@ Integrated Quran text (Uthmani script) with Ayah-level interaction tied to memor
 - [ ] Highlight memorized portions visually
 - [ ] Teacher can share specific Mushaf pages during sessions (screen share)
 
-#### Open Questions
 
-> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
+
+
 
 ---
 
@@ -537,9 +537,9 @@ Comprehensive reporting for teachers and students, with PDF export capability.
 - **Circle Overview Report:** All students side-by-side, session history, top performers
 - **Custom Date Range Reports**
 
-#### Open Questions
 
-> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
+
+
 
 ---
 
@@ -596,9 +596,9 @@ AI-powered analysis of student recitation audio to detect tajweed errors and ass
 4. Error report generated with timestamp references
 5. Grade suggestion provided to teacher (teacher can override)
 
-#### Open Questions
 
-> **Decisions Frozen:** All open questions have been moved to the [MVP Decision Register](./MVP_DECISION_REGISTER.md).
+
+
 
 ---
 

@@ -120,8 +120,8 @@ halaqaty/
 │       ├── collaboration/         ← Agent collaboration & team coordination
 │       │   ├── README.md
 │       │   ├── AGENT_COLLABORATION_GUIDE.md
-│       │   ├── AGENT_SETUP_REFINEMENT_SUMMARY.md
-│       │   └── DOCUMENTATION_UPDATE_SUMMARY.md
+
+
 │       ├── system-design/         ← (Future: Detailed system design)
 │       │   └── README.md
 │       ├── api-docs/              ← (Future: API reference)
@@ -180,17 +180,17 @@ This repository is currently in the **planning phase**. All documents below are 
 
 | Document | Language | Description |
 |----------|----------|-------------|
-| [PRD.md](docs/PRD.md) | 🇬🇧 English | Product requirements document (business-first) |
-| [arabic/PRD_AR.md](docs/arabic/PRD_AR.md) | 🇸🇦 Arabic | وثيقة متطلبات المنتج بالعربية |
-| [PLAN.md](docs/PLAN.md) | 🇬🇧 English | Master project plan — vision, features, architecture, roadmap |
-| [arabic/PLAN_AR.md](docs/arabic/PLAN_AR.md) | 🇸🇦 Arabic | الخطة التجارية للمشروع |
-| [FEATURES.md](docs/FEATURES.md) | 🇬🇧 English | Detailed feature specifications and status tracking |
-| [arabic/FEATURES_AR.md](docs/arabic/FEATURES_AR.md) | 🇸🇦 Arabic | مواصفات المميزات التفصيلية |
-| [arabic/README_AR.md](docs/arabic/README_AR.md) | 🇸🇦 Arabic | نظرة عامة عربية للمشروع |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 🇬🇧 English | Technical architecture, DB schema, API endpoints |
-| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | 🇬🇧 English | Phase-by-phase deployment plan with costs |
-| [EXECUTION_PLAYBOOK.md](docs/EXECUTION_PLAYBOOK.md) | 🇬🇧 English | CEO/PM execution system: MVP cut, decision sprint, GTM, KPIs, RACI |
-| [SYNC_GUIDE.md](docs/SYNC_GUIDE.md) | 🇬🇧🇸🇦 Bilingual | Guide for keeping Arabic/English docs in sync |
+| [PRD.md](docs/management/product/PRD.md) | 🇬🇧 English | Product requirements document (business-first) |
+| [arabic/PRD_AR.md](docs/management/arabic/PRD_AR.md) | 🇸🇦 Arabic | وثيقة متطلبات المنتج بالعربية |
+| [PLAN.md](docs/management/planning/PLAN.md) | 🇬🇧 English | Master project plan — vision, features, architecture, roadmap |
+| [arabic/PLAN_AR.md](docs/management/arabic/PLAN_AR.md) | 🇸🇦 Arabic | الخطة التجارية للمشروع |
+| [FEATURES.md](docs/management/product/FEATURES.md) | 🇬🇧 English | Detailed feature specifications and status tracking |
+| [arabic/FEATURES_AR.md](docs/management/arabic/FEATURES_AR.md) | 🇸🇦 Arabic | مواصفات المميزات التفصيلية |
+| [arabic/README_AR.md](docs/management/arabic/README_AR.md) | 🇸🇦 Arabic | نظرة عامة عربية للمشروع |
+| [ARCHITECTURE.md](docs/engineering/architecture/ARCHITECTURE.md) | 🇬🇧 English | Technical architecture, DB schema, API endpoints |
+| [DEPLOYMENT.md](docs/engineering/deployment/DEPLOYMENT.md) | 🇬🇧 English | Phase-by-phase deployment plan with costs |
+| [EXECUTION_PLAYBOOK.md](docs/engineering/development/EXECUTION_PLAYBOOK.md) | 🇬🇧 English | CEO/PM execution system: MVP cut, decision sprint, GTM, KPIs, RACI |
+| [SYNC_GUIDE.md](docs/management/arabic/SYNC_GUIDE.md) | 🇬🇧🇸🇦 Bilingual | Guide for keeping Arabic/English docs in sync |
 
 ---
 
@@ -233,3 +233,4 @@ This project is licensed under the **MIT License** — see [LICENSE](LICENSE) fo
 *Built with ❤️ for the Quran memorization community worldwide*
 
 </div>
+

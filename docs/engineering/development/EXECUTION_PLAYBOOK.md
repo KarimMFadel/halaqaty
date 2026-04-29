@@ -1,4 +1,4 @@
-# Halaqaty — Execution Playbook
+﻿# Halaqaty — Execution Playbook
 
 > Version: 1.0  
 > Status: Active operating playbook  
@@ -29,34 +29,9 @@ This playbook defines **how we execute** week by week:
 
 ---
 
-## 2) MVP Cut (What we ship first)
+## 2) MVP Cut
 
-### MVP Definition
-**MVP (Minimum Viable Product)** = the smallest version that delivers real value.
-
-For Halaqaty MVP:
-1. Create circle
-2. Run live session
-3. Use queue + grading
-4. View basic session-level progress
-
-### In MVP
-- Authentication + role-based access
-- Circle creation and membership
-- Recitation queue with rounds/statuses
-- Real-time chat + voice notes
-- Live sessions (audio-only)
-- Schedule, reminders, attendance basics
-- Basic session-level progress visibility (history + grades)
-
-### Out of MVP (deferred)
-- Session video (post-MVP, feature-flagged rollout)
-- Session recording (post-MVP, privacy-sensitive/high-risk feature)
-- AI tajweed scoring
-- AI memorization planning
-- Institutional control center
-- Desktop app
-- Advanced progress analytics (Quran map, trend charts, comparative dashboards)
+> **Migrated:** MVP scope definition and out-of-scope items have been moved to [`PRD.md Â§6`](../../management/product/PRD.md#6-scope).
 
 ### Privacy and trust policy for deferred recording
 - Recording remains disabled in MVP for privacy reasons.
@@ -159,37 +134,11 @@ Current Halaqaty policy:
 
 ---
 
-## 9) Abbreviation Glossary
-
-| Abbreviation | Meaning | Practical meaning in Halaqaty |
-|---|---|---|
-| MVP | Minimum Viable Product | Smallest useful launch scope |
-| KPI | Key Performance Indicator | Metrics to evaluate execution |
-| GTM | Go-To-Market | Pilot-to-public launch strategy |
-| RACI | Responsible, Accountable, Consulted, Informed | Ownership model for decisions and delivery |
-| PRD | Product Requirements Document | Business and product requirements |
-| WAU | Weekly Active Users | Weekly recurring usage |
-| MAU | Monthly Active Users | Monthly recurring usage |
-| JTBD | Jobs To Be Done | User goals/tasks the product must solve |
-| B2B | Business to Business | Institution-facing business model |
-| P0 / P1 / P2 / P3 | Priority levels | Launch-now to future backlog |
-| OQ | Open Question | Unresolved product decision |
-| DD | Design Decision | Documented technical/product decision |
-| BR | Business Requirement | Business-level requirement |
-| API | Application Programming Interface | Backend endpoints and integrations |
-| JWT | JSON Web Token | Session/auth token format |
-| OTP | One-Time Password | Phone verification code |
-| FCM | Firebase Cloud Messaging | Push notification service |
-| WS | WebSocket | Real-time update channel |
-| DB | Database | Persistent application data |
-| ERD | Entity Relationship Diagram | Database relationship map |
-
----
-
-## 10) Update Policy
+## 9) Update Policy
 
 When a decision changes:
 1. update the source document (PRD/PLAN/FEATURES),
 2. update this playbook if execution behavior changes,
 3. keep English/Arabic documentation aligned.
+
 

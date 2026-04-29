@@ -1,7 +1,7 @@
 # حِلْقَتي — الخطة التجارية للمشروع
 
 > الإصدار: 1.1 | الحالة: تخطيط  
-> الوثائق ذات الصلة: [PLAN.md](../PLAN.md) · [PRD_AR.md](PRD_AR.md) · [FEATURES_AR.md](FEATURES_AR.md)
+> الوثائق ذات الصلة: [PROJECT_PLAN.md](../PROJECT_PLAN.md) · [PRD_AR.md](PRD_AR.md) · [FEATURES_AR.md](FEATURES_AR.md)
 
 ---
 

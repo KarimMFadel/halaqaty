@@ -2,7 +2,7 @@
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
-**Related Documents:** [../../management/product/PRD.md](../../management/product/PRD.md) · [architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md) · [../../management/planning/PLAN.md](../../management/planning/PLAN.md) · [../../DEVELOPMENT.md](../../DEVELOPMENT.md) · [collaboration/AGENT_COLLABORATION_GUIDE.md](../collaboration/AGENT_COLLABORATION_GUIDE.md)
+**Related Documents:** [../../management/product/PRD.md](../../management/product/PRD.md) · [architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md) · [../../management/planning/PROJECT_PLAN.md](../../management/planning/PROJECT_PLAN.md) · [../../DEVELOPMENT.md](../../DEVELOPMENT.md) · [collaboration/AGENT_COLLABORATION_GUIDE.md](../collaboration/AGENT_COLLABORATION_GUIDE.md)
 
 ---
 

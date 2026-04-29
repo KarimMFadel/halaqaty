@@ -57,6 +57,7 @@ The original review identified **23 findings** (6 critical, 9 important, 8 minor
 | **Current Status** | ✅ **FIXED** |
 
 **Evidence:** `docs/contracts/` now exists and contains:
+
 - `openapi.yaml` — 1,171 lines, OpenAPI 3.0.3 spec covering Auth, Circles, Sessions, Queue, Chat, and Schedules with full request/response schemas, error responses, pagination, and security scheme definitions.
 - `ws_events.md` — 389 lines, complete WebSocket event catalogue with connection handshake, heartbeat, 13 event types (queue, session, chat, error), JSON schemas, delivery guarantees, and client→server commands.
 
@@ -72,6 +73,7 @@ The original review identified **23 findings** (6 critical, 9 important, 8 minor
 | **Current Status** | ✅ **FIXED** |
 
 **Evidence:** ARCHITECTURE.md lines 465–476 now defines a dedicated `device_tokens` table:
+
 - Columns: `id`, `user_id` (FK → users), `token`, `platform` (ios/android/web), `device_name`, `created_at`, `last_seen_at`
 - UNIQUE constraint on `(user_id, token)` — one entry per device per user
 - `ON DELETE CASCADE` — tokens are cleaned up when a user is deleted
@@ -89,6 +91,7 @@ The `/auth/fcm-token` endpoint in `openapi.yaml` (lines 79–110) supports the n
 | **Current Status** | ✅ **FIXED** |
 
 **Evidence:** ARCHITECTURE.md Section 7 (lines 860–893) now contains a **Dependency Version Matrix** with pinned versions for:
+
 - **Flutter:** `livekit_client ^2.4.0`, `firebase_auth ^5.3.0`, `firebase_messaging ^15.1.0`, `flutter_riverpod ^2.6.0`, `go_router ^14.6.0`
 - **Go:** `echo/v4 v4.13.x`, `livekit/server-sdk-go v1.7.x`, `golang-jwt/jwt/v5 v5.2.x`, `jackc/pgx/v5 v5.7.x`, `golang-migrate v4.18.x`, `firebase-admin v4.14.x`
 - **Infrastructure:** LiveKit Server `v1.8.x` (with note: must match `server-sdk-go` major version), PostgreSQL `16.x`, Docker `26.x`
@@ -104,6 +107,7 @@ The `/auth/fcm-token` endpoint in `openapi.yaml` (lines 79–110) supports the n
 | **Current Status** | ✅ **FIXED** |
 
 **Evidence:** ARCHITECTURE.md Section 6.9 (lines 837–856) now documents:
+
 - **Degraded-mode behavior table:** Active sessions continue uninterrupted with valid JWTs; new logins fail gracefully; token refresh retries 3× before prompting re-login; extended outages (>1hr) require Firebase recovery.
 - **Cached Token Policy:** Firebase tokens have 1-hour TTL; FlutterFire SDK caches and auto-refreshes silently.
 - **Migration Path:** Architecture isolates Firebase to two touchpoints (Go middleware + Flutter auth service). Migration to Auth0/Supabase Auth/custom JWT requires: (1) swap JWT validation middleware, (2) new Flutter auth package, (3) one-time `firebase_uid` migration.
@@ -118,6 +122,7 @@ The `/auth/fcm-token` endpoint in `openapi.yaml` (lines 79–110) supports the n
 | **Current Status** | ✅ **FIXED** (partially — see note) |
 
 **Evidence:** PLAN.md lines 694–702 now contains a **"Timeline Realism — Solo Developer"** section that:
+
 - Explicitly acknowledges this is a solo build with AI agent assistance
 - Recommends 15–20% buffer for debugging, App Store review, pilot feedback, and integration surprises
 - Marks Month 10–12 items as stretch goals
@@ -158,6 +163,7 @@ The `/auth/fcm-token` endpoint in `openapi.yaml` (lines 79–110) supports the n
 | **Current Status** | ✅ **FIXED** |
 
 **Evidence:** `docs/engineering/development/TESTING_STRATEGY.md` (219 lines) now exists with:
+
 - Testing pyramid with ratio targets (60% unit / 35% integration / 5% E2E)
 - Go unit tests: ≥80% coverage for business logic; table-driven tests; mock repository pattern
 - Go integration tests: `testcontainers-go` with real PostgreSQL 16; full HTTP + WS handler testing; migration up/down validation
@@ -202,6 +208,7 @@ The `/auth/fcm-token` endpoint in `openapi.yaml` (lines 79–110) supports the n
 | **Current Status** | ✅ **FIXED** |
 
 **Evidence:** ARCHITECTURE.md lines 561–562 now shows:
+
 - `circle_id UUID FK → circles.id` — **nullable** (no `NOT NULL` constraint)
 - `dm_recipient_id UUID FK → users.id` — for direct messages
 - CHECK constraint: `(circle_id IS NOT NULL OR dm_recipient_id IS NOT NULL)` — at least one must be set
@@ -218,9 +225,11 @@ This allows DMs (where `circle_id` is NULL and `dm_recipient_id` is set) while s
 | **Current Status** | ✅ **FIXED** |
 
 **Evidence:** ARCHITECTURE.md line 490 now includes:
+
 ```
 grading_policy VARCHAR(20) CHECK IN ('required','optional') DEFAULT 'required'
 ```
+
 Description: "Whether grading is required after each completed turn." This matches the FEATURES.md F-003 acceptance criteria exactly.
 
 ---
@@ -233,6 +242,7 @@ Description: "Whether grading is required after each completed turn." This match
 | **Current Status** | ✅ **FIXED** |
 
 **Evidence:** Multiple documents now address this:
+
 - AGENT_COLLABORATION_GUIDE.md defines the Tech Lead as a **hard code review gate** — no merge without approval (line 96). Security review, performance validation, and test coverage are explicit review criteria.
 - CONTRIBUTING.md (197 lines, new file) documents the full PR review process: Tech Lead AI agent reviews + final merge by Karim.
 - The solo-developer reality is explicitly acknowledged — AI agents supplement the human review capacity.
@@ -277,6 +287,7 @@ Month 9–10 (lines 673–680) correctly lists these as post-beta improvements.
 | **Current Status** | ❌ **OUTSTANDING** |
 
 **Evidence:** ARCHITECTURE.md Section 3.5 (lines 343–361) documents bandwidth requirements:
+
 - Audio only: ~50 kbps upstream/downstream per student
 - 30-student circle: ~1.5 Mbps total at server
 - RTT estimates for Riyadh/Cairo/Dubai (55–65ms, acceptable)
@@ -299,6 +310,7 @@ However, there is still **no explicit minimum bandwidth requirement for end-user
 | **Current Status** | ✅ **FIXED** |
 
 **Evidence:** `CONTRIBUTING.md` (197 lines) now exists with:
+
 - Who can contribute (Arabic speakers, Quran teachers, Flutter/Go devs, security researchers)
 - Green-light vs prior-discussion contributions
 - Development setup (prerequisites, first-time setup commands)
@@ -318,6 +330,7 @@ However, there is still **no explicit minimum bandwidth requirement for end-user
 | **Current Status** | ✅ **FIXED** |
 
 **Evidence:** FEATURES.md now uses unique, non-overlapping DD IDs:
+
 - F-001 (Auth): DD-001 through DD-004
 - F-002 (Circles): DD-005 through DD-007
 - F-003 (Queue): DD-020 through DD-024
@@ -335,6 +348,7 @@ No duplicate IDs remain.
 | **Current Status** | ✅ **FIXED** |
 
 **Evidence:** ARCHITECTURE.md lines 619–621 now explicitly documents:
+
 - `start_time TIME NOT NULL` — "Stored in local time; use timezone column to convert to UTC"
 - `end_time TIME NOT NULL` — Same semantics
 - `timezone VARCHAR(50) NOT NULL` — "IANA timezone string; used to interpret start_time/end_time as local and convert to UTC"
@@ -378,6 +392,7 @@ An investigation note (line 361) explicitly acknowledges: "No systematic latency
 | **Current Status** | ✅ **FIXED** |
 
 **Evidence:** ARCHITECTURE.md lines 648–658 now defines a `quran_surahs` reference table:
+
 - Columns: `id` (1–114), `name_arabic`, `name_transliterated`, `ayah_count`, `juz_start`, `revelation_type`
 - Seeded via migration — never modified by the application
 - Validation rule documented: `from_ayah >= 1 AND to_ayah <= surah.ayah_count AND from_ayah <= to_ayah`
@@ -411,6 +426,7 @@ It also references feature-flag architecture (ADR-005) for per-user and per-feat
 | **Current Status** | ✅ **FIXED** |
 
 **Evidence:** FEATURES.md lines 642–653 contains an "Appendix: Competitor Analysis Alignment" section that:
+
 - Maps each competitor recommendation to the current feature backlog (Hifz mode → F-003, Audio quality → F-005)
 - Explicitly marks unmapped items as deferred
 - States: "The competitor analysis is treated as **strategic input**, not committed scope."
@@ -450,12 +466,12 @@ These elements are **best-in-class** and should be preserved:
 
 ### New Additions to the Excellence List
 
-9. **OpenAPI contract** — The new `openapi.yaml` is a fully valid OpenAPI 3.0.3 spec with reusable components, pagination, and comprehensive error handling. This elevates the project from "well-planned" to "contractually specified."
-10. **WebSocket event catalogue** — The `ws_events.md` includes delivery guarantees, deduplication strategies, and error codes — not just event shapes. This is unusual and valuable.
-11. **Testing strategy** — The new `TESTING_STRATEGY.md` covers the full pyramid with tool choices, coverage targets, and a clear "what we don't test" section. The `testcontainers-go` approach for integration tests is a mature pattern.
-12. **Agent Collaboration Guide** — A 400+ line document defining 5 agent roles, escalation paths, autonomous decision boundaries, and Spec-Kit phase integration. This is a novel contribution to the AI-assisted development practice.
-13. **Dependency Version Matrix** — Pinned versions for all 11 key dependencies across Flutter, Go, and infrastructure, with an explicit upgrade policy.
-14. **CONTRIBUTING.md** — A comprehensive 197-line guide that welcomes domain experts (Quran teachers, Arabic speakers) alongside developers. The security disclosure policy and PR checklist are professional-grade.
+1. **OpenAPI contract** — The new `openapi.yaml` is a fully valid OpenAPI 3.0.3 spec with reusable components, pagination, and comprehensive error handling. This elevates the project from "well-planned" to "contractually specified."
+2. **WebSocket event catalogue** — The `ws_events.md` includes delivery guarantees, deduplication strategies, and error codes — not just event shapes. This is unusual and valuable.
+3. **Testing strategy** — The new `TESTING_STRATEGY.md` covers the full pyramid with tool choices, coverage targets, and a clear "what we don't test" section. The `testcontainers-go` approach for integration tests is a mature pattern.
+4. **Agent Collaboration Guide** — A 400+ line document defining 5 agent roles, escalation paths, autonomous decision boundaries, and Spec-Kit phase integration. This is a novel contribution to the AI-assisted development practice.
+5. **Dependency Version Matrix** — Pinned versions for all 11 key dependencies across Flutter, Go, and infrastructure, with an explicit upgrade policy.
+6. **CONTRIBUTING.md** — A comprehensive 197-line guide that welcomes domain experts (Quran teachers, Arabic speakers) alongside developers. The security disclosure policy and PR checklist are professional-grade.
 
 ---
 
@@ -476,3 +492,4 @@ These elements are **best-in-class** and should be preserved:
 |------|--------|
 | 2026-04-28 (original) | Initial 23-finding review by PM + Project Manager agents |
 | 2026-04-28 (update) | Re-audit by Document Review Agent after architect/team-leader/tech-lead remediation |
+| 2026-04-29 (update) | PM & PjM agents completed full Documentation Deduplication (Phase 1-3) successfully, eliminating ~600 lines of duplicated content and enforcing a single-source-of-truth structure across PRD, FEATURES, and PLAN. |

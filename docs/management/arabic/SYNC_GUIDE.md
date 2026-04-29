@@ -10,7 +10,7 @@
 
 Arabic docs are now centralized under:
 
-- `docs/arabic/`
+- `docs/management/arabic/`
 
 Arabic coverage is **business/product-facing only**.
 Technical deep-dive docs are maintained in English only.
@@ -19,12 +19,12 @@ Technical deep-dive docs are maintained in English only.
 
 | Type | English | Arabic |
 |---|---|---|
-| Project intro | [`README.md`](../README.md) | [`docs/arabic/README_AR.md`](arabic/README_AR.md) |
-| Product requirements | [`PRD.md`](PRD.md) | [`docs/arabic/PRD_AR.md`](arabic/PRD_AR.md) |
-| Master plan (business) | [`PLAN.md`](PLAN.md) | [`docs/arabic/PLAN_AR.md`](arabic/PLAN_AR.md) |
-| Feature board | [`FEATURES.md`](FEATURES.md) | [`docs/arabic/FEATURES_AR.md`](arabic/FEATURES_AR.md) |
-| Technical architecture | [`ARCHITECTURE.md`](ARCHITECTURE.md) | — |
-| Deployment strategy | [`DEPLOYMENT.md`](DEPLOYMENT.md) | — |
+| Project intro | [`README.md`](../../../README.md) | [`docs/management/README_AR.md`](README_AR.md) |
+| Product requirements | [`PRD.md`](../product/PRD.md) | [`docs/management/PRD_AR.md`](PRD_AR.md) |
+| Master plan (business) | [`PROJECT_PLAN.md`](../planning/PROJECT_PLAN.md) | [`docs/management/PLAN_AR.md`](PLAN_AR.md) |
+| Feature board | [`FEATURES.md`](../product/FEATURES.md) | [`docs/management/FEATURES_AR.md`](FEATURES_AR.md) |
+| Technical architecture | [`ARCHITECTURE.md`](../../engineering/architecture/ARCHITECTURE.md) | — |
+| Deployment strategy | [`DEPLOYMENT.md`](../../engineering/deployment/DEPLOYMENT.md) | — |
 
 ### Source-of-truth rules
 
@@ -34,7 +34,7 @@ Technical deep-dive docs are maintained in English only.
 
 ### Update rules
 
-1. If you change `PRD.md`, `PLAN.md`, or `FEATURES.md`, update Arabic mirrors in `docs/arabic/`.
+1. If you change `PRD.md`, `PROJECT_PLAN.md`, or `FEATURES.md`, update Arabic mirrors in `docs/management/arabic/`.
 2. If you change technical docs (`ARCHITECTURE.md`, `DEPLOYMENT.md`), no Arabic mirror is required.
 3. Keep links valid after any file move.
 
@@ -46,7 +46,7 @@ Technical deep-dive docs are maintained in English only.
 
 تم تجميع الملفات العربية تحت:
 
-- `docs/arabic/`
+- `docs/management/arabic/`
 
 التغطية العربية تركز على **المحتوى التجاري/المنتجي** فقط،
 أما التفاصيل التقنية العميقة فتبقى في الوثائق الإنجليزية.
@@ -55,15 +55,16 @@ Technical deep-dive docs are maintained in English only.
 
 | النوع | الإنجليزية | العربية |
 |---|---|---|
-| تعريف المشروع | [`README.md`](../README.md) | [`docs/arabic/README_AR.md`](arabic/README_AR.md) |
-| وثيقة متطلبات المنتج | [`PRD.md`](PRD.md) | [`docs/arabic/PRD_AR.md`](arabic/PRD_AR.md) |
-| الخطة الرئيسية (تجارية) | [`PLAN.md`](PLAN.md) | [`docs/arabic/PLAN_AR.md`](arabic/PLAN_AR.md) |
-| لوحة المميزات | [`FEATURES.md`](FEATURES.md) | [`docs/arabic/FEATURES_AR.md`](arabic/FEATURES_AR.md) |
-| المعمارية التقنية | [`ARCHITECTURE.md`](ARCHITECTURE.md) | — |
-| استراتيجية النشر | [`DEPLOYMENT.md`](DEPLOYMENT.md) | — |
+| تعريف المشروع | [`README.md`](../../../README.md) | [`docs/management/README_AR.md`](README_AR.md) |
+| وثيقة متطلبات المنتج | [`PRD.md`](../product/PRD.md) | [`docs/management/PRD_AR.md`](PRD_AR.md) |
+| الخطة الرئيسية (تجارية) | [`PROJECT_PLAN.md`](../planning/PROJECT_PLAN.md) | [`docs/management/PLAN_AR.md`](PLAN_AR.md) |
+| لوحة المميزات | [`FEATURES.md`](../product/FEATURES.md) | [`docs/management/FEATURES_AR.md`](FEATURES_AR.md) |
+| المعمارية التقنية | [`ARCHITECTURE.md`](../../engineering/architecture/ARCHITECTURE.md) | — |
+| استراتيجية النشر | [`DEPLOYMENT.md`](../../engineering/deployment/DEPLOYMENT.md) | — |
 
 ### قواعد المزامنة
 
-1. عند تعديل `PRD.md` أو `PLAN.md` أو `FEATURES.md` يجب تحديث النسخ العربية في `docs/arabic/`.
+1. عند تعديل `PRD.md` أو `PROJECT_PLAN.md` أو `FEATURES.md` يجب تحديث النسخ العربية في `docs/management/arabic/`.
 2. عند تعديل الوثائق التقنية (`ARCHITECTURE.md` و `DEPLOYMENT.md`) لا حاجة لمرآة عربية.
 3. تأكد من سلامة الروابط بعد أي نقل للملفات.
+

@@ -1,8 +1,8 @@
-﻿# Halaqaty — Technical Architecture
+# Halaqaty — Technical Architecture
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
-**Related Documents:** [product/PRD.md](../../management/product/PRD.md) · [planning/PLAN.md](../../management/planning/PLAN.md) · [deployment/DEPLOYMENT.md](../deployment/DEPLOYMENT.md) · [adr/README.md](./adr/README.md) · [../../DEVELOPMENT.md](../../DEVELOPMENT.md) · [collaboration/AGENT_COLLABORATION_GUIDE.md](../collaboration/AGENT_COLLABORATION_GUIDE.md)
+**Related Documents:** [product/PRD.md](../../management/product/PRD.md) · [planning/PROJECT_PLAN.md](../../management/planning/PROJECT_PLAN.md) · [deployment/DEPLOYMENT.md](../deployment/DEPLOYMENT.md) · [adr/README.md](./adr/README.md) · [../../DEVELOPMENT.md](../../DEVELOPMENT.md) · [collaboration/AGENT_COLLABORATION_GUIDE.md](../collaboration/AGENT_COLLABORATION_GUIDE.md)
 
 > **Key architectural decisions** (framework choice, state management, auth boundary, migrations) are documented as ADRs in [`./adr/`](./adr/README.md).
 

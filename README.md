@@ -88,7 +88,7 @@ halaqaty/
 │   │   │   └── MVP_DECISION_REGISTER.md
 │   │   ├── planning/              ← Master project plan
 │   │   │   ├── README.md
-│   │   │   └── PLAN.md
+│   │   │   └── PROJECT_PLAN.md
 │   │   ├── business/              ← Market analysis, competitor research
 │   │   │   ├── README.md
 │   │   │   └── QURAN_MEMORIZATION_COMPETITOR_ANALYSIS.md
@@ -157,8 +157,8 @@ Halaqaty uses **[Spec-Kit](https://github.com/github/spec-kit)** (`v0.8.1`) for 
 |---|---|
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Full developer guide: setup, Spec-Kit commands, workflow steps, quality gates, agent roles |
 | [`.specify/memory/constitution.md`](.specify/memory/constitution.md) | Governing principles — every Copilot agent reads this first |
-| [`docs/AGENT_COLLABORATION_GUIDE.md`](docs/AGENT_COLLABORATION_GUIDE.md) | How agents collaborate: roles, clarification protocols, escalation paths |
-| [`docs/MVP_DECISION_REGISTER.md`](docs/MVP_DECISION_REGISTER.md) | All frozen business and technical decisions |
+| [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) | How agents collaborate: roles, clarification protocols, escalation paths |
+| [`docs/management/product/MVP_DECISION_REGISTER.md`](docs/management/product/MVP_DECISION_REGISTER.md) | All frozen business and technical decisions |
 
 **Spec-Kit workflow (7 phases):**
 ```
@@ -182,7 +182,7 @@ This repository is currently in the **planning phase**. All documents below are 
 |----------|----------|-------------|
 | [PRD.md](docs/management/product/PRD.md) | 🇬🇧 English | Product requirements document (business-first) |
 | [arabic/PRD_AR.md](docs/management/arabic/PRD_AR.md) | 🇸🇦 Arabic | وثيقة متطلبات المنتج بالعربية |
-| [PLAN.md](docs/management/planning/PLAN.md) | 🇬🇧 English | Master project plan — vision, features, architecture, roadmap |
+| [PROJECT_PLAN.md](docs/management/planning/PROJECT_PLAN.md) | 🇬🇧 English | Master project plan — vision, features, architecture, roadmap |
 | [arabic/PLAN_AR.md](docs/management/arabic/PLAN_AR.md) | 🇸🇦 Arabic | الخطة التجارية للمشروع |
 | [FEATURES.md](docs/management/product/FEATURES.md) | 🇬🇧 English | Detailed feature specifications and status tracking |
 | [arabic/FEATURES_AR.md](docs/management/arabic/FEATURES_AR.md) | 🇸🇦 Arabic | مواصفات المميزات التفصيلية |
@@ -210,8 +210,8 @@ This repository is currently in the **planning phase**. All documents below are 
 Before writing any code, read [DEVELOPMENT.md](DEVELOPMENT.md) for the full Spec-Kit workflow and agent collaboration model.
 
 1. Read `.specify/memory/constitution.md` — the governing document for all decisions.
-2. Read `docs/AGENT_COLLABORATION_GUIDE.md` — how agents collaborate and when they ask you clarifying questions.
-3. Verify the feature is `🟡 Approved` in `docs/FEATURES.md`.
+2. Read `docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md` — how agents collaborate and when they ask you clarifying questions.
+3. Verify the feature is `🟡 Approved` in `docs/management/product/FEATURES.md`.
 4. Run `/speckit.specify` in VS Code Copilot Chat to start the 7-phase workflow.
 5. Follow the pipeline: **specify → clarify → checklist → plan → tasks → analyze → implement**.
 6. Agents will ask you 5-7 clarifying questions if requirements are ambiguous — **answer clearly**.

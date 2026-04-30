@@ -1,7 +1,7 @@
 # Halaqaty — Role Definitions & Capability Matrix
 
 > **Status:** Authoritative Reference | **Last Updated:** 2026  
-> **Source:** Extracted from PLAN.md §2 as part of documentation deduplication (Phase: Planning)
+> **Source:** Extracted from PROJECT_PLAN.md §2 as part of documentation deduplication (Phase: Planning)
 
 **Related Documents:** [PRD.md](./PRD.md) · [FEATURES.md](./FEATURES.md) · [MVP_DECISION_REGISTER.md](./MVP_DECISION_REGISTER.md) · [ARCHITECTURE.md](../../engineering/architecture/ARCHITECTURE.md)
 

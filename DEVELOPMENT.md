@@ -395,7 +395,7 @@ halaqaty/
 │   │   │   ├── JOURNEY.md           ← Full user journey (teacher-first)
 │   │   │   └── MVP_DECISION_REGISTER.md ← All frozen MVP decisions
 │   │   ├── planning/
-│   │   │   └── PLAN.md              ← Master project plan
+│   │   │   └── PROJECT_PLAN.md              ← Master project plan
 │   │   ├── business/
 │   │   └── arabic/
 │   └── engineering/                 ← Technical architecture & deployment

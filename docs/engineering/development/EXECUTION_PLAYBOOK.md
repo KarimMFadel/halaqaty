@@ -2,7 +2,7 @@
 
 > Version: 1.0  
 > Status: Active operating playbook  
-> Related: [../../management/product/PRD.md](../../management/product/PRD.md) · [../../management/planning/PLAN.md](../../management/planning/PLAN.md) · [../../management/product/FEATURES.md](../../management/product/FEATURES.md) · [../../../DEVELOPMENT.md](../../../DEVELOPMENT.md) · [AGENT_COLLABORATION_GUIDE.md](./AGENT_COLLABORATION_GUIDE.md)
+> Related: [../../management/product/PRD.md](../../management/product/PRD.md) · [../../management/planning/PROJECT_PLAN.md](../../management/planning/PROJECT_PLAN.md) · [../../management/product/FEATURES.md](../../management/product/FEATURES.md) · [../../../DEVELOPMENT.md](../../../DEVELOPMENT.md) · [AGENT_COLLABORATION_GUIDE.md](./AGENT_COLLABORATION_GUIDE.md)
 
 ---
 

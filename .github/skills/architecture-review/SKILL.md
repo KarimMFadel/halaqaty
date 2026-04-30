@@ -13,11 +13,11 @@ Use this skill when asked to review solution design, architecture docs, or major
 
 ## Inputs to inspect
 - `README.md`
-- `docs/PRD.md`
-- `docs/PLAN.md`
-- `docs/FEATURES.md`
-- `docs/ARCHITECTURE.md`
-- `docs/DEPLOYMENT.md`
+- `docs/management/product/PRD.md`
+- `docs/management/planning/PROJECT_PLAN.md`
+- `docs/management/product/FEATURES.md`
+- `docs/engineering/architecture/ARCHITECTURE.md`
+- `docs/engineering/deployment/DEPLOYMENT.md`
 
 ## Review checklist
 1. Domain alignment: architecture supports real Quran circle workflows.

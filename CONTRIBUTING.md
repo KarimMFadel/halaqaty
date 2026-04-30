@@ -41,7 +41,7 @@ Thank you for your interest in Halaqaty — the Quran memorization circle manage
 ### Contributions that need prior discussion
 
 Open an issue before coding:
-- New features — check if it's already on the [roadmap](docs/management/planning/PLAN.md)
+- New features — check if it's already on the [roadmap](docs/management/planning/PROJECT_PLAN.md)
 - Architecture changes — read [ARCHITECTURE.md](docs/engineering/architecture/ARCHITECTURE.md) first
 - Changes to the auth flow, RBAC, or data deletion paths
 

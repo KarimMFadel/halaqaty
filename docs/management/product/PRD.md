@@ -235,7 +235,7 @@ The feature-flag architecture (ADR-005) allows per-user and per-feature activati
 
 ## 13) Product Decisions (Resolved)
 
-All six open product decisions have been resolved. Full rationale is in [`docs/MVP_DECISION_REGISTER.md`](MVP_DECISION_REGISTER.md).
+All six open product decisions have been resolved. Full rationale is in [`MVP_DECISION_REGISTER.md`](MVP_DECISION_REGISTER.md).
 
 | # | Decision | Resolution |
 |---|---|---|

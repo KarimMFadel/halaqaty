@@ -85,7 +85,7 @@ Quran recitation demands pristine, unprocessed audio. Every LiveKit room configu
   { "error": { "code": "ERR_CIRCLE_NOT_FOUND", "message": "Circle does not exist" } }
   ```
 - Standard HTTP semantics apply: `400` bad input, `401` unauthenticated, `403` forbidden, `404` not found, `409` conflict, `422` unprocessable, `500` internal.
-- WebSocket events follow the schema catalog in `docs/contracts/websocket-events.md`.
+- WebSocket events follow the schema catalog in `docs/contracts/ws_events.md`.
 - All timestamps in API payloads are UTC ISO 8601. Clients convert to local timezone using the user's stored IANA timezone string.
 
 ### Feature Flags
@@ -160,7 +160,7 @@ These are final decisions. Do not re-open or work around them during implementat
 | AI / Tajweed analysis | Fully deferred. Not until recording is unblocked. |
 | Circle on account deletion | Archived. Members notified. Teacher must designate supervisor first. |
 
-For full rationale, see `docs/MVP_DECISION_REGISTER.md`.
+For full rationale, see `docs/management/product/MVP_DECISION_REGISTER.md`.
 
 ---
 
@@ -168,7 +168,7 @@ For full rationale, see `docs/MVP_DECISION_REGISTER.md`.
 
 This constitution supersedes all other practices, preferences, or conventions in the Halaqaty codebase. Any amendment requires:
 
-1. A new or updated ADR in `docs/adr/` explaining the change and rationale.
+1. A new or updated ADR in `docs/engineering/architecture/adr/` explaining the change and rationale.
 2. An update to this constitution with the version bump and amendment noted.
 3. Explicit approval from Karim (the product owner) before any implementation proceeds.
 

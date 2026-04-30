@@ -12,10 +12,10 @@ Use this skill when product requirements are broad, unclear, or not implementati
 - Cover user segment, desired behavior, success metrics, constraints, and out-of-scope boundaries.
 
 ## Inputs to inspect
-- `docs/PRD.md`
-- `docs/PLAN.md`
-- `docs/FEATURES.md`
-- `docs/EXECUTION_PLAYBOOK.md`
+- `docs/management/product/PRD.md`
+- `docs/management/planning/PROJECT_PLAN.md`
+- `docs/management/product/FEATURES.md`
+- `docs/engineering/development/EXECUTION_PLAYBOOK.md`
 - Related architecture/deployment docs when needed
 
 ## Refinement process

@@ -750,7 +750,7 @@ Ideas from the broader community will be logged here for team review:
 
 | # | Suggestion | Source | Date | Status |
 |---|-----------|--------|------|--------|
-| CS-001 | *(placeholder)* | — | — | — |
+| CS-001 | *(no suggestions yet — submit via GitHub Discussions after launch)* | — | — | — |
 
 ---
 

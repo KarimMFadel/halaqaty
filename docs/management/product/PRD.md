@@ -252,5 +252,5 @@ All six open product decisions have been resolved. Full rationale is in [`MVP_DE
 
 This PRD is intentionally business-first. Detailed technical implementation remains in:
 
-- [ARCHITECTURE.md](ARCHITECTURE.md)
-- [DEPLOYMENT.md](DEPLOYMENT.md)
+- [ARCHITECTURE.md](../../engineering/architecture/ARCHITECTURE.md)
+- [DEPLOYMENT.md](../../engineering/deployment/DEPLOYMENT.md)

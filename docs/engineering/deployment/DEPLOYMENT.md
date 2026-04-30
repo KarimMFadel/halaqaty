@@ -592,4 +592,4 @@ jobs:
 
 ---
 
-*See [ARCHITECTURE.md](ARCHITECTURE.md) for the technical system design.*
+*See [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) for the technical system design.*

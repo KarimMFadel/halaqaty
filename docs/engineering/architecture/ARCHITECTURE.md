@@ -913,5 +913,5 @@ Pin versions here. Update this table when bumping a dependency.
 
 *This document is the source of truth for technical architecture.*
 
-*See [DEPLOYMENT.md](DEPLOYMENT.md) for infrastructure and deployment details.*
+*See [DEPLOYMENT.md](../deployment/DEPLOYMENT.md) for infrastructure and deployment details.*
 

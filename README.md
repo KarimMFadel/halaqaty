@@ -216,7 +216,7 @@ Before writing any code, read [DEVELOPMENT.md](DEVELOPMENT.md) for the full Spec
 5. Follow the pipeline: **specify → clarify → checklist → plan → tasks → analyze → implement**.
 6. Agents will ask you 5-7 clarifying questions if requirements are ambiguous — **answer clearly**.
 7. All PRs require green quality gates and **Tech Lead approval** (see [DEVELOPMENT.md](DEVELOPMENT.md)).
-8. Arabic documentation mirrors business/product docs only. Technical docs (ARCHITECTURE, ADRs) remain English. See [docs/SYNC_GUIDE.md](docs/SYNC_GUIDE.md).
+8. Arabic documentation mirrors business/product docs only. Technical docs (ARCHITECTURE, ADRs) remain English. See [docs/management/arabic/SYNC_GUIDE.md](docs/management/arabic/SYNC_GUIDE.md).
 
 ---
 

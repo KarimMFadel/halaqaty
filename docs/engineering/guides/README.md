@@ -1,0 +1,250 @@
+# Development Guides
+
+How-to guides, troubleshooting, common workflows, and technical walkthroughs.
+
+---
+
+## Troubleshooting Runbooks
+
+### RB-01: Go backend fails to start
+
+**Symptom:** `go run ./backend/cmd/api` exits with an error immediately.
+
+**Check 1 — Missing environment variables:**
+```bash
+# Required vars (copy from .env.example)
+DATABASE_URL=postgres://halaqaty:password@localhost:5432/halaqaty?sslmode=disable
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_SERVICE_ACCOUNT_JSON=<base64 encoded service account JSON>
+LIVEKIT_API_KEY=...
+LIVEKIT_API_SECRET=...
+MINIO_ENDPOINT=localhost:9000
+```
+
+**Check 2 — PostgreSQL not running:**
+```bash
+docker compose ps           # verify postgres container is Up
+docker compose logs postgres # check for init errors
+```
+
+**Check 3 — Migrations not applied:**
+```bash
+make migrate-up             # apply all pending migrations
+# or manually:
+migrate -path ./migrations -database $DATABASE_URL up
+```
+
+**Check 4 — Port 8080 already in use:**
+```bash
+netstat -an | grep 8080     # find conflicting process
+# Change PORT env var to another value
+```
+
+---
+
+### RB-02: Firebase Auth token validation fails (401 on all requests)
+
+**Symptom:** All authenticated requests return `401 ERR_UNAUTHENTICATED` even with a fresh token.
+
+**Check 1 — Service account misconfigured:**
+- Verify `FIREBASE_PROJECT_ID` matches the project in Firebase Console
+- Verify `FIREBASE_SERVICE_ACCOUNT_JSON` is valid base64-encoded JSON (not the file path)
+
+```bash
+# Decode and inspect the service account
+echo $FIREBASE_SERVICE_ACCOUNT_JSON | base64 -d | python3 -m json.tool | head -5
+# Expected: { "type": "service_account", "project_id": "your-project-id", ... }
+```
+
+**Check 2 — Clock skew:**
+Firebase tokens include `iat` (issued at) and `exp` (expiry). If the server clock is >5 minutes off, all tokens will be rejected.
+```bash
+date -u                     # check server time vs actual UTC
+ntpdate pool.ntp.org        # sync NTP if needed
+```
+
+**Check 3 — Wrong Firebase project:**
+If the Flutter app is pointing to a different Firebase project than the backend, tokens won't validate.
+
+---
+
+### RB-03: WebSocket connection drops immediately
+
+**Symptom:** Flutter client connects and disconnects in under 1 second. No events received.
+
+**Check 1 — WS token expired:**
+WS tokens are valid for 60 seconds from issuance. If the network round-trip takes longer, the connection is rejected.
+```
+Look for server log: "ws_token expired" or "token validation failed"
+```
+
+**Check 2 — Max connection limit hit:**
+Each user can have max 3 simultaneous WS connections. Extra connections are closed with code `4001`.
+```
+Look for server log: "max_connections_exceeded user_id=..."
+```
+
+**Check 3 — Wrong WebSocket URL:**
+```
+Correct:   wss://api.halaqaty.app/ws?token=<token>
+Incorrect: ws://  (non-TLS) or missing token parameter
+```
+
+**Check 4 — Nginx proxy not configured for WS:**
+WebSocket upgrade requires specific Nginx directives:
+```nginx
+location /ws {
+    proxy_pass http://backend;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 3600s;
+}
+```
+
+---
+
+### RB-04: LiveKit audio session — students can't hear each other
+
+**Symptom:** Students join the LiveKit room but audio is silent.
+
+**Check 1 — Student publish permission not granted:**
+In MVP, students can only publish audio when it is their turn (`CanPublish: true`). By default, `CanPublish: false`. Verify the teacher has advanced the queue to the student's turn.
+
+**Check 2 — Flutter audio permissions not granted:**
+```
+iOS: NSMicrophoneUsageDescription must be in Info.plist
+Android: <uses-permission android:name="android.permission.RECORD_AUDIO" />
+```
+
+**Check 3 — LiveKit server not reachable:**
+```bash
+curl https://livekit.halaqaty.app/health   # should return 200 {"status":"ok"}
+```
+
+**Check 4 — LiveKit token misconfigured:**
+```bash
+# Inspect token claims (JWT decode — no secret needed for payload inspection)
+echo "<token>" | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool
+# Verify: "video" claims contain CanPublish, CanSubscribe, room name
+```
+
+**Check 5 — Audio config check:**
+LiveKit rooms must be created with noise suppression and AGC disabled. Check `backend/internal/sessions/livekit.go` for:
+```go
+AudioConfig: &livekit.AudioConfig{
+    NoiseCancellation: false,
+    AgcEnabled:        false,
+}
+```
+
+---
+
+### RB-05: Database migration fails
+
+**Symptom:** `make migrate-up` fails with a SQL error.
+
+**Check 1 — Dirty migration state:**
+```bash
+make migrate-status   # check for "dirty: true"
+# If dirty, the migration was partially applied. Fix manually:
+migrate -path ./migrations -database $DATABASE_URL force <version>
+```
+
+**Check 2 — Missing rollback file:**
+Every `.up.sql` migration must have a corresponding `.down.sql`. Check:
+```bash
+ls backend/migrations/ | sort
+# Each 000NNN_name.up.sql should have a 000NNN_name.down.sql
+```
+
+**Check 3 — Test rollback on fresh schema:**
+```bash
+make migrate-fresh    # drops all tables, applies all migrations from scratch
+```
+
+---
+
+### RB-06: Flutter app fails to build
+
+**Symptom:** `flutter build apk` fails.
+
+**Check 1 — Flutter version mismatch:**
+```bash
+flutter --version     # must be ≥ 3.24
+flutter upgrade       # upgrade if needed
+```
+
+**Check 2 — Pub cache issues:**
+```bash
+cd mobile
+flutter clean
+flutter pub get
+flutter build apk --debug
+```
+
+**Check 3 — Firebase config missing:**
+```
+android/app/google-services.json    must exist
+ios/Runner/GoogleService-Info.plist  must exist
+```
+
+Download from Firebase Console → Project Settings → Your Apps.
+
+**Check 4 — Dart analysis errors blocking build:**
+```bash
+flutter analyze   # zero issues required before building
+```
+
+---
+
+## Common Development Tasks
+
+### Reset the local database
+
+```bash
+make migrate-fresh    # drop all tables and re-apply all migrations
+```
+
+### Add a new DB migration
+
+```bash
+migrate create -ext sql -dir backend/migrations -seq <migration_name>
+# Creates: backend/migrations/000NNN_<migration_name>.up.sql
+#          backend/migrations/000NNN_<migration_name>.down.sql
+# Edit both files, then: make migrate-up
+```
+
+### Run only Go tests
+
+```bash
+cd backend
+go test ./...                              # unit tests
+go test -tags=integration ./...            # integration tests (requires Docker)
+go test -run TestQueueHandler ./internal/queue/...  # specific test
+```
+
+### Run only Flutter tests
+
+```bash
+cd mobile
+flutter test                               # all tests
+flutter test test/queue_notifier_test.dart # specific test
+```
+
+### Inspect WebSocket events locally
+
+Use [websocat](https://github.com/vi/websocat):
+```bash
+# Get a WS token first (requires a valid session)
+WS_TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/sessions/<id>/ws-token \
+  -H "Authorization: Bearer <jwt>" | jq -r .ws_token)
+
+# Connect and watch events
+websocat "ws://localhost:8080/ws?token=$WS_TOKEN"
+```
+
+---
+
+*For architecture context, see [`ARCHITECTURE.md`](../architecture/ARCHITECTURE.md). For deployment issues, see [`DEPLOYMENT.md`](../deployment/DEPLOYMENT.md).*
+

@@ -1,0 +1,94 @@
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+*.dart_tool/
+pubspec.lock
+
+# Flutter generated
+lib/generated_plugin_registrant.dart
+.metadata
+
+# Dart
+*.dart_snapshot
+
+# Go
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/bin/
+/vendor/
+go.sum
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+*.iml
+*.ipr
+*.iws
+.settings/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V7
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+*.env
+
+# Docker volumes & data
+docker/data/
+docker/volumes/
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
+
+# Secrets
+*.pem
+*.key
+*.p12
+*.keystore
+service-account.json
+google-services.json
+GoogleService-Info.plist
+
+# MinIO data
+minio_data/
+
+# LiveKit
+livekit.yaml
+
+# Node (if any tooling is added)
+node_modules/
+
+# Temporary files
+tmp/
+temp/
+*.tmp

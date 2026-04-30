@@ -59,7 +59,7 @@ Quran recitation demands pristine, unprocessed audio. Every LiveKit room configu
 - Integration tests are required for every API endpoint and every WebSocket event handler.
 - No PR is merged with any failing test.
 - Every database migration must be tested against a fresh schema before merging.
-- Go test coverage target: ≥80% for `internal/` packages.
+- Go test coverage target: ≥80% for `backend/internal/` packages.
 
 ### VII. MVP Scope Discipline (YAGNI)
 - Scale target: **50 concurrent users, ≤10 simultaneous live sessions** in the first 6 months.

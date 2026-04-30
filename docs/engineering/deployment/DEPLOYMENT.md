@@ -544,7 +544,7 @@ jobs:
     steps:
       - name: Build Go backend
         run: |
-          go build -o halaqaty-api ./cmd/api
+          go build -o halaqaty-api ./backend/cmd/api
           
       - name: Build Docker image
         run: |

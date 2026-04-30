@@ -8,7 +8,7 @@ How-to guides, troubleshooting, common workflows, and technical walkthroughs.
 
 ### RB-01: Go backend fails to start
 
-**Symptom:** `go run ./cmd/api` exits with an error immediately.
+**Symptom:** `go run ./backend/cmd/api` exits with an error immediately.
 
 **Check 1 — Missing environment variables:**
 ```bash
@@ -130,7 +130,7 @@ echo "<token>" | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool
 ```
 
 **Check 5 — Audio config check:**
-LiveKit rooms must be created with noise suppression and AGC disabled. Check `internal/sessions/livekit.go` for:
+LiveKit rooms must be created with noise suppression and AGC disabled. Check `backend/internal/sessions/livekit.go` for:
 ```go
 AudioConfig: &livekit.AudioConfig{
     NoiseCancellation: false,
@@ -154,7 +154,7 @@ migrate -path ./migrations -database $DATABASE_URL force <version>
 **Check 2 — Missing rollback file:**
 Every `.up.sql` migration must have a corresponding `.down.sql`. Check:
 ```bash
-ls migrations/ | sort
+ls backend/migrations/ | sort
 # Each 000NNN_name.up.sql should have a 000NNN_name.down.sql
 ```
 
@@ -209,15 +209,16 @@ make migrate-fresh    # drop all tables and re-apply all migrations
 ### Add a new DB migration
 
 ```bash
-migrate create -ext sql -dir migrations -seq <migration_name>
-# Creates: migrations/000NNN_<migration_name>.up.sql
-#          migrations/000NNN_<migration_name>.down.sql
+migrate create -ext sql -dir backend/migrations -seq <migration_name>
+# Creates: backend/migrations/000NNN_<migration_name>.up.sql
+#          backend/migrations/000NNN_<migration_name>.down.sql
 # Edit both files, then: make migrate-up
 ```
 
 ### Run only Go tests
 
 ```bash
+cd backend
 go test ./...                              # unit tests
 go test -tags=integration ./...            # integration tests (requires Docker)
 go test -run TestQueueHandler ./internal/queue/...  # specific test

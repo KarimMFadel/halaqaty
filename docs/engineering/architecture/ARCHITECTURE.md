@@ -364,7 +364,7 @@ Halaqaty sessions are hosted on **Hetzner Nuremberg (EU)**. Target audience is p
 
 ## 4. Database Schema
 
-> **Migration tool:** [golang-migrate v4](https://github.com/golang-migrate/migrate) — sequential SQL files in `migrations/`. See [ADR-006](adr/ADR-006-db-migrations.md) for rationale.
+> **Migration tool:** [golang-migrate v4](https://github.com/golang-migrate/migrate) — sequential SQL files in `backend/migrations/`. See [ADR-006](adr/ADR-006-db-migrations.md) for rationale.
 
 ### 4.0 Domain Enumerations
 

@@ -23,7 +23,7 @@ We will use **golang-migrate v4** (`github.com/golang-migrate/migrate/v4`) with 
 
 **File naming convention:**
 ```
-migrations/
+backend/migrations/
 ├── 000001_create_users.up.sql
 ├── 000001_create_users.down.sql
 ├── 000002_create_circles.up.sql
@@ -37,7 +37,7 @@ migrations/
 1. Sequential 6-digit numbering (`000001`, `000002`, …). No timestamp prefixes.
 2. Every migration **must** have a corresponding `.down.sql`.
 3. Migrations are plain SQL only — no Go code in migration files.
-4. All migrations run in a single `migrations/` directory at the repo root. Domain packages do not have their own migration directories.
+4. All migrations live in a single `backend/migrations/` directory. Domain packages do not have their own migration directories.
 5. Application startup does **not** auto-migrate. Migrations are run explicitly via `make migrate-up`.
 6. Migration state is tracked in the `schema_migrations` table managed by golang-migrate (not custom).
 

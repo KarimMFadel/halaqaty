@@ -187,9 +187,9 @@ Sprints are **2 weeks** long. Each sprint has a single goal, a defined feature s
 #### Tasks
 
 **Backend**
-- Set up Go module, Echo v4 scaffold, project directory layout per ADR-007 (`cmd/api/`, `internal/`, `migrations/`)
+- Set up Go module, Echo v4 scaffold, project directory layout per ADR-007 (`backend/cmd/api/`, `backend/internal/`, `backend/migrations/`)
 - Implement `GET /health` endpoint (returns `{"status":"ok"}`) — used by Docker health check
-- Integrate Firebase Admin SDK for JWT verification; implement `internal/auth` middleware
+- Integrate Firebase Admin SDK for JWT verification; implement `backend/internal/auth` middleware
 - Write migration `000001_create_users.up.sql` / `.down.sql` (users table: `id`, `firebase_uid`, `email`, `display_name`, `timezone`, `created_at`, `updated_at`)
 - Implement `POST /api/v1/auth/register` — create user record on first Firebase sign-in
 - Implement `POST /api/v1/auth/login` — return user profile for an authenticated Firebase UID
@@ -232,7 +232,7 @@ Sprints are **2 weeks** long. Each sprint has a single goal, a defined feature s
 - Implement `GET /api/v1/circles/:id` — return circle details + member count (authenticated member only)
 - Implement `POST /api/v1/circles/:id/invite` — regenerate invite code (teacher role required)
 - Implement `POST /api/v1/circles/:id/join` — student joins circle by providing `invite_code` in request body
-- Implement RBAC middleware in `internal/shared/middleware`: reads `circle_members` for the authenticated user and circle ID; attaches `CircleRole` to request context; returns `403` if role check fails
+- Implement RBAC middleware in `backend/internal/shared/middleware`: reads `circle_members` for the authenticated user and circle ID; attaches `CircleRole` to request context; returns `403` if role check fails
 
 **Mobile**
 - Implement circle creation screen: form for name and description, calls `POST /api/v1/circles`, navigates to circle detail on success

@@ -24,22 +24,25 @@ We will use a **single Git repository (monorepo)** for the entire Halaqaty proje
 
 ```
 halaqaty/
-├── cmd/
-│   └── api/                  ← Go binary entry point (main.go, DI wiring)
-├── internal/                 ← Go domain packages (backend owners)
-│   ├── auth/
-│   ├── circles/
-│   ├── sessions/
-│   ├── queue/
-│   ├── chat/
-│   ├── progress/
-│   ├── schedule/
-│   ├── notifications/
-│   └── shared/
-├── migrations/               ← Plain SQL migration files (backend owners)
-│   ├── 000001_create_users.up.sql
-│   ├── 000001_create_users.down.sql
-│   └── ...
+├── backend/                  ← Go service (backend owners)
+│   ├── cmd/
+│   │   └── api/              ← Binary entry point (main.go, DI wiring)
+│   ├── internal/             ← Domain packages (never imported from outside backend/)
+│   │   ├── auth/
+│   │   ├── circles/
+│   │   ├── sessions/
+│   │   ├── queue/
+│   │   ├── chat/
+│   │   ├── progress/
+│   │   ├── schedule/
+│   │   ├── notifications/
+│   │   └── shared/
+│   ├── migrations/           ← golang-migrate SQL files (up + down pairs)
+│   │   ├── 000001_create_users.up.sql
+│   │   ├── 000001_create_users.down.sql
+│   │   └── ...
+│   ├── go.mod
+│   └── go.sum
 ├── mobile/                   ← Flutter application root (mobile owners)
 │   ├── lib/
 │   ├── test/
@@ -56,15 +59,17 @@ halaqaty/
 ├── .github/
 │   └── workflows/            ← CI pipeline definitions
 ├── docker-compose.yml        ← Local dev and deployment (shared infra)
-├── Makefile                  ← Developer task runner (shared infra)
+├── Makefile                  ← Root-level task runner; delegates to backend/ and mobile/
 └── .specify/                 ← Spec-Kit memory and templates
 ```
+
+> **Why `backend/` as a subdirectory?** Grouping the Go module, migrations, and backend tests under `backend/` makes ownership boundaries self-evident from the directory tree, simplifies path-filtered CI triggers to a single prefix, and makes the future repo-split trivial: `git filter-repo --path backend/` produces a clean `halaqaty-backend` repository with no surgery.
 
 ### Ownership Boundaries
 
 | Directory | Owner | Change Policy |
 |---|---|---|
-| `internal/`, `cmd/`, `migrations/` | Backend | Requires Go test pass + golangci-lint green |
+| `backend/` | Backend | Requires Go test pass + golangci-lint green |
 | `mobile/` | Mobile | Requires flutter test pass + flutter analyze green |
 | `docs/contracts/` | Backend + Mobile (joint) | Requires OpenAPI lint pass; changes must be backward-compatible or version-bumped |
 | `docker-compose.yml`, `Makefile` | Shared Infra | Either owner may propose; Karim approves |
@@ -75,12 +80,12 @@ halaqaty/
 
 Three workflow files are maintained in `.github/workflows/`:
 
-**`ci-backend.yml`** — triggers on push/PR for any change under `internal/`, `cmd/`, `migrations/`, `docs/contracts/`:
+**`ci-backend.yml`** — triggers on push/PR for any change under `backend/`, `docs/contracts/`:
 ```
 jobs:
-  lint:    golangci-lint run ./...
-  test:    go test ./... (unit) + go test -tags=integration ./... (integration)
-  migrate: docker run postgres:16-alpine → make migrate-fresh (tests all migrations on fresh schema)
+  lint:    cd backend && golangci-lint run ./...
+  test:    cd backend && go test ./... (unit) + go test -tags=integration ./... (integration)
+  migrate: docker run postgres:16-alpine → cd backend && make migrate-fresh (tests all migrations on fresh schema)
   openapi: spectral lint docs/contracts/openapi.yaml
 ```
 
@@ -124,7 +129,7 @@ Semantic versioning rules:
 - A single PR can span the full feature slice: migration + backend endpoint + Flutter screen + spec update. No cross-repo coordination, no version references between repos, no "which commit goes with which."
 - API contract drift between backend and mobile is detected at PR review time, not at integration test time weeks later. The OpenAPI lint job in `ci-backend.yml` catches undocumented endpoints immediately.
 - Early-stage development benefits from shared context: Copilot agents reading the repo see both the Go handler and the Flutter consumer in one clone, producing more coherent implementations.
-- The clean package structure (ADR-001) and ownership boundary table make future repo-split straightforward: `internal/` + `migrations/` become a new `halaqaty-backend` repo, `mobile/` becomes `halaqaty-mobile`. The split is a `git filter-repo` operation, not an architectural refactor.
+- The clean package structure (ADR-001) and ownership boundary table make future repo-split straightforward: `backend/` + `backend/migrations/` become a new `halaqaty-backend` repo, `mobile/` becomes `halaqaty-mobile`. The split is a `git filter-repo --path backend/` operation, not an architectural refactor.
 - A single `docker-compose.yml` and `Makefile` serve both backend and mobile developers. New contributors clone one repo and run `make dev` to get a fully running local environment.
 
 **Negative:**

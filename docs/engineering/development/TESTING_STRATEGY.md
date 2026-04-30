@@ -28,10 +28,10 @@ Packages to unit-test thoroughly:
 
 | Package | What to Test |
 |---------|-------------|
-| `internal/queue` | Queue ordering, round management, grade submission, idempotency |
-| `internal/auth` | JWT validation, role extraction, permission checks |
-| `internal/schedule` | Timezone conversion, recurrence calculation, next-occurrence logic |
-| `internal/notifications` | FCM payload construction, device token selection |
+| `backend/internal/queue` | Queue ordering, round management, grade submission, idempotency |
+| `backend/internal/auth` | JWT validation, role extraction, permission checks |
+| `backend/internal/schedule` | Timezone conversion, recurrence calculation, next-occurrence logic |
+| `backend/internal/notifications` | FCM payload construction, device token selection |
 
 **Rules:**
 - No database in unit tests — mock the repository interface
@@ -200,7 +200,7 @@ Coverage drops below 80% on new code → PR blocked.
 
 **Go:** Use `testdata/` fixtures for static inputs (valid/invalid JWT payloads, queue state snapshots).
 
-**Seed data:** The `quran_surahs` reference table is seeded in every test database via `migrations/seed_quran_surahs.sql`. Tests that validate Ayah range rejection (e.g., Al-Baqarah has 286 Ayahs) rely on this seed being present.
+**Seed data:** The `quran_surahs` reference table is seeded in every test database via `backend/migrations/seed_quran_surahs.sql`. Tests that validate Ayah range rejection (e.g., Al-Baqarah has 286 Ayahs) rely on this seed being present.
 
 ---
 

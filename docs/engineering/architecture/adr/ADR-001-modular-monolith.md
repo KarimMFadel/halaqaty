@@ -18,9 +18,11 @@ The team is currently one developer (Karim) using Copilot as the primary impleme
 
 We will build a **modular monolith**: a single Go binary with a strict internal package structure that enforces domain boundaries at the code level.
 
-**Package structure:**
+> The Go module and all backend code live under `backend/` in the monorepo root. See ADR-007 for the full repository layout.
+
+**Package structure (`backend/internal/`):**
 ```
-internal/
+backend/internal/
 ├── auth/          ← user identity, token validation
 ├── circles/       ← circle lifecycle, membership, roles
 ├── sessions/      ← live session management, LiveKit coordination
@@ -36,7 +38,7 @@ internal/
 1. Cross-package calls must go through a **service interface** — never import concrete types from another domain's internal sub-packages.
 2. Each package owns its own DB queries. No package reaches into another's table via raw SQL.
 3. Database transactions that span domains must be orchestrated by the calling package, not by a shared "god" service.
-4. Entry points (`cmd/api/`) compose packages together via dependency injection.
+4. Entry points (`backend/cmd/api/`) compose packages together via dependency injection.
 
 ---
 

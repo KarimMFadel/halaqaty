@@ -424,28 +424,32 @@ halaqaty/
 │   │   ├── tasks.md
 │   │   └── quickstart.md
 │   └── ...
-├── cmd/
-│   └── api/                         ← Go entry point (main.go)
-├── internal/                        ← Go application code (domain packages)
-│   ├── auth/
-│   ├── circles/
-│   ├── chat/
-│   ├── sessions/
-│   ├── queue/
-│   ├── progress/
-│   ├── schedule/
-│   ├── notifications/
-│   └── shared/
+├── backend/                         ← Go service (backend owners)
+│   ├── cmd/
+│   │   └── api/                     ← Go entry point (main.go)
+│   ├── internal/                    ← Go domain packages
+│   │   ├── auth/
+│   │   ├── circles/
+│   │   ├── chat/
+│   │   ├── sessions/
+│   │   ├── queue/
+│   │   ├── progress/
+│   │   ├── schedule/
+│   │   ├── notifications/
+│   │   └── shared/
+│   ├── migrations/                  ← golang-migrate SQL files
+│   │   ├── 000001_create_users.up.sql
+│   │   ├── 000001_create_users.down.sql
+│   │   └── ...
+│   ├── go.mod
+│   └── go.sum
 ├── mobile/                          ← Flutter application
 │   ├── lib/
 │   │   ├── features/                ← Feature-first Flutter structure
 │   │   ├── core/
 │   │   └── main.dart
 │   └── pubspec.yaml
-├── migrations/                      ← golang-migrate SQL files
-│   ├── 000001_create_users.up.sql
-│   ├── 000001_create_users.down.sql
-│   └── ...
+├── migrations/                      ← golang-migrate SQL files (under backend/)
 ├── docker-compose.yml               ← MVP deployment
 ├── Makefile                         ← build, test, lint, migrate targets
 └── DEVELOPMENT.md                   ← This file

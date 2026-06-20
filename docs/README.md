@@ -54,6 +54,11 @@ For engineers, architects, and technical leads.
 - **[API Documentation](./engineering/api-docs/)** *(future)* — API reference & endpoints
 - **[Guides](./engineering/guides/)** *(future)* — How-to guides & walkthroughs
 
+- **[Plan Review & Quality Audits](./plan_review/)** — Historical reviews and enhancement tracking
+  - [`ENHANCEMENT_TRACKER.md`](./plan_review/ENHANCEMENT_TRACKER.md) — Living list of all detected enhancements with priority, status, and amendment history
+  - [`project_plan_review.md`](./plan_review/project_plan_review.md) — Original A- plan review (23 findings, 18 resolved)
+  - [`docs_content_audit.md`](./plan_review/docs_content_audit.md) — Docs content audit (18 findings, D-01 through D-18)
+
 ---
 
 ## 🚀 Start Here
@@ -77,14 +82,19 @@ docs/
 │   ├── business/        ← Market analysis
 │   └── arabic/          ← Arabic translations
 │
-└── engineering/         ← Technical docs
-    ├── architecture/    ← System design & ADRs
-    ├── deployment/      ← Infrastructure
-    ├── development/     ← Execution workflow
-    ├── collaboration/   ← Agent coordination
-    ├── system-design/   ← (reserved for future)
-    ├── api-docs/        ← (reserved for future)
-    └── guides/          ← (reserved for future)
+├── engineering/         ← Technical docs
+│   ├── architecture/    ← System design & ADRs
+│   ├── deployment/      ← Infrastructure
+│   ├── development/     ← Execution workflow & testing strategy
+│   ├── collaboration/   ← Agent coordination
+│   ├── system-design/   ← (reserved for future)
+│   ├── api-docs/        ← (reserved for future)
+│   └── guides/          ← (reserved for future)
+│
+└── plan_review/         ← Quality audits & enhancement tracking
+    ├── ENHANCEMENT_TRACKER.md   ← ⭐ Living enhancement tracker
+    ├── project_plan_review.md   ← Original A- plan review
+    └── docs_content_audit.md   ← Docs content audit
 ```
 
 ## Abbreviation Glossary
@@ -124,5 +134,5 @@ A quick reference for the abbreviations used in this repository:
 
 ---
 
-**Last updated:** 2026-04-28  
+**Last updated:** 2026-06-20  
 **Maintained by:** Halaqaty Team

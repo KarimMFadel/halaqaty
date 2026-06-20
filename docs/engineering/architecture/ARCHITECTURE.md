@@ -471,13 +471,14 @@ Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 |--------|------|-------------|-------------|
 | id | UUID | PK, DEFAULT gen_random_uuid() | Unique user identifier |
 | firebase_uid | VARCHAR(128) | UNIQUE NOT NULL | Firebase Auth UID |
-| name | VARCHAR(100) | NOT NULL | Display name |
-| email | VARCHAR(255) | UNIQUE | Email (nullable for phone-only) |
+| display_name | VARCHAR(100) | NOT NULL | User's chosen display name |
+| email | VARCHAR(255) | UNIQUE | Email (nullable for Apple relay used) |
 | phone | VARCHAR(20) | UNIQUE | Phone number with country code |
+| timezone | VARCHAR(50) | NOT NULL DEFAULT 'UTC' | IANA timezone string (e.g., Asia/Riyadh) |
 | avatar_url | TEXT | | MinIO object URL |
-| preferred_lang | VARCHAR(10) | DEFAULT 'ar' | ISO 639-1 language code |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
-| updated_at | TIMESTAMPTZ | DEFAULT NOW() | |
+| preferred_lang | VARCHAR(10) | NOT NULL DEFAULT 'ar' | ISO 639-1 language code |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | |
+| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | |
 
 #### `device_tokens`
 | Column | Type | Constraints | Description |

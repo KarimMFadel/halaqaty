@@ -8,18 +8,27 @@
 
 ## Table of Contents
 
-1. [Executive Summary & Target Users](#1-executive-summary--target-users)
-3. [Detailed Feature Specifications](#3-detailed-feature-specifications)
+1. [Executive Summary & Target Users](#1-executive-summary--target-users) *(→ PRD.md)*
+2. [Target Users & Roles](#2-target-users--roles) *(→ PRD.md §4 + ROLES.md)*
+3. [Detailed Feature Specifications](#3-detailed-feature-specifications) *(→ FEATURES.md)*
 4. [Technical Architecture Overview](#4-technical-architecture-overview)
-5. [Deployment Strategy](#5-deployment-strategy)
+5. [Deployment Strategy](#5-deployment-strategy) *(→ DEPLOYMENT.md)*
 6. [Release Channel Strategy](#6-release-channel-strategy)
+7. [Business Model](#7-business-model) *(→ PRD.md §9)*
 8. [Timeline — 12-Month Plan](#8-timeline--12-month-plan)
+9. [Sprint Execution Plan](#9-sprint-execution-plan)
 
 ---
 
 ## 1. Executive Summary & Target Users
 
 > **Migrated:** Vision, Problem Statement, and Roles have been moved to [`product/PRD.md`](../product/PRD.md) and [`product/ROLES.md`](../product/ROLES.md).
+
+---
+
+## 2. Target Users & Roles
+
+> **Migrated:** Target user segments, jobs-to-be-done, and the full role permission matrix have been moved to [`product/PRD.md §4`](../product/PRD.md#4-target-users-and-jobs-to-be-done) and [`product/ROLES.md`](../product/ROLES.md).
 
 ---
 

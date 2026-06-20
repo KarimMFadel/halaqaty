@@ -73,36 +73,13 @@ Policy rule: `live_session_video` and `session_recording` feature flags must rem
 
 ## 5) GTM (Go-To-Market) Execution
 
-### Phase A: Pilot
-- 10–20 teachers in a controlled cohort
-- Weekly feedback loop
-
-### Phase B: Early Public
-- Android-first expansion
-- Referral and teacher ambassador motion
-
-### Phase C: Trust Expansion
-- Strengthen dashboards and retention
-- Start selective institution pilots
+> **Migrated:** GTM phases (Pilot → Early Public → Trust Expansion) have been moved to [`PRD.md §10`](../../management/product/PRD.md#10-go-to-market-gtm).
 
 ---
 
 ## 6) KPI System
 
-### KPI Definition
-**KPI (Key Performance Indicator)** = measurable numbers used to track progress.
-
-### North Star
-- Weekly completed recitation rounds
-
-### Core KPI Set
-- Teacher activation rate
-- Student WAU/MAU ratio
-- Session attendance rate
-- Queue completion rate
-- 90-day teacher retention
-
-KPI rule: each KPI must have an owner, target, and review frequency.
+> **Migrated:** North Star metric and supporting KPIs have been moved to [`PRD.md §8`](../../management/product/PRD.md#8-success-metrics-north-star--supporting).
 
 ---
 

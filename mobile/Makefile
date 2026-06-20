@@ -1,0 +1,45 @@
+# mobile/Makefile — Flutter mobile targets only
+#
+# Run from this directory:  make <target>
+# Run from repo root:       make <target>  (root Makefile delegates here)
+#
+# Prerequisites:
+#   Flutter SDK (stable channel) — https://docs.flutter.dev/get-started/install
+#   Run `flutter pub get` once after cloning or updating pubspec.yaml
+
+.DEFAULT_GOAL := help
+
+.PHONY: help deps test analyze build-apk build-ios
+
+# ──────────────────────────────────────────────────────────────────────────────
+
+help: ## Show available targets
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-22s\033[0m %s\n", $$1, $$2}'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Setup
+# ──────────────────────────────────────────────────────────────────────────────
+
+deps: ## Install Flutter dependencies (run after cloning or pubspec.yaml changes)
+	flutter pub get
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Tests & Analysis
+# ──────────────────────────────────────────────────────────────────────────────
+
+test: ## Run unit and widget tests
+	flutter test test
+
+analyze: ## Run flutter analyze (static analysis — zero issues required before PR)
+	flutter analyze
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Builds
+# ──────────────────────────────────────────────────────────────────────────────
+
+build-apk: ## Build a debug Android APK (for internal testing)
+	flutter build apk --debug
+
+build-ios: ## Build an iOS release archive (requires macOS + Xcode)
+	flutter build ipa

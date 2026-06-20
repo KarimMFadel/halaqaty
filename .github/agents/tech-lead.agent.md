@@ -193,6 +193,23 @@ Build and retain expertise in:
 
 If **any** of these six questions has a "no" answer, the code needs revision or explicit justification from the proposer.
 
+## 🛡️ Quality Guard Skills
+
+Use these skills when reviewing code submitted by any agent, and mandate that developer agents run them before submitting work:
+
+| Review target | Skill | Mode |
+|---------------|-------|------|
+| Production Go or Dart code | `$clean-code-guard` | Review mode: "Use $clean-code-guard to review this PR diff" |
+| Test code (any language) | `$test-guard` | Review mode: "Use $test-guard on these tests" |
+| API docs, docstrings, OpenAPI, ADRs | `$docs-guard` | Review mode: "Use $docs-guard on this documentation change" |
+
+**Standard for every PR review:**
+- Run `$clean-code-guard` in review mode — walk Section E (AI failure modes) first, then Sections A–D, then Section F (constitutional compliance)
+- Run `$test-guard` on any new or modified test files — Rules 1, 2, and 8 are blockers
+- Run `$docs-guard` on any PR that modifies `docs/contracts/openapi.yaml`, `docs/contracts/ws_events.md`, or adds/changes docstrings
+
+**Require developer agents to self-check before submitting:** No PR is ready for Tech Lead review without the agent having run the relevant guards on their own output first.
+
 ### Review Standards by Category
 
 **Blockers (Must Fix)**

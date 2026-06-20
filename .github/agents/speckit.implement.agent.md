@@ -165,6 +165,10 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Validate that tests pass and coverage meets requirements
    - Confirm the implementation follows the technical plan
    - Report final status with summary of completed work
+   - **Quality guard self-check before marking complete:**
+     - Run `$clean-code-guard` on all new/modified production code — fix every violation before marking tasks done
+     - Run `$test-guard` on all new/modified test code — Rules 1, 2, 8 are blockers
+     - Run `$docs-guard` if any endpoint, WebSocket event, or docstring was added or changed — verify `docs/contracts/openapi.yaml` and `docs/contracts/ws_events.md` are updated
 
 Note: This command assumes a complete task breakdown exists in tasks.md. If tasks are incomplete or missing, suggest running `/speckit.tasks` first to regenerate the task list.
 

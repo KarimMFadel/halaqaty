@@ -64,6 +64,8 @@ Sent when a client joins a session or when the queue is reset. Full queue snapsh
 
 **Queue entry statuses:** `waiting` | `reciting` | `completed` | `skipped` | `opted_out`
 
+> **Cross-reference:** `queue_entry_id` in WebSocket events corresponds to `QueueEntry.id` in the REST API (`GET /sessions/{id}/queue`). The WS events use the longer name for clarity in event payloads; the REST schema uses `id` following standard JSON API conventions.
+
 ---
 
 ### `queue.entry_updated` (Server → Client)

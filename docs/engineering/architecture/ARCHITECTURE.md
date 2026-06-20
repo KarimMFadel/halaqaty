@@ -2,7 +2,7 @@
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
-**Related Documents:** [product/PRD.md](../../management/product/PRD.md) · [planning/PROJECT_PLAN.md](../../management/planning/PROJECT_PLAN.md) · [deployment/DEPLOYMENT.md](../deployment/DEPLOYMENT.md) · [adr/README.md](./adr/README.md) · [../../DEVELOPMENT.md](../../DEVELOPMENT.md) · [collaboration/AGENT_COLLABORATION_GUIDE.md](../collaboration/AGENT_COLLABORATION_GUIDE.md)
+**Related Documents:** [product/PRD.md](../../management/product/PRD.md) · [planning/PROJECT_PLAN.md](../../management/planning/PROJECT_PLAN.md) · [deployment/DEPLOYMENT.md](../deployment/DEPLOYMENT.md) · [adr/README.md](./adr/README.md) · [../../../DEVELOPMENT.md](../../../DEVELOPMENT.md) · [collaboration/AGENT_COLLABORATION_GUIDE.md](../collaboration/AGENT_COLLABORATION_GUIDE.md)
 
 > **Key architectural decisions** (framework choice, state management, auth boundary, migrations) are documented as ADRs in [`./adr/`](./adr/README.md).
 
@@ -112,51 +112,65 @@
 
 **WebSocket connection lifecycle:**
 ```
-Client connects → WS /ws?token=<jwt>
+1. Client calls POST /api/v1/sessions/{id}/ws-token → receives short-lived token (60s TTL)
     ↓
-Server authenticates JWT
+2. Client connects: wss://api.halaqaty.app/ws?token=<ws_token>
     ↓
-Server registers client in Hub (by userID)
+3. Server validates token, upgrades connection, registers client in Hub (by userID)
     ↓
-Client subscribes to rooms (circle IDs, session IDs)
+4. Server adds client to relevant circle/session rooms
     ↓
-Bidirectional messages:
-  Client → Server: chat message, queue action, typing indicator
-  Server → Client: chat message, queue update, presence change, notification
+5. Bidirectional messages:
+   Client → Server: cmd.raise_hand, cmd.lower_hand, chat.typing, ping
+   Server → Client: queue.*, session.*, chat.*, error, pong
     ↓
-Client disconnects → Hub removes registration → Presence update broadcast
+6. Client disconnects → Hub removes registration
 ```
 
-**WebSocket Message Format:**
+**Heartbeat:** client sends `{"type":"ping"}` every 30 seconds; server replies `{"type":"pong","server_time":"<ISO8601>"}`.
+
+**Event Envelope (all events):**
 ```json
 {
-  "type": "queue.student_status_changed",
-  "session_id": "sess_123",
-  "data": {
-    "entry_id": "entry_456",
-    "student_id": "user_789",
-    "status": "reciting",
-    "position": 3
-  },
-  "timestamp": "2026-03-15T10:30:00Z"
+  "type": "event.name",
+  "payload": { "...": "..." },
+  "timestamp": "2024-01-15T10:30:00Z",
+  "request_id": "optional-client-correlation-id"
 }
 ```
 
-**Message Types:**
-| Type | Direction | Description |
-|------|-----------|-------------|
-| `chat.message` | S→C, C→S | New message in circle or DM |
-| `chat.typing` | C→S, S→C | Typing indicator |
-| `chat.read` | C→S | Mark messages as read |
-| `queue.updated` | S→C | Full queue state refresh |
-| `queue.student_status_changed` | S→C | Single student status update |
-| `queue.round_started` | S→C | New round created |
-| `queue.reset` | S→C | Queue was reset |
-| `presence.online` | S→C | User came online |
-| `presence.offline` | S→C | User went offline |
-| `notification.in_app` | S→C | In-app notification |
-| `session.started` | S→C | Teacher started session |
-| `session.ended` | S→C | Session ended |
+**Server → Client event types:**
+
+| Type | Description |
+|------|-------------|
+| `queue.state` | Full queue snapshot — sent on join or queue reset |
+| `queue.entry_updated` | Single queue entry status change |
+| `queue.your_turn` | Targeted: notifies the student whose turn it is |
+| `queue.next_soon` | Targeted: notifies the student who is next (position 2) |
+| `queue.reordered` | Teacher manually reordered the queue |
+| `queue.round_started` | New recitation round started |
+| `queue.grade_submitted` | Grade recorded for a completed turn (teacher/supervisor only) |
+| `session.started` | Session went live; includes `livekit_url` and `livekit_token` |
+| `session.ended` | Session ended by teacher |
+| `session.participant_joined` | A participant joined the session |
+| `session.participant_left` | A participant left the session |
+| `session.hand_raised` | A student raised their hand |
+| `chat.message` | New circle message delivered |
+| `chat.message_read` | Recipient read a message (sent to sender) |
+| `chat.typing` | Typing indicator |
+| `error` | Server could not process a client command |
+
+**Client → Server command types:**
+
+| Type | Description |
+|------|-------------|
+| `cmd.raise_hand` | Student raises hand in session |
+| `cmd.lower_hand` | Student lowers hand in session |
+| `ping` | Heartbeat (every 30 s) |
+
+> **Source of truth for all event schemas and payloads:** [`docs/contracts/ws_events.md`](../../contracts/ws_events.md)
+
+> **Reconnection:** on reconnect, clients re-fetch state via REST (`GET /api/v1/sessions/{id}/queue`, etc.) rather than relying solely on buffered WebSocket events.
 
 ### 2.3 WebRTC via LiveKit
 
@@ -231,13 +245,14 @@ Device shows notification even if app is closed
 │                                                                   │
 │  Student Flutter              Go Backend              LiveKit    │
 │     │                              │                    Server   │
-│     │  GET /sessions/{id}/token    │                      │      │
+│     │  POST /sessions/{id}/join    │                      │      │
 │     │─────────────────────────────►│                      │      │
 │     │  GenerateJWT(roomName, uid)  │                      │      │
 │     │                              │  (student has join   │      │
 │     │                              │   permission only,   │      │
 │     │                              │   not room admin)    │      │
-│     │  { token }                   │                      │      │
+│     │  { session, livekit_url,     │                      │      │
+│     │    livekit_token }           │                      │      │
 │     │◄─────────────────────────────│                      │      │
 │     │  room.connect(url, token)    │                      │      │
 │     │───────────────────────────────────────────────────►│       │
@@ -247,14 +262,11 @@ Device shows notification even if app is closed
 │  STEP 4: Teacher controls (mute, remove)                         │
 │  ════════════════════════════════════                            │
 │                                                                   │
-│  Flutter UI                    Go Backend              LiveKit   │
-│     │  POST /sessions/{id}/       │                    Server   │
-│     │    mute/{participant_id}    │                      │       │
-│     │─────────────────────────────►│                      │      │
-│     │                              │  MutePublishedTrack  │      │
-│     │                              │  (LiveKit Admin API) │      │
-│     │                              │─────────────────────►│      │
-│     │                              │  Participant muted   │      │
+│  Note: Teacher mute/remove actions are performed via the         │
+│  LiveKit Admin SDK on the Go backend — triggered by future       │
+│  endpoints to be specced post-MVP. In MVP, the teacher manages   │
+│  turns through the queue system (grant/revoke CanPublish) rather │
+│  than explicit mute calls.                                        │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -375,10 +387,8 @@ These are the canonical enum values used in PostgreSQL CHECK constraints and Go 
 | DB Value | English Label | Arabic Label | Meaning |
 |----------|--------------|--------------|---------|
 | `excellent` | Excellent | ممتاز | Perfect recitation, excellent tajweed |
-| `very_good` | Very Good | جيد جداً | Minor errors, good tajweed |
-| `good` | Good | جيد | Some errors, acceptable tajweed |
-| `acceptable` | Acceptable | مقبول | Notable errors, basic tajweed |
-| `needs_review` | Needs Review | يحتاج مراجعة | Significant errors; review required |
+| `good` | Good | جيد | Minor to moderate errors, acceptable tajweed |
+| `needs_improvement` | Needs Improvement | يحتاج تحسين | Notable errors; requires more practice |
 | `repeat` | Repeat | إعادة | Must fully repeat before advancing |
 
 Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
@@ -501,9 +511,9 @@ Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 | rules | TEXT | | Circle rules/guidelines |
 | teacher_id | UUID | FK → users.id NOT NULL | Circle owner |
 | invite_code | VARCHAR(20) | UNIQUE NOT NULL | Join code (e.g., HLQ-7X2K) |
-| max_members | INTEGER | DEFAULT 50 | Maximum student capacity |
-| privacy | VARCHAR(20) | CHECK IN ('public','private') | |
-| gender_spec | VARCHAR(20) | CHECK IN ('male','female','mixed','unspecified') | |
+| max_capacity | INTEGER | DEFAULT 50 | Maximum student capacity (min 2, max 200) |
+| is_private | BOOLEAN | DEFAULT FALSE | Whether circle requires invite to join |
+| gender_restriction | VARCHAR(20) | CHECK IN ('male','female','mixed') DEFAULT 'mixed' | Audience restriction |
 | language | VARCHAR(10) | DEFAULT 'ar' | Primary language |
 | grading_policy | VARCHAR(20) | CHECK IN ('required','optional') DEFAULT 'required' | Whether grading is required after each completed turn |
 | is_archived | BOOLEAN | DEFAULT FALSE | |
@@ -524,14 +534,15 @@ Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 |--------|------|-------------|-------------|
 | id | UUID | PK | |
 | circle_id | UUID | FK → circles.id NOT NULL | |
-| title | VARCHAR(200) | | Session title |
-| scheduled_start | TIMESTAMPTZ | | Planned start time |
-| scheduled_end | TIMESTAMPTZ | | Planned end time |
+| notes | TEXT | maxLength 500 | Optional session notes (visible to members) |
+| scheduled_at | TIMESTAMPTZ | | Planned start time; NULL for ad-hoc sessions |
 | actual_start | TIMESTAMPTZ | | When teacher actually started |
 | actual_end | TIMESTAMPTZ | | When session actually ended |
-| status | VARCHAR(20) | CHECK IN ('scheduled','live','completed','cancelled') | |
+| status | VARCHAR(20) | CHECK IN ('scheduled','active','ended') | |
 | media_mode | VARCHAR(20) | CHECK IN ('audio_only','audio_video'), DEFAULT 'audio_only' | Session media policy (MVP always audio_only) |
 | livekit_room_name | VARCHAR(200) | UNIQUE | LiveKit room identifier |
+| created_by | UUID | FK → users.id NOT NULL | Teacher who created the session |
+| participant_count | INTEGER | DEFAULT 0 | Running count updated on join/leave |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
 
 #### `session_attendance`
@@ -553,9 +564,10 @@ Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 | session_id | UUID | FK → sessions.id NOT NULL | |
 | round_number | INTEGER | NOT NULL | Round 1, 2, 3... |
 | round_type | VARCHAR(30) | CHECK IN ('new_memorization','revision','old_revision','test') | |
-| surah_name | VARCHAR(100) | | Arabic Surah name |
-| from_ayah | INTEGER | | Starting Ayah number |
-| to_ayah | INTEGER | | Ending Ayah number |
+| surah_id | INTEGER | FK → quran_surahs.id NOT NULL | Surah number (1–114); name derived via JOIN |
+| from_ayah | INTEGER | NOT NULL | Starting Ayah number (validated ≥ 1) |
+| to_ayah | INTEGER | NOT NULL | Ending Ayah number (validated ≤ quran_surahs.ayah_count) |
+| grading_required | BOOLEAN | NOT NULL | Overrides circle grading_policy for this round |
 | is_active | BOOLEAN | DEFAULT TRUE | Only one active queue per session |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
 
@@ -566,8 +578,8 @@ Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 | queue_id | UUID | FK → recitation_queue.id NOT NULL | |
 | student_id | UUID | FK → users.id NOT NULL | |
 | position | INTEGER | NOT NULL | Order in queue (1, 2, 3...) |
-| status | VARCHAR(20) | CHECK IN ('waiting','reciting','completed','skipped') | |
-| grade | VARCHAR(30) | CHECK IN ('excellent','very_good','good','acceptable','needs_review','repeat') | |
+| status | VARCHAR(20) | CHECK IN ('waiting','reciting','completed','skipped','opted_out') | |
+| grade | VARCHAR(30) | CHECK IN ('excellent','good','needs_improvement','repeat') | |
 | teacher_notes | TEXT | | Free-form notes from teacher |
 | started_at | TIMESTAMPTZ | | When recitation began |
 | completed_at | TIMESTAMPTZ | | When recitation ended / was graded |
@@ -580,14 +592,14 @@ Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 | CHECK | (circle_id IS NOT NULL OR dm_recipient_id IS NOT NULL) | | At least one must be set |
 | dm_recipient_id | UUID | FK → users.id | For direct messages |
 | sender_id | UUID | FK → users.id NOT NULL | |
-| content | TEXT | | Text content (empty for voice/files) |
-| type | VARCHAR(20) | CHECK IN ('text','voice','image','file') | |
-| file_url | TEXT | | MinIO presigned URL |
-| file_name | VARCHAR(255) | | Original filename |
-| file_size_bytes | INTEGER | | |
-| reply_to_id | UUID | FK → messages.id | Threaded reply |
+| content | TEXT | | Text content (empty for voice/image/file) |
+| message_type | VARCHAR(20) | CHECK IN ('text','voice','image','file') NOT NULL | |
+| media_url | TEXT | | MinIO presigned URL (expires 7 days); NULL for text messages |
+| file_name | VARCHAR(255) | | Original filename for file/image/voice attachments |
+| file_size_bytes | INTEGER | | File size in bytes |
+| reply_to_id | UUID | FK → messages.id | Threaded reply target |
 | is_pinned | BOOLEAN | DEFAULT FALSE | |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+| sent_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | Message send timestamp; maps to API field `sent_at` |
 | deleted_at | TIMESTAMPTZ | | Soft delete |
 
 #### `message_reads`
@@ -611,7 +623,7 @@ Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 | from_ayah | INTEGER | NOT NULL | |
 | to_ayah | INTEGER | NOT NULL | |
 | type | VARCHAR(30) | CHECK IN ('new_memorization','revision','old_revision') | |
-| grade | VARCHAR(30) | CHECK IN ('excellent','very_good','good','acceptable','needs_review','repeat') | Same grade enum as queue entries |
+| grade | VARCHAR(30) | CHECK IN ('excellent','good','needs_improvement','repeat') | Same grade enum as queue entries |
 | notes | TEXT | | Teacher notes |
 | date | DATE | NOT NULL | Session date |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
@@ -679,6 +691,8 @@ Removed from MVP scope. The product currently supports direct student and teache
 
 ## 5. API Endpoint Planning
 
+> **Legend:** ✅ In `docs/contracts/openapi.yaml` (contracted, MVP) · 🔲 Post-MVP (not yet in contract — must be added to `openapi.yaml` via spec before implementation per Constitution §III)
+
 ### Base URL: `https://api.halaqaty.app/api/v1`
 
 ### Authentication: All endpoints require `Authorization: Bearer <firebase-jwt>` except `/auth/*`
@@ -686,107 +700,113 @@ Removed from MVP scope. The product currently supports direct student and teache
 ---
 
 ### `/auth`
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/auth/register` | Create user profile after Firebase registration |
-| POST | `/auth/fcm-token` | Register or update a device FCM token (upsert by user_id + token) |
-| GET | `/auth/me` | Get current user profile |
-| PUT | `/auth/me` | Update profile (name, avatar, language) |
-| DELETE | `/auth/me` | Delete account and all data |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| POST | `/auth/register` | ✅ | Create user profile after Firebase registration |
+| POST | `/auth/fcm-token` | ✅ | Register or update a device FCM token (upsert by user_id + token) |
+| GET | `/auth/me` | ✅ | Get current user profile |
+| PUT | `/auth/me` | ✅ | Update profile (name, avatar, language) |
+| DELETE | `/auth/me` | ✅ | Delete account and all data |
 
 ### `/circles`
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/circles` | List my circles (teacher + student) |
-| POST | `/circles` | Create a new circle |
-| GET | `/circles/{id}` | Get circle details |
-| PUT | `/circles/{id}` | Update circle settings |
-| DELETE | `/circles/{id}` | Delete circle (teacher only) |
-| POST | `/circles/{id}/archive` | Archive circle (teacher only) |
-| POST | `/circles/join` | Join a circle by invite code `{ invite_code }` |
-| POST | `/circles/{id}/leave` | Leave a circle |
-| GET | `/circles/{id}/members` | List members with roles |
-| PUT | `/circles/{id}/members/{userId}/role` | Update member role (assign/revoke supervisor) |
-| DELETE | `/circles/{id}/members/{userId}` | Remove member from circle |
-| POST | `/circles/{id}/invite-code/refresh` | Generate new invite code |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/circles` | ✅ | List my circles (teacher + student) |
+| POST | `/circles` | ✅ | Create a new circle |
+| GET | `/circles/{id}` | ✅ | Get circle details |
+| PUT | `/circles/{id}` | ✅ | Update circle settings (teacher only) |
+| DELETE | `/circles/{id}` | ✅ | Archive circle (teacher only) |
+| POST | `/circles/join` | ✅ | Join a circle by invite code `{ invite_code }` |
+| GET | `/circles/{id}/members` | ✅ | List members with roles |
+| DELETE | `/circles/{id}/members/{userId}` | ✅ | Remove member from circle (teacher only) |
+| POST | `/circles/{id}/leave` | 🔲 | Leave a circle |
+| PUT | `/circles/{id}/members/{userId}/role` | 🔲 | Update member role (assign/revoke supervisor) |
+| POST | `/circles/{id}/invite-code/refresh` | 🔲 | Generate new invite code |
 
 ### `/sessions`
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/circles/{id}/sessions` | List sessions for a circle |
-| POST | `/circles/{id}/sessions` | Create a session |
-| GET | `/sessions/{id}` | Get session details |
-| POST | `/sessions/{id}/start` | Teacher starts session (creates LiveKit room) |
-| POST | `/sessions/{id}/end` | Teacher ends session |
-| GET | `/sessions/{id}/token` | Get LiveKit JWT token for this session |
-| POST | `/sessions/{id}/participants/{userId}/mute` | Mute a participant |
-| POST | `/sessions/{id}/participants/{userId}/unmute` | Unmute a participant |
-| POST | `/sessions/{id}/participants/{userId}/remove` | Remove participant from session |
-| POST | `/sessions/{id}/lock` | Lock session (no new joiners) |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/circles/{id}/sessions` | ✅ | List sessions for a circle |
+| POST | `/circles/{id}/sessions` | ✅ | Create a session (teacher only) |
+| POST | `/sessions/{id}/start` | ✅ | Teacher starts session (creates LiveKit room, returns token) |
+| POST | `/sessions/{id}/join` | ✅ | Join an active session — returns LiveKit token (members only) |
+| POST | `/sessions/{id}/end` | ✅ | Teacher ends session |
+| POST | `/sessions/{id}/ws-token` | ✅ | Issue short-lived WebSocket connection token |
+| GET | `/sessions/{id}` | 🔲 | Get session details |
+| POST | `/sessions/{id}/participants/{userId}/mute` | 🔲 | Mute a participant |
+| POST | `/sessions/{id}/participants/{userId}/unmute` | 🔲 | Unmute a participant |
+| POST | `/sessions/{id}/participants/{userId}/remove` | 🔲 | Remove participant from session |
+| POST | `/sessions/{id}/lock` | 🔲 | Lock session (no new joiners) |
 
 ### `/sessions/{id}/attendance`
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/sessions/{id}/attendance` | List attendance for a session |
-| PUT | `/sessions/{id}/attendance/{userId}` | Manual attendance override |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/sessions/{id}/attendance` | 🔲 | List attendance for a session |
+| PUT | `/sessions/{id}/attendance/{userId}` | 🔲 | Manual attendance override |
 
 ### `/queue`
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/sessions/{id}/queue` | Get current queue state |
-| POST | `/sessions/{id}/queue/rounds` | Start a new round (Surah, Ayah range, type) |
-| POST | `/sessions/{id}/queue/reset` | Reset queue (creates new round) |
-| PUT | `/sessions/{id}/queue/entries/{entryId}/status` | Update student status in queue |
-| PUT | `/sessions/{id}/queue/entries/{entryId}/grade` | Grade a student's recitation |
-| PUT | `/sessions/{id}/queue/order` | Reorder queue `{ ordered_entry_ids: [...] }` |
-| POST | `/sessions/{id}/queue/entries` | Add a student to queue (late-joiner) |
-| DELETE | `/sessions/{id}/queue/entries/{entryId}` | Remove student from queue |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/sessions/{id}/queue` | ✅ | Get current queue state |
+| POST | `/sessions/{id}/queue/rounds` | ✅ | Start a new round (Surah, Ayah range) |
+| POST | `/sessions/{id}/queue/entries/{entryId}/grade` | ✅ | Grade a student's recitation (teacher/supervisor only) |
+| POST | `/sessions/{id}/queue/opt-out` | ✅ | Student opts out of current round |
+| POST | `/sessions/{id}/queue/reset` | 🔲 | Reset queue (creates new round) |
+| PUT | `/sessions/{id}/queue/entries/{entryId}/status` | 🔲 | Update student status in queue |
+| PUT | `/sessions/{id}/queue/order` | 🔲 | Reorder queue `{ ordered_entry_ids: [...] }` |
+| POST | `/sessions/{id}/queue/entries` | 🔲 | Add a student to queue (late-joiner) |
+| DELETE | `/sessions/{id}/queue/entries/{entryId}` | 🔲 | Remove student from queue |
 
 ### `/messages`
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/circles/{id}/messages` | List circle messages (paginated) |
-| POST | `/circles/{id}/messages` | Send a message |
-| DELETE | `/circles/{id}/messages/{msgId}` | Delete a message |
-| POST | `/circles/{id}/messages/{msgId}/pin` | Pin a message |
-| DELETE | `/circles/{id}/messages/{msgId}/pin` | Unpin a message |
-| POST | `/circles/{id}/messages/{msgId}/read` | Mark message as read |
-| GET | `/dm/{userId}` | List DM conversation with a user |
-| POST | `/dm/{userId}` | Send a direct message |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/circles/{id}/messages` | ✅ | List circle messages (paginated) |
+| POST | `/circles/{id}/messages` | ✅ | Send a message |
+| DELETE | `/circles/{id}/messages/{msgId}` | ✅ | Delete a message |
+| POST | `/circles/{id}/messages/{msgId}/pin` | 🔲 | Pin a message |
+| DELETE | `/circles/{id}/messages/{msgId}/pin` | 🔲 | Unpin a message |
+| POST | `/circles/{id}/messages/{msgId}/read` | 🔲 | Mark message as read |
+| GET | `/dm/{userId}` | 🔲 | List DM conversation with a user |
+| POST | `/dm/{userId}` | 🔲 | Send a direct message |
 
 ### `/progress`
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/circles/{id}/progress` | All students' progress in a circle |
-| GET | `/circles/{id}/progress/{userId}` | One student's detailed progress |
-| POST | `/circles/{id}/progress` | Manual progress entry (outside session) |
-| GET | `/progress/me` | My own progress across all circles |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/circles/{id}/progress` | 🔲 | All students' progress in a circle |
+| GET | `/circles/{id}/progress/{userId}` | 🔲 | One student's detailed progress |
+| POST | `/circles/{id}/progress` | 🔲 | Manual progress entry (outside session) |
+| GET | `/progress/me` | 🔲 | My own progress across all circles |
 
 ### `/schedule`
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/circles/{id}/schedules` | List schedules for a circle |
-| POST | `/circles/{id}/schedules` | Create a schedule |
-| PUT | `/circles/{id}/schedules/{schedId}` | Update a schedule |
-| DELETE | `/circles/{id}/schedules/{schedId}` | Delete a schedule |
-| GET | `/schedule/me` | My unified calendar across all circles |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/circles/{id}/schedules` | ✅ | List schedules for a circle |
+| POST | `/circles/{id}/schedules` | ✅ | Create a schedule (teacher only) |
+| PUT | `/circles/{id}/schedules/{schedId}` | 🔲 | Update a schedule |
+| DELETE | `/circles/{id}/schedules/{schedId}` | 🔲 | Delete a schedule |
+| GET | `/schedule/me` | 🔲 | My unified calendar across all circles |
 
-### `/notifications`
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/notifications` | List my notifications (paginated) |
-| PUT | `/notifications/{id}/read` | Mark notification as read |
-| PUT | `/notifications/read-all` | Mark all as read |
-| GET | `/notifications/preferences` | Get notification preferences |
-| PUT | `/notifications/preferences` | Update preferences |
+### `/config`
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/config/features` | ✅ | Get feature flags for the authenticated user |
 
 ### `/uploads`
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/uploads/avatar` | Upload user avatar (multipart/form-data) |
-| POST | `/uploads/voice` | Upload voice message (returns presigned URL pattern) |
-| POST | `/uploads/image` | Upload image attachment |
-| POST | `/uploads/file` | Upload file attachment (PDF) |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| POST | `/uploads/avatar` | ✅ | Upload user avatar → returns presigned MinIO URL |
+| POST | `/uploads/voice` | ✅ | Upload voice message → returns MinIO object key |
+| POST | `/uploads/image` | ✅ | Upload image attachment → returns MinIO object key |
+| POST | `/uploads/file` | ✅ | Upload file attachment (PDF) → returns MinIO object key |
+
+### `/notifications`
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/notifications` | 🔲 | List my notifications (paginated) |
+| PUT | `/notifications/{id}/read` | 🔲 | Mark notification as read |
+| PUT | `/notifications/read-all` | 🔲 | Mark all as read |
+| GET | `/notifications/preferences` | 🔲 | Get notification preferences |
+| PUT | `/notifications/preferences` | 🔲 | Update preferences |
 
 ---
 

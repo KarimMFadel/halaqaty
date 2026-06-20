@@ -27,6 +27,7 @@ FEATURE_RECORDING_ENABLED=false
 FEATURE_VIDEO_ENABLED=false
 FEATURE_AI_TAJWEED_ENABLED=false
 FEATURE_ANALYTICS_ENABLED=false
+FEATURE_WEB_ENABLED=false
 ```
 
 **Backend config endpoint:**
@@ -40,7 +41,8 @@ Returns a JSON object of active flags, filtered by the authenticated user's tier
   "recording": false,
   "video": false,
   "ai_tajweed": false,
-  "analytics": false
+  "analytics": false,
+  "web": false
 }
 ```
 

@@ -164,7 +164,7 @@ Agents validate spec quality (not implementation) — checking completeness, cla
 ```
 /speckit.plan
 Go backend, Echo v4. Firebase Auth JWT middleware. PostgreSQL users table via golang-migrate.
-Flutter + Riverpod 2.x. See docs/ARCHITECTURE.md for full schema and endpoint definitions.
+Flutter + Riverpod 2.x. See docs/engineering/architecture/ARCHITECTURE.md for full schema and endpoint definitions.
 Constitution: .specify/memory/constitution.md
 ```
 
@@ -465,9 +465,7 @@ halaqaty/
 │   │   ├── core/
 │   │   └── main.dart
 │   └── pubspec.yaml
-├── migrations/                      ← golang-migrate SQL files (under backend/)
 ├── docker-compose.yml               ← MVP deployment
-├── Makefile                         ← build, test, lint, migrate targets
 └── DEVELOPMENT.md                   ← This file
 ```
 

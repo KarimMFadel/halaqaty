@@ -59,7 +59,7 @@ The queue can be **reset and reused multiple times** in a single session — for
 | **File Storage** | MinIO (S3-compatible, self-hosted) | Cost-effective, self-hosted, no vendor lock-in |
 | **Push Notifications** | Firebase Cloud Messaging (FCM) | Industry standard, cross-platform |
 | **Auth** | Firebase Auth | Social sign-in (Google, Apple), phone OTP |
-| **Deployment** | Docker Compose → Kubernetes | Start cheap (~$8/mo), scale to global |
+| **Deployment** | Docker Compose on Hetzner CX22 | Start cheap (~$8/mo), single-server MVP (No Kubernetes in MVP — see ADR-007) |
 
 ---
 
@@ -110,7 +110,8 @@ halaqaty/
 │       │       ├── ADR-003-flutter-state-management.md
 │       │       ├── ADR-004-auth-boundary.md
 │       │       ├── ADR-005-feature-flags.md
-│       │       └── ADR-006-db-migrations.md
+│       │       ├── ADR-006-db-migrations.md
+│       │       └── ADR-007-monorepo-structure.md
 │       ├── deployment/            ← Deployment strategy & infrastructure
 │       │   ├── README.md
 │       │   └── DEPLOYMENT.md

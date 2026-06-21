@@ -32,6 +32,27 @@ Our deployment strategy follows these principles:
 4. **Self-hosted first, cloud second.** Hetzner over AWS for cost efficiency. Move to AWS/GCP only when Hetzner capacity is insufficient.
 5. **No vendor lock-in.** MinIO instead of S3, LiveKit instead of Twilio, Firebase only for Auth/FCM (easily replaceable).
 
+### Deployment Phase Progression
+
+```mermaid
+flowchart LR
+    P1["🟢 Phase 1 — MVP\n$8–12/mo\nHetzner CX22\nDocker Compose\n10–50 users"]
+    P2["🟡 Phase 2 — Growth\n$20–25/mo\n2× Hetzner CX32\nDocker Compose\n100–500 users"]
+    P3["🟠 Phase 3 — Scale\n$60–80/mo\nKubernetes\nLoad balancer\n500–5K users"]
+    P4["🔴 Phase 4 — Global\n$500+/mo\nAWS/GCP multi-region\n5K+ users"]
+
+    P1 -->|"Trigger:\nRAM > 70%\nor sessions > 5\nor P95 > 500ms\nor storage > 35GB"| P2
+    P2 -->|"Trigger:\nConcurrent sessions > 20\nor response time degrading\nor single server bottleneck"| P3
+    P3 -->|"Trigger:\n5K+ DAU\nor global latency issues\nor multi-region requirement"| P4
+
+    style P1 fill:#e8f5e9,stroke:#4CAF50,stroke-width:2px
+    style P2 fill:#fff9c4,stroke:#F9A825,stroke-width:2px
+    style P3 fill:#fff3e0,stroke:#FF9800,stroke-width:2px
+    style P4 fill:#ffebee,stroke:#f44336,stroke-width:2px
+```
+
+> **Default posture:** stay on Phase 1 until a trigger fires. Premature scaling wastes engineering time and money.
+
 ---
 
 ## 2. Phase 1 — MVP (10–50 Users)
@@ -63,28 +84,25 @@ Our deployment strategy follows these principles:
 
 All services run in Docker containers on a single server:
 
-```
-╔═══════════════════════════════════════════════╗
-║          Hetzner CX22 — Single Server         ║
-║                                               ║
-║  ┌──────────────────────────────────────────┐ ║
-║  │          Nginx (Reverse Proxy)            │ ║
-║  │  halaqaty.app → Go API container         │ ║
-║  │  ws.halaqaty.app → Go WebSocket          │ ║
-║  │  lk.halaqaty.app → LiveKit container     │ ║
-║  │  files.halaqaty.app → MinIO container    │ ║
-║  └──────────────────────────────────────────┘ ║
-║                                               ║
-║  ┌───────────┐  ┌───────────┐  ┌───────────┐ ║
-║  │ Go Backend│  │ LiveKit   │  │   MinIO   │ ║
-║  │ (API+WS)  │  │  Server   │  │  Server   │ ║
-║  └───────────┘  └───────────┘  └───────────┘ ║
-║                                               ║
-║  ┌───────────────────────────────────────────┐ ║
-║  │           PostgreSQL 16                   │ ║
-║  │         (Primary Database)                │ ║
-║  └───────────────────────────────────────────┘ ║
-╚═══════════════════════════════════════════════╝
+```mermaid
+graph TD
+    CF["☁️ Cloudflare\nDNS · TLS · DDoS protection"]
+
+    subgraph Server["🖥️ Hetzner CX22 — Single Server\n2 vCPU · 4 GB RAM · 40 GB SSD · ~$8/mo"]
+        Nginx["⚙️ Nginx (Reverse Proxy)\napi.halaqaty.app → Go API\nfiles.halaqaty.app → MinIO\nlk.halaqaty.app → LiveKit"]
+        Go["🟦 Go Backend\n(REST API + WebSocket Hub)"]
+        LK["🎙️ LiveKit SFU\n(WebRTC · audio-only MVP)"]
+        MinIO["📦 MinIO\n(voice notes · images · files)"]
+        PG[("🐘 PostgreSQL 16\nPrimary Database\nsource of truth")]
+    end
+
+    Internet(["🌍 Internet"]) --> CF --> Nginx
+    Nginx --> Go
+    Nginx --> MinIO
+    Nginx -->|"UDP 7880-7900\n(WebRTC — DNS only, no proxy)"| LK
+    Go <--> PG
+    Go <--> LK
+    Go <--> MinIO
 ```
 
 ### Phase 1 Capacity Estimates
@@ -140,24 +158,26 @@ LiveKit SFU is CPU and bandwidth intensive during active sessions. By separating
 
 ### Phase 2 Architecture
 
-```
-┌──────────────────┐       ┌──────────────────┐
-│    App Server    │       │  LiveKit Server   │
-│  (Hetzner CX32)  │       │  (Hetzner CX32)   │
-│                  │       │                  │
-│  ┌────────────┐  │       │  ┌────────────┐  │
-│  │ Go Backend │  │       │  │  LiveKit   │  │
-│  │ (API + WS) │  │◄─────►│  │    SFU     │  │
-│  └────────────┘  │       │  └────────────┘  │
-│  ┌────────────┐  │       │                  │
-│  │ PostgreSQL │  │       │  UDP: 7880-7900  │
-│  │   (DB)     │  │       │  TCP: 7880       │
-│  └────────────┘  │       └──────────────────┘
-│  ┌────────────┐  │
-│  │   MinIO    │  │
-│  │  (Files)   │  │
-│  └────────────┘  │
-└──────────────────┘
+```mermaid
+graph LR
+    CF["☁️ Cloudflare\nDNS · TLS"]
+
+    subgraph App["🖥️ App Server — Hetzner CX32\n4 vCPU · 8 GB RAM · ~$10/mo"]
+        Go["🟦 Go Backend\n(REST API + WebSocket Hub)"]
+        PG[("🐘 PostgreSQL 16")]
+        MinIO["📦 MinIO\n(File Store)"]
+    end
+
+    subgraph LKServer["🎙️ LiveKit Server — Hetzner CX32\n4 vCPU · 8 GB RAM · ~$10/mo"]
+        LK["LiveKit SFU\nUDP 7880-7900 · TCP 7880"]
+    end
+
+    Internet(["🌍 Internet"]) --> CF
+    CF -->|"HTTPS / WSS"| Go
+    CF -->|"UDP/TCP — DNS only\n(WebRTC needs direct connection)"| LK
+    Go <-->|"LiveKit SDK\n(room mgmt · token gen)"| LK
+    Go <--> PG
+    Go <--> MinIO
 ```
 
 ### Phase 2 Capacity
@@ -204,34 +224,30 @@ Move when **any** of:
 
 ### Phase 3 Architecture
 
-```
-                    ┌─────────────────┐
-                    │  Cloudflare CDN  │
-                    │   (Global Edge)  │
-                    └────────┬────────┘
-                             │
-                    ┌────────▼────────┐
-                    │  Load Balancer  │
-                    │ (Hetzner/DO LB) │
-                    └────────┬────────┘
-                             │
-        ┌────────────────────┼────────────────────┐
-        │                    │                    │
-┌───────▼───────┐   ┌────────▼──────┐   ┌────────▼──────┐
-│  Go Backend   │   │  Go Backend   │   │  Go Backend   │
-│   Pod 1       │   │    Pod 2      │   │    Pod 3      │
-│  (API + WS)   │   │  (API + WS)  │   │  (API + WS)   │
-└───────────────┘   └───────────────┘   └───────────────┘
-        │                    │                    │
-        └────────────────────┼────────────────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              │              │              │
-    ┌─────────▼─────┐  ┌─────▼─────┐  ┌───▼─────────┐
-    │  PostgreSQL   │  │  MinIO    │  │  LiveKit    │
-    │  (Primary     │  │ (Dist.    │  │  (2+ nodes  │
-    │  + Replica)   │  │  Storage) │  │  for scale) │
-    └───────────────┘  └───────────┘  └─────────────┘
+```mermaid
+graph TD
+    CF["☁️ Cloudflare CDN\n(Global Edge · DDoS · TLS)"]
+    LB["⚖️ Load Balancer\n(Hetzner / DO LB)"]
+
+    subgraph K8s["☸️ Kubernetes Cluster"]
+        P1["🟦 Go Backend Pod 1\n(API + WS)"]
+        P2["🟦 Go Backend Pod 2\n(API + WS)"]
+        P3["🟦 Go Backend Pod N...\n(HPA: 2–10 pods)"]
+    end
+
+    subgraph Data["🗄️ Stateful Services"]
+        PG[("🐘 PostgreSQL\nPrimary + Read Replica")]
+        MinIO["📦 MinIO\nDistributed Storage"]
+        LK["🎙️ LiveKit\n2+ nodes for scale"]
+    end
+
+    Internet(["🌍 Internet"]) --> CF --> LB
+    LB --> P1
+    LB --> P2
+    LB --> P3
+    P1 & P2 & P3 <--> PG
+    P1 & P2 & P3 <--> MinIO
+    P1 & P2 & P3 <--> LK
 ```
 
 ### Phase 3 Features Enabled by Kubernetes
@@ -411,27 +427,28 @@ audio:
 
 ### Phase 2+: Full Observability Stack
 
-```
-┌─────────────────────────────────────────────────────┐
-│                  Monitoring Stack                    │
-│                                                     │
-│  ┌──────────────┐    ┌──────────────┐               │
-│  │  Prometheus  │    │   Grafana    │               │
-│  │  (Metrics)   │───►│ (Dashboards) │               │
-│  └──────────────┘    └──────────────┘               │
-│         ▲                                           │
-│  ┌──────┴───────┐    ┌──────────────┐               │
-│  │  Go Backend  │    │    Loki      │               │
-│  │   /metrics   │    │  (Logs)      │               │
-│  │  (Prometheus │    └──────────────┘               │
-│  │   exporter)  │           ▲                       │
-│  └──────────────┘    ┌──────┴───────┐               │
-│                      │  Promtail    │               │
-│  ┌──────────────┐    │ (Log agent)  │               │
-│  │  PostgreSQL  │    └──────────────┘               │
-│  │  Exporter    │                                   │
-│  └──────────────┘                                   │
-└─────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph Sources["📡 Metric & Log Sources"]
+        Go["🟦 Go Backend\n/metrics (Prometheus exporter)"]
+        PGExp["🐘 PostgreSQL Exporter\n(query stats · connections)"]
+        Docker["🐳 Docker containers\n(logs via Promtail)"]
+    end
+
+    subgraph Collection["🔄 Collection Layer"]
+        Prom["📊 Prometheus\n(metrics scrape & store)"]
+        Promtail["📝 Promtail\n(log shipping agent)"]
+        Loki["📋 Loki\n(log aggregation)"]
+    end
+
+    Grafana["📈 Grafana\nDashboards · Alerts"]
+
+    Go -->|"scrape /metrics"| Prom
+    PGExp -->|"scrape /metrics"| Prom
+    Docker -->|"tail logs"| Promtail
+    Promtail -->|"push logs"| Loki
+    Prom -->|"metrics"| Grafana
+    Loki -->|"logs"| Grafana
 ```
 
 **Key Metrics to Track:**

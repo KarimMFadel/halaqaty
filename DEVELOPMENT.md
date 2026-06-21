@@ -88,6 +88,29 @@ Every feature in Halaqaty follows this exact pipeline. **No shortcuts.**
 
 ### Complete 7-Phase Spec-Kit Workflow
 
+```mermaid
+flowchart LR
+    S1["1️⃣ /speckit.specify\nProduct requirements\n→ spec.md"]
+    S2["2️⃣ /speckit.clarify\nResolve ambiguities\n(5-7 questions)"]
+    S3["3️⃣ /speckit.checklist\nValidate spec quality\n(completeness · clarity)"]
+    S4["4️⃣ /speckit.plan\nArchitecture design\n→ plan.md · data-model.md\n→ contracts/"]
+    S5["5️⃣ /speckit.tasks\nBreak into tasks\n→ tasks.md with P hints"]
+    S6["6️⃣ /speckit.analyze\nCross-artifact\nconsistency check"]
+    S7["7️⃣ /speckit.implement\nCode + tests\n+ migrations"]
+
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
+
+    style S1 fill:#e8f4fd,stroke:#2196F3
+    style S2 fill:#e8f4fd,stroke:#2196F3
+    style S3 fill:#e8f4fd,stroke:#2196F3
+    style S4 fill:#fff3e0,stroke:#FF9800
+    style S5 fill:#fff3e0,stroke:#FF9800
+    style S6 fill:#fff3e0,stroke:#FF9800
+    style S7 fill:#e8f5e9,stroke:#4CAF50
+```
+
+> **No shortcuts.** Every feature must complete all 7 phases. All agents collaborate throughout. See [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) for agent roles.
+
 **Phase 1: Specify** → **Phase 2: Clarify** → **Phase 3: Checklist** → **Phase 4: Plan** → **Phase 5: Tasks** → **Phase 6: Analyze** → **Phase 7: Implement**
 
 All agents (Senior Golang Developer, Senior Flutter Mobile Engineer, Architect, Tech Lead, Team Leader) collaborate throughout all phases. See [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) for agent roles and collaboration patterns.

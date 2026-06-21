@@ -160,34 +160,26 @@ Current pain point: In a typical online Quran circle, the teacher verbally says 
 
 #### Queue States
 
-```
-                    ┌──────────────────────────────┐
-                    │    QUEUE STATE MACHINE        │
-                    │                               │
-   Teacher creates  │   ┌──────────┐                │
-   session ────────►├──►│  EMPTY   │                │
-                    │   └─────┬────┘                │
-                    │         │ Students join        │
-                    │         ▼                      │
-                    │   ┌──────────┐                │
-                    │   │ WAITING  │◄───────────────┐│
-                    │   │    ⏳    │   Skip/reorder  ││
-                    │   └─────┬────┘                ││
-                    │         │ Teacher starts turn  ││
-                    │         ▼                      ││
-                    │   ┌──────────┐                ││
-                    │   │RECITING  │                ││
-                    │   │    🎙️   │                ││
-                    │   └─────┬────┘                ││
-                    │         │ Teacher marks done   ││
-                    │         ▼                      ││
-                    │   ┌──────────┐ ┌──────────┐   ││
-                    │   │COMPLETED │ │ SKIPPED  │───┘│
-                    │   │    ✅   │ │    ⏭️   │    │
-                    │   └──────────┘ └──────────┘    │
-                    │                               │
-                    │   QUEUE RESET ─────────────► EMPTY
-                    └──────────────────────────────┘
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> empty : Teacher starts\nnew round
+
+    empty --> waiting : Students added\nto queue
+
+    waiting --> reciting : Teacher calls\nstudent's turn 🎙️
+    reciting --> completed : Turn finished\n✅ grade recorded
+    reciting --> skipped : Teacher skips\nstudent ⏭️
+    waiting --> opted_out : Student opts out\n🚫 (teacher approval)
+
+    completed --> waiting : Next student up
+    skipped --> waiting : Next student up
+    opted_out --> waiting : Next student up
+
+    completed --> empty : Queue reset\n(new round)
+    skipped --> empty : Queue reset\n(new round)
+
+    note right of reciting : Only one student\nreciting at a time\nLiveKit CanPublish=true
 ```
 
 #### Round System — Detailed Specification
@@ -415,6 +407,21 @@ Recurring weekly schedule management with smart reminders and integrated attenda
 - [ ] Unified calendar: students in multiple circles see all sessions in one color-coded calendar view
 - [ ] Conflict detection: alert if two circles have overlapping scheduled times
 - [ ] Session lifecycle: Scheduled → Live (auto when teacher starts) → Completed (auto after end) → Cancelled (manual)
+
+#### Circle Lifecycle State Machine
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> active : Teacher creates circle\n(POST /circles)
+
+    active --> archived : Teacher archives circle\n(DELETE /circles/{id})\nAll members notified via FCM
+
+    archived --> [*] : Data retained\n(read-only access for members)
+
+    note right of active : Members can join/leave\nSessions can be created\nChat is live
+    note right of archived : No new sessions\nNo new members\nHistory preserved
+```
 
 
 

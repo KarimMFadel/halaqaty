@@ -135,46 +135,68 @@ This guide documents the collaborative framework for Halaqaty's 5 core engineeri
 
 ---
 
+## Agent Collaboration Model
+
+```mermaid
+graph TD
+    K(["👤 Karim\n(Product Owner)"])
+
+    subgraph Agents["5 Core Engineering Agents"]
+        TL["👥 Team Leader\nCoordination · Spec-Kit enforcement\nTask sequencing · Blocker escalation"]
+        ARCH["🏗️ Architect\nSchema · API contracts · ADRs\nService boundaries · Tech choices"]
+        GO["🔧 Go Developer\nREST API · WebSocket · LiveKit\nDB queries · Migrations"]
+        FL["📱 Flutter Engineer\nMobile UI · RTL/Arabic\nRiverpod · LiveKit client"]
+        TECH["🛡️ Tech Lead\nCode review gate · Security\nPerf · Test coverage ≥80%"]
+    end
+
+    K -->|"Approves PRs\nAnswers clarifications"| TL
+    TL -->|"Sequences tasks\nAssigns ownership"| GO
+    TL -->|"Sequences tasks\nAssigns ownership"| FL
+    TL -->|"Phases architecture work"| ARCH
+    ARCH -->|"Schema & contract design"| GO
+    ARCH -->|"API contract design"| FL
+    GO <-->|"API contracts\nError codes\nWS message formats"| FL
+    GO -->|"Code review"| TECH
+    FL -->|"Code review"| TECH
+    ARCH -->|"Design review"| TECH
+    TECH -->|"✅ Hard gate — no merge without approval"| K
+
+    style TECH fill:#fff3e0,stroke:#FF9800,stroke-width:2px
+    style K fill:#e8f5e9,stroke:#4CAF50,stroke-width:2px
+```
+
+---
+
 ## Spec-Kit Workflow Integration (COMPLETE FLOW)
 
 ### Full Spec-Kit Workflow With All Agents
 
-```
-1. SPECIFY (/speckit.specify)
-   └─ Product requirements → Technical specifications
-   └─ All agents review for feasibility and constraints
+```mermaid
+graph TD
+    START(["📋 Feature Request\n(must be ≥🟡 Approved\nin FEATURES.md)"])
 
-2. CLARIFY (/speckit.clarify)
-   └─ Identify underspecified areas in the spec
-   └─ Ask 5-7 targeted questions to Karim
-   └─ Update spec with clarifications
+    S1["1️⃣ /speckit.specify\nAll agents review\nfor feasibility"]
+    S2["2️⃣ /speckit.clarify\nAgents ask Karim\n5-7 questions"]
+    S3["3️⃣ /speckit.checklist\nSpec quality gate\n(completeness · clarity)"]
+    S4["4️⃣ /speckit.plan\nArch + Go + Flutter\nschema · contracts · tests"]
+    S5["5️⃣ /speckit.tasks\nTeam Leader sequences\nwith dependencies"]
+    S6["6️⃣ /speckit.analyze\nCross-artifact check\n(spec ↔ plan ↔ tasks)"]
+    S7["7️⃣ /speckit.implement\nGo + Flutter build\nTech Lead reviews all"]
+    S8["8️⃣ /speckit.git.commit\nStructured commit\nwith spec traceability"]
+    MERGE(["✅ PR opened\nKarim reviews & merges"])
 
-3. CHECKLIST (/speckit.checklist)
-   └─ Unit test spec quality (completeness, clarity, consistency)
-   └─ Validate requirements are implementation-ready
+    START --> S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> MERGE
 
-4. PROJECT_PLAN.md (/speckit.plan)
-   └─ Architecture design, schema, API contracts, testing strategy
-   └─ Golang Dev + Flutter Eng + Architect collaborate
-   └─ Tech Lead validates for quality implications
-
-5. TASKS (/speckit.tasks)
-   └─ Break design into actionable, testable tasks
-   └─ Explicit dependencies, integration points, Definition of Done
-   └─ Team Leader assigns ownership
-
-6. ANALYZE (/speckit.analyze)
-   └─ Cross-artifact consistency check (spec.md, plan.md, tasks.md)
-   └─ Identify inconsistencies, duplications, ambiguities
-   └─ Before implementation starts
-
-7. IMPLEMENT (/speckit.implement)
-   └─ Execute tasks with tests, reviews, quality gates
-   └─ Golang Dev + Flutter Eng develop and coordinate
-   └─ Tech Lead gates all merges on quality
-
-8. COMMIT (/speckit.git.commit)
-   └─ Auto-commit changes with proper formatting
+    style START fill:#e3f2fd,stroke:#1565C0
+    style S1 fill:#e8f4fd,stroke:#2196F3
+    style S2 fill:#e8f4fd,stroke:#2196F3
+    style S3 fill:#e8f4fd,stroke:#2196F3
+    style S4 fill:#fff3e0,stroke:#FF9800
+    style S5 fill:#fff3e0,stroke:#FF9800
+    style S6 fill:#fff3e0,stroke:#FF9800
+    style S7 fill:#e8f5e9,stroke:#4CAF50
+    style S8 fill:#e8f5e9,stroke:#4CAF50
+    style MERGE fill:#e8f5e9,stroke:#1B5E20,stroke-width:2px
 ```
 
 ### Key Points for Multi-Agent Collaboration in Spec-Kit

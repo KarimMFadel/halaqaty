@@ -111,7 +111,16 @@
 
 | Date | Decision ID | Old Value | New Value | Rationale | ADR |
 |---|---|---|---|---|---|
-| *(none yet)* | — | — | — | — | — |
+| 2026-06-30 | GRADE-ENUM | 4-grade: `excellent/good/needs_improvement/repeat` (ARCHITECTURE.md) / 6-grade: `excellent/very_good/good/acceptable/needs_review/repeat` (FEATURES.md) | **5-grade canonical:** `excellent/good/acceptable/needs_review/repeat` | Resolved mismatch between ARCHITECTURE.md (4-grade) and FEATURES.md F-003 (6-grade). Merged `very_good` into `good`; renamed `needs_improvement` → `needs_review` for clarity. Approved by Karim 2026-06-30. | Pending ADR-008 |
+| 2026-06-30 | OQ-027 | Open | Fixed globally — same Surah status threshold rules for all circles | Simpler to reason about; teacher customisation deferred | — |
+| 2026-06-30 | OQ-028 | Open | "Practiced" = only `completed` turns count; `skipped`/`opted_out` do NOT | Semantic correctness; a skipped turn is not a recitation event | — |
+| 2026-06-30 | OQ-029 | Open | Teacher CAN see student's cross-circle progress (not restricted to own circle) | Teachers need full student context for informed guidance | — |
+| 2026-06-30 | OQ-030 | Open | 🚩 flag triggers at ≥7 consecutive sessions attended with zero completed turns | 7 sessions = ~2 weeks; enough signal without being too sensitive | — |
+| 2026-06-30 | OQ-031 | Open | ⚠️ stale badge on `memorized` Surahs after 30 days without revision | Aligns with traditional weekly revision expectation | — |
+| 2026-06-30 | OQ-032 | Open | Add `surah_id INT FK` to `memorization_progress`; keep `surah_name` deprecated until v1.1 | Normalises schema; enables Quran Map JOIN without name-matching hacks | — |
+| 2026-06-30 | OQ-033 | Open | Soft degradation — `memorized` stays but shows ⚠️ badge after 30 days | Preserves student motivation; does not penalise infrequent revision artificially | — |
+| 2026-06-30 | OQ-034 | Open | Medina Mushaf standard — 240 Rub' divisions for `quran_divisions` seed | Most widely used globally; matches printed Mushaf most students use | — |
+| 2026-06-30 | CROSS-CIRCLE | Open | Most recent update wins for global Quran Map cross-circle conflict resolution | Simplest rule; full history always preserved for audit | — |
 
 ---
 

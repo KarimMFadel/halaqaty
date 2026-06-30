@@ -204,7 +204,7 @@ Broadcast to teacher/supervisors when a grade is recorded for a completed turn.
 }
 ```
 
-**Grade values:** `excellent` | `good` | `needs_improvement` | `repeat`
+**Grade values:** `excellent` | `good` | `acceptable` | `needs_review` | `repeat`
 
 ---
 

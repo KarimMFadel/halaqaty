@@ -108,6 +108,8 @@
 | P3 — Nice to Have | 22 | 0 | 0 | **22** |
 | **Total** | **40** | **5** | **0** | **35** |
 
+> **2026-06-30 update:** Grade enum conflict (E-19 partial) resolved. F-007 Enhanced Progress Tracking approved and specced. `updated_at` on `memorization_progress` added (E-21 partial). Pagination strategy applied to all 7 new Progress endpoints (E-22 partial).
+
 ---
 
 ## Amendment Log
@@ -119,3 +121,6 @@
 | 2026-06-20 | E-01 through E-16 | Initial review and tracker created | Claude Sonnet 4.6 (`claude-sonnet-4.6`) | Full docs + plan review. Overall rating: 8.5/10. Sixteen enhancements identified across 3 priority levels. |
 | 2026-06-20 | E-01, E-02, E-03, E-04, E-05 | Resolved — Priority 1 complete | Claude Sonnet 4.6 (`claude-sonnet-4.6`) | Created `.github/workflows/lint.yml`, `.spectral.yaml`, `SECURITY.md`, `Makefile`. Fixed `PROJECT_PLAN.md` ToC (added §2, §7, §9). Replaced `EXECUTION_PLAYBOOK.md` §5 and §6 duplicated content with "Migrated" notices. |
 | 2026-06-20 | E-17 through E-40 | Additional review points added | Antigravity AI (Gemini 3.1 Pro) | Conducted a comprehensive documentation review; added 24 new enhancements across P2 and P3. Overall rating bumped to 9.5/10. Noted usage of Antigravity AI chat. |
+| 2026-06-30 | E-19 (partial) | Grade enum conflict resolved — 4-grade vs 6-grade mismatch across ARCHITECTURE.md and FEATURES.md fixed | Claude Sonnet 4.6 | F-003/F-007 grade scale unified to 5-grade canonical: `excellent/good/acceptable/needs_review/repeat`. Updated ARCHITECTURE.md §4.0, FEATURES.md F-003, openapi.yaml GradeRequest + QueueEntry, ws_events.md. |
+| 2026-06-30 | E-21 (partial) | Added `updated_at` to `memorization_progress` as part of F-007 spec | Claude Sonnet 4.6 | Migration 0008 adds `updated_at TIMESTAMPTZ` to `memorization_progress`. |
+| 2026-06-30 | E-19, E-22 (partial) | F-007 Enhanced Student Progress Tracking approved and fully specced | Claude Sonnet 4.6 | F-007 upgraded from Proposed → Approved. New file `F-007-SPEC.md` created. 7 new Progress API endpoints added to `openapi.yaml` with full schema. 16 new OpenAPI schemas. DB: 2 new tables (`quran_divisions`), 1 materialized view (`mv_student_surah_status`), 2 views, 7 indexes. 10 decisions locked (OQ-027 to OQ-034, GRADE-ENUM, CROSS-CIRCLE). |

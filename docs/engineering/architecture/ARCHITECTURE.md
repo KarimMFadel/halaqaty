@@ -466,14 +466,19 @@ These are the canonical enum values used in PostgreSQL CHECK constraints and Go 
 
 #### Recitation Grade (`grade` column)
 
+> **Canonical 5-grade scale — locked 2026-06-30.** Replaces the previous 4-grade scale. The product definition and Arabic display labels are in [FEATURES.md F-003](../../management/product/FEATURES.md#f-003-recitation-queue-system).
+
 | DB Value | English Label | Arabic Label | Meaning |
 |----------|--------------|--------------|---------|
 | `excellent` | Excellent | ممتاز | Perfect recitation, excellent tajweed |
-| `good` | Good | جيد | Minor to moderate errors, acceptable tajweed |
-| `needs_improvement` | Needs Improvement | يحتاج تحسين | Notable errors; requires more practice |
-| `repeat` | Repeat | إعادة | Must fully repeat before advancing |
+| `good` | Good | جيد | Minor errors, good tajweed |
+| `acceptable` | Acceptable | مقبول | Notable errors, basic tajweed |
+| `needs_review` | Needs Review | يحتاج مراجعة | Significant errors; review required before advancing |
+| `repeat` | Repeat | إعادة | Must fully repeat; cannot advance |
 
 Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
+
+> **Migration note:** If existing data contains the old value `needs_improvement`, rename it to `needs_review` in migration `0009_grade_enum_5grade.up.sql`.
 
 #### Queue Entry State Machine
 
@@ -492,7 +497,7 @@ stateDiagram-v2
     opted_out --> [*]
 
     note right of reciting : Only ONE entry\ncan be 'reciting'\nper round at a time
-    note right of completed : grade stored:\nexcellent · good\nneeds_improvement · repeat
+    note right of completed : grade stored:\nexcellent · good\nacceptable · needs_review · repeat
 ```
 
 #### Session Lifecycle State Machine
@@ -607,13 +612,25 @@ erDiagram
         uuid student_id FK
         uuid circle_id FK
         uuid session_id FK
-        uuid queue_entry_id FK
-        int surah_id
+        uuid queue_entry_id FK-UK
+        int surah_id FK
         int from_ayah
         int to_ayah
+        varchar type
         varchar grade
         text notes
         date date
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    quran_divisions {
+        int id PK
+        int surah_id FK
+        int from_ayah
+        int to_ayah
+        int juz_number
+        int hizb_number
+        int rub_number
     }
     schedules {
         uuid id PK
@@ -659,7 +676,9 @@ erDiagram
     users ||--o{ recitation_queue_entries : "is student"
     users ||--o{ memorization_progress : "records"
     sessions ||--o{ memorization_progress : "sources"
-    recitation_queue_entries ||--o{ memorization_progress : "generates"
+    recitation_queue_entries ||--|| memorization_progress : "generates (1:1)"
+    quran_surahs ||--o{ memorization_progress : "referenced by"
+    quran_surahs ||--o{ quran_divisions : "divided into"
     users ||--o{ device_tokens : "registers"
     users ||--o{ notifications : "receives"
     quran_surahs ||--o{ recitation_queue : "referenced by"
@@ -770,7 +789,7 @@ erDiagram
 | student_id | UUID | FK → users.id NOT NULL | |
 | position | INTEGER | NOT NULL | Order in queue (1, 2, 3...) |
 | status | VARCHAR(20) | CHECK IN ('waiting','reciting','completed','skipped','opted_out') | |
-| grade | VARCHAR(30) | CHECK IN ('excellent','good','needs_improvement','repeat') | |
+| grade | VARCHAR(30) | CHECK IN ('excellent','good','acceptable','needs_review','repeat') | Nullable until teacher submits grade |
 | teacher_notes | TEXT | | Free-form notes from teacher |
 | started_at | TIMESTAMPTZ | | When recitation began |
 | completed_at | TIMESTAMPTZ | | When recitation ended / was graded |
@@ -806,18 +825,34 @@ erDiagram
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | UUID | PK | |
-| student_id | UUID | FK → users.id NOT NULL | |
+| student_id | UUID | FK → users.id NOT NULL ON DELETE CASCADE | |
 | circle_id | UUID | FK → circles.id NOT NULL | |
 | session_id | UUID | FK → sessions.id | Source session |
-| queue_entry_id | UUID | FK → recitation_queue_entries.id | Source queue entry |
-| surah_name | VARCHAR(100) | NOT NULL | |
-| from_ayah | INTEGER | NOT NULL | |
-| to_ayah | INTEGER | NOT NULL | |
+| queue_entry_id | UUID | FK → recitation_queue_entries.id UNIQUE | Source queue entry; UNIQUE enables idempotent re-grade upsert |
+| surah_id | INTEGER | FK → quran_surahs.id NOT NULL | Normalized surah reference (replaces deprecated `surah_name`) |
+| surah_name | VARCHAR(100) | DEPRECATED | Use `surah_id`; retained until v1.1 for in-flight client compat |
+| from_ayah | INTEGER | NOT NULL | Starting Ayah of the recited range |
+| to_ayah | INTEGER | NOT NULL | Ending Ayah of the recited range |
 | type | VARCHAR(30) | CHECK IN ('new_memorization','revision','old_revision') | |
-| grade | VARCHAR(30) | CHECK IN ('excellent','good','needs_improvement','repeat') | Same grade enum as queue entries |
+| grade | VARCHAR(30) | CHECK IN ('excellent','good','acceptable','needs_review','repeat') NULLABLE | NULL when `grading_required = false` on the round |
 | notes | TEXT | | Teacher notes |
 | date | DATE | NOT NULL | Session date |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+| updated_at | TIMESTAMPTZ | | Set on re-grade |
+
+#### `quran_divisions` *(Reference — Static Seed Data)*
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | SERIAL | PK | |
+| surah_id | INTEGER | FK → quran_surahs.id NOT NULL | |
+| from_ayah | INTEGER | NOT NULL CHECK ≥ 1 | Start of this division segment |
+| to_ayah | INTEGER | NOT NULL CHECK ≥ from_ayah | End of this division segment |
+| juz_number | INTEGER | NOT NULL CHECK 1–30 | Juz containing this segment |
+| hizb_number | INTEGER | NOT NULL CHECK 1–60 | Hizb (half-juz) containing this segment |
+| rub_number | INTEGER | NOT NULL CHECK 1–240 | Rub' (quarter-hizb) number — 240 total |
+| UNIQUE | (surah_id, from_ayah) | | |
+
+> **Usage:** Pre-populated with all 240 Medina Mushaf Rub' boundaries. Never modified by the application. Enables teacher grading UI to offer a Rub'/Hizb/Juz picker and powers Surah coverage segment bars for long Surahs (e.g., Al-Baqarah spans 3 Juz and 6 Hizb).
 
 #### `notifications`
 | Column | Type | Constraints | Description |
@@ -963,10 +998,15 @@ Removed from MVP scope. The product currently supports direct student and teache
 ### `/progress`
 | Method | Path | Status | Description |
 |--------|------|--------|-------------|
-| GET | `/circles/{id}/progress` | 🔲 | All students' progress in a circle |
-| GET | `/circles/{id}/progress/{userId}` | 🔲 | One student's detailed progress |
-| POST | `/circles/{id}/progress` | 🔲 | Manual progress entry (outside session) |
-| GET | `/progress/me` | 🔲 | My own progress across all circles |
+| GET | `/students/me/circles/history` | 🔲 | My circle history — attendance + practice counts per circle |
+| GET | `/students/me/progress` | 🔲 | My global Quran map — all 114 Surahs with memorization status (cross-circle) |
+| GET | `/students/me/sessions/history` | 🔲 | My session timeline — attended vs practiced per session |
+| GET | `/students/me/progress/stats` | 🔲 | My analytics — Ayahs/week, attendance %, practice % |
+| GET | `/circles/{id}/progress` | 🔲 | All students' progress summary in a circle (teacher/supervisor only) |
+| GET | `/circles/{id}/progress/{userId}` | 🔲 | One student's full profile incl. cross-circle Quran map (teacher only) |
+| GET | `/circles/{id}/surah-insights` | 🔲 | Surahs ranked by weak grade frequency — last 30 days (teacher only) |
+
+> **Note:** `POST /circles/{id}/progress` (manual student self-logging) was explicitly decided out of scope (OQ-020). All progress records are auto-generated from session-based recitations only.
 
 ### `/schedule`
 | Method | Path | Status | Description |

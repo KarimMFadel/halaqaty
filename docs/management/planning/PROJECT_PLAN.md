@@ -121,12 +121,14 @@ See [ARCHITECTURE.md](../engineering/architecture/ARCHITECTURE.md) for the compl
 - [ ] Auto-attendance from LiveKit room join events
 - [ ] Manual attendance override
 
-### Month 7: Progress Tracking (Session-Level)
+### Month 7: Progress Tracking (Session-Level + F-007 Foundation)
 - [ ] Memorization log linked to queue history (session-level visibility)
 - [ ] Teacher notes per student per session
 - [ ] Session history view: past sessions with grades per student
+- [ ] `memorization_progress` auto-creation from completed queue entries (F-007 AC-001–AC-003)
+- [ ] Grade enum migration to 5-grade scale (F-007 AC-005)
 
-> **Scope note:** Visual Quran map, progress charts, and PDF export are P1/P2 features moved to Month 9–10. See FEATURES.md F-007 and F-011 for priority classification.
+> **Scope note:** F-007 (Enhanced Student Progress Tracking) is now **🟡 Approved** for Phase 3. Full delivery (Quran Map, analytics, teacher dashboard) is planned across Month 7–9. See [FEATURES.md F-007](../../management/product/FEATURES.md#f-007-enhanced-student-progress-tracking) and [F-007-SPEC.md](../../engineering/design/F-007-SPEC.md) for the approved spec. PDF export is F-011 (P2, Month 10).
 
 ### Month 8: Beta Launch Preparation
 - [ ] Google Play Beta deployment
@@ -140,8 +142,8 @@ See [ARCHITECTURE.md](../engineering/architecture/ARCHITECTURE.md) for the compl
 - [ ] Performance tuning (WebSocket scalability)
 - [ ] Student + teacher dashboards (P2)
 - [ ] Multi-language: English + Arabic complete
-- [ ] Visual Quran map — color-coded memorized portions (F-007, P1)
-- [ ] Progress charts: weekly/monthly trend views (F-007, P1)
+- [ ] Visual Quran map — 114-surah color-coded grid, cross-circle (F-007 ✅ Approved — Phase 3)
+- [ ] Progress charts: weekly/monthly trend views, attendance vs practiced stats (F-007)
 - [ ] Basic PDF report export (F-011, P2)
 
 ### Month 11: App Store Launch

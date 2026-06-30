@@ -48,7 +48,7 @@ This is a **living document**. It tracks every feature from proposal through del
 | [F-004](#f-004-real-time-chat) | Real-time Chat | P0 | 🟡 Approved | 1 | Backend |
 | [F-005](#f-005-live-sessions-livekit) | Live Sessions (Audio-only, LiveKit) | P0 | 🟡 Approved | 2 | Full Stack |
 | [F-006](#f-006-schedule--calendar) | Schedule & Calendar | P0 | 🟡 Approved | 2 | Full Stack |
-| [F-007](#f-007-memorization-progress-tracking) | Memorization Progress Tracking | P1 | 🔵 Proposed | 3 | Full Stack |
+| [F-007](#f-007-enhanced-student-progress-tracking) | Enhanced Student Progress Tracking | P1 | 🟡 Approved | 3 | Full Stack |
 | [F-008](#f-008-notification-system) | Notification System | P1 | 🔵 Proposed | 2 | Backend |
 | [F-009](#f-009-built-in-digital-mushaf) | Built-in Digital Mushaf | P2 | 🔵 Proposed | 4 | Mobile |
 | [F-010](#f-010-student--teacher-dashboards) | Student & Teacher Dashboards | P2 | 🔵 Proposed | 3 | Full Stack |
@@ -201,16 +201,15 @@ When teacher resets the queue:
 
 #### Grading Scale
 
-The following 6-grade scale applies to all recitation entries in this circle. This is the canonical product definition; database enum values and Arabic display labels are in [ARCHITECTURE.md §4.0](../../engineering/architecture/ARCHITECTURE.md#40-domain-enumerations).
+The following **5-grade scale** applies to all recitation entries. This is the canonical product definition; database enum values and Arabic display labels are in [ARCHITECTURE.md §4.0](../../engineering/architecture/ARCHITECTURE.md#40-domain-enumerations).
 
 | Grade | DB Value | Arabic | Meaning |
 |-------|----------|--------|---------|
 | Excellent | `excellent` | ممتاز | Perfect recitation, excellent tajweed |
-| Very Good | `very_good` | جيد جداً | Minor errors, good tajweed |
-| Good | `good` | جيد | Some errors, acceptable tajweed |
+| Good | `good` | جيد | Minor errors, good tajweed |
 | Acceptable | `acceptable` | مقبول | Notable errors, basic tajweed |
-| Needs Review | `needs_review` | يحتاج مراجعة | Significant errors; review required |
-| Repeat | `repeat` | إعادة | Must fully repeat before advancing |
+| Needs Review | `needs_review` | يحتاج مراجعة | Significant errors; review required before advancing |
+| Repeat | `repeat` | إعادة | Must fully repeat; cannot advance |
 
 #### Real-Time Sync Requirements
 
@@ -247,7 +246,7 @@ The following 6-grade scale applies to all recitation entries in this circle. Th
 - **DD-022:** Grading mode is configured per circle (required vs optional per completed turn).
 - **DD-023:** Temporary student opt-out is allowed for operational issues and is logged in queue history.
 - **DD-024:** Late-joining students are appended to the end of the current active round.
-- **DD-025:** A 6-grade recitation scale was chosen over simpler alternatives (4-grade or binary pass/fail) to reflect the nuanced evaluation used in traditional Quranic teaching. The granularity between "needs targeted revision" (Needs Review) and "must fully repeat" (Repeat) is pedagogically significant in tajweed assessment, and aligns with established practice in Quran circles and the ijazah tradition.
+- **DD-025:** A **5-grade** recitation scale was chosen to reflect the nuanced evaluation used in traditional Quranic teaching: `excellent / good / acceptable / needs_review / repeat`. The distinction between "needs targeted revision" (`needs_review`) and "must fully repeat" (`repeat`) is pedagogically significant in tajweed assessment, and aligns with established practice in Quran circles and the ijazah tradition. *(Updated from original 6-grade proposal — `very_good` was merged into `good` to reduce cognitive overhead for teachers while preserving all meaningful distinctions. Decision locked 2026-06-30.)*
 
 #### Dependencies
 
@@ -429,23 +428,119 @@ stateDiagram-v2
 
 ---
 
-### F-007: Memorization Progress Tracking
+### F-007: Enhanced Student Progress Tracking
 
-**Priority:** P1 | **Status:** 🔵 Proposed | **Phase:** 3
+*(Enhancement of: Memorization Progress Tracking | Also delivers: F-010 student-side content)*
+
+**Priority:** P1 | **Status:** 🟡 Approved | **Phase:** 3
+
+> **Design decisions locked 2026-06-30.** See [F-007-SPEC.md](../../engineering/design/F-007-SPEC.md) for the full technical specification.
 
 #### Description
 
-Advanced per-student Quran memorization analytics, automatically populated from recitation queue history with teacher grading. MVP baseline remains session-level progress visibility (history + grades).
+Full student progress intelligence layer built on top of the existing session and recitation queue data. Gives students a clear, Arabic-first view of their Quran memorization journey and gives teachers actionable insight into each student's attendance vs practice commitment.
+
+**Key insight — Attended ≠ Practiced:**
+- **Attended (حضر):** `session_attendance.status = 'present'`
+- **Practiced (تلا / راجع):** has ≥1 `recitation_queue_entries` with `status = 'completed'` in that session — graded turns only (skipped/opted_out do NOT count)
+
+**Granular grading for long Surahs:** Al-Baqarah and other long Surahs are graded by Ayah range (already stored in `from_ayah/to_ayah`). The Quran Map shows **coverage % per Surah** as a progress bar, not a single pass/fail grade.
+
+#### Quran Map — 5 Status Colors
+
+| Color | Status | Arabic | Rule |
+|-------|--------|--------|------|
+| 🟢 | `memorized` | محفوظ | Latest record = `new_memorization` + grade `excellent` or `good` |
+| 🟢⚠️ | `memorized_stale` | محفوظ · يحتاج مراجعة | `memorized` + no revision in last **30 days** |
+| 🔵 | `in_revision` | قيد المراجعة | Latest record = `revision` or `old_revision` |
+| 🟡 | `needs_recap` | يحتاج مراجعة | Latest grade = `needs_review` or `repeat` |
+| 🟠 | `in_progress` | جزئي / قيد الحفظ | Has records but none match above |
+| ⚪ | `not_started` | لم يُبدأ | No records |
 
 #### Acceptance Criteria
 
-- [ ] Auto-create memorization record from each completed recitation queue entry
-- [ ] Fields per record: student, circle, session, round type (new/revision), surah, from_ayah, to_ayah, grade, teacher notes, date
-- [ ] Separate views: New Memorization tab vs Revision tab
-- [ ] Visual Quran map: 114-surah grid, color-coded (memorized/partial/not started)
-- [ ] Progress charts: Ayahs memorized per week/month (line graph)
-- [ ] Attendance correlation: days attended vs progress made
-- [ ] Teacher dashboard: side-by-side comparison of all students' progress
+**Data Layer**
+- [ ] **AC-001** `memorization_progress` auto-created on every `recitation_queue_entries` transition to `completed` (in `QueueService.SubmitGrade` transaction)
+- [ ] **AC-002** Only `completed` turns generate a progress record — `skipped` and `opted_out` do NOT
+- [ ] **AC-003** `memorization_progress` stores: `student_id`, `circle_id`, `session_id`, `queue_entry_id`, `surah_id` (FK), `from_ayah`, `to_ayah`, `type`, `grade` (nullable), `notes`, `date`
+- [ ] **AC-004** `mv_student_surah_status` materialized view is refreshed (async, fire-and-forget) after each grade submission
+- [ ] **AC-005** Grade enum updated to 5 values: `excellent / good / acceptable / needs_review / repeat` across all tables and the OpenAPI contract
+
+**Student APIs**
+- [ ] **AC-006** `GET /students/me/circles/history` — paginated list of all circles with sessions_attended, sessions_practiced, last_session_date
+- [ ] **AC-007** `GET /students/me/progress` — 114-surah Quran Map (global, merged across all circles; most recent update wins for cross-circle status)
+- [ ] **AC-008** `GET /students/me/progress?circle_id=X` — same map scoped to one circle (live query, not mat-view)
+- [ ] **AC-009** `GET /students/me/sessions/history` — paginated session timeline with `attended` + `practiced` flags, completed turns with Ayah ranges and grades
+- [ ] **AC-010** `GET /students/me/progress/stats` — Ayahs recited per week/month, attendance %, practice %, keyed by time bucket
+- [ ] **AC-011** All student endpoints support `?circle_id=` filter; global (no filter) returns cross-circle aggregate
+- [ ] **AC-012** Student cannot access another student's progress — 403 Forbidden
+
+**Teacher APIs**
+- [ ] **AC-013** `GET /circles/{id}/progress` — all students summary: attendance %, practice %, last practiced date, 🚩 flag for ≥7 consecutive attended-but-no-recitation sessions
+- [ ] **AC-014** `GET /circles/{id}/progress/{userId}` — full student profile: teacher can see cross-circle surah map + recitation log (not restricted to own circle data)
+- [ ] **AC-015** `GET /circles/{id}/surah-insights` — Surahs ranked by weak grade frequency (last 30 days), with student count per Surah
+- [ ] **AC-016** Teacher cannot access a student's data unless that student is a member of at least one of the teacher's circles — 403 Forbidden
+
+**Mobile UI**
+- [ ] **AC-017** Student "My Progress" section: 4 tabs — Attendance History / Quran Map / Recitation Log / Stats
+- [ ] **AC-018** Attendance History: each session row shows distinct label `تلا / راجع` (practiced) vs `حضر فقط` (attended only) vs `غائب` (absent) — with icon, not color-only
+- [ ] **AC-019** Quran Map: scrollable RTL grid of 114 tiles; each tile shows Surah number, Arabic name, coverage %, color badge
+- [ ] **AC-020** Long Surahs (e.g., Al-Baqarah): Surah detail shows a segment bar with each recited range highlighted
+- [ ] **AC-021** `memorized_stale` Surahs show ⚠️ badge — tapping it shows "Last revised X days ago"
+- [ ] **AC-022** Teacher student list: 🚩 flag visible on rows where student attended ≥7 consecutive sessions with no recitation turn; flag tooltip explains in Arabic
+- [ ] **AC-023** All screens RTL-correct; all labels in Arabic (F-012 i18n strings)
+
+**Quality Gates**
+- [ ] **AC-024** All new API endpoints documented in `openapi.yaml` with request params, response schemas, error codes
+- [ ] **AC-025** Unit tests: surah status derivation (all grade × type combinations), coverage % calculation, "practiced" flag JOIN logic
+- [ ] **AC-026** Integration tests: RBAC (student isolation, teacher cross-circle access), pagination cursor correctness
+- [ ] **AC-027** Query performance: all endpoints ≤500ms for a student with 500 memorization records (`EXPLAIN ANALYZE` verified)
+
+#### New DB Objects (Summary)
+
+| Object | Type | Purpose |
+|--------|------|---------|
+| `quran_divisions` | New table | Medina Mushaf 240 Rub' divisions — maps Surah+Ayah range to Juz/Hizb/Rub' |
+| `memorization_progress.surah_id` | New FK column | Normalizes surah reference (replaces `surah_name VARCHAR`) |
+| `memorization_progress.updated_at` | New column | Tracks re-grades |
+| `mv_student_surah_status` | Materialized view | Powers Quran Map; refreshed async after each grade |
+| `v_student_session_history` | View | Powers session history endpoint |
+| `v_student_circle_summary` | View | Powers circle history endpoint |
+| 8 indexes | Indexes | Performance for all new queries |
+
+#### New API Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/students/me/circles/history` | Student | Circle history with attendance + practice counts |
+| GET | `/students/me/progress` | Student | Global 114-Surah Quran Map |
+| GET | `/students/me/sessions/history` | Student | Session timeline (attended vs practiced) |
+| GET | `/students/me/progress/stats` | Student | Ayahs/week charts, attendance %, practice % |
+| GET | `/circles/{id}/progress` | Teacher | All students summary + 🚩 flags |
+| GET | `/circles/{id}/progress/{userId}` | Teacher | Full student profile (cross-circle surah map) |
+| GET | `/circles/{id}/surah-insights` | Teacher | Surahs ranked by weak grades |
+
+#### Dependencies
+
+| Dependency | Type |
+|------------|------|
+| F-003 Recitation Queue System | Hard prerequisite — progress flows from completed queue entries |
+| F-005 Live Sessions | Hard prerequisite — `session_attendance` created during sessions |
+| F-010 Student & Teacher Dashboards | Overlap — F-007 delivers the student-side content of F-010 |
+| F-008 Notification System | Enhancement — "grade posted" notification should deep-link to recitation log |
+| F-009 Digital Mushaf | Future consumer — will display `memorization_progress` data per Ayah |
+| F-011 Reports & Statistics | Future consumer — PDF exports pull from the same aggregations |
+
+#### Out of Scope
+
+| Item | Where |
+|------|-------|
+| AI memorization planning | F-014 |
+| AI tajweed error analysis | F-013 |
+| PDF progress reports | F-011 |
+| Parent/guardian access | Post-MVP |
+| Push notification on grade posted | F-008 |
+| Student self-logging outside sessions | Decided No (OQ-020) |
 
 
 
@@ -510,14 +605,16 @@ Integrated Quran text (Uthmani script) with Ayah-level interaction tied to memor
 
 **Priority:** P2 | **Status:** 🔵 Proposed | **Phase:** 3
 
+> **Relationship with F-007:** The student-side dashboard content (Quran Map, attendance history, recitation log, progress analytics) is **delivered by F-007**. F-010 covers the dashboard **shell, navigation structure, and teacher overview screens** only. Build F-007 first; F-010 depends on it.
+
 #### Description
 
-Role-based dashboards for student self-tracking and teacher oversight across circles.
+Role-based dashboard shell for student self-tracking and teacher oversight across circles. The data and detail screens are provided by F-007 (Enhanced Student Progress Tracking).
 
 #### Acceptance Criteria
 
-- [ ] Student dashboard shows own attendance, grades, notes, and memorization progress
-- [ ] Teacher dashboard shows all students taught by that teacher with summary metrics
+- [ ] Student dashboard shell with tab/section navigation to F-007 progress views
+- [ ] Teacher dashboard shows all students taught by that teacher with summary metrics (feeds from F-007 `GET /circles/{id}/progress`)
 - [ ] Circle dashboard shows per-circle progress, attendance, and queue history
 - [ ] No parent-linked account management in MVP scope
 

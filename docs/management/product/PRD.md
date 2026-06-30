@@ -108,7 +108,7 @@ This opens a **B2B revenue model** that is more predictable and higher-value tha
 - Real-time chat + voice notes
 - Live sessions (audio-only via LiveKit for MVP)
 - Scheduling + reminders + attendance basics
-- Basic session-level progress visibility (session history + grades)
+- Full student progress tracking via F-007: Quran Map (114 Surahs), attendance vs practiced history, recitation log, and analytics (Approved — Phase 3)
 
 ### Out of Scope (MVP)
 

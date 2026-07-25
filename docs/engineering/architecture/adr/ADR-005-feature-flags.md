@@ -27,6 +27,7 @@ FEATURE_RECORDING_ENABLED=false
 FEATURE_VIDEO_ENABLED=false
 FEATURE_AI_TAJWEED_ENABLED=false
 FEATURE_ANALYTICS_ENABLED=false
+FEATURE_WEB_ENABLED=false
 ```
 
 **Backend config endpoint:**
@@ -40,7 +41,8 @@ Returns a JSON object of active flags, filtered by the authenticated user's tier
   "recording": false,
   "video": false,
   "ai_tajweed": false,
-  "analytics": false
+  "analytics": false,
+  "web": false
 }
 ```
 
@@ -49,6 +51,32 @@ Returns a JSON object of active flags, filtered by the authenticated user's tier
 - Stores the result in a `featuresProvider` (Riverpod).
 - All feature-gated UI watches `featuresProvider` before rendering.
 - The Flutter app never reads env vars directly. It trusts the API response.
+
+**Feature flag data flow:**
+
+```mermaid
+flowchart LR
+    ENV["🔧 Server Environment\nFEATURE_VIDEO_ENABLED=false\nFEATURE_RECORDING_ENABLED=false\nFEATURE_AI_TAJWEED_ENABLED=false\nFEATURE_ANALYTICS_ENABLED=false\nFEATURE_WEB_ENABLED=false"]
+
+    API["⚙️ Go Backend\nGET /api/v1/config/features\n(filters by user tier)"]
+
+    JSON["📦 JSON Response\n{ video: false,\n  recording: false,\n  ai_tajweed: false,\n  analytics: false,\n  web: false }"]
+
+    RP["📱 Flutter — Riverpod\nfeaturesProvider\n(loaded at startup)"]
+
+    UI1["🔒 Video UI\nhidden"]
+    UI2["🔒 Recording UI\nhidden"]
+    UI3["✅ Queue UI\nvisible (always on)"]
+
+    ENV --> API --> JSON --> RP
+    RP -->|"video: false"| UI1
+    RP -->|"recording: false"| UI2
+    RP -->|"no flag needed"| UI3
+
+    style UI1 fill:#ffebee,stroke:#f44336
+    style UI2 fill:#ffebee,stroke:#f44336
+    style UI3 fill:#e8f5e9,stroke:#4CAF50
+```
 
 **Per-tier logic (post-MVP):**
 When video is enabled globally (`FEATURE_VIDEO_ENABLED=true`), the endpoint returns `video: true` only for Pro and Institution tier users. Free users get `video: false` regardless of the global flag.

@@ -71,17 +71,17 @@ Open an issue before coding:
 git clone https://github.com/KarimMFadel/halaqaty.git
 cd halaqaty
 
-# 2. Start infrastructure (PostgreSQL, LiveKit, MinIO)
-docker compose up -d
+# 2. Start infrastructure (PostgreSQL, LiveKit, MinIO) + show status
+make dev
 
 # 3. Run database migrations
 make migrate-up
 
-# 4. Start the Go backend
-go run ./cmd/server
+# 4. Start the Go backend (in one terminal)
+cd backend && go run ./cmd/api
 
 # 5. Start the Flutter app (in a separate terminal)
-flutter run
+cd mobile && flutter run
 ```
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for the complete development workflow.

@@ -29,6 +29,10 @@ Every PR is fully traceable: user story → contract → implementation → test
 | `specify-cli` | 0.8.1 | See below |
 | VS Code | Latest | with **GitHub Copilot** extension |
 | Git | 2.x+ | — |
+| `golangci-lint` | v1.62.x | `go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.0` |
+| `gitleaks` | latest | `go install github.com/zricethezav/gitleaks/v8@latest` |
+| Node.js | 20+ | [nodejs.org](https://nodejs.org) — required for Spectral (API linting) |
+| `spectral` + OAS ruleset | latest | `npm install -g @stoplight/spectral-cli @stoplight/spectral-oas` |
 
 ### Install uv (Windows)
 
@@ -83,6 +87,29 @@ All Spec-Kit commands are available in **VS Code Copilot Chat** and **GitHub Cop
 Every feature in Halaqaty follows this exact pipeline. **No shortcuts.**
 
 ### Complete 7-Phase Spec-Kit Workflow
+
+```mermaid
+flowchart LR
+    S1["1️⃣ /speckit.specify\nProduct requirements\n→ spec.md"]
+    S2["2️⃣ /speckit.clarify\nResolve ambiguities\n(5-7 questions)"]
+    S3["3️⃣ /speckit.checklist\nValidate spec quality\n(completeness · clarity)"]
+    S4["4️⃣ /speckit.plan\nArchitecture design\n→ plan.md · data-model.md\n→ contracts/"]
+    S5["5️⃣ /speckit.tasks\nBreak into tasks\n→ tasks.md with P hints"]
+    S6["6️⃣ /speckit.analyze\nCross-artifact\nconsistency check"]
+    S7["7️⃣ /speckit.implement\nCode + tests\n+ migrations"]
+
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
+
+    style S1 fill:#e8f4fd,stroke:#2196F3
+    style S2 fill:#e8f4fd,stroke:#2196F3
+    style S3 fill:#e8f4fd,stroke:#2196F3
+    style S4 fill:#fff3e0,stroke:#FF9800
+    style S5 fill:#fff3e0,stroke:#FF9800
+    style S6 fill:#fff3e0,stroke:#FF9800
+    style S7 fill:#e8f5e9,stroke:#4CAF50
+```
+
+> **No shortcuts.** Every feature must complete all 7 phases. All agents collaborate throughout. See [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) for agent roles.
 
 **Phase 1: Specify** → **Phase 2: Clarify** → **Phase 3: Checklist** → **Phase 4: Plan** → **Phase 5: Tasks** → **Phase 6: Analyze** → **Phase 7: Implement**
 
@@ -160,7 +187,7 @@ Agents validate spec quality (not implementation) — checking completeness, cla
 ```
 /speckit.plan
 Go backend, Echo v4. Firebase Auth JWT middleware. PostgreSQL users table via golang-migrate.
-Flutter + Riverpod 2.x. See docs/ARCHITECTURE.md for full schema and endpoint definitions.
+Flutter + Riverpod 2.x. See docs/engineering/architecture/ARCHITECTURE.md for full schema and endpoint definitions.
 Constitution: .specify/memory/constitution.md
 ```
 
@@ -248,7 +275,16 @@ All of these must be **green** before opening a PR:
 | Dart formatter | `dart format --set-exit-if-changed .` | No diff |
 | Go formatter | `gofmt -l .` | Empty output |
 | Secret scan | `gitleaks detect` | No findings |
+| **OpenAPI spec lint** | `make api-lint` | Zero errors (Spectral OAS rules) |
 | **Tech Lead Code Review** | Via GitHub PR | **Approved** (hard gate) |
+
+> **Tip:** Run `make lint` to execute golangci-lint + flutter analyze + spectral lint + gitleaks in one command.
+
+### About `make api-lint` (Spectral)
+
+Spectral validates `docs/contracts/openapi.yaml` against the official OpenAPI Specification ruleset. It catches issues like unresolved `$ref` values, missing response schemas, duplicate `operationId` fields, and invalid security scheme definitions — before they become runtime bugs.
+
+The linting rules are configured in **`.spectral.yaml`** at the repo root. Open that file for a full explanation of each setting, how to add custom rules, and when to modify it. Run `make api-lint` locally before pushing.
 
 ---
 
@@ -424,7 +460,9 @@ halaqaty/
 │   │   ├── tasks.md
 │   │   └── quickstart.md
 │   └── ...
+├── Makefile                         ← root: aggregate + cross-cutting targets (delegates to sub-Makefiles)
 ├── backend/                         ← Go service (backend owners)
+│   ├── Makefile                     ← Go-only: test, lint, build, migrate-*
 │   ├── cmd/
 │   │   └── api/                     ← Go entry point (main.go)
 │   ├── internal/                    ← Go domain packages
@@ -444,14 +482,13 @@ halaqaty/
 │   ├── go.mod
 │   └── go.sum
 ├── mobile/                          ← Flutter application
+│   ├── Makefile                     ← Flutter-only: test, analyze, build-apk, build-ios
 │   ├── lib/
 │   │   ├── features/                ← Feature-first Flutter structure
 │   │   ├── core/
 │   │   └── main.dart
 │   └── pubspec.yaml
-├── migrations/                      ← golang-migrate SQL files (under backend/)
 ├── docker-compose.yml               ← MVP deployment
-├── Makefile                         ← build, test, lint, migrate targets
 └── DEVELOPMENT.md                   ← This file
 ```
 
@@ -468,7 +505,10 @@ halaqaty/
 | [`docs/management/product/JOURNEY.md`](docs/management/product/JOURNEY.md) | Screen-by-screen user journey with error/offline states |
 | [`docs/management/product/MVP_DECISION_REGISTER.md`](docs/management/product/MVP_DECISION_REGISTER.md) | All frozen MVP rules — binding on implementation |
 | [`docs/engineering/architecture/adr/`](docs/engineering/architecture/adr/) | Architecture Decision Records — why we chose each technology |
-| [`specs/NNN-feature/contracts/`](specs/NNN-feature/contracts/) | OpenAPI spec + WebSocket event catalog |
+| [`docs/contracts/openapi.yaml`](docs/contracts/openapi.yaml) | REST API contract — source of truth for all endpoints |
+| [`docs/contracts/ws_events.md`](docs/contracts/ws_events.md) | WebSocket event catalog — all real-time message types |
+| [`.spectral.yaml`](.spectral.yaml) | OpenAPI linting config — rules enforced by `make api-lint` and CI; includes inline docs on how to add/modify rules |
+| [`specs/NNN-feature/contracts/`](specs/NNN-feature/contracts/) | Per-feature OpenAPI + WS event overrides (generated by Spec-Kit) |
 
 ---
 

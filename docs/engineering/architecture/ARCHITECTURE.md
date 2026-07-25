@@ -2,7 +2,7 @@
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
-**Related Documents:** [product/PRD.md](../../management/product/PRD.md) · [planning/PROJECT_PLAN.md](../../management/planning/PROJECT_PLAN.md) · [deployment/DEPLOYMENT.md](../deployment/DEPLOYMENT.md) · [adr/README.md](./adr/README.md) · [../../DEVELOPMENT.md](../../DEVELOPMENT.md) · [collaboration/AGENT_COLLABORATION_GUIDE.md](../collaboration/AGENT_COLLABORATION_GUIDE.md)
+**Related Documents:** [product/PRD.md](../../management/product/PRD.md) · [planning/PROJECT_PLAN.md](../../management/planning/PROJECT_PLAN.md) · [deployment/DEPLOYMENT.md](../deployment/DEPLOYMENT.md) · [adr/README.md](./adr/README.md) · [../../../DEVELOPMENT.md](../../../DEVELOPMENT.md) · [collaboration/AGENT_COLLABORATION_GUIDE.md](../collaboration/AGENT_COLLABORATION_GUIDE.md)
 
 > **Key architectural decisions** (framework choice, state management, auth boundary, migrations) are documented as ADRs in [`./adr/`](./adr/README.md).
 
@@ -21,69 +21,46 @@
 
 ## 1. System Overview Diagram
 
-```
-╔═══════════════════════════════════════════════════════════════════╗
-║                        CLIENT LAYER                               ║
-║                                                                   ║
-║   ┌─────────────────────────────────────────────────────────┐    ║
-║   │          Flutter App (iOS / Android / Web)               │    ║
-║   │                                                          │    ║
-║   │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐  │    ║
-║   │  │  Auth UI  │  │ Circles  │  │  Chat UI │  │Session │  │    ║
-║   │  │           │  │   UI     │  │          │  │  UI    │  │    ║
-║   │  └──────────┘  └──────────┘  └──────────┘  └────────┘  │    ║
-║   │                                                          │    ║
-║   │  Packages: livekit_client · firebase_auth · firebase_    │    ║
-║   │            messaging · flutter_local_notifications       │    ║
-║   └─────────────────────────────────────────────────────────┘    ║
-╚══════════╦═══════════════════╦═══════════════════╦═══════════════╝
-           ║                   ║                   ║
-     HTTPS/REST           WebSocket            WebRTC
-     (Auth, CRUD)      (Chat, Queue,        (Audio in MVP
-                        Presence,            via LiveKit)
-                        Notifications)
-           ║                   ║                   ║
-╔══════════╩═══════════════════╩═══════════════════╩═══════════════╗
-║                       BACKEND LAYER                               ║
-║                                                                   ║
-║  ┌─────────────────────────────────────────────────────────┐     ║
-║  │                    Go Backend Server                      │     ║
-║  │                                                          │     ║
-║  │  ┌─────────────────┐    ┌──────────────────────────┐    │     ║
-║  │  │   REST API       │    │    WebSocket Hub          │    │     ║
-║  │  │  (Echo v4)        │    │                          │    │     ║
-║  │  │                 │    │  ┌──────────────────┐    │    │     ║
-║  │  │  /api/v1/auth   │    │  │ Chat Handler     │    │    │     ║
-║  │  │  /api/v1/circles│    │  ├──────────────────┤    │    │     ║
-║  │  │  /api/v1/sessions│   │  │ Queue Handler    │    │    │     ║
-║  │  │  /api/v1/queue  │    │  ├──────────────────┤    │    │     ║
-║  │  │  /api/v1/messages│   │  │ Presence Handler │    │    │     ║
-║  │  │  /api/v1/progress│   │  ├──────────────────┤    │    │     ║
-║  │  │  /api/v1/schedule│   │  │ Notification     │    │    │     ║
-║  │  │  /api/v1/notifs  │   │  │ Broadcaster      │    │    │     ║
-║  │  └────────┬─────────┘   └──────────┬───────────┘    │    │     ║
-║  │           │                        │                 │     ║
-║  │  ┌────────▼────────────────────────▼───────┐        │     ║
-║  │  │           LiveKit Manager                │        │     ║
-║  │  │   (room creation, token generation)      │        │     ║
-║  │  └────────┬────────────────────────────────┘        │     ║
-║  └───────────┼─────────────────────────────────────────┘     ║
-╚═════════════╦╩══════════════════════════════════════════════════╝
-              ║
-     ┌────────╩────────────────────────────────────────────────┐
-     │                    DATA & SERVICES LAYER                  │
-     │                                                           │
-     │  ┌─────────────┐  ┌─────────────┐  ┌────────────────┐   │
-     │  │  PostgreSQL  │  │    MinIO     │  │  LiveKit SFU   │   │
-     │  │  (Primary DB)│  │ (File Store) │  │ (WebRTC Server)│   │
-     │  └─────────────┘  └─────────────┘  └────────────────┘   │
-     │                                                           │
-     │  ┌─────────────────────────┐  ┌──────────────────────┐   │
-     │  │      Firebase           │  │     Cloudflare       │   │
-     │  │  Auth (Identity)        │  │  (DNS + SSL/TLS)     │   │
-     │  │  FCM (Push Notifs)      │  │                      │   │
-     │  └─────────────────────────┘  └──────────────────────┘   │
-     └───────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph CLIENT["📱 Client Layer"]
+        Flutter["Flutter App\n(iOS · Android · Web)"]
+        subgraph UI["UI Modules"]
+            AuthUI["Auth UI"]
+            CirclesUI["Circles UI"]
+            ChatUI["Chat UI"]
+            SessionUI["Session UI\n(Queue + LiveKit)"]
+        end
+        Pkgs["livekit_client · firebase_auth\nfirebase_messaging · riverpod"]
+    end
+
+    subgraph BACKEND["⚙️ Backend Layer"]
+        subgraph GoServer["Go Backend (Echo v4)"]
+            REST["REST API\n/api/v1/*"]
+            WSHub["WebSocket Hub\n(Chat · Queue · Presence)"]
+            LKMgr["LiveKit Manager\n(room creation · token gen)"]
+        end
+        REST --> LKMgr
+        WSHub --> LKMgr
+    end
+
+    subgraph DATA["🗄️ Data & Services Layer"]
+        PG[("PostgreSQL 16\nPrimary DB\n(source of truth)")]
+        MinIO[("MinIO\nFile Store\n(voice · images · files)")]
+        LK["LiveKit SFU\n(WebRTC · audio-only MVP)"]
+        FB["Firebase\nAuth (identity)\nFCM (push notifs)"]
+        CF["Cloudflare\nDNS · TLS"]
+    end
+
+    Flutter -->|"HTTPS/REST\nAuth · CRUD"| REST
+    Flutter -->|"WebSocket\nChat · Queue · Presence"| WSHub
+    Flutter -->|"WebRTC\naudio via LiveKit"| LK
+
+    REST <-->|"pgx queries"| PG
+    WSHub <-->|"pgx queries"| PG
+    LKMgr <-->|"LiveKit SDK"| LK
+    REST -->|"FCM dispatch"| FB
+    REST -->|"file upload/serve"| MinIO
 ```
 
 ---
@@ -111,52 +88,119 @@
 **Used for:** Real-time communication that requires low latency and server-push capability.
 
 **WebSocket connection lifecycle:**
+
+```mermaid
+sequenceDiagram
+    participant C as Flutter Client
+    participant API as Go REST API
+    participant WS as WebSocket Hub
+    participant DB as PostgreSQL
+
+    C->>API: POST /sessions/{id}/ws-token
+    API->>DB: verify session membership
+    DB-->>API: membership confirmed
+    API-->>C: { token, expires_at } (60s TTL)
+
+    C->>WS: WSS wss://api.halaqaty.app/ws?token=<ws_token>
+    WS->>DB: validate token, load circle memberships
+    DB-->>WS: user circles
+    WS-->>C: connection upgraded ✓
+    Note over WS: client registered in Hub rooms<br/>(circle IDs, session IDs)
+
+    loop Every 30 seconds
+        C->>WS: { "type": "ping" }
+        WS-->>C: { "type": "pong", "server_time": "..." }
+    end
+
+    Note over C,WS: On disconnect → Hub removes client<br/>Client reconnects + re-fetches state via REST
+
+### 2.5 Real-Time Data Flow — End-to-End Example
+
+How a teacher starting a new queue round propagates from REST call to every connected client:
+
+```mermaid
+sequenceDiagram
+        participant T as Teacher (Flutter)
+        participant API as Go REST API
+        participant DB as PostgreSQL
+        participant Hub as WebSocket Hub
+        participant S as Student (Flutter)
+        participant O as Other Students
+
+        rect rgb(230,245,255)
+            Note over T,O: Teacher starts a new recitation round
+            T->>+API: POST /sessions/{id}/queue/rounds\n{ surah_id:2, from_ayah:1, to_ayah:10 }
+            API->>DB: INSERT recitation_queue (round 1, surah_id=2)
+            API->>DB: INSERT recitation_queue_entries for all members
+            DB-->>API: queue_id, entries[]
+            API->>Hub: emit queue.round_started to session room
+            Hub-->>T: queue.round_started { round_number:1, surah_id:2, ... }
+            Hub-->>O: queue.round_started { round_number:1, surah_id:2, ... }
+            Hub-->>S: queue.round_started { round_number:1, surah_id:2, ... }
+            API-->>-T: 201 QueueState { entries: [...] }
+        end
+
+        rect rgb(230,255,230)
+            Note over T,O: First student's turn begins
+            API->>Hub: emit queue.your_turn to Student S (targeted)
+            Hub-->>S: queue.your_turn { queue_entry_id, surah_id:2, from_ayah:1, to_ayah:10 }
+            API->>Hub: emit queue.entry_updated to all (broadcast)
+            Hub-->>T: queue.entry_updated { new_status: reciting, student_id: S }
+            Hub-->>O: queue.entry_updated { new_status: reciting, student_id: S }
+        end
+
+        rect rgb(255,245,230)
+            Note over T,O: Student raises hand (WS command — no REST round-trip)
+            S->>Hub: cmd.raise_hand { session_id }
+            Hub->>DB: log raise_hand event
+            Hub-->>T: session.hand_raised { student_id, student_name }
+            Hub-->>O: session.hand_raised { student_id, student_name }
+        end
 ```
-Client connects → WS /ws?token=<jwt>
-    ↓
-Server authenticates JWT
-    ↓
-Server registers client in Hub (by userID)
-    ↓
-Client subscribes to rooms (circle IDs, session IDs)
-    ↓
-Bidirectional messages:
-  Client → Server: chat message, queue action, typing indicator
-  Server → Client: chat message, queue update, presence change, notification
-    ↓
-Client disconnects → Hub removes registration → Presence update broadcast
 ```
 
-**WebSocket Message Format:**
+**Event Envelope (all events):**
 ```json
 {
-  "type": "queue.student_status_changed",
-  "session_id": "sess_123",
-  "data": {
-    "entry_id": "entry_456",
-    "student_id": "user_789",
-    "status": "reciting",
-    "position": 3
-  },
-  "timestamp": "2026-03-15T10:30:00Z"
+  "type": "event.name",
+  "payload": { "...": "..." },
+  "timestamp": "2024-01-15T10:30:00Z",
+  "request_id": "optional-client-correlation-id"
 }
 ```
 
-**Message Types:**
-| Type | Direction | Description |
-|------|-----------|-------------|
-| `chat.message` | S→C, C→S | New message in circle or DM |
-| `chat.typing` | C→S, S→C | Typing indicator |
-| `chat.read` | C→S | Mark messages as read |
-| `queue.updated` | S→C | Full queue state refresh |
-| `queue.student_status_changed` | S→C | Single student status update |
-| `queue.round_started` | S→C | New round created |
-| `queue.reset` | S→C | Queue was reset |
-| `presence.online` | S→C | User came online |
-| `presence.offline` | S→C | User went offline |
-| `notification.in_app` | S→C | In-app notification |
-| `session.started` | S→C | Teacher started session |
-| `session.ended` | S→C | Session ended |
+**Server → Client event types:**
+
+| Type | Description |
+|------|-------------|
+| `queue.state` | Full queue snapshot — sent on join or queue reset |
+| `queue.entry_updated` | Single queue entry status change |
+| `queue.your_turn` | Targeted: notifies the student whose turn it is |
+| `queue.next_soon` | Targeted: notifies the student who is next (position 2) |
+| `queue.reordered` | Teacher manually reordered the queue |
+| `queue.round_started` | New recitation round started |
+| `queue.grade_submitted` | Grade recorded for a completed turn (teacher/supervisor only) |
+| `session.started` | Session went live; includes `livekit_url` and `livekit_token` |
+| `session.ended` | Session ended by teacher |
+| `session.participant_joined` | A participant joined the session |
+| `session.participant_left` | A participant left the session |
+| `session.hand_raised` | A student raised their hand |
+| `chat.message` | New circle message delivered |
+| `chat.message_read` | Recipient read a message (sent to sender) |
+| `chat.typing` | Typing indicator |
+| `error` | Server could not process a client command |
+
+**Client → Server command types:**
+
+| Type | Description |
+|------|-------------|
+| `cmd.raise_hand` | Student raises hand in session |
+| `cmd.lower_hand` | Student lowers hand in session |
+| `ping` | Heartbeat (every 30 s) |
+
+> **Source of truth for all event schemas and payloads:** [`docs/contracts/ws_events.md`](../../contracts/ws_events.md)
+
+> **Reconnection:** on reconnect, clients re-fetch state via REST (`GET /api/v1/sessions/{id}/queue`, etc.) rather than relying solely on buffered WebSocket events.
 
 ### 2.3 WebRTC via LiveKit
 
@@ -175,19 +219,21 @@ Client disconnects → Hub removes registration → Presence update broadcast
 
 **Used for:** Push notifications when the app is in the background or completely closed.
 
-**Flow:**
-```
-Event occurs (e.g., teacher starts session)
-       ↓
-Go Backend detects event
-       ↓
-Go Backend retrieves user's FCM device tokens from DB
-       ↓
-Go Backend → Firebase FCM API (HTTP POST)
-       ↓
-FCM → User's device (iOS APNs or Android FCM)
-       ↓
-Device shows notification even if app is closed
+**Flow — WS online vs FCM offline decision:**
+
+```mermaid
+flowchart TD
+    E["⚡ Event occurs\n(session starts · your turn · new message)"]
+    E --> Q{Is user connected\nvia WebSocket?}
+    Q -->|Yes – online / foreground| WS["📨 Deliver via WebSocket\n(zero latency, in-app)"]
+    Q -->|No – offline / background| DB[("🗄️ Fetch FCM device\ntokens from PostgreSQL")]
+    DB --> FCM["POST Firebase FCM API"]
+    FCM --> OS{Platform}
+    OS -->|iOS| APNs["🍎 Apple APNs → device"]
+    OS -->|Android| AFCM["🤖 Android FCM → device"]
+    APNs --> N["🔔 System notification\n(app closed or backgrounded)"]
+    AFCM --> N
+    WS --> Bell["🔔 In-app notification bell\n+ real-time UI update"]
 ```
 
 ---
@@ -196,69 +242,83 @@ Device shows notification even if app is closed
 
 ### 3.1 Complete Integration Flow
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                    LIVEKIT INTEGRATION FLOW                       │
-│                                                                   │
-│  STEP 1: Teacher starts session                                   │
-│  ════════════════════════════                                     │
-│                                                                   │
-│  Flutter UI                    Go Backend              LiveKit    │
-│     │                              │                    Server   │
-│     │  POST /sessions/{id}/start   │                      │      │
-│     │─────────────────────────────►│                      │      │
-│     │                              │  CreateRoom(name)    │      │
-│     │                              │─────────────────────►│      │
-│     │                              │  Room created ✓      │      │
-│     │                              │◄─────────────────────│      │
-│     │  { token, livekit_url }      │                      │      │
-│     │◄─────────────────────────────│                      │      │
-│                                                                   │
-│  STEP 2: Flutter connects to LiveKit                              │
-│  ════════════════════════════════                                 │
-│                                                                   │
-│  Flutter (livekit_client)                          LiveKit SFU   │
-│     │                                                    │        │
-│     │  room.connect(url, token, RoomOptions{...})        │        │
-│     │───────────────────────────────────────────────────►│        │
-│     │  WebRTC handshake (ICE, DTLS, SRTP)               │        │
-│     │◄──────────────────────────────────────────────────►│        │
-│     │  Connected ✓                                       │        │
-│     │◄───────────────────────────────────────────────────│        │
-│                                                                   │
-│  STEP 3: Other participants join                                  │
-│  ══════════════════════════════                                   │
-│                                                                   │
-│  Student Flutter              Go Backend              LiveKit    │
-│     │                              │                    Server   │
-│     │  GET /sessions/{id}/token    │                      │      │
-│     │─────────────────────────────►│                      │      │
-│     │  GenerateJWT(roomName, uid)  │                      │      │
-│     │                              │  (student has join   │      │
-│     │                              │   permission only,   │      │
-│     │                              │   not room admin)    │      │
-│     │  { token }                   │                      │      │
-│     │◄─────────────────────────────│                      │      │
-│     │  room.connect(url, token)    │                      │      │
-│     │───────────────────────────────────────────────────►│       │
-│     │  Connected; receives audio streams                 │       │
-│     │◄───────────────────────────────────────────────────│       │
-│                                                                   │
-│  STEP 4: Teacher controls (mute, remove)                         │
-│  ════════════════════════════════════                            │
-│                                                                   │
-│  Flutter UI                    Go Backend              LiveKit   │
-│     │  POST /sessions/{id}/       │                    Server   │
-│     │    mute/{participant_id}    │                      │       │
-│     │─────────────────────────────►│                      │      │
-│     │                              │  MutePublishedTrack  │      │
-│     │                              │  (LiveKit Admin API) │      │
-│     │                              │─────────────────────►│      │
-│     │                              │  Participant muted   │      │
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+    participant T as Teacher (Flutter)
+    participant API as Go Backend
+    participant DB as PostgreSQL
+    participant LK as LiveKit Server
+    participant S as Student (Flutter)
+
+    Note over T,S: Step 1 — Teacher starts session
+    T->>API: POST /sessions/{id}/start
+    API->>DB: UPDATE sessions SET status='active'
+    API->>LK: CreateRoom(name: session_uuid)
+    LK-->>API: room created ✓
+    API-->>T: { session, livekit_url, livekit_token [RoomAdmin=true] }
+    T->>LK: room.connect(url, token)
+    LK-->>T: Connected ✓ (WebRTC handshake)
+    API--)S: WS session.started { livekit_url, livekit_token }
+
+    Note over T,S: Step 2 — Student joins
+    S->>API: POST /sessions/{id}/join
+    API->>DB: verify circle membership
+    API->>LK: GenerateToken(uid, CanPublish=false, CanPublishVideo=false)
+    API-->>S: { session, livekit_url, livekit_token }
+    S->>LK: room.connect(url, token)
+    LK-->>S: Connected ✓ (subscribes to audio streams)
+
+    Note over T,S: Step 3 — Student's turn (teacher starts round)
+    T->>API: POST /sessions/{id}/queue/rounds\n{ surah_id, from_ayah, to_ayah }
+    API->>DB: INSERT recitation_queue + entries
+    API--)S: WS queue.your_turn { queue_entry_id, surah_id, from_ayah, to_ayah }
+    API->>LK: UpdateParticipantPermissions(studentUID, CanPublish=true)
+    S->>LK: publishAudioTrack() [48kbps Opus]
+    LK-->>T: receives student audio stream ✓
+
+    Note over T,S: Step 4 — Turn ends, grade recorded
+    T->>API: POST /sessions/{id}/queue/entries/{id}/grade\n{ grade: "excellent" }
+    API->>LK: UpdateParticipantPermissions(studentUID, CanPublish=false)
+    API->>DB: UPDATE entry status=completed, grade=excellent
+    API--)S: WS queue.entry_updated { new_status: completed }
+    API--)T: WS queue.grade_submitted { grade, student_id }
 ```
 
-### 3.2 Go Backend — Token Generation Code Pattern
+### 3.2 LiveKit Token Security Flow
+
+The Go backend is the **sole token issuer** — the Flutter client never calls LiveKit APIs directly (Constitution §IV.1). Tokens encode the minimum permission set for each role.
+
+```mermaid
+sequenceDiagram
+    participant App as Flutter App
+    participant API as Go Backend
+    participant DB as PostgreSQL
+    participant LK as LiveKit Server
+
+    Note over App,LK: Teacher token — issued on session start
+    App->>API: POST /sessions/{id}/start
+    API->>DB: verify role = teacher in circle_members
+    API->>LK: GenerateToken(uid, RoomAdmin=true,\nCanPublish=true, CanPublishVideo=false)
+    API-->>App: { livekit_token }
+    App->>LK: room.connect(token) — RoomAdmin=true ✓
+
+    Note over App,LK: Student token — issued on session join
+    App->>API: POST /sessions/{id}/join
+    API->>DB: verify role = student/supervisor in circle_members
+    API->>LK: GenerateToken(uid, RoomAdmin=false,\nCanPublish=false, CanPublishVideo=false)
+    API-->>App: { livekit_token }
+    App->>LK: room.connect(token) — listen-only ✓
+
+    Note over App,LK: Turn grant — student publish enabled for one turn only
+    API->>LK: UpdateParticipantPermissions(studentUID, CanPublish=true)
+    Note right of LK: Student can now publish audio
+    API->>LK: UpdateParticipantPermissions(studentUID, CanPublish=false)
+    Note right of LK: Publish revoked immediately after turn
+```
+
+> **Security invariant:** `CanPublishVideo` is **always** `false` in MVP. The token generation function enforces this unconditionally — no code path can produce a video-enabled token until `FEATURE_VIDEO_ENABLED=true` and an ADR approves the change.
+
+### 3.3 Go Backend — Token Generation Code Pattern
 
 ```go
 // Using github.com/livekit/server-sdk-go
@@ -294,7 +354,7 @@ func generateLiveKitToken(
 }
 ```
 
-### 3.3 Flutter — Room Connection Pattern
+### 3.4 Flutter — Room Connection Pattern
 
 ```dart
 // Using livekit_client Flutter package
@@ -324,7 +384,7 @@ Future<Room> connectToSession({
 }
 ```
 
-### 3.4 Audio Configuration (Critical)
+### 3.5 Audio Configuration (Critical)
 
 ```dart
 // Disable noise suppression and auto-gain for Quran recitation
@@ -340,7 +400,7 @@ final audioConstraints = {
 };
 ```
 
-### 3.5 Network Requirements
+### 3.6 Network Requirements
 
 Halaqaty sessions are hosted on **Hetzner Nuremberg (EU)**. Target audience is primarily MENA region (Saudi Arabia, UAE, Egypt).
 
@@ -360,11 +420,45 @@ Halaqaty sessions are hosted on **Hetzner Nuremberg (EU)**. Target audience is p
 
 > **⚠️ Investigation pending — server location not yet validated:** No systematic latency benchmarking or region testing has been performed. The 60 ms figure above is an estimate from public ping data, not from actual Hetzner load tests. If pilot teachers in Egypt or Gulf report noticeable audio lag, the first corrective action is to evaluate alternative Hetzner regions (e.g., Helsinki, Singapore) or other providers (e.g., Fly.io, Railway, Vultr) for lower-latency MENA routing. This is a known open item for Phase 1 evaluation.
 
----
+### 3.7 LiveKit SFU Audio Routing
 
-## 4. Database Schema
+LiveKit uses a **Selective Forwarding Unit (SFU)** architecture. Each participant uploads one audio stream; LiveKit fans it out to all others without mixing or re-encoding. This is why it scales beyond 4 participants (the ceiling for P2P WebRTC).
+
+```mermaid
+graph TD
+    subgraph Reciter["🎙️ Current Reciter"]
+        R["Active Student\n1× upload — 48kbps Opus"]
+    end
+
+    subgraph Teacher["👨‍🏫 Teacher"]
+        T["Teacher\n1× upload + receives all"]
+    end
+
+    subgraph SFU["⚡ LiveKit SFU"]
+        FWD["Selective Forwarding Unit\nno mixing · no re-encoding\n1 stream in → N copies out"]
+    end
+
+    subgraph Listeners["👨‍🎓 Listening Students"]
+        S1["Student 1\n🎧 receive only"]
+        S2["Student 2\n🎧 receive only"]
+        SN["Student N...\n🎧 receive only"]
+    end
+
+    R -->|"48kbps"| SFU
+    T -->|"48kbps"| SFU
+    SFU -->|"48kbps"| S1
+    SFU -->|"48kbps"| S2
+    SFU -->|"48kbps"| SN
+    SFU -->|"48kbps"| T
+    SFU -->|"48kbps"| R
+
+    note1["❌ P2P WebRTC: N² connections\n30 students = 870 streams\nimpractical above 4 participants"]
+    note2["✅ SFU: each client sends 1 stream\nregardless of audience size\n30 students = 31 upstream streams total"]
+```
 
 > **Migration tool:** [golang-migrate v4](https://github.com/golang-migrate/migrate) — sequential SQL files in `backend/migrations/`. See [ADR-006](adr/ADR-006-db-migrations.md) for rationale.
+
+## 4. Database Schema
 
 ### 4.0 Domain Enumerations
 
@@ -372,96 +466,222 @@ These are the canonical enum values used in PostgreSQL CHECK constraints and Go 
 
 #### Recitation Grade (`grade` column)
 
+> **Canonical 5-grade scale — locked 2026-06-30.** Replaces the previous 4-grade scale. The product definition and Arabic display labels are in [FEATURES.md F-003](../../management/product/FEATURES.md#f-003-recitation-queue-system).
+
 | DB Value | English Label | Arabic Label | Meaning |
 |----------|--------------|--------------|---------|
 | `excellent` | Excellent | ممتاز | Perfect recitation, excellent tajweed |
-| `very_good` | Very Good | جيد جداً | Minor errors, good tajweed |
-| `good` | Good | جيد | Some errors, acceptable tajweed |
+| `good` | Good | جيد | Minor errors, good tajweed |
 | `acceptable` | Acceptable | مقبول | Notable errors, basic tajweed |
-| `needs_review` | Needs Review | يحتاج مراجعة | Significant errors; review required |
-| `repeat` | Repeat | إعادة | Must fully repeat before advancing |
+| `needs_review` | Needs Review | يحتاج مراجعة | Significant errors; review required before advancing |
+| `repeat` | Repeat | إعادة | Must fully repeat; cannot advance |
 
 Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 
-### 4.1 Entity-Relationship Diagram (ASCII)
+> **Migration note:** If existing data contains the old value `needs_improvement`, rename it to `needs_review` in migration `0009_grade_enum_5grade.up.sql`.
 
+#### Queue Entry State Machine
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> waiting : Student added to round
+
+    waiting --> reciting : Teacher calls student's turn\n(LiveKit CanPublish → true)
+    reciting --> completed : Grade submitted\n(LiveKit CanPublish → false)
+    reciting --> skipped : Teacher skips student\n(LiveKit CanPublish → false)
+    waiting --> opted_out : Student opts out\n(requires teacher approval)
+
+    completed --> [*]
+    skipped --> [*]
+    opted_out --> [*]
+
+    note right of reciting : Only ONE entry\ncan be 'reciting'\nper round at a time
+    note right of completed : grade stored:\nexcellent · good\nacceptable · needs_review · repeat
 ```
-┌───────────────┐     ┌───────────────────┐     ┌───────────────┐
-│    users      │     │   circle_members  │     │    circles    │
-│───────────────│     │───────────────────│     │───────────────│
-│ id (PK)       │────►│ user_id (FK)      │◄────│ id (PK)       │
-│ name          │     │ circle_id (FK)    │     │ name          │
-│ email         │     │ role              │     │ description   │
-│ phone         │     │ joined_at         │     │ teacher_id(FK)│
-│ avatar_url    │     └───────────────────┘     │ invite_code   │
-│ preferred_lang│     ┌───────────────────┐     │ max_members   │
-│ created_at    │                               │ gender_spec   │
-│ updated_at    │                               │ created_at    │
-└──────┬────────┘                               └───────┬───────┘
-       │                                        ┌───────▼───────┐
-       │                                        │   schedules   │
-       │                                        │───────────────│
-       │              ┌───────────────────┐     │ id (PK)       │
-       │              │   notifications   │     │ circle_id (FK)│
-       │◄─────────────│───────────────────│     │ day_of_week   │
-       │              │ id (PK)           │     │ start_time    │
-       │              │ user_id (FK)      │     │ end_time      │
-       │              │ type              │     │ timezone      │
-       │              │ title             │     │ is_active     │
-       │              │ body              │     └───────────────┘
-       │              │ data_json         │
-       │              │ is_read           │     ┌───────────────┐
-       │              │ created_at        │     │   sessions    │
-       │              └───────────────────┘     │───────────────│
-       │                                        │ id (PK)       │
-       │              ┌───────────────────┐     │ circle_id (FK)│
-       └─────────────►│    messages       │     │ title         │
-                      │───────────────────│◄────│ scheduled_at  │
-                      │ id (PK)           │     │ actual_start  │
-                      │ circle_id (FK)    │     │ actual_end    │
-                      │ sender_id (FK)    │     │ status        │
-                      │ content           │     │ lk_room_name  │
-                      │ type              │     └───────┬───────┘
-                      │ reply_to_id (FK)  │             │
-                      │ is_pinned         │     ┌───────▼───────┐
-                      │ created_at        │     │  session_     │
-                      └───────────────────┘     │  attendance   │
-                                                │───────────────│
-                      ┌───────────────────┐     │ session_id(FK)│
-                      │  message_reads    │     │ user_id (FK)  │
-                      │───────────────────│     │ joined_at     │
-                      │ message_id (FK)   │     │ left_at       │
-                      │ user_id (FK)      │     │ status        │
-                      │ read_at           │     └───────────────┘
-                      └───────────────────┘
-                                                ┌───────────────┐
-                      ┌───────────────────┐     │recitation_    │
-                      │ memorization_     │     │queue          │
-                      │ progress          │     │───────────────│
-                      │───────────────────│     │ id (PK)       │
-                      │ id (PK)           │     │ session_id(FK)│
-                      │ student_id (FK)   │     │ round_number  │
-                      │ circle_id (FK)    │     │ round_type    │
-                      │ surah_name        │     │ surah_name    │
-                      │ from_ayah         │     │ from_ayah     │
-                      │ to_ayah           │     │ to_ayah       │
-                      │ type              │     │ created_at    │
-                      │ grade             │     └───────┬───────┘
-                      │ notes             │             │
-                      │ session_id (FK)   │     ┌───────▼───────┐
-                      │ date              │     │recitation_    │
-                      └───────────────────┘     │queue_entries  │
-                                                │───────────────│
-                                                │ id (PK)       │
-                                                │ queue_id (FK) │
-                                                │ student_id(FK)│
-                                                │ position      │
-                                                │ status        │
-                                                │ grade         │
-                                                │ teacher_notes │
-                                                │ started_at    │
-                                                │ completed_at  │
-                                                └───────────────┘
+
+#### Session Lifecycle State Machine
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> scheduled : POST /circles/{id}/sessions\n(teacher only)
+
+    scheduled --> active : POST /sessions/{id}/start\n(teacher only)\nLiveKit room created\nWS → session.started broadcast
+
+    active --> ended : POST /sessions/{id}/end\n(teacher only)\nLiveKit room closed\nWS → session.ended broadcast
+
+    ended --> [*]
+
+    note right of scheduled : Session stored in DB\nNo LiveKit room yet\nQueue rounds not yet possible
+    note right of active : Queue rounds active\nWS events flowing\nAttendance auto-tracked
+```
+
+### 4.1 Entity-Relationship Diagram
+
+```mermaid
+erDiagram
+    users {
+        uuid id PK
+        varchar firebase_uid UK
+        varchar display_name
+        varchar email UK
+        varchar timezone
+        text avatar_url
+        varchar preferred_lang
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    circles {
+        uuid id PK
+        varchar name
+        uuid teacher_id FK
+        varchar invite_code UK
+        int max_capacity
+        bool is_private
+        varchar gender_restriction
+        varchar grading_policy
+        bool is_archived
+        timestamptz created_at
+    }
+    circle_members {
+        uuid id PK
+        uuid circle_id FK
+        uuid user_id FK
+        varchar role
+        timestamptz joined_at
+    }
+    sessions {
+        uuid id PK
+        uuid circle_id FK
+        uuid created_by FK
+        text notes
+        timestamptz scheduled_at
+        timestamptz actual_start
+        timestamptz actual_end
+        varchar status
+        varchar livekit_room_name UK
+        int participant_count
+        timestamptz created_at
+    }
+    session_attendance {
+        uuid id PK
+        uuid session_id FK
+        uuid user_id FK
+        timestamptz joined_at
+        timestamptz left_at
+        varchar status
+    }
+    recitation_queue {
+        uuid id PK
+        uuid session_id FK
+        int round_number
+        varchar round_type
+        int surah_id FK
+        int from_ayah
+        int to_ayah
+        bool grading_required
+        bool is_active
+        timestamptz created_at
+    }
+    recitation_queue_entries {
+        uuid id PK
+        uuid queue_id FK
+        uuid student_id FK
+        int position
+        varchar status
+        varchar grade
+        text teacher_notes
+        timestamptz started_at
+        timestamptz completed_at
+    }
+    messages {
+        uuid id PK
+        uuid circle_id FK
+        uuid sender_id FK
+        text content
+        varchar message_type
+        text media_url
+        uuid reply_to_id FK
+        bool is_pinned
+        timestamptz sent_at
+        timestamptz deleted_at
+    }
+    memorization_progress {
+        uuid id PK
+        uuid student_id FK
+        uuid circle_id FK
+        uuid session_id FK
+        uuid queue_entry_id FK-UK
+        int surah_id FK
+        int from_ayah
+        int to_ayah
+        varchar type
+        varchar grade
+        text notes
+        date date
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    quran_divisions {
+        int id PK
+        int surah_id FK
+        int from_ayah
+        int to_ayah
+        int juz_number
+        int hizb_number
+        int rub_number
+    }
+    schedules {
+        uuid id PK
+        uuid circle_id FK
+        int day_of_week
+        time start_time
+        time end_time
+        varchar timezone
+        bool is_active
+    }
+    quran_surahs {
+        int id PK
+        varchar name_arabic
+        varchar name_transliterated
+        int ayah_count
+        int juz_start
+    }
+    device_tokens {
+        uuid id PK
+        uuid user_id FK
+        text token UK
+        varchar platform
+        timestamptz last_seen_at
+    }
+    notifications {
+        uuid id PK
+        uuid user_id FK
+        varchar type
+        varchar title
+        bool is_read
+        timestamptz created_at
+    }
+
+    users ||--o{ circle_members : "joins circles"
+    circles ||--o{ circle_members : "has members"
+    users ||--o{ circles : "teaches (teacher_id)"
+    circles ||--o{ sessions : "hosts"
+    circles ||--o{ messages : "has messages"
+    circles ||--o{ schedules : "has schedules"
+    sessions ||--o{ session_attendance : "tracks"
+    sessions ||--o{ recitation_queue : "has rounds"
+    recitation_queue ||--o{ recitation_queue_entries : "has entries"
+    users ||--o{ recitation_queue_entries : "is student"
+    users ||--o{ memorization_progress : "records"
+    sessions ||--o{ memorization_progress : "sources"
+    recitation_queue_entries ||--|| memorization_progress : "generates (1:1)"
+    quran_surahs ||--o{ memorization_progress : "referenced by"
+    quran_surahs ||--o{ quran_divisions : "divided into"
+    users ||--o{ device_tokens : "registers"
+    users ||--o{ notifications : "receives"
+    quran_surahs ||--o{ recitation_queue : "referenced by"
 ```
 
 ### 4.2 Table Definitions
@@ -471,13 +691,14 @@ Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 |--------|------|-------------|-------------|
 | id | UUID | PK, DEFAULT gen_random_uuid() | Unique user identifier |
 | firebase_uid | VARCHAR(128) | UNIQUE NOT NULL | Firebase Auth UID |
-| name | VARCHAR(100) | NOT NULL | Display name |
-| email | VARCHAR(255) | UNIQUE | Email (nullable for phone-only) |
+| display_name | VARCHAR(100) | NOT NULL | User's chosen display name |
+| email | VARCHAR(255) | UNIQUE | Email (nullable for Apple relay used) |
 | phone | VARCHAR(20) | UNIQUE | Phone number with country code |
+| timezone | VARCHAR(50) | NOT NULL DEFAULT 'UTC' | IANA timezone string (e.g., Asia/Riyadh) |
 | avatar_url | TEXT | | MinIO object URL |
-| preferred_lang | VARCHAR(10) | DEFAULT 'ar' | ISO 639-1 language code |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
-| updated_at | TIMESTAMPTZ | DEFAULT NOW() | |
+| preferred_lang | VARCHAR(10) | NOT NULL DEFAULT 'ar' | ISO 639-1 language code |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | |
+| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | |
 
 #### `device_tokens`
 | Column | Type | Constraints | Description |
@@ -500,9 +721,9 @@ Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 | rules | TEXT | | Circle rules/guidelines |
 | teacher_id | UUID | FK → users.id NOT NULL | Circle owner |
 | invite_code | VARCHAR(20) | UNIQUE NOT NULL | Join code (e.g., HLQ-7X2K) |
-| max_members | INTEGER | DEFAULT 50 | Maximum student capacity |
-| privacy | VARCHAR(20) | CHECK IN ('public','private') | |
-| gender_spec | VARCHAR(20) | CHECK IN ('male','female','mixed','unspecified') | |
+| max_capacity | INTEGER | DEFAULT 50 | Maximum student capacity (min 2, max 200) |
+| is_private | BOOLEAN | DEFAULT FALSE | Whether circle requires invite to join |
+| gender_restriction | VARCHAR(20) | CHECK IN ('male','female','mixed') DEFAULT 'mixed' | Audience restriction |
 | language | VARCHAR(10) | DEFAULT 'ar' | Primary language |
 | grading_policy | VARCHAR(20) | CHECK IN ('required','optional') DEFAULT 'required' | Whether grading is required after each completed turn |
 | is_archived | BOOLEAN | DEFAULT FALSE | |
@@ -523,14 +744,15 @@ Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 |--------|------|-------------|-------------|
 | id | UUID | PK | |
 | circle_id | UUID | FK → circles.id NOT NULL | |
-| title | VARCHAR(200) | | Session title |
-| scheduled_start | TIMESTAMPTZ | | Planned start time |
-| scheduled_end | TIMESTAMPTZ | | Planned end time |
+| notes | TEXT | maxLength 500 | Optional session notes (visible to members) |
+| scheduled_at | TIMESTAMPTZ | | Planned start time; NULL for ad-hoc sessions |
 | actual_start | TIMESTAMPTZ | | When teacher actually started |
 | actual_end | TIMESTAMPTZ | | When session actually ended |
-| status | VARCHAR(20) | CHECK IN ('scheduled','live','completed','cancelled') | |
+| status | VARCHAR(20) | CHECK IN ('scheduled','active','ended') | |
 | media_mode | VARCHAR(20) | CHECK IN ('audio_only','audio_video'), DEFAULT 'audio_only' | Session media policy (MVP always audio_only) |
 | livekit_room_name | VARCHAR(200) | UNIQUE | LiveKit room identifier |
+| created_by | UUID | FK → users.id NOT NULL | Teacher who created the session |
+| participant_count | INTEGER | DEFAULT 0 | Running count updated on join/leave |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
 
 #### `session_attendance`
@@ -552,9 +774,10 @@ Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 | session_id | UUID | FK → sessions.id NOT NULL | |
 | round_number | INTEGER | NOT NULL | Round 1, 2, 3... |
 | round_type | VARCHAR(30) | CHECK IN ('new_memorization','revision','old_revision','test') | |
-| surah_name | VARCHAR(100) | | Arabic Surah name |
-| from_ayah | INTEGER | | Starting Ayah number |
-| to_ayah | INTEGER | | Ending Ayah number |
+| surah_id | INTEGER | FK → quran_surahs.id NOT NULL | Surah number (1–114); name derived via JOIN |
+| from_ayah | INTEGER | NOT NULL | Starting Ayah number (validated ≥ 1) |
+| to_ayah | INTEGER | NOT NULL | Ending Ayah number (validated ≤ quran_surahs.ayah_count) |
+| grading_required | BOOLEAN | NOT NULL | Overrides circle grading_policy for this round |
 | is_active | BOOLEAN | DEFAULT TRUE | Only one active queue per session |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
 
@@ -565,8 +788,8 @@ Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 | queue_id | UUID | FK → recitation_queue.id NOT NULL | |
 | student_id | UUID | FK → users.id NOT NULL | |
 | position | INTEGER | NOT NULL | Order in queue (1, 2, 3...) |
-| status | VARCHAR(20) | CHECK IN ('waiting','reciting','completed','skipped') | |
-| grade | VARCHAR(30) | CHECK IN ('excellent','very_good','good','acceptable','needs_review','repeat') | |
+| status | VARCHAR(20) | CHECK IN ('waiting','reciting','completed','skipped','opted_out') | |
+| grade | VARCHAR(30) | CHECK IN ('excellent','good','acceptable','needs_review','repeat') | Nullable until teacher submits grade |
 | teacher_notes | TEXT | | Free-form notes from teacher |
 | started_at | TIMESTAMPTZ | | When recitation began |
 | completed_at | TIMESTAMPTZ | | When recitation ended / was graded |
@@ -579,14 +802,14 @@ Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 | CHECK | (circle_id IS NOT NULL OR dm_recipient_id IS NOT NULL) | | At least one must be set |
 | dm_recipient_id | UUID | FK → users.id | For direct messages |
 | sender_id | UUID | FK → users.id NOT NULL | |
-| content | TEXT | | Text content (empty for voice/files) |
-| type | VARCHAR(20) | CHECK IN ('text','voice','image','file') | |
-| file_url | TEXT | | MinIO presigned URL |
-| file_name | VARCHAR(255) | | Original filename |
-| file_size_bytes | INTEGER | | |
-| reply_to_id | UUID | FK → messages.id | Threaded reply |
+| content | TEXT | | Text content (empty for voice/image/file) |
+| message_type | VARCHAR(20) | CHECK IN ('text','voice','image','file') NOT NULL | |
+| media_url | TEXT | | MinIO presigned URL (expires 7 days); NULL for text messages |
+| file_name | VARCHAR(255) | | Original filename for file/image/voice attachments |
+| file_size_bytes | INTEGER | | File size in bytes |
+| reply_to_id | UUID | FK → messages.id | Threaded reply target |
 | is_pinned | BOOLEAN | DEFAULT FALSE | |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+| sent_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | Message send timestamp; maps to API field `sent_at` |
 | deleted_at | TIMESTAMPTZ | | Soft delete |
 
 #### `message_reads`
@@ -602,18 +825,34 @@ Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | UUID | PK | |
-| student_id | UUID | FK → users.id NOT NULL | |
+| student_id | UUID | FK → users.id NOT NULL ON DELETE CASCADE | |
 | circle_id | UUID | FK → circles.id NOT NULL | |
 | session_id | UUID | FK → sessions.id | Source session |
-| queue_entry_id | UUID | FK → recitation_queue_entries.id | Source queue entry |
-| surah_name | VARCHAR(100) | NOT NULL | |
-| from_ayah | INTEGER | NOT NULL | |
-| to_ayah | INTEGER | NOT NULL | |
+| queue_entry_id | UUID | FK → recitation_queue_entries.id UNIQUE | Source queue entry; UNIQUE enables idempotent re-grade upsert |
+| surah_id | INTEGER | FK → quran_surahs.id NOT NULL | Normalized surah reference (replaces deprecated `surah_name`) |
+| surah_name | VARCHAR(100) | DEPRECATED | Use `surah_id`; retained until v1.1 for in-flight client compat |
+| from_ayah | INTEGER | NOT NULL | Starting Ayah of the recited range |
+| to_ayah | INTEGER | NOT NULL | Ending Ayah of the recited range |
 | type | VARCHAR(30) | CHECK IN ('new_memorization','revision','old_revision') | |
-| grade | VARCHAR(30) | CHECK IN ('excellent','very_good','good','acceptable','needs_review','repeat') | Same grade enum as queue entries |
+| grade | VARCHAR(30) | CHECK IN ('excellent','good','acceptable','needs_review','repeat') NULLABLE | NULL when `grading_required = false` on the round |
 | notes | TEXT | | Teacher notes |
 | date | DATE | NOT NULL | Session date |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+| updated_at | TIMESTAMPTZ | | Set on re-grade |
+
+#### `quran_divisions` *(Reference — Static Seed Data)*
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | SERIAL | PK | |
+| surah_id | INTEGER | FK → quran_surahs.id NOT NULL | |
+| from_ayah | INTEGER | NOT NULL CHECK ≥ 1 | Start of this division segment |
+| to_ayah | INTEGER | NOT NULL CHECK ≥ from_ayah | End of this division segment |
+| juz_number | INTEGER | NOT NULL CHECK 1–30 | Juz containing this segment |
+| hizb_number | INTEGER | NOT NULL CHECK 1–60 | Hizb (half-juz) containing this segment |
+| rub_number | INTEGER | NOT NULL CHECK 1–240 | Rub' (quarter-hizb) number — 240 total |
+| UNIQUE | (surah_id, from_ayah) | | |
+
+> **Usage:** Pre-populated with all 240 Medina Mushaf Rub' boundaries. Never modified by the application. Enables teacher grading UI to offer a Rub'/Hizb/Juz picker and powers Surah coverage segment bars for long Surahs (e.g., Al-Baqarah spans 3 Juz and 6 Hizb).
 
 #### `notifications`
 | Column | Type | Constraints | Description |
@@ -678,6 +917,8 @@ Removed from MVP scope. The product currently supports direct student and teache
 
 ## 5. API Endpoint Planning
 
+> **Legend:** ✅ In `docs/contracts/openapi.yaml` (contracted, MVP) · 🔲 Post-MVP (not yet in contract — must be added to `openapi.yaml` via spec before implementation per Constitution §III)
+
 ### Base URL: `https://api.halaqaty.app/api/v1`
 
 ### Authentication: All endpoints require `Authorization: Bearer <firebase-jwt>` except `/auth/*`
@@ -685,107 +926,118 @@ Removed from MVP scope. The product currently supports direct student and teache
 ---
 
 ### `/auth`
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/auth/register` | Create user profile after Firebase registration |
-| POST | `/auth/fcm-token` | Register or update a device FCM token (upsert by user_id + token) |
-| GET | `/auth/me` | Get current user profile |
-| PUT | `/auth/me` | Update profile (name, avatar, language) |
-| DELETE | `/auth/me` | Delete account and all data |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| POST | `/auth/register` | ✅ | Create user profile after Firebase registration |
+| POST | `/auth/fcm-token` | ✅ | Register or update a device FCM token (upsert by user_id + token) |
+| GET | `/auth/me` | ✅ | Get current user profile |
+| PUT | `/auth/me` | ✅ | Update profile (name, avatar, language) |
+| DELETE | `/auth/me` | ✅ | Delete account and all data |
 
 ### `/circles`
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/circles` | List my circles (teacher + student) |
-| POST | `/circles` | Create a new circle |
-| GET | `/circles/{id}` | Get circle details |
-| PUT | `/circles/{id}` | Update circle settings |
-| DELETE | `/circles/{id}` | Delete circle (teacher only) |
-| POST | `/circles/{id}/archive` | Archive circle (teacher only) |
-| POST | `/circles/join` | Join a circle by invite code `{ invite_code }` |
-| POST | `/circles/{id}/leave` | Leave a circle |
-| GET | `/circles/{id}/members` | List members with roles |
-| PUT | `/circles/{id}/members/{userId}/role` | Update member role (assign/revoke supervisor) |
-| DELETE | `/circles/{id}/members/{userId}` | Remove member from circle |
-| POST | `/circles/{id}/invite-code/refresh` | Generate new invite code |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/circles` | ✅ | List my circles (teacher + student) |
+| POST | `/circles` | ✅ | Create a new circle |
+| GET | `/circles/{id}` | ✅ | Get circle details |
+| PUT | `/circles/{id}` | ✅ | Update circle settings (teacher only) |
+| DELETE | `/circles/{id}` | ✅ | Archive circle (teacher only) |
+| POST | `/circles/join` | ✅ | Join a circle by invite code `{ invite_code }` |
+| GET | `/circles/{id}/members` | ✅ | List members with roles |
+| DELETE | `/circles/{id}/members/{userId}` | ✅ | Remove member from circle (teacher only) |
+| POST | `/circles/{id}/leave` | 🔲 | Leave a circle |
+| PUT | `/circles/{id}/members/{userId}/role` | 🔲 | Update member role (assign/revoke supervisor) |
+| POST | `/circles/{id}/invite-code/refresh` | 🔲 | Generate new invite code |
 
 ### `/sessions`
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/circles/{id}/sessions` | List sessions for a circle |
-| POST | `/circles/{id}/sessions` | Create a session |
-| GET | `/sessions/{id}` | Get session details |
-| POST | `/sessions/{id}/start` | Teacher starts session (creates LiveKit room) |
-| POST | `/sessions/{id}/end` | Teacher ends session |
-| GET | `/sessions/{id}/token` | Get LiveKit JWT token for this session |
-| POST | `/sessions/{id}/participants/{userId}/mute` | Mute a participant |
-| POST | `/sessions/{id}/participants/{userId}/unmute` | Unmute a participant |
-| POST | `/sessions/{id}/participants/{userId}/remove` | Remove participant from session |
-| POST | `/sessions/{id}/lock` | Lock session (no new joiners) |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/circles/{id}/sessions` | ✅ | List sessions for a circle |
+| POST | `/circles/{id}/sessions` | ✅ | Create a session (teacher only) |
+| POST | `/sessions/{id}/start` | ✅ | Teacher starts session (creates LiveKit room, returns token) |
+| POST | `/sessions/{id}/join` | ✅ | Join an active session — returns LiveKit token (members only) |
+| POST | `/sessions/{id}/end` | ✅ | Teacher ends session |
+| POST | `/sessions/{id}/ws-token` | ✅ | Issue short-lived WebSocket connection token |
+| GET | `/sessions/{id}` | 🔲 | Get session details |
+| POST | `/sessions/{id}/participants/{userId}/mute` | 🔲 | Mute a participant |
+| POST | `/sessions/{id}/participants/{userId}/unmute` | 🔲 | Unmute a participant |
+| POST | `/sessions/{id}/participants/{userId}/remove` | 🔲 | Remove participant from session |
+| POST | `/sessions/{id}/lock` | 🔲 | Lock session (no new joiners) |
 
 ### `/sessions/{id}/attendance`
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/sessions/{id}/attendance` | List attendance for a session |
-| PUT | `/sessions/{id}/attendance/{userId}` | Manual attendance override |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/sessions/{id}/attendance` | 🔲 | List attendance for a session |
+| PUT | `/sessions/{id}/attendance/{userId}` | 🔲 | Manual attendance override |
 
 ### `/queue`
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/sessions/{id}/queue` | Get current queue state |
-| POST | `/sessions/{id}/queue/rounds` | Start a new round (Surah, Ayah range, type) |
-| POST | `/sessions/{id}/queue/reset` | Reset queue (creates new round) |
-| PUT | `/sessions/{id}/queue/entries/{entryId}/status` | Update student status in queue |
-| PUT | `/sessions/{id}/queue/entries/{entryId}/grade` | Grade a student's recitation |
-| PUT | `/sessions/{id}/queue/order` | Reorder queue `{ ordered_entry_ids: [...] }` |
-| POST | `/sessions/{id}/queue/entries` | Add a student to queue (late-joiner) |
-| DELETE | `/sessions/{id}/queue/entries/{entryId}` | Remove student from queue |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/sessions/{id}/queue` | ✅ | Get current queue state |
+| POST | `/sessions/{id}/queue/rounds` | ✅ | Start a new round (Surah, Ayah range) |
+| POST | `/sessions/{id}/queue/entries/{entryId}/grade` | ✅ | Grade a student's recitation (teacher/supervisor only) |
+| POST | `/sessions/{id}/queue/opt-out` | ✅ | Student opts out of current round |
+| POST | `/sessions/{id}/queue/reset` | 🔲 | Reset queue (creates new round) |
+| PUT | `/sessions/{id}/queue/entries/{entryId}/status` | 🔲 | Update student status in queue |
+| PUT | `/sessions/{id}/queue/order` | 🔲 | Reorder queue `{ ordered_entry_ids: [...] }` |
+| POST | `/sessions/{id}/queue/entries` | 🔲 | Add a student to queue (late-joiner) |
+| DELETE | `/sessions/{id}/queue/entries/{entryId}` | 🔲 | Remove student from queue |
 
 ### `/messages`
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/circles/{id}/messages` | List circle messages (paginated) |
-| POST | `/circles/{id}/messages` | Send a message |
-| DELETE | `/circles/{id}/messages/{msgId}` | Delete a message |
-| POST | `/circles/{id}/messages/{msgId}/pin` | Pin a message |
-| DELETE | `/circles/{id}/messages/{msgId}/pin` | Unpin a message |
-| POST | `/circles/{id}/messages/{msgId}/read` | Mark message as read |
-| GET | `/dm/{userId}` | List DM conversation with a user |
-| POST | `/dm/{userId}` | Send a direct message |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/circles/{id}/messages` | ✅ | List circle messages (paginated) |
+| POST | `/circles/{id}/messages` | ✅ | Send a message |
+| DELETE | `/circles/{id}/messages/{msgId}` | ✅ | Delete a message |
+| POST | `/circles/{id}/messages/{msgId}/pin` | 🔲 | Pin a message |
+| DELETE | `/circles/{id}/messages/{msgId}/pin` | 🔲 | Unpin a message |
+| POST | `/circles/{id}/messages/{msgId}/read` | 🔲 | Mark message as read |
+| GET | `/dm/{userId}` | 🔲 | List DM conversation with a user |
+| POST | `/dm/{userId}` | 🔲 | Send a direct message |
 
 ### `/progress`
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/circles/{id}/progress` | All students' progress in a circle |
-| GET | `/circles/{id}/progress/{userId}` | One student's detailed progress |
-| POST | `/circles/{id}/progress` | Manual progress entry (outside session) |
-| GET | `/progress/me` | My own progress across all circles |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/students/me/circles/history` | 🔲 | My circle history — attendance + practice counts per circle |
+| GET | `/students/me/progress` | 🔲 | My global Quran map — all 114 Surahs with memorization status (cross-circle) |
+| GET | `/students/me/sessions/history` | 🔲 | My session timeline — attended vs practiced per session |
+| GET | `/students/me/progress/stats` | 🔲 | My analytics — Ayahs/week, attendance %, practice % |
+| GET | `/circles/{id}/progress` | 🔲 | All students' progress summary in a circle (teacher/supervisor only) |
+| GET | `/circles/{id}/progress/{userId}` | 🔲 | One student's full profile incl. cross-circle Quran map (teacher only) |
+| GET | `/circles/{id}/surah-insights` | 🔲 | Surahs ranked by weak grade frequency — last 30 days (teacher only) |
+
+> **Note:** `POST /circles/{id}/progress` (manual student self-logging) was explicitly decided out of scope (OQ-020). All progress records are auto-generated from session-based recitations only.
 
 ### `/schedule`
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/circles/{id}/schedules` | List schedules for a circle |
-| POST | `/circles/{id}/schedules` | Create a schedule |
-| PUT | `/circles/{id}/schedules/{schedId}` | Update a schedule |
-| DELETE | `/circles/{id}/schedules/{schedId}` | Delete a schedule |
-| GET | `/schedule/me` | My unified calendar across all circles |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/circles/{id}/schedules` | ✅ | List schedules for a circle |
+| POST | `/circles/{id}/schedules` | ✅ | Create a schedule (teacher only) |
+| PUT | `/circles/{id}/schedules/{schedId}` | 🔲 | Update a schedule |
+| DELETE | `/circles/{id}/schedules/{schedId}` | 🔲 | Delete a schedule |
+| GET | `/schedule/me` | 🔲 | My unified calendar across all circles |
 
-### `/notifications`
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/notifications` | List my notifications (paginated) |
-| PUT | `/notifications/{id}/read` | Mark notification as read |
-| PUT | `/notifications/read-all` | Mark all as read |
-| GET | `/notifications/preferences` | Get notification preferences |
-| PUT | `/notifications/preferences` | Update preferences |
+### `/config`
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/config/features` | ✅ | Get feature flags for the authenticated user |
 
 ### `/uploads`
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/uploads/avatar` | Upload user avatar (multipart/form-data) |
-| POST | `/uploads/voice` | Upload voice message (returns presigned URL pattern) |
-| POST | `/uploads/image` | Upload image attachment |
-| POST | `/uploads/file` | Upload file attachment (PDF) |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| POST | `/uploads/avatar` | ✅ | Upload user avatar → returns presigned MinIO URL |
+| POST | `/uploads/voice` | ✅ | Upload voice message → returns MinIO object key |
+| POST | `/uploads/image` | ✅ | Upload image attachment → returns MinIO object key |
+| POST | `/uploads/file` | ✅ | Upload file attachment (PDF) → returns MinIO object key |
+
+### `/notifications`
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/notifications` | 🔲 | List my notifications (paginated) |
+| PUT | `/notifications/{id}/read` | 🔲 | Mark notification as read |
+| PUT | `/notifications/read-all` | 🔲 | Mark all as read |
+| GET | `/notifications/preferences` | 🔲 | Get notification preferences |
+| PUT | `/notifications/preferences` | 🔲 | Update preferences |
 
 ---
 
@@ -798,7 +1050,36 @@ Removed from MVP scope. The product currently supports direct student and teache
 - **Token lifecycle:** Firebase tokens expire after 1 hour; `firebase_client` SDK auto-refreshes silently
 - **LiveKit tokens:** Generated exclusively by Go backend; never by the Flutter client. Student publish scope is turn-based and non-admin.
 
-### 6.2 LiveKit Room Security
+### 6.2 Authentication & Authorization Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant App as Flutter App
+    participant FB as Firebase Auth
+    participant API as Go Backend
+    participant DB as PostgreSQL circle_members
+
+    Note over U,DB: Phase 1 — Identity (Authentication)
+    U->>App: Sign in (Google / Apple / Email)
+    App->>FB: signInWith(provider)
+    FB-->>App: Firebase ID Token (JWT, 1hr expiry)
+    App->>API: POST /auth/register { firebase_uid, display_name }
+    API->>FB: VerifyIDToken(jwt) → uid ✓
+    API->>DB: INSERT users (firebase_uid, display_name, ...)
+    API-->>App: UserProfile { id, display_name }
+
+    Note over U,DB: Phase 2 — Authorization (per-circle role check)
+    App->>API: GET /circles/{id}\n[Authorization: Bearer firebase_jwt]
+    API->>FB: VerifyIDToken(jwt) → uid ✓
+    API->>DB: SELECT role FROM circle_members\nWHERE circle_id=$1 AND user_id=$2
+    DB-->>API: role = "teacher"
+    API-->>App: 200 Circle { ... }
+
+    Note over API,DB: ⚠️ No Firebase custom claims for authz.\nAll roles are per-circle from circle_members.\nRole changes take effect immediately — no cache delay.
+```
+
+### 6.3 LiveKit Room Security
 
 - Each session generates a unique LiveKit room name (UUID-based)
 - Room names are not publicly guessable
@@ -808,14 +1089,14 @@ Removed from MVP scope. The product currently supports direct student and teache
 - Backend grants `CanPublish: true` only for the active reciter turn, then revokes after the turn (audio-only in MVP)
 - Room is deleted from LiveKit server when session ends
 
-### 6.3 Rate Limiting
+### 6.4 Rate Limiting
 
 - REST API: rate limited by IP and by user ID
 - WebSocket: connections limited per user (max 3 active connections per user)
 - Message sending: max 30 messages per minute per user per circle
 - File uploads: max 10 uploads per hour per user
 
-### 6.4 Input Validation
+### 6.5 Input Validation
 
 - All API inputs validated and sanitized server-side (never trust client)
 - Ayah numbers validated against `quran_surahs` reference table (e.g., Al-Baqarah has 286 Ayahs; `to_ayah: 300` returns HTTP 422)
@@ -824,34 +1105,34 @@ Removed from MVP scope. The product currently supports direct student and teache
 - SQL injection prevention via parameterized queries (Go `database/sql` with `pgx`)
 - XSS prevention: message content stored as plain text; HTML escaped on display
 
-### 6.5 Data Privacy
+### 6.6 Data Privacy
 
 - Voice messages (chat voice notes) stored in MinIO with access-controlled bucket policies
 - File URLs are pre-signed and expire after 7 days (renewable on access)
 - Personal data (email, phone) not returned in group-visible APIs
 - Live-session recording is disabled in MVP (no session audio/video storage)
 
-### 6.6 Transport Security
+### 6.7 Transport Security
 
 - HTTPS enforced everywhere (TLS 1.2+, Cloudflare handles certificates)
 - WebSocket connections over WSS (TLS)
 - LiveKit WebRTC streams encrypted with DTLS/SRTP (built into WebRTC protocol)
 - HSTS headers set
 
-### 6.7 Future Security Improvements
+### 6.8 Future Security Improvements
 
 - **End-to-end encryption** for direct messages (P3)
 - **Two-factor authentication** for teacher accounts (P2)
 - **Audit logging** for sensitive actions (remove member, delete messages)
 - **GDPR data export** — allow users to download all their data
 
-### 6.8 Privacy Risk Register for Recording (Post-MVP)
+### 6.9 Privacy Risk Register for Recording (Post-MVP)
 
 - Recording introduces high privacy sensitivity, especially for circles with minors.
 - Any future recording rollout requires explicit participant consent UX, retention limits, and strict access controls.
 - Recording feature flag must remain OFF until privacy/legal framework is approved.
 
-### 6.9 Firebase Auth Availability & Degraded Mode
+### 6.10 Firebase Auth Availability & Degraded Mode
 
 Firebase Auth has a 99.95% SLA but has experienced brief outages historically. Behavior during unavailability:
 

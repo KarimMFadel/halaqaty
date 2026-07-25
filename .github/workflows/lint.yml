@@ -1,0 +1,97 @@
+name: Lint & Security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  detect-stacks:
+    runs-on: ubuntu-latest
+    outputs:
+      go_enabled: ${{ steps.detect.outputs.go_enabled }}
+      flutter_enabled: ${{ steps.detect.outputs.flutter_enabled }}
+      openapi_enabled: ${{ steps.detect.outputs.openapi_enabled }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect available stacks
+        id: detect
+        shell: bash
+        run: |
+          if [[ -f "backend/go.mod" ]]; then
+            echo "go_enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "go_enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [[ -f "mobile/pubspec.yaml" ]]; then
+            echo "flutter_enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "flutter_enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [[ -f "docs/contracts/openapi.yaml" ]]; then
+            echo "openapi_enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "openapi_enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  go-lint:
+    needs: detect-stacks
+    if: needs.detect-stacks.outputs.go_enabled == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.62.x
+          working-directory: backend
+
+  flutter-analyze:
+    needs: detect-stacks
+    if: needs.detect-stacks.outputs.flutter_enabled == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install dependencies
+        working-directory: mobile
+        run: flutter pub get
+      - name: Run flutter analyze
+        working-directory: mobile
+        run: flutter analyze
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  api-lint:
+    needs: detect-stacks
+    if: needs.detect-stacks.outputs.openapi_enabled == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Spectral
+        run: npm install -g @stoplight/spectral-cli @stoplight/spectral-oas
+      - name: Lint OpenAPI spec
+        run: spectral lint docs/contracts/openapi.yaml

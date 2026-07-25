@@ -1,0 +1,67 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Spectral — OpenAPI Linting Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# WHAT IS THIS FILE?
+#   Spectral (https://stoplight.io/open-source/spectral) is a linter for
+#   OpenAPI / JSON Schema documents — think "ESLint, but for your API spec".
+#   This file tells Spectral which ruleset to apply when checking
+#   docs/contracts/openapi.yaml.
+#
+# WHY DO WE NEED IT?
+#   Our sprint acceptance gates require `spectral lint` to pass before any PR
+#   can merge. Without this config file, Spectral doesn't know which rules to
+#   enforce. It also makes the linting reproducible: the same rules run
+#   locally (make api-lint) and in CI (.github/workflows/lint.yml).
+#
+# HOW TO RUN IT LOCALLY:
+#   Prerequisites:
+#     npm install -g @stoplight/spectral-cli @stoplight/spectral-oas
+#   Then:
+#     spectral lint docs/contracts/openapi.yaml        # uses this file automatically
+#   Or via Make:
+#     make api-lint
+#
+# WHAT DOES THE CURRENT CONFIG DO?
+#   `extends: ['@stoplight/spectral-oas']` applies the official OpenAPI
+#   Specification (OAS) ruleset, which enforces:
+#     - All operations must have at least one 2xx response
+#     - All $ref values must resolve to existing schemas
+#     - operationIds must be unique
+#     - Parameters must have a description
+#     - Security schemes must be valid
+#   Full rule list: https://docs.stoplight.io/docs/spectral/4dec24461f3af-open-api-rules
+#
+# HOW TO CUSTOMIZE:
+#   To DISABLE a rule (e.g. if it's too noisy):
+#     rules:
+#       operation-operationId-unique: off
+#
+#   To CHANGE a rule's severity (error → warn → info → hint → off):
+#     rules:
+#       operation-description: warn          # default is error
+#
+#   To ADD a custom rule (e.g. require x-internal field on private endpoints):
+#     rules:
+#       my-custom-rule:
+#         message: "Private endpoints must include x-internal: true"
+#         given: "$.paths[*][*]"
+#         severity: warn
+#         then:
+#           field: x-internal
+#           function: truthy
+#
+# WHEN TO MODIFY THIS FILE:
+#   - When adding a custom API convention that Spectral should enforce
+#   - When a rule produces false positives on valid Halaqaty API patterns
+#   - When upgrading to a new OAS ruleset version
+#
+# OFFICIAL DOCS:
+#   https://docs.stoplight.io/docs/spectral/9ffa04e352438-spectral-cli
+# ─────────────────────────────────────────────────────────────────────────────
+
+extends: ['@stoplight/spectral-oas']
+
+# Add project-specific overrides below this line:
+# rules:
+#   example-rule-override: off

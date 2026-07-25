@@ -93,6 +93,7 @@ Quran recitation demands pristine, unprocessed audio. Every LiveKit room configu
   - `FEATURE_VIDEO_ENABLED` (default: `false`)
   - `FEATURE_RECORDING_ENABLED` (default: `false`)
   - `FEATURE_AI_TAJWEED_ENABLED` (default: `false`)
+  - `FEATURE_ANALYTICS_ENABLED` (default: `false`)
   - `FEATURE_WEB_ENABLED` (default: `false`)
 - Activating `FEATURE_RECORDING_ENABLED` requires a signed-off privacy framework document merged to `main`.
 - Flutter clients must read feature flags from a backend endpoint — never hardcoded in the app binary.

@@ -38,6 +38,12 @@ tags:
     description: Circle and direct messages
   - name: Schedules
     description: Weekly recurring schedules
+  - name: Progress
+    description: Student progress tracking — attendance history, Quran map, recitation stats (F-007)
+  - name: Config
+    description: Feature flags and application configuration
+  - name: Uploads
+    description: File uploads to MinIO (avatars, voice notes, images, PDFs)
 
 # ─────────────────────────────────────────────────────────────
 # Paths
@@ -179,6 +185,8 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/CircleSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
     post:
       tags: [Circles]
       summary: Create a new circle
@@ -213,6 +221,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Circle'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -233,6 +243,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Circle'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -243,6 +257,8 @@ paths:
       responses:
         '204':
           description: Circle archived
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -264,6 +280,10 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/CircleMember'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /circles/{circleId}/members/{userId}:
     parameters:
@@ -280,6 +300,8 @@ paths:
       responses:
         '204':
           description: Member removed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -310,6 +332,8 @@ paths:
                 $ref: '#/components/schemas/Circle'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           description: Invite code not found or expired
         '409':
@@ -347,6 +371,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedSessions'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
     post:
       tags: [Sessions]
       summary: Create a new session (teacher only)
@@ -363,6 +391,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /sessions/{sessionId}/start:
     parameters:
@@ -377,6 +411,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionStartResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '409':
@@ -395,6 +431,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionJoinResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -415,8 +453,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   # ── Queue ─────────────────────────────────────────────────
   /sessions/{sessionId}/queue:
@@ -432,8 +474,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QueueState'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /sessions/{sessionId}/queue/rounds:
     parameters:
@@ -456,8 +502,12 @@ paths:
                 $ref: '#/components/schemas/QueueState'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '422':
           description: Invalid Ayah range (e.g., to_ayah exceeds Surah length)
           content:
@@ -488,6 +538,8 @@ paths:
           description: Grade recorded
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -504,8 +556,12 @@ paths:
       responses:
         '200':
           description: Opt-out recorded; entry status set to opted_out
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           description: No active round or user is not in the queue
 
@@ -536,6 +592,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedMessages'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
     post:
       tags: [Chat]
       summary: Send a text, image, or file message to circle chat
@@ -554,6 +614,8 @@ paths:
                 $ref: '#/components/schemas/Message'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -572,6 +634,8 @@ paths:
       responses:
         '204':
           description: Message deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -598,6 +662,10 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Schedule'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
     post:
       tags: [Schedules]
       summary: Create a recurring schedule entry (teacher only)
@@ -616,8 +684,462 @@ paths:
                 $ref: '#/components/schemas/Schedule'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  # ── Progress (F-007) ──────────────────────────────────────
+  /students/me/circles/history:
+    get:
+      tags: [Progress]
+      summary: Get student's circle history with attendance and practice counts
+      description: |
+        Returns a paginated list of all circles the authenticated student has attended,
+        with per-circle statistics. **Attended vs Practiced:** "practiced" means the student
+        had at least one `completed` recitation queue entry in that session. `skipped` and
+        `opted_out` turns do NOT count as practiced.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+          description: Opaque pagination cursor from previous response
+        - name: active_only
+          in: query
+          schema: { type: boolean, default: false }
+          description: Only return circles where student is still an active member
+      responses:
+        '200':
+          description: Paginated circle history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CircleHistoryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /students/me/progress:
+    get:
+      tags: [Progress]
+      summary: Get student's global Quran map — all 114 Surahs with memorization status
+      description: |
+        Returns memorization status for all 114 Surahs derived from the student's recitation
+        history across all circles. Pass `circle_id` to filter to one circle.
+
+        **Status values:** `memorized` · `in_revision` · `needs_recap` · `in_progress` · `not_started`
+
+        `is_stale: true` is set on `memorized` Surahs with no revision in the last 30 days.
+
+        **Long Surahs** (e.g., Al-Baqarah): `segments` array shows each recited Ayah range
+        with its grade. `coverage_pct` is the union of all ranges (no double-counting).
+
+        **Cross-circle conflict:** Most recent update across all circles wins for global status.
+      parameters:
+        - name: circle_id
+          in: query
+          schema: { type: string, format: uuid }
+          description: Filter to one circle (live query; bypasses cached mat-view)
+      responses:
+        '200':
+          description: 114-Surah Quran map
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentProgress'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /students/me/sessions/history:
+    get:
+      tags: [Progress]
+      summary: Get student's session history with attended vs practiced breakdown
+      parameters:
+        - name: circle_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: practiced_only
+          in: query
+          schema: { type: boolean, default: false }
+          description: Only sessions where student had at least one completed turn
+        - name: from_date
+          in: query
+          schema: { type: string, format: date }
+        - name: to_date
+          in: query
+          schema: { type: string, format: date }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Paginated session history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionHistoryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /students/me/progress/stats:
+    get:
+      tags: [Progress]
+      summary: Get student's progress analytics — Ayahs per time bucket, attendance %, practice %
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [week, month, year]
+            default: month
+        - name: circle_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: from_date
+          in: query
+          schema: { type: string, format: date }
+        - name: to_date
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Aggregated progress statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgressStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /circles/{circleId}/progress:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    get:
+      tags: [Progress]
+      summary: Get all students' progress summary in a circle (teacher/supervisor only)
+      description: |
+        Returns a summary row per student: attendance %, practice %, last practiced date,
+        active Surahs, and a `needs_attention_flag` for students who attended ≥7 consecutive
+        sessions without any completed recitation turn.
+      responses:
+        '200':
+          description: Per-student progress summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CircleProgressSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /circles/{circleId}/progress/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+      - name: userId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Progress]
+      summary: Get one student's full progress profile (teacher only)
+      description: |
+        Returns the full progress profile for a student including their cross-circle Quran map.
+        Teacher must manage at least one circle that the student belongs to.
+        Teacher can see progress from ALL the student's circles (not restricted to path circle).
+      responses:
+        '200':
+          description: Full student progress profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentProgress'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /circles/{circleId}/surah-insights:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    get:
+      tags: [Progress]
+      summary: Get Surahs ranked by weak grade frequency — last N days (teacher only)
+      description: |
+        Returns Surahs practiced in this circle ranked by count of `needs_review` + `repeat`
+        grades in the lookback window. Helps teachers identify which Surahs need more
+        revision rounds.
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            minimum: 7
+            maximum: 365
+            default: 30
+      responses:
+        '200':
+          description: Surahs ranked by weak grade frequency
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SurahInsights'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Uploads ───────────────────────────────────────────────
+  /uploads/avatar:
+      tags: [Uploads]
+      summary: Upload user avatar image
+      description: |
+        Accepts `multipart/form-data` with a single `file` field. Stores the
+        image in MinIO and returns a pre-signed URL. The caller must then pass
+        this URL as `avatar_url` in `PUT /auth/me`.
+
+        Accepted MIME types: `image/jpeg`, `image/png`, `image/webp`.
+        Maximum file size: 5 MB.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: File exceeds the 5 MB size limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /uploads/voice:
+    post:
+      tags: [Uploads]
+      summary: Upload a voice note attachment
+      description: |
+        Accepts `multipart/form-data` with a single `file` field. Stores the
+        audio in MinIO and returns the object key. Pass the key as `media_key`
+        when calling `POST /circles/{circleId}/messages` with
+        `message_type: voice`.
+
+        Accepted MIME types: `audio/ogg`, `audio/mpeg`, `audio/mp4`, `audio/webm`.
+        Maximum duration: 5 minutes (300 s). Maximum file size: 20 MB.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: File exceeds the 20 MB size limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: MIME type not accepted or duration exceeds 5 minutes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /uploads/image:
+    post:
+      tags: [Uploads]
+      summary: Upload an image attachment for circle chat
+      description: |
+        Accepts `multipart/form-data`. Returns the MinIO object key to pass as
+        `media_key` in `POST /circles/{circleId}/messages` with
+        `message_type: image`.
+
+        Accepted MIME types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`.
+        Maximum file size: 20 MB.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: File exceeds the 20 MB size limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: MIME type not accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /uploads/file:
+    post:
+      tags: [Uploads]
+      summary: Upload a file attachment (PDF) for circle chat
+      description: |
+        Accepts `multipart/form-data`. Returns the MinIO object key to pass as
+        `media_key` in `POST /circles/{circleId}/messages` with
+        `message_type: file`.
+
+        Accepted MIME types: `application/pdf`.
+        Maximum file size: 20 MB.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: File exceeds the 20 MB size limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: MIME type not accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  # ── Config ────────────────────────────────────────────────
+  /config/features:
+    get:
+      tags: [Config]
+      summary: Get feature flags for the authenticated user
+      description: |
+        Returns the set of feature flags active for the authenticated user.
+        Flutter clients fetch this at startup and store the result in a
+        `featuresProvider` (Riverpod). All feature-gated UI watches this
+        provider — the app never reads environment variables directly.
+
+        Per-tier filtering is applied server-side: a flag may be globally
+        enabled but returned as `false` for a user whose tier does not include
+        that feature.
+      responses:
+        '200':
+          description: Active feature flags for this user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeatureFlags'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── WebSocket token ───────────────────────────────────────
+  /sessions/{sessionId}/ws-token:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      tags: [Sessions]
+      summary: Issue a short-lived WebSocket connection token
+      description: |
+        Issues a short-lived token (valid for 60 seconds) used to authenticate
+        the persistent WebSocket connection. The client connects to
+        `wss://api.halaqaty.app/ws?token=<ws_token>` immediately after
+        receiving this token.
+
+        The WS token encodes the user ID and their circle memberships so the
+        server can register the client into the correct rooms on upgrade.
+      responses:
+        '200':
+          description: Short-lived WebSocket token
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, expires_at]
+                properties:
+                  token:
+                    type: string
+                    description: Opaque WS auth token (valid for 60 seconds)
+                  expires_at:
+                    type: string
+                    format: date-time
+                    description: UTC expiry time of the token
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
 # ─────────────────────────────────────────────────────────────
 # Components
@@ -958,7 +1480,14 @@ components:
       properties:
         grade:
           type: string
-          enum: [excellent, good, needs_improvement, repeat]
+          enum: [excellent, good, acceptable, needs_review, repeat]
+          description: |
+            5-grade recitation scale (locked 2026-06-30):
+            - `excellent` — ممتاز: Perfect recitation, excellent tajweed
+            - `good` — جيد: Minor errors, good tajweed
+            - `acceptable` — مقبول: Notable errors, basic tajweed
+            - `needs_review` — يحتاج مراجعة: Significant errors; review required
+            - `repeat` — إعادة: Must fully repeat; cannot advance
         notes:
           type: string
           maxLength: 500
@@ -987,7 +1516,7 @@ components:
           type: integer
         grade:
           type: string
-          enum: [excellent, good, needs_improvement, repeat]
+          enum: [excellent, good, acceptable, needs_review, repeat]
           nullable: true
         grade_notes:
           type: string
@@ -1130,6 +1659,401 @@ components:
               format: date-time
               description: UTC datetime of the next occurrence
 
+    # ── Progress (F-007) ───────────────────────────────────
+
+    GradeEnum:
+      type: string
+      enum: [excellent, good, acceptable, needs_review, repeat]
+      description: |
+        5-grade recitation scale:
+        - `excellent` — ممتاز
+        - `good` — جيد
+        - `acceptable` — مقبول
+        - `needs_review` — يحتاج مراجعة
+        - `repeat` — إعادة
+
+    SurahStatusEnum:
+      type: string
+      enum: [memorized, in_revision, needs_recap, in_progress, not_started]
+      description: |
+        Memorization status for a Surah:
+        - `memorized` — محفوظ: new_memorization record with excellent/good grade
+        - `in_revision` — قيد المراجعة: revision or old_revision record
+        - `needs_recap` — يحتاج مراجعة: latest grade is needs_review or repeat
+        - `in_progress` — جزئي: has records but none match above criteria
+        - `not_started` — لم يُبدأ: no records
+
+    SurahSegment:
+      type: object
+      description: A single recited Ayah range within a Surah
+      properties:
+        from_ayah:
+          type: integer
+        to_ayah:
+          type: integer
+        grade:
+          $ref: '#/components/schemas/GradeEnum'
+          nullable: true
+        type:
+          type: string
+          enum: [new_memorization, revision, old_revision]
+        rub_number:
+          type: integer
+          nullable: true
+          description: Medina Mushaf Rub' number (1–240) for this segment
+
+    SurahStatusEntry:
+      type: object
+      properties:
+        surah_id:
+          type: integer
+          minimum: 1
+          maximum: 114
+        name_arabic:
+          type: string
+          example: الفاتحة
+        name_transliterated:
+          type: string
+          example: Al-Fatihah
+        ayah_count:
+          type: integer
+        juz_start:
+          type: integer
+        status:
+          $ref: '#/components/schemas/SurahStatusEnum'
+        is_stale:
+          type: boolean
+          description: True when status=memorized AND no revision in last 30 days
+        days_since_revision:
+          type: integer
+          nullable: true
+          description: Days since last recitation of any type for this Surah
+        latest_grade:
+          $ref: '#/components/schemas/GradeEnum'
+          nullable: true
+        latest_type:
+          type: string
+          enum: [new_memorization, revision, old_revision]
+          nullable: true
+        last_practiced_date:
+          type: string
+          format: date
+          nullable: true
+        total_sessions:
+          type: integer
+          description: Total number of completed recitation turns for this Surah
+        coverage_pct:
+          type: number
+          format: float
+          description: Percentage of Surah Ayahs covered (union of all recited ranges)
+        ayahs_covered:
+          type: integer
+          nullable: true
+          description: Distinct Ayahs covered (union of all ranges)
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/SurahSegment'
+          description: Non-empty only for Surahs with multiple distinct recited ranges
+
+    StudentProgress:
+      type: object
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        last_computed_at:
+          type: string
+          format: date-time
+          description: When the global mat-view was last refreshed (null for per-circle live queries)
+          nullable: true
+        filter:
+          type: object
+          properties:
+            circle_id:
+              type: string
+              format: uuid
+              nullable: true
+        summary:
+          type: object
+          properties:
+            memorized_count:
+              type: integer
+            in_revision_count:
+              type: integer
+            needs_recap_count:
+              type: integer
+            in_progress_count:
+              type: integer
+            not_started_count:
+              type: integer
+        surahs:
+          type: array
+          items:
+            $ref: '#/components/schemas/SurahStatusEntry'
+          description: Always 114 items ordered by surah_id
+
+    CircleHistoryItem:
+      type: object
+      properties:
+        circle_id:
+          type: string
+          format: uuid
+        circle_name:
+          type: string
+        my_role:
+          type: string
+          enum: [student, supervisor]
+        joined_at:
+          type: string
+          format: date-time
+        is_active_member:
+          type: boolean
+        sessions_attended:
+          type: integer
+        sessions_practiced:
+          type: integer
+        sessions_attended_only:
+          type: integer
+          description: Sessions attended but without any completed recitation turn
+        total_completed_turns:
+          type: integer
+        last_session_date:
+          type: string
+          format: date-time
+          nullable: true
+        overall_avg_grade:
+          type: number
+          format: float
+          nullable: true
+          description: Numeric average (5=excellent, 4=good, 3=acceptable, 2=needs_review, 1=repeat)
+
+    CircleHistoryResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CircleHistoryItem'
+        next_cursor:
+          type: string
+          nullable: true
+        total_circles:
+          type: integer
+
+    SessionTurn:
+      type: object
+      description: One completed recitation turn within a session
+      properties:
+        queue_entry_id:
+          type: string
+          format: uuid
+        surah_id:
+          type: integer
+        surah_name_arabic:
+          type: string
+        surah_name_transliterated:
+          type: string
+        from_ayah:
+          type: integer
+        to_ayah:
+          type: integer
+        round_type:
+          type: string
+          enum: [new_memorization, revision, old_revision, test]
+        grade:
+          $ref: '#/components/schemas/GradeEnum'
+          nullable: true
+        grade_label:
+          type: string
+          description: Arabic grade label (e.g., ممتاز)
+          nullable: true
+        teacher_notes:
+          type: string
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    SessionHistoryItem:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        circle_id:
+          type: string
+          format: uuid
+        circle_name:
+          type: string
+        session_date:
+          type: string
+          format: date-time
+        session_end:
+          type: string
+          format: date-time
+          nullable: true
+        attendance_status:
+          type: string
+          enum: [present, late, absent, excused]
+        practiced:
+          type: boolean
+          description: True if student had at least one completed turn in this session
+        completed_turns:
+          type: integer
+        skipped_turns:
+          type: integer
+        opted_out_turns:
+          type: integer
+        avg_grade:
+          type: number
+          format: float
+          nullable: true
+        turns:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionTurn'
+
+    SessionHistoryResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionHistoryItem'
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+
+    ProgressStatsBucket:
+      type: object
+      properties:
+        bucket_start:
+          type: string
+          format: date
+        ayahs_recited:
+          type: integer
+        sessions_attended:
+          type: integer
+        sessions_practiced:
+          type: integer
+        completed_turns:
+          type: integer
+        avg_grade:
+          type: number
+          format: float
+          nullable: true
+
+    ProgressStats:
+      type: object
+      properties:
+        period:
+          type: string
+          enum: [week, month, year]
+        from_date:
+          type: string
+          format: date
+        to_date:
+          type: string
+          format: date
+        buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProgressStatsBucket'
+        totals:
+          $ref: '#/components/schemas/ProgressStatsBucket'
+
+    StudentProgressSummary:
+      type: object
+      description: Per-student summary row in the teacher circle progress view
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        avatar_url:
+          type: string
+          nullable: true
+        attendance_pct:
+          type: number
+          format: float
+          description: Sessions attended / total circle sessions (last 30 days)
+        practice_pct:
+          type: number
+          format: float
+          description: Sessions practiced / sessions attended (last 30 days)
+        last_practiced_date:
+          type: string
+          format: date
+          nullable: true
+        needs_attention_flag:
+          type: boolean
+          description: True when student attended ≥7 consecutive sessions with no completed turn
+        consecutive_attended_no_recitation:
+          type: integer
+          description: Current streak of attended-but-not-practiced sessions
+        active_surahs:
+          type: array
+          items:
+            type: object
+            properties:
+              surah_id:
+                type: integer
+              name_arabic:
+                type: string
+              status:
+                $ref: '#/components/schemas/SurahStatusEnum'
+
+    CircleProgressSummary:
+      type: object
+      properties:
+        circle_id:
+          type: string
+          format: uuid
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StudentProgressSummary'
+
+    SurahInsightItem:
+      type: object
+      properties:
+        surah_id:
+          type: integer
+        name_arabic:
+          type: string
+        ayah_count:
+          type: integer
+        weak_grade_count:
+          type: integer
+          description: Count of needs_review + repeat grades in the period
+        student_count:
+          type: integer
+          description: Number of distinct students who had weak grades on this Surah
+        most_common_grade:
+          $ref: '#/components/schemas/GradeEnum'
+
+    SurahInsights:
+      type: object
+      properties:
+        circle_id:
+          type: string
+          format: uuid
+        period_days:
+          type: integer
+        insights:
+          type: array
+          items:
+            $ref: '#/components/schemas/SurahInsightItem'
+
     # ── Errors ─────────────────────────────────────────────
     ErrorResponse:
       type: object
@@ -1168,3 +2092,37 @@ components:
                     type: string
                   message:
                     type: string
+
+    # ── Config ─────────────────────────────────────────────
+    FeatureFlags:
+      type: object
+      required: [recording, video, ai_tajweed, analytics, web]
+      properties:
+        recording:
+          type: boolean
+          description: Whether session recording is enabled (default false — requires privacy framework)
+        video:
+          type: boolean
+          description: Whether video publishing is enabled in LiveKit sessions (default false)
+        ai_tajweed:
+          type: boolean
+          description: Whether AI Tajweed analysis is enabled (default false — requires recording to be enabled first)
+        analytics:
+          type: boolean
+          description: Whether advanced analytics dashboards are enabled (default false)
+        web:
+          type: boolean
+          description: Whether Flutter Web platform is enabled (default false)
+
+    # ── Uploads ────────────────────────────────────────────
+    UploadResponse:
+      type: object
+      required: [object_key, url]
+      properties:
+        object_key:
+          type: string
+          description: MinIO object key — pass as `media_key` in message requests
+        url:
+          type: string
+          format: uri
+          description: Pre-signed MinIO URL (expires in 7 days) — use directly for display or as `avatar_url`

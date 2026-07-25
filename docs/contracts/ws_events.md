@@ -31,9 +31,32 @@ All events follow this envelope schema:
 }
 ```
 
----
+## Event Flow Overview
 
-## Queue Events
+```mermaid
+graph LR
+    subgraph Server["⚙️ Go Backend (WebSocket Hub)"]
+        HUB["Hub\nroutes events\nto rooms"]
+    end
+
+    subgraph SC["Server → Client (push)"]
+        direction TB
+        BCAST["📢 Broadcast\nto all in session room\n─────────────────\nqueue.state\nqueue.entry_updated\nqueue.round_started\nqueue.reordered\nqueue.grade_submitted\nsession.started · session.ended\nsession.participant_joined\nsession.participant_left\nsession.hand_raised\nchat.message · chat.typing\nerror"]
+        TARGET["🎯 Targeted\nto one client only\n─────────────────\nqueue.your_turn\nqueue.next_soon\nchat.message_read"]
+    end
+
+    subgraph CS["Client → Server (commands)"]
+        direction TB
+        CMD["📤 WS Commands\n─────────────────\ncmd.raise_hand\ncmd.lower_hand\nping (heartbeat)"]
+        REST_NOTE["📡 Low-latency actions\nuse WS commands;\nCRUD uses REST API"]
+    end
+
+    HUB -->|"room broadcast"| BCAST
+    HUB -->|"user-targeted"| TARGET
+    CMD --> HUB
+```
+
+---
 
 ### `queue.state` (Server → Client)
 
@@ -63,6 +86,8 @@ Sent when a client joins a session or when the queue is reset. Full queue snapsh
 ```
 
 **Queue entry statuses:** `waiting` | `reciting` | `completed` | `skipped` | `opted_out`
+
+> **Cross-reference:** `queue_entry_id` in WebSocket events corresponds to `QueueEntry.id` in the REST API (`GET /sessions/{id}/queue`). The WS events use the longer name for clarity in event payloads; the REST schema uses `id` following standard JSON API conventions.
 
 ---
 
@@ -179,7 +204,7 @@ Broadcast to teacher/supervisors when a grade is recorded for a completed turn.
 }
 ```
 
-**Grade values:** `excellent` | `good` | `needs_improvement` | `repeat`
+**Grade values:** `excellent` | `good` | `acceptable` | `needs_review` | `repeat`
 
 ---
 

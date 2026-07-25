@@ -31,7 +31,7 @@ The primary power user of Halaqaty.
 - Conduct live audio sessions (video is post-MVP behind feature flag)
 - Manage the recitation queue during sessions (order, skip, grade)
 - Assign and revoke the Supervisor role to any circle member at any time
-- Grade students' recitations (Excellent → Repeat scale)
+- Grade students' recitations (5-grade scale: Excellent → Good → Acceptable → Needs Review → Repeat)
 - Send private messages and voice notes to students
 - View session-level progress per student in MVP (comprehensive analytics post-MVP)
 - Set and manage weekly schedules
@@ -48,7 +48,7 @@ The primary power user of Halaqaty.
 - Join multiple circles with different teachers
 - Participate in live sessions; join recitation queue
 - Send and receive messages (group and private)
-- View own session-level progress and grades in MVP (advanced analytics post-MVP)
+- View own progress via F-007: Quran Map (114 Surahs), attendance vs practiced history, recitation log, and progress analytics
 - Receive schedule reminders and turn notifications (when it's their time to recite)
 - View Quran map of memorized portions
 

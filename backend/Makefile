@@ -1,0 +1,66 @@
+# backend/Makefile — Go backend targets only
+#
+# Run from this directory:  make <target>
+# Run from repo root:       make <target>  (root Makefile delegates here)
+#
+# Prerequisites:
+#   go 1.22+, golangci-lint v1.62.x, golang-migrate CLI
+#   DATABASE_URL env var for migrate-* targets
+#   Example: export DATABASE_URL="postgres://user:pass@localhost:5432/halaqaty?sslmode=disable"
+
+.DEFAULT_GOAL := help
+
+.PHONY: help test test-integration lint build \
+        migrate-up migrate-down migrate-fresh migrate-status migrate-create
+
+# ──────────────────────────────────────────────────────────────────────────────
+
+help: ## Show available targets
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-22s\033[0m %s\n", $$1, $$2}'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Tests
+# ──────────────────────────────────────────────────────────────────────────────
+
+test: ## Run unit tests (no database required)
+	go test -short ./...
+
+test-integration: ## Run integration tests (requires DATABASE_URL and a running PostgreSQL)
+	@test -n "$$DATABASE_URL" || { echo "❌  DATABASE_URL is not set"; exit 1; }
+	go test -tags=integration ./...
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Lint & Build
+# ──────────────────────────────────────────────────────────────────────────────
+
+lint: ## Run golangci-lint (zero violations required before PR)
+	golangci-lint run ./...
+
+build: ## Compile the API binary → bin/api
+	go build -o bin/api ./cmd/api
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Database Migrations  (golang-migrate CLI — https://github.com/golang-migrate/migrate)
+# ──────────────────────────────────────────────────────────────────────────────
+
+migrate-up: ## Apply all pending migrations
+	@test -n "$$DATABASE_URL" || { echo "❌  DATABASE_URL is not set"; exit 1; }
+	migrate -path migrations -database "$$DATABASE_URL" up
+
+migrate-down: ## Roll back all migrations
+	@test -n "$$DATABASE_URL" || { echo "❌  DATABASE_URL is not set"; exit 1; }
+	migrate -path migrations -database "$$DATABASE_URL" down -all
+
+migrate-fresh: ## ⚠️  Drop schema + recreate + run all migrations (destroys all data)
+	@test -n "$$DATABASE_URL" || { echo "❌  DATABASE_URL is not set"; exit 1; }
+	migrate -path migrations -database "$$DATABASE_URL" drop -f
+	migrate -path migrations -database "$$DATABASE_URL" up
+
+migrate-status: ## Show current migration version and dirty state
+	@test -n "$$DATABASE_URL" || { echo "❌  DATABASE_URL is not set"; exit 1; }
+	migrate -path migrations -database "$$DATABASE_URL" version
+
+migrate-create: ## Create a new up/down migration pair — usage: make migrate-create NAME=create_foo
+	@test -n "$$NAME" || { echo "❌  NAME is required — usage: make migrate-create NAME=create_foo"; exit 1; }
+	migrate create -ext sql -dir migrations -seq $$NAME

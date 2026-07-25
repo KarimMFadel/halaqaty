@@ -4,14 +4,17 @@ Halaqaty testing strategy for a solo developer with AI agent assistance. Optimiz
 
 ## Testing Pyramid
 
-```
-         ▲
-        /E2E\        — Few; critical user journeys only
-       /------\
-      / Integ  \     — Core; database + HTTP + WebSocket
-     /----------\
-    /    Unit    \   — Fast; pure business logic
-   /--------------\
+```mermaid
+graph TD
+    E2E["🔺 E2E Tests\n~5% of total\nCritical user journeys only\n(auth · queue · session flow)\nSlow · brittle · high value"]
+    INT["🔷 Integration Tests\n~35% of total\nDB + HTTP + WebSocket\nEvery API endpoint\nEvery WS event handler"]
+    UNIT["🔵 Unit Tests\n~60% of total\nPure business logic\nNo DB · No HTTP\nFast · reliable · cheap"]
+
+    E2E --> INT --> UNIT
+
+    style E2E fill:#ffebee,stroke:#f44336,stroke-width:2px
+    style INT fill:#fff3e0,stroke:#FF9800,stroke-width:2px
+    style UNIT fill:#e8f5e9,stroke:#4CAF50,stroke-width:2px
 ```
 
 **Ratio target:** ~60% unit · ~35% integration · ~5% E2E

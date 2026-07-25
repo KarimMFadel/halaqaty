@@ -1,0 +1,309 @@
+openapi: 3.0.3
+info:
+  title: Halaqaty Auth/Roles/Profile Feature Contract
+  version: 0.2.0
+  description: |
+    Feature-level contract draft for specs/001-auth-roles-profile.
+    This contract follows constitution constraints: Firebase identity, per-circle authorization, and standard error envelope.
+
+security:
+  - BearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      summary: Register account via Firebase Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registered and signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirebaseSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /auth/login:
+    post:
+      summary: Login via Firebase Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Firebase token payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirebaseSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      summary: Logout current session
+      description: Invalidates only the current authenticated device/session. Other active sessions remain valid.
+      responses:
+        '204':
+          description: Logged out
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      summary: Read current profile
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      summary: Update current profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /circles/{circleId}/members/{userId}/role:
+    post:
+      summary: Assign circle role (supervisor/teacher only)
+      parameters:
+        - name: circleId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignCircleRoleRequest'
+      responses:
+        '200':
+          description: Role updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, password, account_type]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        account_type:
+          type: string
+          enum: [student, teacher]
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+
+    FirebaseSessionResponse:
+      type: object
+      required: [id_token, refresh_token, expires_in_seconds, token_type]
+      properties:
+        id_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in_seconds:
+          type: integer
+          example: 3600
+        token_type:
+          type: string
+          example: Bearer
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+          minLength: 2
+          maxLength: 150
+        display_name:
+          type: string
+          maxLength: 100
+        bio:
+          type: string
+          maxLength: 500
+        country:
+          type: string
+          minLength: 2
+          maxLength: 2
+        avatar_url:
+          type: string
+          format: uri
+
+    ProfileResponse:
+      type: object
+      required: [user_id, email, account_type, profile]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        account_type:
+          type: string
+          enum: [student, teacher]
+        profile:
+          type: object
+          properties:
+            full_name:
+              type: string
+              nullable: true
+            display_name:
+              type: string
+              nullable: true
+            bio:
+              type: string
+              nullable: true
+            country:
+              type: string
+              nullable: true
+            avatar_url:
+              type: string
+              nullable: true
+            profile_completed_at:
+              type: string
+              format: date-time
+              nullable: true
+
+    AssignCircleRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [student, teacher, supervisor]
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - ERR_AUTH_INVALID_TOKEN
+                - ERR_AUTH_SESSION_EXPIRED
+                - ERR_AUTH_INVALID_CREDENTIALS
+                - ERR_AUTH_EMAIL_EXISTS
+                - ERR_AUTH_RATE_LIMITED
+                - ERR_PROFILE_VALIDATION
+                - ERR_PROFILE_REQUIRED_FIELDS
+                - ERR_AUTHZ_FORBIDDEN
+                - ERR_RESOURCE_NOT_FOUND
+            message:
+              type: string
+            fields:
+              type: object
+              additionalProperties:
+                type: string
+
+  responses:
+    BadRequest:
+      description: Invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Unauthorized:
+      description: Missing, invalid, expired, or revoked authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Forbidden:
+      description: Insufficient circle role
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Conflict:
+      description: Resource conflict (duplicate email)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    UnprocessableEntity:
+      description: Validation failed for semantic rules
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'

@@ -18,6 +18,7 @@ This directory records the key architectural decisions made for Halaqaty. Each A
 | [ADR-005](ADR-005-feature-flags.md) | Feature Flag Strategy | Accepted | 2026-04-26 |
 | [ADR-006](ADR-006-db-migrations.md) | Database Migration Tool — golang-migrate | Accepted | 2026-04-26 |
 | [ADR-007](ADR-007-monorepo-structure.md) | Monorepo Structure and CI Strategy | Accepted | 2026-04-26 |
+| [ADR-008](ADR-008-webrtc-solution.md) | WebRTC Solution for Live Audio Sessions — LiveKit | Accepted | 2026-07-25 |
 
 ---
 

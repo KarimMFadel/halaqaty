@@ -142,11 +142,13 @@ Run these skills as mandatory self-checks on your own output **before presenting
 | After writing/editing any Go code | `$clean-code-guard` | "Use $clean-code-guard on the diff I just produced" |
 | After writing/editing any test code | `$test-guard` | "Use $test-guard on the tests I just wrote" |
 | After updating docstrings, OpenAPI contract, or WS event catalog | `$docs-guard` | "Use $docs-guard on this API documentation change" |
+| For implementation/progress responses where brevity is preferred | `$steno-mode` | "Use $steno-mode brief for this update" |
 
 **Non-negotiable self-check before every commit:**
 1. `$clean-code-guard` — verify no error swallowing, no hardcoded success returns, no speculative abstractions, no hallucinated library APIs
 2. `$test-guard` — verify tests cover behavior (not implementation), mocks are only at system boundaries (PostgreSQL/pgx, Firebase, LiveKit, MinIO, FCM), no test bloat
 3. `$docs-guard` — for any PR that adds/changes an endpoint or WebSocket event, verify `docs/contracts/openapi.yaml` and `docs/contracts/ws_events.md` are updated and accurate
+4. `$steno-mode` — keep implementation/progress communication compact; do not use for polished docs, onboarding/tutorial content, or stakeholder-facing prose
 
 ## 📋 Output Expectations
 - Clean, production-ready Go code with clear package organization.

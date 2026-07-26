@@ -10,7 +10,9 @@
 
 .DEFAULT_GOAL := help
 
-.PHONY: help test test-integration lint build \
+.PHONY: help test test-integration \
+        test-feature-001-auth-roles-profile test-feature-001-unit test-feature-001-contract test-feature-001-integration \
+        lint build \
         migrate-up migrate-down migrate-fresh migrate-status migrate-create
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -29,6 +31,59 @@ test: ## Run unit tests (no database required)
 test-integration: ## Run integration tests (requires DATABASE_URL and a running PostgreSQL)
 	@test -n "$$DATABASE_URL" || { echo "❌  DATABASE_URL is not set"; exit 1; }
 	go test -tags=integration ./...
+
+FEATURE_001_UNIT_DIRS := ./internal/auth ./internal/profile ./internal/rbac ./internal/middleware
+FEATURE_001_CONTRACT_DIRS := ./tests/contract
+FEATURE_001_INTEGRATION_DIRS := ./tests/integration
+FEATURE_001_CONTRACT_RUN := Auth|Profile|CircleAssignRole|ResponseSafety
+FEATURE_001_INTEGRATION_RUN := AuthFlow|ProfileFlow|CircleRoleAccess|RateLimitPolicy|PasswordStorageSafety
+
+test-feature-001-auth-roles-profile: test-feature-001-unit test-feature-001-contract test-feature-001-integration ## Run auth/profile/rbac/middleware tests for feature 001
+
+test-feature-001-unit: ## Run feature 001 unit tests (auth/profile/rbac/middleware)
+	@set -e; \
+	found=0; \
+	for dir in $(FEATURE_001_UNIT_DIRS); do \
+		if [ -d "$$dir" ]; then \
+			found=1; \
+			go test -short "$$dir/..."; \
+		fi; \
+	done; \
+	if [ $$found -eq 0 ]; then \
+		echo "ℹ️  No feature 001 unit test packages found"; \
+	fi
+
+test-feature-001-contract: ## Run feature 001 contract tests (if present)
+	@set -e; \
+	found=0; \
+	for dir in $(FEATURE_001_CONTRACT_DIRS); do \
+		if [ -d "$$dir" ]; then \
+			found=1; \
+			go test -tags=contract "$$dir/..." -run '$(FEATURE_001_CONTRACT_RUN)'; \
+		fi; \
+	done; \
+	if [ $$found -eq 0 ]; then \
+		echo "ℹ️  No feature 001 contract test packages found"; \
+	fi
+
+test-feature-001-integration: ## Run feature 001 integration tests (if present)
+	@set -e; \
+	found=0; \
+	for dir in $(FEATURE_001_INTEGRATION_DIRS); do \
+		if [ -d "$$dir" ]; then \
+			found=1; \
+		fi; \
+	done; \
+	if [ $$found -eq 0 ]; then \
+		echo "ℹ️  No feature 001 integration test packages found"; \
+		exit 0; \
+	fi; \
+	test -n "$$DATABASE_URL" || { echo "❌  DATABASE_URL is not set"; exit 1; }; \
+	for dir in $(FEATURE_001_INTEGRATION_DIRS); do \
+		if [ -d "$$dir" ]; then \
+			go test -tags=integration "$$dir/..." -run '$(FEATURE_001_INTEGRATION_RUN)'; \
+		fi; \
+	done
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Lint & Build

@@ -120,13 +120,19 @@ When a generic clean-code rule conflicts with a constitutional rule, the constit
     - **Go**: check `backend/internal/` for existing domain errors, middleware helpers, and `pgx` query patterns before inventing new ones.
     - **Dart**: check neighboring feature modules for the established state management and navigation patterns.
 
+23. **Centralize repeated literals.** If a protocol or domain literal appears in more than one production file (e.g., `Content-Type`, `application/json`, auth scheme names, shared error messages), move it to a dedicated constants module and reuse it.
+    - **Go (Halaqaty)**: use `backend/internal/platform/httpconst/` for HTTP/auth header names, content types, and reusable API error message constants.
+
+24. **No inline runtime SQL in repository methods.** Repository functions should orchestrate query execution and row mapping only. SQL text belongs in dedicated `*_queries.go` files (or generated query layer) inside the same package.
+    - **Go (Halaqaty)**: keep `const ...Query` blocks in a separate query-definition file; avoid embedding multiline SQL literals directly in method bodies.
+
 ### Refactoring discipline
 
-23. **Preserve observable behavior when refactoring.** When asked to clean up, simplify, or refactor, do not change the contract. If you spot a bug while refactoring, flag it separately and ask before changing it. Refactoring and bug fixes are two operations — never bundle them.
+25. **Preserve observable behavior when refactoring.** When asked to clean up, simplify, or refactor, do not change the contract. If you spot a bug while refactoring, flag it separately and ask before changing it. Refactoring and bug fixes are two operations — never bundle them.
 
 ## Self-check before delivery
 
-1. Walk imperatives 1–23 against your diff. Fix every violation.
+1. Walk imperatives 1–25 against your diff. Fix every violation.
 2. For new functions: lines ≤20? params ≤4 (or functional options)? complexity ≤10? names reveal intent?
 3. For new comments: does this explain *why*? If it explains *what*, delete it. (Exception: exported Go/Dart doc comments.)
 4. For new error handling in Go: does the error propagate with `fmt.Errorf("…: %w", err)`? Is the caught type specific?

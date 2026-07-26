@@ -23,18 +23,18 @@
 
 **Purpose**: Build constitution-aligned auth/session/rbac/rate-limit foundations.
 
-- [ ] T007 Create schema migration for users/profiles/user_sessions/circle_members in `backend/migrations/000010_auth_roles_profile.up.sql`
-- [ ] T008 Create rollback migration for users/profiles/user_sessions/circle_members in `backend/migrations/000010_auth_roles_profile.down.sql`
-- [ ] T009 [P] Define auth/session/rate-limit/timeout configuration in `backend/internal/platform/config/auth_config.go`
-- [ ] T010 Implement Firebase token verification service in `backend/internal/auth/firebase_verifier.go`
-- [ ] T011 Implement backend session inactivity enforcement service in `backend/internal/auth/session_service.go`
-- [ ] T012 Implement backend logout session invalidation repository in `backend/internal/auth/session_repository.go`
-- [ ] T013 [P] Implement bearer authentication middleware in `backend/internal/middleware/auth_middleware.go`
-- [ ] T014 [P] Implement per-circle role authorization middleware using `circle_members` in `backend/internal/middleware/role_middleware.go`
-- [ ] T015 [P] Implement audit logger for auth/profile/role-change events in `backend/internal/platform/logging/audit_logger.go`
-- [ ] T016 [P] Implement REST rate limits per IP and per user in `backend/internal/middleware/rate_limit_middleware.go`
-- [ ] T017 [P] Implement WebSocket limits (max 3 connections/user, max 30 messages/min/user/circle) in `backend/internal/middleware/ws_rate_limit_middleware.go`
-- [ ] T018 Wire authentication, authorization, validation, timeout, and rate-limit middleware in `backend/cmd/api/router.go`
+- [X] T007 Create schema migration for users/profiles/user_sessions/circle_members in `backend/migrations/000010_auth_roles_profile.up.sql`
+- [X] T008 Create rollback migration for users/profiles/user_sessions/circle_members in `backend/migrations/000010_auth_roles_profile.down.sql`
+- [X] T009 [P] Define auth/session/rate-limit/timeout configuration in `backend/internal/platform/config/auth_config.go`
+- [X] T010 Implement Firebase token verification service in `backend/internal/auth/firebase_verifier.go`
+- [X] T011 Implement backend session inactivity enforcement service in `backend/internal/auth/session_service.go`
+- [X] T012 Implement backend logout session invalidation repository in `backend/internal/auth/session_repository.go`
+- [X] T013 [P] Implement bearer authentication middleware in `backend/internal/middleware/auth_middleware.go`
+- [X] T014 [P] Implement per-circle role authorization middleware using `circle_members` in `backend/internal/middleware/role_middleware.go`
+- [X] T015 [P] Implement audit logger for auth/profile/role-change events in `backend/internal/platform/logging/audit_logger.go`
+- [X] T016 [P] Implement REST rate limits per IP and per user in `backend/internal/middleware/rate_limit_middleware.go`
+- [X] T017 [P] Implement WebSocket limits (max 3 connections/user, max 30 messages/min/user/circle) in `backend/internal/middleware/ws_rate_limit_middleware.go`
+- [X] T018 Wire authentication, authorization, validation, timeout, and rate-limit middleware in `backend/cmd/api/router.go`
 
 **Checkpoint**: Foundational platform complete; user stories can begin.
 

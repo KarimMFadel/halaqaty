@@ -11,7 +11,7 @@
 **Purpose**: Initialize feature scaffolding and contract baseline.
 
 - [X] T001 Create backend feature scaffolding in `backend/cmd/api/router.go` and `backend/internal/{auth,profile,rbac,middleware,platform}/`
-- [ ] T002 Create mobile feature scaffolding in `mobile/lib/features/{auth,profile,admin}/` and `mobile/test/widget/{auth,profile}/`
+- [X] T002 Create mobile feature scaffolding in `mobile/lib/features/{auth,profile,admin}/` and `mobile/test/widget/{auth,profile}/`
 - [ ] T003 [P] Add backend dependencies for Firebase auth verification and profile/rbac modules in `backend/go.mod`
 - [ ] T004 [P] Add Flutter dependencies for Firebase auth and feature flows in `mobile/pubspec.yaml`
 - [ ] T005 [P] Merge feature OpenAPI paths/schemas into `docs/contracts/openapi.yaml`

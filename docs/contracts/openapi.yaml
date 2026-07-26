@@ -82,6 +82,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserProfile'
 
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in with email/password via Firebase Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Firebase token payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirebaseSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout current session
+      description: Invalidates only the current authenticated device/session. Other active sessions remain valid.
+      responses:
+        '204':
+          description: Logged out
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /auth/fcm-token:
     post:
       tags: [Auth]
@@ -300,6 +334,34 @@ paths:
       responses:
         '204':
           description: Member removed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /circles/{circleId}/members/{userId}/role:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [Circles]
+      summary: Assign member role in a circle (supervisor/teacher only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignCircleRoleRequest'
+      responses:
+        '200':
+          description: Role updated
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1213,6 +1275,32 @@ components:
           enum: [ar, en]
           default: ar
 
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+
+    FirebaseSessionResponse:
+      type: object
+      required: [id_token, refresh_token, expires_in_seconds, token_type]
+      properties:
+        id_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in_seconds:
+          type: integer
+          example: 3600
+        token_type:
+          type: string
+          example: Bearer
+
     UpdateProfileRequest:
       type: object
       properties:
@@ -1371,6 +1459,14 @@ components:
         joined_at:
           type: string
           format: date-time
+
+    AssignCircleRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [student, teacher, supervisor]
 
     # ── Sessions ───────────────────────────────────────────
     CreateSessionRequest:

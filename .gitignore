@@ -24,7 +24,6 @@ lib/generated_plugin_registrant.dart
 /bin/
 /backend/bin/
 /vendor/
-go.sum
 
 # Test binary
 *.test

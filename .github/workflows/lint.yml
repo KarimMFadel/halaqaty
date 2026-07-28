@@ -46,21 +46,13 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
-          cache: false
-      - name: Clean and download Go modules
-        working-directory: backend
-        run: go clean -modcache && go mod download
-      - name: Build all packages
-        working-directory: backend
-        run: go build ./...
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.64.8
           working-directory: backend
-          skip-cache: true
 
   flutter-analyze:
     needs: detect-stacks

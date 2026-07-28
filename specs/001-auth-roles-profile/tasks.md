@@ -23,18 +23,24 @@
 
 **Purpose**: Build constitution-aligned auth/session/rbac/rate-limit foundations.
 
-- [ ] T007 Create schema migration for users/profiles/user_sessions/circle_members in `backend/migrations/000010_auth_roles_profile.up.sql`
-- [ ] T008 Create rollback migration for users/profiles/user_sessions/circle_members in `backend/migrations/000010_auth_roles_profile.down.sql`
-- [ ] T009 [P] Define auth/session/rate-limit/timeout configuration in `backend/internal/platform/config/auth_config.go`
-- [ ] T010 Implement Firebase token verification service in `backend/internal/auth/firebase_verifier.go`
-- [ ] T011 Implement backend session inactivity enforcement service in `backend/internal/auth/session_service.go`
-- [ ] T012 Implement backend logout session invalidation repository in `backend/internal/auth/session_repository.go`
-- [ ] T013 [P] Implement bearer authentication middleware in `backend/internal/middleware/auth_middleware.go`
-- [ ] T014 [P] Implement per-circle role authorization middleware using `circle_members` in `backend/internal/middleware/role_middleware.go`
-- [ ] T015 [P] Implement audit logger for auth/profile/role-change events in `backend/internal/platform/logging/audit_logger.go`
-- [ ] T016 [P] Implement REST rate limits per IP and per user in `backend/internal/middleware/rate_limit_middleware.go`
-- [ ] T017 [P] Implement WebSocket limits (max 3 connections/user, max 30 messages/min/user/circle) in `backend/internal/middleware/ws_rate_limit_middleware.go`
-- [ ] T018 Wire authentication, authorization, validation, timeout, and rate-limit middleware in `backend/cmd/api/router.go`
+- [X] T007 Create schema migration for users/profiles/user_sessions/circle_members in `backend/migrations/000010_auth_roles_profile.up.sql`
+- [X] T008 Create rollback migration for users/profiles/user_sessions/circle_members in `backend/migrations/000010_auth_roles_profile.down.sql`
+- [X] T009 [P] Define auth/session/rate-limit/timeout configuration in `backend/internal/platform/config/auth_config.go`
+- [X] T010 Implement Firebase token verification service in `backend/internal/auth/firebase_verifier.go`
+- [X] T011 Implement backend session inactivity enforcement service in `backend/internal/auth/session_service.go`
+- [X] T012 Implement backend logout session invalidation repository in `backend/internal/auth/session_repository.go`
+- [X] T013 [P] Implement bearer authentication middleware in `backend/internal/middleware/auth_middleware.go`
+  - [X] **Correction**: Resolve PostgreSQL UUID from Firebase UID and set it in `AuthPrincipal` to fix the `session.UserID` (UUID) vs `decoded.UID` (Firebase UID) mismatch.
+- [X] T014 [P] Implement per-circle role authorization middleware using `circle_members` in `backend/internal/middleware/role_middleware.go`
+  - [X] **Correction**: Pass local database User UUID (from `principal.UserID`) to `RoleForUserInCircle` instead of the Firebase UID string. Also added `RoleForUserInCircle` to `SessionRepository` and `getCircleMemberRoleQuery` to `session_queries.go`.
+- [X] T015 [P] Implement audit logger for auth/profile/role-change events in `backend/internal/platform/logging/audit_logger.go`
+- [X] T016 [P] Implement REST rate limits per IP and per user in `backend/internal/middleware/rate_limit_middleware.go`
+  - [X] **Correction**: Implement periodic eviction/expiration of rate limiter counters to fix the unbounded map memory leak.
+- [X] T017 [P] Implement WebSocket limits (max 3 connections/user, max 30 messages/min/user/circle) in `backend/internal/middleware/ws_rate_limit_middleware.go`
+  - [X] **Correction**: Exposed `OpenConnection`/`CloseConnection` public methods for WebSocket handler lifecycle. `LimitUpgrade` now only checks capacity; handler is responsible for tracking the live connection.
+- [X] T018 Wire authentication, authorization, validation, timeout, and rate-limit middleware in `backend/cmd/api/router.go`
+- [X] T018a Bootstrap database connection pool, load configuration, wire dependencies, and start HTTP server in `backend/cmd/api/main.go`
+  - ✅ **Blocker resolved**: System Go version is `go1.26.5`; `go.mod` requires Go 1.22. Ran `go mod tidy` to populate dependencies, then `go build -o bin/api ./cmd/api` succeeded. All `-short` tests pass (no tests yet in affected packages).
 
 **Checkpoint**: Foundational platform complete; user stories can begin.
 

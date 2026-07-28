@@ -1,0 +1,20 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md", ".github/copilot-instructions.md"],
+  "skills": {
+    "paths": [".opencode/skills", ".github/skills"]
+  },
+  "default_agent": "team-leader",
+  "mcp": {
+    "github-projects": {
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "enabled": true,
+      "headers": {
+        "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}",
+        "X-MCP-Toolsets": "projects,issues,pull_requests,repos",
+        "X-MCP-Readonly": "false"
+      }
+    }
+  }
+}

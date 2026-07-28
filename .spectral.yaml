@@ -16,14 +16,14 @@
 #
 # HOW TO RUN IT LOCALLY:
 #   Prerequisites:
-#     npm install -g @stoplight/spectral-cli @stoplight/spectral-oas
+#     npm install -g @stoplight/spectral-cli
 #   Then:
 #     spectral lint docs/contracts/openapi.yaml        # uses this file automatically
 #   Or via Make:
 #     make api-lint
 #
 # WHAT DOES THE CURRENT CONFIG DO?
-#   `extends: ['@stoplight/spectral-oas']` applies the official OpenAPI
+#   `extends: ['spectral:oas']` applies the built-in OpenAPI
 #   Specification (OAS) ruleset, which enforces:
 #     - All operations must have at least one 2xx response
 #     - All $ref values must resolve to existing schemas
@@ -60,7 +60,7 @@
 #   https://docs.stoplight.io/docs/spectral/9ffa04e352438-spectral-cli
 # ─────────────────────────────────────────────────────────────────────────────
 
-extends: ['@stoplight/spectral-oas']
+extends: ['spectral:oas']
 
 # Add project-specific overrides below this line:
 # rules:

@@ -29,10 +29,10 @@ Every PR is fully traceable: user story → contract → implementation → test
 | `specify-cli` | 0.8.1 | See below |
 | VS Code | Latest | with **GitHub Copilot** extension |
 | Git | 2.x+ | — |
-| `golangci-lint` | v1.62.x | `go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.0` |
+| `golangci-lint` | v1.64.x | `go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8` |
 | `gitleaks` | latest | `go install github.com/zricethezav/gitleaks/v8@latest` |
 | Node.js | 20+ | [nodejs.org](https://nodejs.org) — required for Spectral (API linting) |
-| `spectral` + OAS ruleset | latest | `npm install -g @stoplight/spectral-cli @stoplight/spectral-oas` |
+| `spectral` + OAS ruleset | latest | `npm install -g @stoplight/spectral-cli` |
 
 ### Install uv (Windows)
 

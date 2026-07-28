@@ -4,7 +4,7 @@
 # Run from repo root:       make <target>  (root Makefile delegates here)
 #
 # Prerequisites:
-#   go 1.22+, golangci-lint v1.62.x, golang-migrate CLI
+#   go 1.22+, golangci-lint v1.64.x, golang-migrate CLI
 #   DATABASE_URL env var for migrate-* targets
 #   Example: export DATABASE_URL="postgres://user:pass@localhost:5432/halaqaty?sslmode=disable"
 

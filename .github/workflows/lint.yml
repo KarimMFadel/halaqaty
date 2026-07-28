@@ -50,7 +50,7 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.62.2
+          version: v1.64.8
           working-directory: backend
 
   flutter-analyze:
@@ -92,6 +92,6 @@ jobs:
         with:
           node-version: '20'
       - name: Install Spectral
-        run: npm install -g @stoplight/spectral-cli @stoplight/spectral-rulesets
+        run: npm install -g @stoplight/spectral-cli
       - name: Lint OpenAPI spec
         run: spectral lint docs/contracts/openapi.yaml

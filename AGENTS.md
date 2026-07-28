@@ -116,7 +116,7 @@ Contract tests run with `-tags=contract` and a `-run` regex filter (`Auth|Profil
 |---|---|
 | Go unit | `go test -short ./...` (run in `backend/`) |
 | Go integration | `go test -tags=integration ./...` (needs `DATABASE_URL`) |
-| Go lint | `golangci-lint run ./...` (v1.62.x, zero violations) |
+| Go lint | `golangci-lint run ./...` (v1.64.x, zero violations) |
 | Go fmt | `gofmt -l .` (empty output) |
 | Flutter test | `flutter test test` (in `mobile/`) |
 | Flutter analyze | `flutter analyze` (zero issues) |

@@ -39,8 +39,8 @@
 - [X] T017 [P] Implement WebSocket limits (max 3 connections/user, max 30 messages/min/user/circle) in `backend/internal/middleware/ws_rate_limit_middleware.go`
   - [X] **Correction**: Exposed `OpenConnection`/`CloseConnection` public methods for WebSocket handler lifecycle. `LimitUpgrade` now only checks capacity; handler is responsible for tracking the live connection.
 - [X] T018 Wire authentication, authorization, validation, timeout, and rate-limit middleware in `backend/cmd/api/router.go`
-- [ ] T018a Bootstrap database connection pool, load configuration, wire dependencies, and start HTTP server in `backend/cmd/api/main.go`
-  - ⚠️ **Blocker**: Code implemented but cannot compile — system Go version is 1.20.2; project requires Go 1.22+. Install Go 1.22 from https://go.dev/dl/ to unblock.
+- [X] T018a Bootstrap database connection pool, load configuration, wire dependencies, and start HTTP server in `backend/cmd/api/main.go`
+  - ✅ **Blocker resolved**: System Go version is `go1.26.5`; `go.mod` requires Go 1.22. Ran `go mod tidy` to populate dependencies, then `go build -o bin/api ./cmd/api` succeeded. All `-short` tests pass (no tests yet in affected packages).
 
 **Checkpoint**: Foundational platform complete; user stories can begin.
 

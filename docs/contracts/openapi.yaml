@@ -964,6 +964,7 @@ paths:
 
   # ── Uploads ───────────────────────────────────────────────
   /uploads/avatar:
+    post:
       tags: [Uploads]
       summary: Upload user avatar image
       description: |

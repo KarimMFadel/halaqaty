@@ -16,10 +16,9 @@ const principalContextKey authContextKey = "auth-principal"
 
 // AuthPrincipal is the authenticated request identity.
 type AuthPrincipal struct {
-	UserID      string
-	FirebaseUID string
-	Email       string
-	Claims      map[string]any
+	UserID string // local PostgreSQL UUID
+	Email  string
+	Claims map[string]any
 }
 
 // CurrentPrincipal returns the request principal from context, if available.
@@ -79,6 +78,14 @@ func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 			return
 		}
 
+		// Resolve local DB UUID from Firebase UID to ensure all downstream
+		// comparisons and queries use the PostgreSQL UUID, not the Firebase UID.
+		localUserID, err := m.sessionRepo.GetLocalUserIDByFirebaseUID(r.Context(), decoded.UID)
+		if err != nil {
+			http.Error(w, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+			return
+		}
+
 		sessionID := strings.TrimSpace(r.Header.Get(httpconst.HeaderSessionID))
 		if sessionID == "" {
 			http.Error(w, httpconst.ErrorMessageMissingSessionID, http.StatusUnauthorized)
@@ -90,11 +97,7 @@ func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 			http.Error(w, httpconst.ErrorMessageInvalidSession, http.StatusUnauthorized)
 			return
 		}
-		localUserID, err := m.sessionRepo.GetLocalUserIDByFirebaseUID(r.Context(), decoded.UID)
-		if err != nil {
-			http.Error(w, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
-			return
-		}
+		// Compare against the resolved local DB UUID, not the Firebase UID.
 		if !strings.EqualFold(session.UserID, localUserID) {
 			http.Error(w, httpconst.ErrorMessageSessionUserMismatch, http.StatusUnauthorized)
 			return
@@ -111,10 +114,9 @@ func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 		}
 
 		principal := AuthPrincipal{
-			UserID:      localUserID,
-			FirebaseUID: decoded.UID,
-			Email:       decoded.Email,
-			Claims:      decoded.Claims,
+			UserID: localUserID, // DB UUID, safe for all downstream DB operations
+			Email:  decoded.Email,
+			Claims: decoded.Claims,
 		}
 		ctx := context.WithValue(r.Context(), principalContextKey, principal)
 		next.ServeHTTP(w, r.WithContext(ctx))

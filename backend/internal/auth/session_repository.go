@@ -105,6 +105,20 @@ func (r *SessionRepository) Revoke(ctx context.Context, sessionID string, revoke
 	return nil
 }
 
+// RoleForUserInCircle returns the role of userID in circleID from circle_members.
+// Satisfies middleware.CircleMembershipRepository.
+func (r *SessionRepository) RoleForUserInCircle(ctx context.Context, circleID string, userID string) (string, error) {
+	var role string
+	err := r.pool.QueryRow(ctx, getCircleMemberRoleQuery, circleID, userID).Scan(&role)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrSessionNotFound
+		}
+		return "", fmt.Errorf("get circle member role: %w", err)
+	}
+	return role, nil
+}
+
 func nullIfZero(ts time.Time) *time.Time {
 	if ts.IsZero() {
 		return nil

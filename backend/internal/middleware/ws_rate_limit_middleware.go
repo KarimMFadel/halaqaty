@@ -1,11 +1,9 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"halaqaty/backend/internal/platform/httpconst"
@@ -21,15 +19,6 @@ type wsRateKey struct {
 	circleID string
 }
 
-type wsContextKey string
-
-const wsConnectionTrackerContextKey wsContextKey = "ws-connection-tracker"
-
-type wsConnectionTracker struct {
-	release  func()
-	upgraded atomic.Bool
-}
-
 // WSRateLimitMiddleware enforces websocket connection and message budgets.
 type WSRateLimitMiddleware struct {
 	maxConnectionsPerUser int
@@ -37,7 +26,6 @@ type WSRateLimitMiddleware struct {
 	nowFn                 func() time.Time
 
 	mu            sync.Mutex
-	lastCleanup   time.Time
 	perUserConns  map[string]int
 	perUserCircle map[wsRateKey]wsRateWindow
 }
@@ -53,7 +41,9 @@ func NewWSRateLimitMiddleware(maxConnectionsPerUser int, maxMessagesPerMinute in
 	}
 }
 
-// LimitUpgrade enforces max concurrent websocket connections per user.
+// LimitUpgrade checks the per-user connection budget before upgrading.
+// The handler is responsible for calling OpenConnection/CloseConnection
+// around the actual WebSocket connection loop to track live connections.
 func (m *WSRateLimitMiddleware) LimitUpgrade(next http.Handler) http.Handler {
 	if m == nil {
 		return next
@@ -66,42 +56,28 @@ func (m *WSRateLimitMiddleware) LimitUpgrade(next http.Handler) http.Handler {
 			return
 		}
 
-		release, ok := m.acquireConnection(principal.UserID)
-		if !ok {
+		// Check budget without incrementing — the handler calls OpenConnection
+		// once the WebSocket upgrade succeeds and the connection loop begins.
+		if !m.hasCapacity(principal.UserID) {
 			http.Error(w, httpconst.ErrorMessageWebSocketConnLimitExceeded, http.StatusTooManyRequests)
 			return
 		}
 
-		tracker := &wsConnectionTracker{release: release}
-		ctx := context.WithValue(r.Context(), wsConnectionTrackerContextKey, tracker)
-		next.ServeHTTP(w, r.WithContext(ctx))
-
-		if !tracker.upgraded.Load() {
-			tracker.release()
-		}
+		next.ServeHTTP(w, r)
 	})
 }
 
-// MarkWSConnectionUpgraded marks that the request became a websocket connection.
-func MarkWSConnectionUpgraded(ctx context.Context) bool {
-	tracker, ok := currentWSConnectionTracker(ctx)
-	if !ok {
-		return false
-	}
-
-	tracker.upgraded.Store(true)
-	return true
+// OpenConnection increments the active connection count for userID.
+// Must be called by the WebSocket handler after a successful upgrade,
+// paired with a deferred CloseConnection call inside the connection loop.
+func (m *WSRateLimitMiddleware) OpenConnection(userID string) bool {
+	return m.openConnection(userID)
 }
 
-// ReleaseWSConnection should be called once when the websocket disconnects.
-func ReleaseWSConnection(ctx context.Context) bool {
-	tracker, ok := currentWSConnectionTracker(ctx)
-	if !ok {
-		return false
-	}
-
-	tracker.release()
-	return true
+// CloseConnection decrements the active connection count for userID.
+// Must be deferred by the WebSocket handler when the connection loop exits.
+func (m *WSRateLimitMiddleware) CloseConnection(userID string) {
+	m.closeConnection(userID)
 }
 
 // AllowMessage returns true when message budget is available for the user/circle tuple.
@@ -123,8 +99,6 @@ func (m *WSRateLimitMiddleware) AllowMessage(userID string, circleID string) boo
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.cleanupStaleMessageWindowsLocked(now, windowStart)
-
 	state := m.perUserCircle[key]
 	if state.windowStart != windowStart {
 		state = wsRateWindow{windowStart: windowStart}
@@ -135,31 +109,41 @@ func (m *WSRateLimitMiddleware) AllowMessage(userID string, circleID string) boo
 	return state.msgCount <= m.maxMessagesPerMinute
 }
 
-func (m *WSRateLimitMiddleware) acquireConnection(userID string) (func(), bool) {
+// hasCapacity returns true if the user has room for another connection without incrementing.
+func (m *WSRateLimitMiddleware) hasCapacity(userID string) bool {
 	if m.maxConnectionsPerUser <= 0 {
-		return func() {}, true
+		return true
+	}
+	trimmedUserID := strings.TrimSpace(userID)
+	if trimmedUserID == "" {
+		return false
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return m.perUserConns[trimmedUserID] < m.maxConnectionsPerUser
+}
+
+func (m *WSRateLimitMiddleware) openConnection(userID string) bool {
+	if m.maxConnectionsPerUser <= 0 {
+		return true
 	}
 
 	trimmedUserID := strings.TrimSpace(userID)
 	if trimmedUserID == "" {
-		return nil, false
+		return false
 	}
 
 	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	next := m.perUserConns[trimmedUserID] + 1
 	if next > m.maxConnectionsPerUser {
-		m.mu.Unlock()
-		return nil, false
+		return false
 	}
 	m.perUserConns[trimmedUserID] = next
-	m.mu.Unlock()
-
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			m.closeConnection(trimmedUserID)
-		})
-	}, true
+	return true
 }
 
 func (m *WSRateLimitMiddleware) closeConnection(userID string) {
@@ -177,23 +161,4 @@ func (m *WSRateLimitMiddleware) closeConnection(userID string) {
 		return
 	}
 	m.perUserConns[trimmedUserID] = current - 1
-}
-
-func currentWSConnectionTracker(ctx context.Context) (*wsConnectionTracker, bool) {
-	tracker, ok := ctx.Value(wsConnectionTrackerContextKey).(*wsConnectionTracker)
-	return tracker, ok
-}
-
-func (m *WSRateLimitMiddleware) cleanupStaleMessageWindowsLocked(now time.Time, currentWindow time.Time) {
-	if !m.lastCleanup.IsZero() && now.Sub(m.lastCleanup) < time.Minute {
-		return
-	}
-
-	for key, window := range m.perUserCircle {
-		if window.windowStart != currentWindow {
-			delete(m.perUserCircle, key)
-		}
-	}
-
-	m.lastCleanup = now
 }

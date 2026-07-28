@@ -49,3 +49,10 @@ SET
     updated_at = NOW()
 WHERE session_id = $1
 `
+
+const getCircleMemberRoleQuery = `
+SELECT role
+FROM circle_members
+WHERE circle_id = $1::uuid
+  AND user_id = $2::uuid
+`

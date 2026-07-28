@@ -22,19 +22,49 @@ type RateLimitMiddleware struct {
 	nowFn         func() time.Time
 
 	mu           sync.Mutex
-	lastCleanup  time.Time
 	ipCounters   map[string]windowCounter
 	userCounters map[string]windowCounter
 }
 
 // NewRateLimitMiddleware creates a one-minute fixed-window limiter.
 func NewRateLimitMiddleware(perIPPerMin int, perUserPerMin int) *RateLimitMiddleware {
-	return &RateLimitMiddleware{
+	m := &RateLimitMiddleware{
 		perIPPerMin:   perIPPerMin,
 		perUserPerMin: perUserPerMin,
 		nowFn:         time.Now,
 		ipCounters:    map[string]windowCounter{},
 		userCounters:  map[string]windowCounter{},
+	}
+	go m.runEviction()
+	return m
+}
+
+// runEviction periodically removes stale counters to prevent unbounded memory growth.
+func (m *RateLimitMiddleware) runEviction() {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		m.evict()
+	}
+}
+
+// evict removes counters that belong to a window older than the current one.
+func (m *RateLimitMiddleware) evict() {
+	now := m.nowFn().UTC()
+	currentWindow := now.Truncate(time.Minute)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for key, c := range m.ipCounters {
+		if c.windowStart.Before(currentWindow) {
+			delete(m.ipCounters, key)
+		}
+	}
+	for key, c := range m.userCounters {
+		if c.windowStart.Before(currentWindow) {
+			delete(m.userCounters, key)
+		}
 	}
 }
 
@@ -73,8 +103,6 @@ func (m *RateLimitMiddleware) hitLimit(counters map[string]windowCounter, key st
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.cleanupStaleCountersLocked(now, windowStart)
-
 	counter := counters[key]
 	if counter.windowStart != windowStart {
 		counter = windowCounter{windowStart: windowStart}
@@ -84,25 +112,6 @@ func (m *RateLimitMiddleware) hitLimit(counters map[string]windowCounter, key st
 	counters[key] = counter
 
 	return counter.count > limit
-}
-
-func (m *RateLimitMiddleware) cleanupStaleCountersLocked(now time.Time, currentWindow time.Time) {
-	if !m.lastCleanup.IsZero() && now.Sub(m.lastCleanup) < time.Minute {
-		return
-	}
-
-	for key, counter := range m.ipCounters {
-		if counter.windowStart != currentWindow {
-			delete(m.ipCounters, key)
-		}
-	}
-	for key, counter := range m.userCounters {
-		if counter.windowStart != currentWindow {
-			delete(m.userCounters, key)
-		}
-	}
-
-	m.lastCleanup = now
 }
 
 func clientIP(r *http.Request) string {

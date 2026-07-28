@@ -30,11 +30,17 @@
 - [X] T011 Implement backend session inactivity enforcement service in `backend/internal/auth/session_service.go`
 - [X] T012 Implement backend logout session invalidation repository in `backend/internal/auth/session_repository.go`
 - [X] T013 [P] Implement bearer authentication middleware in `backend/internal/middleware/auth_middleware.go`
+  - [X] **Correction**: Resolve PostgreSQL UUID from Firebase UID and set it in `AuthPrincipal` to fix the `session.UserID` (UUID) vs `decoded.UID` (Firebase UID) mismatch.
 - [X] T014 [P] Implement per-circle role authorization middleware using `circle_members` in `backend/internal/middleware/role_middleware.go`
+  - [X] **Correction**: Pass local database User UUID (from `principal.UserID`) to `RoleForUserInCircle` instead of the Firebase UID string. Also added `RoleForUserInCircle` to `SessionRepository` and `getCircleMemberRoleQuery` to `session_queries.go`.
 - [X] T015 [P] Implement audit logger for auth/profile/role-change events in `backend/internal/platform/logging/audit_logger.go`
 - [X] T016 [P] Implement REST rate limits per IP and per user in `backend/internal/middleware/rate_limit_middleware.go`
+  - [X] **Correction**: Implement periodic eviction/expiration of rate limiter counters to fix the unbounded map memory leak.
 - [X] T017 [P] Implement WebSocket limits (max 3 connections/user, max 30 messages/min/user/circle) in `backend/internal/middleware/ws_rate_limit_middleware.go`
+  - [X] **Correction**: Exposed `OpenConnection`/`CloseConnection` public methods for WebSocket handler lifecycle. `LimitUpgrade` now only checks capacity; handler is responsible for tracking the live connection.
 - [X] T018 Wire authentication, authorization, validation, timeout, and rate-limit middleware in `backend/cmd/api/router.go`
+- [ ] T018a Bootstrap database connection pool, load configuration, wire dependencies, and start HTTP server in `backend/cmd/api/main.go`
+  - ⚠️ **Blocker**: Code implemented but cannot compile — system Go version is 1.20.2; project requires Go 1.22+. Install Go 1.22 from https://go.dev/dl/ to unblock.
 
 **Checkpoint**: Foundational platform complete; user stories can begin.
 

@@ -18,11 +18,12 @@ Implement and validate auth, role enforcement, and profile flows for Go backend 
 3. Add circle-role-protected role assignment endpoint:
    - `POST /circles/{circleId}/members/{userId}/role`
 4. Add middleware/policies for:
-   - authentication + authorization
+   - authentication + authorization (resolving database User UUID from Firebase UID)
    - validation
-   - rate limits
+   - rate limits (with periodic memory eviction of counters)
    - audit logging
    - timeout handling
+5. Implement application bootstrapping, database connection pooling, dependency wiring, and HTTP server startup in `backend/cmd/api/main.go`.
 
 ## 3) Mobile implementation outline (Flutter)
 1. Build/register/login/logout flows.

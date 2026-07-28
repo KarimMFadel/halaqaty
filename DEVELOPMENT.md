@@ -32,7 +32,7 @@ Every PR is fully traceable: user story → contract → implementation → test
 | `golangci-lint` | v1.62.x | `go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.0` |
 | `gitleaks` | latest | `go install github.com/zricethezav/gitleaks/v8@latest` |
 | Node.js | 20+ | [nodejs.org](https://nodejs.org) — required for Spectral (API linting) |
-| `spectral` + OAS ruleset | latest | `npm install -g @stoplight/spectral-cli @stoplight/spectral-oas` |
+| `spectral` + OAS ruleset | latest | `npm install -g @stoplight/spectral-cli @stoplight/spectral-rulesets` |
 
 ### Install uv (Windows)
 

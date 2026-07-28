@@ -52,6 +52,9 @@ jobs:
       - name: Clean and download Go modules
         working-directory: backend
         run: go clean -modcache && go mod download
+      - name: Build all packages
+        working-directory: backend
+        run: go build ./...
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:

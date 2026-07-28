@@ -47,11 +47,15 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
+      - name: Download Go modules
+        working-directory: backend
+        run: go mod download
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.64.8
           working-directory: backend
+          skip-cache: true
 
   flutter-analyze:
     needs: detect-stacks

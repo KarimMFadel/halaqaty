@@ -53,6 +53,7 @@ paths:
   # ── Auth ──────────────────────────────────────────────────
   /auth/register:
     post:
+      operationId: registerUser
       tags: [Auth]
       summary: Create user profile after Firebase registration
       security: []
@@ -84,6 +85,8 @@ paths:
 
   /auth/login:
     post:
+      operationId: loginUser
+      description: Sign in with email/password via Firebase Auth
       tags: [Auth]
       summary: Sign in with email/password via Firebase Auth
       security: []
@@ -107,6 +110,7 @@ paths:
 
   /auth/logout:
     post:
+      operationId: logoutUser
       tags: [Auth]
       summary: Logout current session
       description: Invalidates only the current authenticated device/session. Other active sessions remain valid.
@@ -118,6 +122,7 @@ paths:
 
   /auth/fcm-token:
     post:
+      operationId: registerFcmToken
       tags: [Auth]
       summary: Register or update a device FCM token (upsert by user_id + token)
       description: |
@@ -151,6 +156,8 @@ paths:
 
   /auth/me:
     get:
+      operationId: getCurrentUser
+      description: Get current user profile
       tags: [Auth]
       summary: Get current user profile
       responses:
@@ -163,6 +170,8 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
     put:
+      operationId: updateCurrentUser
+      description: Update profile (name, avatar, language)
       tags: [Auth]
       summary: Update profile (name, avatar, language)
       requestBody:
@@ -183,6 +192,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
     delete:
+      operationId: deleteCurrentUser
       tags: [Auth]
       summary: Delete account and all associated data
       description: |
@@ -198,6 +208,8 @@ paths:
   # ── Circles ───────────────────────────────────────────────
   /circles:
     get:
+      operationId: listCircles
+      description: List circles the authenticated user is a member of
       tags: [Circles]
       summary: List circles the authenticated user is a member of
       parameters:
@@ -222,6 +234,8 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
     post:
+      operationId: createCircle
+      description: Create a new circle
       tags: [Circles]
       summary: Create a new circle
       requestBody:
@@ -246,6 +260,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/CircleId'
     get:
+      operationId: getCircle
+      description: Get circle details
       tags: [Circles]
       summary: Get circle details
       responses:
@@ -262,6 +278,8 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     put:
+      operationId: updateCircle
+      description: Update circle settings (teacher only)
       tags: [Circles]
       summary: Update circle settings (teacher only)
       requestBody:
@@ -286,6 +304,8 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     delete:
+      operationId: deleteCircle
+      description: Archive a circle (teacher only)
       tags: [Circles]
       summary: Archive a circle (teacher only)
       responses:
@@ -300,6 +320,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/CircleId'
     get:
+      operationId: listCircleMembers
+      description: List circle members
       tags: [Circles]
       summary: List circle members
       responses:
@@ -329,6 +351,8 @@ paths:
           type: string
           format: uuid
     delete:
+      operationId: removeCircleMember
+      description: Remove a member from the circle (teacher only)
       tags: [Circles]
       summary: Remove a member from the circle (teacher only)
       responses:
@@ -351,6 +375,8 @@ paths:
           type: string
           format: uuid
     post:
+      operationId: updateCircleMemberRole
+      description: Assign member role in a circle (supervisor/teacher only)
       tags: [Circles]
       summary: Assign member role in a circle (supervisor/teacher only)
       requestBody:
@@ -371,6 +397,8 @@ paths:
 
   /circles/join:
     post:
+      operationId: joinCircle
+      description: Join a circle using an invite code
       tags: [Circles]
       summary: Join a circle using an invite code
       requestBody:
@@ -406,6 +434,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/CircleId'
     get:
+      operationId: listCircleSessions
+      description: List sessions for a circle
       tags: [Sessions]
       summary: List sessions for a circle
       parameters:
@@ -438,6 +468,8 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
     post:
+      operationId: createCircleSession
+      description: Create a new session (teacher only)
       tags: [Sessions]
       summary: Create a new session (teacher only)
       requestBody:
@@ -464,6 +496,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/SessionId'
     post:
+      operationId: startSession
+      description: Start a session — creates LiveKit room and returns token (teacher only)
       tags: [Sessions]
       summary: Start a session — creates LiveKit room and returns token (teacher only)
       responses:
@@ -484,6 +518,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/SessionId'
     post:
+      operationId: joinSession
+      description: Join an active session — returns LiveKit token (members only)
       tags: [Sessions]
       summary: Join an active session — returns LiveKit token (members only)
       responses:
@@ -506,6 +542,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/SessionId'
     post:
+      operationId: endSession
+      description: End a session (teacher only)
       tags: [Sessions]
       summary: End a session (teacher only)
       responses:
@@ -527,6 +565,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/SessionId'
     get:
+      operationId: getSessionQueue
+      description: Get current queue state
       tags: [Queue]
       summary: Get current queue state
       responses:
@@ -547,6 +587,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/SessionId'
     post:
+      operationId: createQueueRound
+      description: Start a new recitation round (teacher/supervisor only)
       tags: [Queue]
       summary: Start a new recitation round (teacher/supervisor only)
       requestBody:
@@ -587,6 +629,8 @@ paths:
           type: string
           format: uuid
     post:
+      operationId: gradeQueueEntry
+      description: Submit grade for a completed recitation turn (teacher/supervisor only)
       tags: [Queue]
       summary: Submit grade for a completed recitation turn (teacher/supervisor only)
       requestBody:
@@ -613,6 +657,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/SessionId'
     post:
+      operationId: optOutOfQueue
+      description: Opt out of the current round (student only, requires teacher/supervisor approval)
       tags: [Queue]
       summary: Opt out of the current round (student only, requires teacher/supervisor approval)
       responses:
@@ -632,6 +678,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/CircleId'
     get:
+      operationId: listCircleMessages
+      description: List recent messages in a circle chat
       tags: [Chat]
       summary: List recent messages in a circle chat
       parameters:
@@ -659,6 +707,8 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
     post:
+      operationId: sendCircleMessage
+      description: Send a text, image, or file message to circle chat
       tags: [Chat]
       summary: Send a text, image, or file message to circle chat
       requestBody:
@@ -691,6 +741,8 @@ paths:
           type: string
           format: uuid
     delete:
+      operationId: deleteCircleMessage
+      description: Delete a message (own messages within 10 min; teacher can delete any)
       tags: [Chat]
       summary: Delete a message (own messages within 10 min; teacher can delete any)
       responses:
@@ -710,6 +762,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/CircleId'
     get:
+      operationId: listCircleSchedules
+      description: List schedules for a circle
       tags: [Schedules]
       summary: List schedules for a circle
       responses:
@@ -729,6 +783,8 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
     post:
+      operationId: createCircleSchedule
+      description: Create a recurring schedule entry (teacher only)
       tags: [Schedules]
       summary: Create a recurring schedule entry (teacher only)
       requestBody:
@@ -754,6 +810,7 @@ paths:
   # ── Progress (F-007) ──────────────────────────────────────
   /students/me/circles/history:
     get:
+      operationId: getMyCirclesHistory
       tags: [Progress]
       summary: Get student's circle history with attendance and practice counts
       description: |
@@ -785,6 +842,7 @@ paths:
 
   /students/me/progress:
     get:
+      operationId: getMyProgress
       tags: [Progress]
       summary: Get student's global Quran map — all 114 Surahs with memorization status
       description: |
@@ -816,6 +874,8 @@ paths:
 
   /students/me/sessions/history:
     get:
+      operationId: getMySessionsHistory
+      description: Get student's session history with attended vs practiced breakdown
       tags: [Progress]
       summary: Get student's session history with attended vs practiced breakdown
       parameters:
@@ -850,6 +910,8 @@ paths:
 
   /students/me/progress/stats:
     get:
+      operationId: getMyProgressStats
+      description: Get student's progress analytics — Ayahs per time bucket, attendance %, practice %
       tags: [Progress]
       summary: Get student's progress analytics — Ayahs per time bucket, attendance %, practice %
       parameters:
@@ -882,6 +944,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/CircleId'
     get:
+      operationId: getCircleProgress
       tags: [Progress]
       summary: Get all students' progress summary in a circle (teacher/supervisor only)
       description: |
@@ -910,6 +973,7 @@ paths:
         required: true
         schema: { type: string, format: uuid }
     get:
+      operationId: getCircleUserProgress
       tags: [Progress]
       summary: Get one student's full progress profile (teacher only)
       description: |
@@ -934,6 +998,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/CircleId'
     get:
+      operationId: getCircleSurahInsights
       tags: [Progress]
       summary: Get Surahs ranked by weak grade frequency — last N days (teacher only)
       description: |
@@ -965,6 +1030,7 @@ paths:
   # ── Uploads ───────────────────────────────────────────────
   /uploads/avatar:
     post:
+      operationId: uploadAvatar
       tags: [Uploads]
       summary: Upload user avatar image
       description: |
@@ -1005,6 +1071,7 @@ paths:
 
   /uploads/voice:
     post:
+      operationId: uploadVoice
       tags: [Uploads]
       summary: Upload a voice note attachment
       description: |
@@ -1052,6 +1119,7 @@ paths:
 
   /uploads/image:
     post:
+      operationId: uploadImage
       tags: [Uploads]
       summary: Upload an image attachment for circle chat
       description: |
@@ -1098,6 +1166,7 @@ paths:
 
   /uploads/file:
     post:
+      operationId: uploadFile
       tags: [Uploads]
       summary: Upload a file attachment (PDF) for circle chat
       description: |
@@ -1145,6 +1214,7 @@ paths:
   # ── Config ────────────────────────────────────────────────
   /config/features:
     get:
+      operationId: getFeatureConfig
       tags: [Config]
       summary: Get feature flags for the authenticated user
       description: |
@@ -1171,6 +1241,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/SessionId'
     post:
+      operationId: getSessionWebSocketToken
       tags: [Sessions]
       summary: Issue a short-lived WebSocket connection token
       description: |
@@ -1789,8 +1860,9 @@ components:
         to_ayah:
           type: integer
         grade:
-          $ref: '#/components/schemas/GradeEnum'
           nullable: true
+          allOf:
+            - $ref: '#/components/schemas/GradeEnum'
         type:
           type: string
           enum: [new_memorization, revision, old_revision]
@@ -1826,8 +1898,9 @@ components:
           nullable: true
           description: Days since last recitation of any type for this Surah
         latest_grade:
-          $ref: '#/components/schemas/GradeEnum'
           nullable: true
+          allOf:
+            - $ref: '#/components/schemas/GradeEnum'
         latest_type:
           type: string
           enum: [new_memorization, revision, old_revision]
@@ -1959,8 +2032,9 @@ components:
           type: string
           enum: [new_memorization, revision, old_revision, test]
         grade:
-          $ref: '#/components/schemas/GradeEnum'
           nullable: true
+          allOf:
+            - $ref: '#/components/schemas/GradeEnum'
         grade_label:
           type: string
           description: Arabic grade label (e.g., ممتاز)

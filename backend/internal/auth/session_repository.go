@@ -2,11 +2,11 @@ package auth
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -53,7 +53,7 @@ func (r *SessionRepository) GetByID(ctx context.Context, sessionID string) (Sess
 		&session.RevokedAt,
 	)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return Session{}, ErrSessionNotFound
 		}
 		return Session{}, fmt.Errorf("get session: %w", err)
@@ -83,7 +83,7 @@ func (r *SessionRepository) GetLocalUserIDByFirebaseUID(ctx context.Context, fir
 	var userID string
 	err := r.pool.QueryRow(ctx, getLocalUserIDByFirebaseUIDQuery, firebaseUID).Scan(&userID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return "", ErrUserNotFound
 		}
 		return "", fmt.Errorf("get local user id: %w", err)
@@ -111,7 +111,7 @@ func (r *SessionRepository) RoleForUserInCircle(ctx context.Context, circleID st
 	var role string
 	err := r.pool.QueryRow(ctx, getCircleMemberRoleQuery, circleID, userID).Scan(&role)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return "", ErrSessionNotFound
 		}
 		return "", fmt.Errorf("get circle member role: %w", err)

@@ -46,11 +46,12 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: backend/go.mod
+          go-version: '1.24'
           cache-dependency-path: backend/go.sum
-      - name: Download Go modules
+          cache: false
+      - name: Clean and download Go modules
         working-directory: backend
-        run: go mod download
+        run: go clean -modcache && go mod download
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:

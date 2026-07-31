@@ -48,19 +48,19 @@
 
 **Purpose**: Align the already-completed Phase 1/2 foundation with the clarified plan before implementing user stories.
 
-- [ ] T020 [P] Add alignment migration `backend/migrations/000011_auth_roles_profile_alignment.up.sql` for opaque UUID session IDs, non-null expiry, indexes, and `circle_members.circle_id` foreign-key validation where the parent `circles` table exists.
-- [ ] T021 [P] Add rollback migration `backend/migrations/000011_auth_roles_profile_alignment.down.sql` that reverses only objects introduced by `000011`.
-- [ ] T022 [P] Add repository queries for idempotent user provisioning, backend session lookup by `X-Halaqaty-Session-ID`, revocation checks, expiry checks, user ownership match, and activity touch in `backend/internal/auth/session_queries.go`.
-- [ ] T023 Update auth middleware so only `/auth/register` and `/auth/sessions` are Firebase-bearer-only; all other protected routes require bearer plus `X-Halaqaty-Session-ID`.
-- [ ] T024 Add standard error-code constants and validation-field mapping for missing, revoked, expired, inactive, and mismatched backend sessions in `backend/internal/platform/httpconst/` and auth/profile handlers.
-- [ ] T025 [P] Add audit event constants and payload builders for registration, session creation, logout, profile update, circle creation, and role changes in `backend/internal/platform/logging/audit_logger.go`.
-- [ ] T026 [P] Add request timeout, retry/idempotency, and request-ID behavior for safe auth/profile requests in `backend/internal/platform/http/server.go` and middleware wiring.
-- [ ] T027 [P] Add contract tests proving protected requests reject missing, revoked, expired, and user-mismatched session IDs alongside Firebase token validation in `backend/tests/contract/auth_session_contract_test.go`.
-- [ ] T028 [P] Add migration test coverage for `000010 -> 000011` and `000011` rollback in `backend/tests/integration/auth_roles_migration_test.go`.
-- [ ] T029 Validate OpenAPI operation IDs, `$ref` targets, dual-credential security, profile fields, and circle role schemas across `docs/contracts/openapi.yaml` and `specs/001-auth-roles-profile/contracts/auth-roles-profile.openapi.yaml`.
-- [ ] T030 Run Spec-Kit cross-artifact analysis for `spec.md`, `plan.md`, `data-model.md`, contracts, and this task list; record findings in `specs/001-auth-roles-profile/validation-report.md`.
-- [ ] T031 Run OpenAPI lint when Spectral is available; otherwise record the environment blocker and the manual schema-reference validation result in `specs/001-auth-roles-profile/validation-report.md`.
-- [ ] T032 Confirm Phase 3 checkpoint: dual-credential auth, additive migration, error envelope, audit events, and role lifecycle are testable before US1 implementation continues.
+- [X] T020 [P] Add alignment migration `backend/migrations/000011_auth_roles_profile_alignment.up.sql` for opaque UUID session IDs, non-null expiry, indexes, and `circle_members.circle_id` foreign-key validation where the parent `circles` table exists.
+- [X] T021 [P] Add rollback migration `backend/migrations/000011_auth_roles_profile_alignment.down.sql` that reverses only objects introduced by `000011`.
+- [X] T022 [P] Add repository queries for idempotent user provisioning, backend session lookup by `X-Halaqaty-Session-ID`, revocation checks, expiry checks, user ownership match, and activity touch in `backend/internal/auth/session_queries.go`.
+- [X] T023 Update auth middleware so only `/auth/register` and `/auth/sessions` are Firebase-bearer-only; all other protected routes require bearer plus `X-Halaqaty-Session-ID`.
+- [X] T024 Add standard error-code constants and validation-field mapping for missing, revoked, expired, inactive, and mismatched backend sessions in `backend/internal/platform/httpconst/` and auth/profile handlers.
+- [X] T025 [P] Add audit event constants and payload builders for registration, session creation, logout, profile update, circle creation, and role changes in `backend/internal/platform/logging/audit_logger.go`.
+- [X] T026 [P] Add request timeout, retry/idempotency, and request-ID behavior for safe auth/profile requests in `backend/internal/platform/http/server.go` and middleware wiring.
+- [X] T027 [P] Add contract tests proving protected requests reject missing, revoked, expired, and user-mismatched session IDs alongside Firebase token validation in `backend/tests/contract/auth_session_contract_test.go`.
+- [X] T028 [P] Add migration test coverage for `000010 -> 000011` and `000011` rollback in `backend/tests/integration/auth_roles_migration_test.go`.
+- [X] T029 Validate OpenAPI operation IDs, `$ref` targets, dual-credential security, profile fields, and circle role schemas across `docs/contracts/openapi.yaml` and `specs/001-auth-roles-profile/contracts/auth-roles-profile.openapi.yaml`.
+- [X] T030 Run Spec-Kit cross-artifact analysis for `spec.md`, `plan.md`, `data-model.md`, contracts, and this task list; record findings in `specs/001-auth-roles-profile/validation-report.md`.
+- [X] T031 Run OpenAPI lint when Spectral is available; otherwise record the environment blocker and the manual schema-reference validation result in `specs/001-auth-roles-profile/validation-report.md`.
+- [X] T032 Confirm Phase 3 checkpoint: dual-credential auth, additive migration, error envelope, audit events, and role lifecycle are testable before US1 implementation continues.
 
 **Checkpoint**: Completed Phase 1/2 foundations are aligned with the clarified Firebase/session and circle-role plan.
 

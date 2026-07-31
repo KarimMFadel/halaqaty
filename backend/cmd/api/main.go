@@ -77,6 +77,7 @@ func main() {
 		Role:      roleMW,
 		RateLimit: rateLimitMW,
 		Timeout:   cfg.RequestTimeout,
+		Logger:    logger,
 	}
 
 	// ── Router ────────────────────────────────────────────────────────────────

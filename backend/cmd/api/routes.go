@@ -5,9 +5,13 @@ const (
 )
 
 const (
-	routeAuthMe = "GET /auth/me"
+	routeAuthRegister = "POST /auth/register"
+	routeAuthSessions = "POST /auth/sessions"
+	routeAuthLogout   = "POST /auth/logout"
+	routeAuthMeGet    = "GET /auth/me"
+	routeAuthMePut    = "PUT /auth/me"
 )
 
 const (
-	routeCircleAssignRole = "POST /circles/{circleId}/members/{userId}/role"
+	routeCircleAssignRole = "PUT /circles/{circleId}/members/{userId}/role"
 )

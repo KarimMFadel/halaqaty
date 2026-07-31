@@ -1420,6 +1420,10 @@ components:
           type: string
           format: uri
           description: Pre-signed MinIO URL returned by the upload endpoint
+        phone:
+          type: string
+          nullable: true
+          maxLength: 50
 
     UserProfile:
       type: object
@@ -1446,6 +1450,10 @@ components:
         preferred_language:
           type: string
           enum: [ar, en]
+        phone:
+          type: string
+          nullable: true
+          maxLength: 50
         created_at:
           type: string
           format: date-time

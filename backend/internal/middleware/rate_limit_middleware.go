@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	phttp "halaqaty/backend/internal/platform/http"
 	"halaqaty/backend/internal/platform/httpconst"
 )
 
@@ -77,13 +78,23 @@ func (m *RateLimitMiddleware) Limit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := clientIP(r)
 		if ip != "" && m.hitLimit(m.ipCounters, ip, m.perIPPerMin) {
-			http.Error(w, httpconst.ErrorMessageRateLimitExceeded, http.StatusTooManyRequests)
+			phttp.WriteError(
+				w,
+				httpconst.ErrorCodeRateLimitExceeded,
+				httpconst.ErrorMessageRateLimitExceeded,
+				http.StatusTooManyRequests,
+			)
 			return
 		}
 
 		if principal, ok := CurrentPrincipal(r.Context()); ok {
 			if m.hitLimit(m.userCounters, principal.UserID, m.perUserPerMin) {
-				http.Error(w, httpconst.ErrorMessageRateLimitExceeded, http.StatusTooManyRequests)
+				phttp.WriteError(
+					w,
+					httpconst.ErrorCodeRateLimitExceeded,
+					httpconst.ErrorMessageRateLimitExceeded,
+					http.StatusTooManyRequests,
+				)
 				return
 			}
 		}

@@ -1,6 +1,6 @@
 # ADR-009: Firebase Identity and Backend Device Sessions
 
-**Status:** Accepted  
+**Status:** Superseded by ADR-010
 **Date:** 2026-07-31  
 **Deciders:** Karim (product owner)
 
@@ -30,10 +30,7 @@ manage supervisors.
    out from Firebase locally. A future explicit logout-all-devices endpoint revokes all
    backend sessions for the authenticated user. Firebase remains responsible for
    refresh-token rotation and reuse detection.
-4. Creating a circle atomically creates a teacher membership for its creator. Joining
-   with an invite creates a student membership. Only that circle's teacher can promote
-   an existing student to supervisor or revoke a supervisor; the role endpoint cannot
-   assign a teacher role.
+4. Circle-role lifecycle is superseded by ADR-010.
 
 ## Consequences
 

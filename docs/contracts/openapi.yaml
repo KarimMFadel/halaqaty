@@ -250,7 +250,11 @@ paths:
           $ref: '#/components/responses/Unauthorized'
     post:
       operationId: createCircle
-      description: Create a new circle
+      description: |
+        Create a new circle. The creator may assign existing registered users as one
+        or more teachers and one optional backup supervisor. If no teacher is
+        selected, the creator becomes teacher; otherwise the creator becomes
+        supervisor.
       tags: [Circles]
       summary: Create a new circle
       requestBody:
@@ -392,12 +396,12 @@ paths:
     put:
       operationId: updateCircleMemberRole
       description: |
-        A circle's teacher may promote an existing student to supervisor or revoke a
-        supervisor back to student. This endpoint cannot assign or revoke the
-        teacher role, cannot modify the sole teacher membership, and never changes
-        a role in another circle. Supervisors cannot manage roles.
+        An active teacher or supervisor may update another active member to student,
+        supervisor, or teacher. The actor cannot change their own role, this endpoint
+        cannot leave the circle without a teacher, and it never changes a role in
+        another circle.
       tags: [Circles]
-      summary: Promote or revoke a circle supervisor (teacher only)
+      summary: Manage another circle member's role (teacher or supervisor)
       requestBody:
         required: true
         content:
@@ -1394,6 +1398,10 @@ components:
     UpdateProfileRequest:
       type: object
       properties:
+        full_name:
+          type: string
+          minLength: 2
+          maxLength: 150
         display_name:
           type: string
           minLength: 2
@@ -1401,6 +1409,10 @@ components:
         bio:
           type: string
           maxLength: 500
+        country:
+          type: string
+          minLength: 2
+          maxLength: 2
         preferred_language:
           type: string
           enum: [ar, en]
@@ -1417,9 +1429,15 @@ components:
           format: uuid
         firebase_uid:
           type: string
+        full_name:
+          type: string
+          nullable: true
         display_name:
           type: string
         bio:
+          type: string
+          nullable: true
+        country:
           type: string
           nullable: true
         avatar_url:
@@ -1466,6 +1484,17 @@ components:
           type: string
           enum: [required, optional]
           default: required
+        teacher_user_ids:
+          type: array
+          description: Existing registered users to add as teachers. If omitted or empty, the creator becomes teacher.
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        backup_supervisor_user_id:
+          type: string
+          format: uuid
+          description: Optional existing registered user to add as supervisor. Must not also be a selected teacher.
 
     UpdateCircleRequest:
       type: object
@@ -1556,7 +1585,7 @@ components:
       properties:
         role:
           type: string
-          enum: [student, supervisor]
+          enum: [student, supervisor, teacher]
 
     # ── Sessions ───────────────────────────────────────────
     CreateSessionRequest:
@@ -2266,6 +2295,7 @@ components:
       properties:
         error:
           type: object
+          required: [code, message]
           properties:
             code:
               type: string
@@ -2273,14 +2303,9 @@ components:
             message:
               type: string
             fields:
-              type: array
-              items:
-                type: object
-                properties:
-                  field:
-                    type: string
-                  message:
-                    type: string
+              type: object
+              additionalProperties:
+                type: string
 
     # ── Config ─────────────────────────────────────────────
     FeatureFlags:

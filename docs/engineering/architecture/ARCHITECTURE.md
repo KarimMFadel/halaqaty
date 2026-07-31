@@ -980,7 +980,7 @@ token remains valid.
 | GET | `/circles/{id}/members` | ✅ | List members with roles |
 | DELETE | `/circles/{id}/members/{userId}` | ✅ | Remove member from circle (teacher only) |
 | POST | `/circles/{id}/leave` | 🔲 | Leave a circle |
-| PUT | `/circles/{id}/members/{userId}/role` | ✅ | Teacher promotes/revokes an existing supervisor |
+| PUT | `/circles/{id}/members/{userId}/role` | ✅ | Teacher or supervisor changes another member's circle role |
 | POST | `/circles/{id}/invite-code/refresh` | 🔲 | Generate new invite code |
 
 ### `/sessions`
@@ -1084,7 +1084,22 @@ token remains valid.
 - **Firebase token lifecycle:** Firebase ID tokens expire after 1 hour; the Flutter Firebase SDK refreshes them silently. Firebase owns refresh-token rotation and reuse detection.
 - **Backend session lifecycle:** The backend creates one opaque session per device after a verified Firebase sign-in. Every protected request includes its session ID; session activity extends the 30-day inactivity window. Current-device logout revokes only that session. A future logout-all-devices operation must revoke every session for the authenticated user. Backend sessions do not mint access or refresh tokens.
 - **LiveKit tokens:** Generated exclusively by Go backend; never by the Flutter client. Student publish scope is turn-based and non-admin.
-- **Circle role lifecycle:** Creating a circle atomically creates its creator's `circle_members` record with role `teacher`. Joining by invite creates `student`. Only that circle's teacher may promote an existing student to `supervisor` or revoke a supervisor to `student`; supervisors cannot assign roles, and self-registration never grants a circle role.
+- **Circle role lifecycle:** Roles are stored only in `circle_members`. On creation, the creator may assign existing registered users as one or more teachers and one optional backup supervisor; if no teacher is selected, the creator becomes teacher, otherwise the creator is supervisor. Invite acceptance creates `student`. Any teacher or supervisor may change another member's role among `student`, `supervisor`, and `teacher`, but cannot change their own role or leave the circle without a teacher. See ADR-010.
+
+#### Circle permission matrix
+
+All rows below require `Authorization: Bearer <firebase-jwt>` and `X-Halaqaty-Session-ID`, except `/auth/register` and `/auth/sessions`, which require only the Firebase bearer token.
+
+| Action | Required role | Expected rejection |
+|--------|---------------|--------------------|
+| List/read own circles and joined circle details | active member | `401` invalid credentials, `403` non-member, `404` missing circle |
+| Create circle | authenticated user | `401` invalid credentials, `400` invalid role assignment input |
+| Join by invite | authenticated user | `401` invalid credentials, `404` invalid invite, `409` already member |
+| Update circle settings, archive circle, remove member | teacher | `401` invalid credentials, `403` non-teacher, `404` missing circle/member |
+| Create/start/end session, create schedules | teacher | `401` invalid credentials, `403` non-teacher, `404` missing circle/session |
+| Join live session, list members, read queue/chat | active member | `401` invalid credentials, `403` non-member, `404` missing resource |
+| Grade recitation | teacher or supervisor | `401` invalid credentials, `403` student/non-member, `404` missing queue entry |
+| Change another member role | teacher or supervisor | `401` invalid credentials, `403` self-change/final-teacher/student/non-member/cross-circle, `404` missing member |
 
 ### 6.2 Authentication & Authorization Flow
 

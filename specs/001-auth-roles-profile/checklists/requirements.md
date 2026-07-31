@@ -1,36 +1,32 @@
 # Specification Quality Checklist: Authentication, Roles, and User Profile
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-07-25
+**Validated**: 2026-07-31
 **Feature**: [Link to spec.md](../spec.md)
 
 ## Content Quality
 
-- [x] No implementation details (languages, frameworks, APIs)
-- [x] Focused on user value and business needs
-- [x] Written for non-technical stakeholders
-- [x] All mandatory sections completed
+- [x] All mandatory sections are present.
+- [x] User scenarios have independently testable acceptance scenarios.
+- [x] No `[NEEDS CLARIFICATION]` markers remain.
+- [x] Success criteria are measurable.
 
 ## Requirement Completeness
 
-- [x] No [NEEDS CLARIFICATION] markers remain
-- [x] Requirements are testable and unambiguous
-- [x] Success criteria are measurable
-- [x] Success criteria are technology-agnostic (no implementation details)
-- [x] All acceptance scenarios are defined
-- [x] Edge cases are identified
-- [x] Scope is clearly bounded
-- [x] Dependencies and assumptions identified
+- [x] Firebase identity ownership and current-device backend-session ownership are explicit.
+- [x] First-time profile completion fields are explicit.
+- [x] Per-circle authorization is explicit.
+- [x] Role policy is defined by ADR-010 and aligned across the decision register, source contract, and feature artifacts.
+- [x] The feature-level contract follows Firebase-owned identity and opaque backend-session semantics.
+- [x] Protected-request session credentials and rejection conditions are explicit.
+- [x] User Story 3 covers teacher/supervisor role management and its safeguards.
+- [x] `User.account_type` is removed; no global account role exists.
 
 ## Feature Readiness
 
-- [x] All functional requirements have clear acceptance criteria
-- [x] User scenarios cover primary flows
-- [x] Feature meets measurable outcomes defined in Success Criteria
-- [x] No implementation details leak into specification
+- [x] Ready for `/speckit.plan`.
 
 ## Notes
 
-- Validation completed with all checklist items passing.
-- No blockers identified. No clarification markers remain.
-- Ready for `/speckit.clarify` (optional) or `/speckit.plan`.
+- The global REST contract is the source of truth; the feature-level contract conforms to it.
+- Contract-test scenarios are recorded in `tasks.md` for implementation.

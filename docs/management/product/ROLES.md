@@ -13,7 +13,7 @@
 |------|-------------|-------------|
 | Teacher / Reciter | مُقرئ / محفظ | Creates and manages circles; conducts sessions; evaluates students |
 | Student | طالب | Joins circles; recites; tracks progress |
-| Supervisor | مُشرف | Assigned by teacher; helps manage sessions and queue |
+| Supervisor | مُشرف | Assigned during circle creation or by a circle manager; helps manage sessions, queue, and roles |
 | Institution Admin | مدير مؤسسة | Manages entire institution (future — F-017) |
 
 > **Authorization note:** Role boundaries are enforced server-side via Go backend authorization middleware. The `circle_members.role` column stores the assigned role per circle. See [ARCHITECTURE.md §4](../../engineering/architecture/ARCHITECTURE.md#4-database-schema) for schema detail.
@@ -30,7 +30,7 @@ The primary power user of Halaqaty.
 - Generate and share invite codes/links
 - Conduct live audio sessions (video is post-MVP behind feature flag)
 - Manage the recitation queue during sessions (order, skip, grade)
-- Assign and revoke the Supervisor role to any circle member at any time
+- Assign another member as teacher, supervisor, or student, while retaining at least one teacher
 - Grade students' recitations (5-grade scale: Excellent → Good → Acceptable → Needs Review → Repeat)
 - Send private messages and voice notes to students
 - View session-level progress per student in MVP (comprehensive analytics post-MVP)
@@ -56,21 +56,22 @@ The primary power user of Halaqaty.
 
 ## Supervisor (مُشرف)
 
-A trusted student or assistant appointed by the teacher to help manage sessions. MVP uses this assignable role model; a distinct co-teacher role remains deferred until after pilot.
+A trusted member appointed during circle creation or by a circle manager to help manage sessions. MVP uses this assignable role model; a distinct co-teacher role remains deferred until after pilot.
 
-> **Key design decision:** A supervisor can be assigned at any point — before the session is created, before the session starts, or during a live session. The teacher retains full authority at all times.
+> **Key design decision:** A supervisor can be assigned at circle creation or later by a teacher or supervisor. Multiple teachers may share the circle's authority.
 
-**Capabilities (granted by teacher):**
+**Capabilities (granted by a circle manager):**
 
 - Manage the recitation queue (reorder, skip, add late joiners)
 - Mute/unmute participants in live sessions
 - Track attendance
+- Change another member's teacher, supervisor, or student assignment
 - Pin messages in circle chat
 
 **Explicit restrictions — enforced by authorization middleware:**
 
 - **Cannot grade students** — grading is teacher-only
-- **Cannot remove the teacher** from the circle
+- **Cannot change their own role** or leave the circle without a teacher
 
 > **Decision reference:** Co-teacher / Supervisor boundary — see [MVP_DECISION_REGISTER.md](./MVP_DECISION_REGISTER.md) entry PRD-4.
 
@@ -93,10 +94,12 @@ A trusted student or assistant appointed by the teacher to help manage sessions.
 | Rule | Detail |
 |------|--------|
 | Circle-scoped | All roles (Teacher, Student, Supervisor) are scoped per circle, not globally |
+| Circle creation | Any authenticated user may create a circle; their role in an existing circle does not restrict it |
 | Multi-circle participation | A user can be a Teacher in one circle and a Student in another |
-| Supervisor assignment | Only the circle's Teacher can assign or revoke the Supervisor role |
+| Initial assignments | Creator may select existing registered users as one or more teachers and one optional backup supervisor; without a selected teacher, the creator becomes teacher |
+| Role management | A teacher or supervisor may change another member's role among teacher, supervisor, and student; they cannot change their own role or remove the final teacher |
 | Supervisor timing | Can be assigned before session creation, before session start, or during a live session |
-| One teacher per circle | Each circle has exactly one teacher (the creator); transferable ownership is post-MVP |
+| Teacher count | A circle may have multiple teachers and must always retain at least one |
 
 ---
 
@@ -104,7 +107,7 @@ A trusted student or assistant appointed by the teacher to help manage sessions.
 
 | Capability | Teacher | Student | Supervisor |
 |-----------|---------|---------|------------|
-| Create circle | ✅ | ❌ | ❌ |
+| Create circle | Account-level (any authenticated user) | Account-level (any authenticated user) | Account-level (any authenticated user) |
 | Invite members | ✅ | ❌ | ❌ |
 | Start live session | ✅ | ❌ | ❌ |
 | Manage queue (reorder/skip) | ✅ | ❌ | ✅ |
@@ -113,8 +116,8 @@ A trusted student or assistant appointed by the teacher to help manage sessions.
 | Pin messages | ✅ | ❌ | ✅ |
 | Track attendance | ✅ | ❌ | ✅ |
 | View own grades | ✅ (as teacher) | ✅ | ✅ |
-| Assign Supervisor role | ✅ | ❌ | ❌ |
-| Remove teacher | ❌ | ❌ | ❌ |
+| Manage another member's role | ✅ | ❌ | ✅ |
+| Change own role / remove final teacher | ❌ | ❌ | ❌ |
 | Set schedule | ✅ | ❌ | ❌ |
 | Send messages | ✅ | ✅ | ✅ |
 | Send voice notes | ✅ | ✅ | ✅ |

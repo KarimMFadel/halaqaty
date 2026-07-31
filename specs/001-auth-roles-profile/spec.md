@@ -10,8 +10,14 @@
 ### Session 2026-07-25
 
 - Q: Which fields are required for first-time profile completion? → A: full_name + country.
-- Q: Which roles can be selected during self-registration? → A: student or teacher only; privileged role assignment is restricted.
+- Q: Which roles can be selected during self-registration? → A: None. Self-registration does not create circle roles; circle roles are assigned through circle creation, invites, and authorized circle-role management.
 - Q: What is the token policy? → A: Firebase ID tokens (1-hour lifecycle with SDK auto-refresh) and backend-enforced 30-day inactivity logout.
+
+### Session 2026-07-31
+
+- Q: Which component owns registration and sign-in? → A: The Flutter Firebase SDK owns password validation, identity creation, sign-in, and Firebase ID-token refresh. The Go API verifies Firebase ID tokens and creates or revokes durable per-device backend sessions; it never accepts passwords or returns Firebase tokens.
+- Q: How are initial circle roles assigned? → A: A creator may assign existing registered users as one or more teachers and an optional backup supervisor. Invite acceptance creates a student membership. Without a selected teacher, the creator becomes teacher; otherwise the creator becomes supervisor.
+- Q: Who may later change teacher or supervisor assignments? → A: A teacher or supervisor may change another member between student, supervisor, and teacher. Managers cannot change their own role or leave the circle with no teacher; students cannot manage roles.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -21,12 +27,12 @@ As a new or returning user, I can register or sign in with email and password so
 
 **Why this priority**: Account access is the entry point to all other product value and must be reliable and secure before any downstream feature can be used.
 
-**Independent Test**: Register a new user, sign in with valid credentials, verify Firebase-issued tokens are accepted by protected backend routes, and verify logout/session-expiration behavior.
+**Independent Test**: Register a new user, sign in with valid credentials through Firebase, verify protected routes require both a Firebase ID token and the matching backend session ID, and verify logout/session-expiration behavior.
 
 **Acceptance Scenarios**:
 
-1. **Given** a new email, **When** the user registers with a valid password and selected account type, **Then** the account is created and Firebase-issued session tokens are returned.
-2. **Given** valid credentials, **When** the user logs in, **Then** Firebase-issued session tokens are returned and mobile session becomes active.
+1. **Given** a new email, **When** the user registers with a valid password through the Flutter Firebase SDK and provisions their profile with the API, **Then** the account and local user record are created and a current-device backend session is returned.
+2. **Given** valid credentials, **When** the user signs in through the Flutter Firebase SDK and creates a backend session, **Then** the mobile session becomes active.
 3. **Given** an authenticated user, **When** the user logs out from the current device/session, **Then** only that session is invalidated and protected backend access is rejected until sign-in.
 
 ---
@@ -53,13 +59,13 @@ As a system owner, I need protected endpoints to enforce per-circle authorizatio
 
 **Why this priority**: Role enforcement protects sensitive operations and governance, but builds on authentication and token validation foundations.
 
-**Independent Test**: Call a supervisor-only endpoint with tokens from supervisor, teacher, student, and non-member users and confirm only authorized users are allowed.
+**Independent Test**: Call a role-management endpoint with teacher, supervisor, student, and non-member sessions and confirm only authorized managers may update another member without self-changing or removing the final teacher.
 
 **Acceptance Scenarios**:
 
-1. **Given** a supervisor-only endpoint, **When** a student or non-member token is used, **Then** the request is rejected with authorization error.
-2. **Given** a protected endpoint requiring authentication, **When** a request has missing or invalid token, **Then** the request is rejected.
-3. **Given** a circle-role-protected endpoint, **When** a user has required role in `circle_members`, **Then** access is granted.
+1. **Given** a role-management endpoint, **When** a student or non-member uses it, **Then** the request is rejected with an authorization error.
+2. **Given** a protected endpoint, **When** a request has a missing, invalid, revoked, or mismatched Firebase token or backend session ID, **Then** the request is rejected.
+3. **Given** a circle-role-management endpoint, **When** a teacher or supervisor updates another member without removing the final teacher, **Then** access is granted.
 
 ---
 
@@ -67,21 +73,22 @@ As a system owner, I need protected endpoints to enforce per-circle authorizatio
 
 - Duplicate email registration attempt is rejected with conflict error and no account overwrite.
 - Missing or malformed Firebase ID token is rejected.
+- A missing, revoked, unknown, inactive, or user-mismatched backend session ID is rejected on a protected request.
 - Backend session inactivity beyond 30 days forces re-authentication.
 - Missing full_name or country during first-time profile completion blocks completion until both are provided.
-- Self-registration attempts with disallowed account type are rejected.
+- Backend authentication endpoints never accept passwords or return Firebase ID or refresh tokens.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: System MUST allow account registration with unique email/password and MUST reject duplicate email attempts.
+- **FR-001**: The Flutter client MUST allow account registration with unique email/password through Firebase Auth, which rejects duplicate email attempts; the API MUST provision the corresponding local user from a verified Firebase ID token.
 - **FR-002**: System MUST securely store passwords in non-plaintext form (via Firebase credential handling) and MUST never return passwords in API responses.
-- **FR-003**: System MUST authenticate credentials through Firebase Auth and issue/return only Firebase-managed session tokens to clients.
+- **FR-003**: The Flutter Firebase SDK MUST authenticate credentials, create identities, and refresh Firebase ID tokens. The API MUST verify Firebase ID tokens and return only an opaque current-device backend session identifier, never Firebase tokens.
 - **FR-004**: System MUST enforce backend session inactivity logout at 30 days and require re-authentication after inactivity expiration.
 - **FR-005**: System MUST invalidate only the current device/session on logout and reject subsequent protected access for that revoked session until re-authentication.
-- **FR-006**: System MUST allow self-registration account type selection only from student or teacher; privileged role assignment MUST be restricted to authorized flows.
-- **FR-007**: System MUST enforce authentication middleware on every protected route and reject requests with missing, malformed, expired, or revoked tokens.
+- **FR-006**: System MUST not assign any circle role during self-registration. Circle creation MUST let the creator assign existing registered users as one or more teachers and one optional backup supervisor; if no teacher is selected, the creator MUST become teacher, otherwise the creator MUST become supervisor. Invite acceptance MUST create a student membership. A teacher or supervisor may change another member between student, supervisor, and teacher, but MUST NOT change their own role or leave the circle without a teacher.
+- **FR-007**: After backend-session creation, system MUST enforce both Firebase ID-token and `X-Halaqaty-Session-ID` validation on every protected route, rejecting missing, malformed, expired, revoked, unknown, inactive, or user-mismatched credentials. Registration and backend-session creation require only the Firebase ID token.
 - **FR-008**: System MUST enforce authorization using PostgreSQL `circle_members` roles per circle for protected endpoints.
 - **FR-009**: System MUST allow authenticated users to create, read, and update their own basic profile.
 - **FR-010**: System MUST provide mobile flows for register, login, logout, profile view, and profile edit.
@@ -91,7 +98,7 @@ As a system owner, I need protected endpoints to enforce per-circle authorizatio
 
 ### Key Entities *(include if feature involves data)*
 
-- **User**: Authenticated account identity with Firebase UID, email, account type, status, and audit timestamps.
+- **User**: Authenticated account identity with Firebase UID, email, status, and audit timestamps.
 - **Profile**: User-managed personal details including full_name, display_name, bio, country, avatar_url, and updated_at. `full_name` and `country` are mandatory on first completion.
 - **CircleMember**: Per-circle authorization record mapping user_id + circle_id to role (student/teacher/supervisor) and membership status.
 - **UserSession**: Backend session activity record used for inactivity timeout enforcement, including last_activity_at and revoked_at.

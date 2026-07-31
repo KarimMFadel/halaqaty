@@ -19,7 +19,8 @@ This directory records the key architectural decisions made for Halaqaty. Each A
 | [ADR-006](ADR-006-db-migrations.md) | Database Migration Tool — golang-migrate | Accepted | 2026-04-26 |
 | [ADR-007](ADR-007-monorepo-structure.md) | Monorepo Structure and CI Strategy | Accepted | 2026-04-26 |
 | [ADR-008](ADR-008-webrtc-solution.md) | WebRTC Solution for Live Audio Sessions — LiveKit | Accepted | 2026-07-25 |
-| [ADR-009](ADR-009-firebase-device-sessions.md) | Firebase Identity and Backend Device Sessions | Accepted | 2026-07-31 |
+| [ADR-009](ADR-009-firebase-device-sessions.md) | Firebase Identity and Backend Device Sessions | Superseded by ADR-010 | 2026-07-31 |
+| [ADR-010](ADR-010-circle-role-management.md) | Multi-Teacher Circle Role Management | Accepted | 2026-07-31 |
 
 ---
 

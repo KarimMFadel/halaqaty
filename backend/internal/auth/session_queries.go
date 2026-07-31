@@ -1,31 +1,69 @@
 package auth
 
-const upsertSessionQuery = `
+const upsertUserByFirebaseUIDQuery = `
+INSERT INTO users (firebase_uid, email) VALUES ($1, $2)
+ON CONFLICT (firebase_uid) DO UPDATE SET
+    email = EXCLUDED.email,
+    updated_at = NOW()
+RETURNING id, firebase_uid, email, created_at, updated_at
+`
+
+const getUserByFirebaseUIDQuery = `
+SELECT id, firebase_uid, email, created_at, updated_at
+FROM users
+WHERE firebase_uid = $1
+`
+
+const getUserByEmailQuery = `
+SELECT id, firebase_uid, email, created_at, updated_at
+FROM users
+WHERE email = $1
+`
+
+const createEmptyProfileQuery = `
+INSERT INTO profiles (user_id) VALUES ($1)
+ON CONFLICT (user_id) DO NOTHING
+`
+
+const createSessionQuery = `
 INSERT INTO user_sessions (
     session_id,
     user_id,
+    device_name,
     last_activity_at,
     expires_at,
     revoked_at,
     updated_at
-) VALUES ($1, $2, $3, $4, $5, NOW())
-ON CONFLICT (session_id)
-DO UPDATE SET
-    last_activity_at = EXCLUDED.last_activity_at,
-    expires_at = EXCLUDED.expires_at,
-    revoked_at = EXCLUDED.revoked_at,
-    updated_at = NOW()
+) VALUES ($1, $2, $3, $4, $5, NULL, NOW())
 `
 
 const getSessionByIDQuery = `
 SELECT
     session_id,
     user_id,
+    device_name,
     last_activity_at,
-    COALESCE(expires_at, TIMESTAMPTZ 'epoch'),
-    revoked_at
+    expires_at,
+    revoked_at,
+    created_at,
+    updated_at
 FROM user_sessions
 WHERE session_id = $1
+`
+
+const getSessionByIDAndUserIDQuery = `
+SELECT
+    session_id,
+    user_id,
+    device_name,
+    last_activity_at,
+    expires_at,
+    revoked_at,
+    created_at,
+    updated_at
+FROM user_sessions
+WHERE session_id = $1
+  AND user_id = $2
 `
 
 const getLocalUserIDByFirebaseUIDQuery = `

@@ -532,6 +532,15 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at
     }
+    user_sessions {
+        uuid id PK
+        uuid user_id FK
+        varchar device_name
+        timestamptz last_activity_at
+        timestamptz expires_at
+        timestamptz revoked_at
+        timestamptz created_at
+    }
     circles {
         uuid id PK
         varchar name
@@ -680,6 +689,7 @@ erDiagram
     quran_surahs ||--o{ memorization_progress : "referenced by"
     quran_surahs ||--o{ quran_divisions : "divided into"
     users ||--o{ device_tokens : "registers"
+    users ||--o{ user_sessions : "has"
     users ||--o{ notifications : "receives"
     quran_surahs ||--o{ recitation_queue : "referenced by"
 ```
@@ -711,6 +721,19 @@ erDiagram
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
 | last_seen_at | TIMESTAMPTZ | DEFAULT NOW() | Updated on each successful FCM delivery |
 | UNIQUE | (user_id, token) | | One entry per device per user |
+
+#### `user_sessions`
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK, server-generated | Opaque current-device session identifier; supplied as `X-Halaqaty-Session-ID` |
+| user_id | UUID | FK → users.id NOT NULL ON DELETE CASCADE | Session owner |
+| device_name | VARCHAR(100) | NULL | Optional user-visible device label; not a credential |
+| last_activity_at | TIMESTAMPTZ | NOT NULL | Updated by authenticated requests; used for the 30-day inactivity rule |
+| expires_at | TIMESTAMPTZ | NOT NULL | Absolute backend-session expiry |
+| revoked_at | TIMESTAMPTZ | NULL | Set on current-device logout or account revocation |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | |
+
+> Firebase refresh tokens are never stored in this table. Firebase owns their rotation and reuse detection.
 
 #### `circles`
 | Column | Type | Constraints | Description |
@@ -921,7 +944,16 @@ Removed from MVP scope. The product currently supports direct student and teache
 
 ### Base URL: `https://api.halaqaty.app/api/v1`
 
-### Authentication: All endpoints require `Authorization: Bearer <firebase-jwt>` except `/auth/*`
+### Authentication: Firebase identity plus backend device session
+
+Flutter Firebase Auth owns email/password validation, identity creation, sign-in, and
+Firebase ID-token refresh. The Go backend never receives passwords and never issues
+Firebase ID or refresh tokens. `POST /auth/register` provisions a just-created Firebase
+identity locally; `POST /auth/sessions` creates a backend session after Firebase sign-in.
+Both require `Authorization: Bearer <firebase-jwt>`. All other protected routes require
+that bearer token plus `X-Halaqaty-Session-ID`, an opaque backend-issued current-device
+session identifier. A revoked or inactive session is rejected even while its Firebase ID
+token remains valid.
 
 ---
 
@@ -929,6 +961,8 @@ Removed from MVP scope. The product currently supports direct student and teache
 | Method | Path | Status | Description |
 |--------|------|--------|-------------|
 | POST | `/auth/register` | ✅ | Create user profile after Firebase registration |
+| POST | `/auth/sessions` | ✅ | Create backend session after Firebase sign-in |
+| POST | `/auth/logout` | ✅ | Revoke the current backend device session |
 | POST | `/auth/fcm-token` | ✅ | Register or update a device FCM token (upsert by user_id + token) |
 | GET | `/auth/me` | ✅ | Get current user profile |
 | PUT | `/auth/me` | ✅ | Update profile (name, avatar, language) |
@@ -946,7 +980,7 @@ Removed from MVP scope. The product currently supports direct student and teache
 | GET | `/circles/{id}/members` | ✅ | List members with roles |
 | DELETE | `/circles/{id}/members/{userId}` | ✅ | Remove member from circle (teacher only) |
 | POST | `/circles/{id}/leave` | 🔲 | Leave a circle |
-| PUT | `/circles/{id}/members/{userId}/role` | 🔲 | Update member role (assign/revoke supervisor) |
+| PUT | `/circles/{id}/members/{userId}/role` | ✅ | Teacher or supervisor changes another member's circle role |
 | POST | `/circles/{id}/invite-code/refresh` | 🔲 | Generate new invite code |
 
 ### `/sessions`
@@ -1047,8 +1081,25 @@ Removed from MVP scope. The product currently supports direct student and teache
 
 - **Identity:** Firebase Auth issues JWTs; our Go backend validates them on every request
 - **Authorization:** Role-based per circle. After JWT validation, Go backend checks `circle_members` table for user's role in the requested circle
-- **Token lifecycle:** Firebase tokens expire after 1 hour; `firebase_client` SDK auto-refreshes silently
+- **Firebase token lifecycle:** Firebase ID tokens expire after 1 hour; the Flutter Firebase SDK refreshes them silently. Firebase owns refresh-token rotation and reuse detection.
+- **Backend session lifecycle:** The backend creates one opaque session per device after a verified Firebase sign-in. Every protected request includes its session ID; session activity extends the 30-day inactivity window. Current-device logout revokes only that session. A future logout-all-devices operation must revoke every session for the authenticated user. Backend sessions do not mint access or refresh tokens.
 - **LiveKit tokens:** Generated exclusively by Go backend; never by the Flutter client. Student publish scope is turn-based and non-admin.
+- **Circle role lifecycle:** Roles are stored only in `circle_members`. On creation, the creator may assign existing registered users as one or more teachers and one optional backup supervisor; if no teacher is selected, the creator becomes teacher, otherwise the creator is supervisor. Invite acceptance creates `student`. Any teacher or supervisor may change another member's role among `student`, `supervisor`, and `teacher`, but cannot change their own role or leave the circle without a teacher. See ADR-010.
+
+#### Circle permission matrix
+
+All rows below require `Authorization: Bearer <firebase-jwt>` and `X-Halaqaty-Session-ID`, except `/auth/register` and `/auth/sessions`, which require only the Firebase bearer token.
+
+| Action | Required role | Expected rejection |
+|--------|---------------|--------------------|
+| List/read own circles and joined circle details | active member | `401` invalid credentials, `403` non-member, `404` missing circle |
+| Create circle | authenticated user | `401` invalid credentials, `400` invalid role assignment input |
+| Join by invite | authenticated user | `401` invalid credentials, `404` invalid invite, `409` already member |
+| Update circle settings, archive circle, remove member | teacher | `401` invalid credentials, `403` non-teacher, `404` missing circle/member |
+| Create/start/end session, create schedules | teacher | `401` invalid credentials, `403` non-teacher, `404` missing circle/session |
+| Join live session, list members, read queue/chat | active member | `401` invalid credentials, `403` non-member, `404` missing resource |
+| Grade recitation | teacher or supervisor | `401` invalid credentials, `403` student/non-member, `404` missing queue entry |
+| Change another member role | teacher or supervisor | `401` invalid credentials, `403` self-change/final-teacher/student/non-member/cross-circle, `404` missing member |
 
 ### 6.2 Authentication & Authorization Flow
 
@@ -1064,13 +1115,13 @@ sequenceDiagram
     U->>App: Sign in (Google / Apple / Email)
     App->>FB: signInWith(provider)
     FB-->>App: Firebase ID Token (JWT, 1hr expiry)
-    App->>API: POST /auth/register { firebase_uid, display_name }
+    App->>API: POST /auth/register { display_name }\n[Authorization: Bearer firebase_jwt]
     API->>FB: VerifyIDToken(jwt) → uid ✓
-    API->>DB: INSERT users (firebase_uid, display_name, ...)
-    API-->>App: UserProfile { id, display_name }
+    API->>DB: INSERT users + user_sessions (firebase_uid, display_name, ...)
+    API-->>App: { user, session_id, expires_at }
 
     Note over U,DB: Phase 2 — Authorization (per-circle role check)
-    App->>API: GET /circles/{id}\n[Authorization: Bearer firebase_jwt]
+    App->>API: GET /circles/{id}\n[Authorization: Bearer firebase_jwt; X-Halaqaty-Session-ID]
     API->>FB: VerifyIDToken(jwt) → uid ✓
     API->>DB: SELECT role FROM circle_members\nWHERE circle_id=$1 AND user_id=$2
     DB-->>API: role = "teacher"

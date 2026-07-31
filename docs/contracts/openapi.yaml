@@ -4,7 +4,11 @@ info:
   description: |
     REST API for the Halaqaty Quran memorization circle management platform.
 
-    **Authentication:** All endpoints except `/auth/*` require a Firebase JWT in the `Authorization: Bearer <token>` header.
+    **Authentication:** Flutter uses Firebase Auth for sign-up, sign-in, password
+    management, and ID-token refresh. API requests require a Firebase ID token in
+    `Authorization: Bearer <token>` and, after backend session creation, the opaque
+    current-device session identifier in `X-Halaqaty-Session-ID`. The backend never
+    accepts passwords or issues Firebase ID or refresh tokens.
 
     **Base URL:** `https://api.halaqaty.app/api/v1`
 
@@ -24,6 +28,7 @@ servers:
 
 security:
   - BearerAuth: []
+    SessionId: []
 
 tags:
   - name: Auth
@@ -56,11 +61,13 @@ paths:
       operationId: registerUser
       tags: [Auth]
       summary: Create user profile after Firebase registration
-      security: []
+      security:
+        - BearerAuth: []
       description: |
-        Called once after a successful Firebase Auth sign-up to create the user
-        record in our PostgreSQL `users` table. Idempotent — safe to call again
-        if the first call failed.
+        Called after a successful Firebase Auth sign-up to provision the local user
+        record and create a backend session for this device. The Firebase UID is
+        derived solely from the verified bearer token; it is never accepted in the
+        request body. Idempotent for the same Firebase identity.
       requestBody:
         required: true
         content:
@@ -69,40 +76,44 @@ paths:
               $ref: '#/components/schemas/RegisterRequest'
       responses:
         '201':
-          description: User profile created
+          description: User provisioned and current-device backend session created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserProfile'
+                $ref: '#/components/schemas/BackendSessionResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
         '409':
-          description: User already exists (idempotent — returns existing profile)
+          description: User already exists (idempotent — returns current session)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserProfile'
+                $ref: '#/components/schemas/BackendSessionResponse'
 
-  /auth/login:
+  /auth/sessions:
     post:
-      operationId: loginUser
-      description: Sign in with email/password via Firebase Auth
+      operationId: createBackendSession
+      description: |
+        Creates a backend session for the current device after the Flutter Firebase
+        SDK has signed the user in. This endpoint does not validate a password,
+        create Firebase identities, or return Firebase tokens.
       tags: [Auth]
-      summary: Sign in with email/password via Firebase Auth
-      security: []
+      summary: Create a current-device backend session
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LoginRequest'
+              $ref: '#/components/schemas/CreateBackendSessionRequest'
       responses:
         '200':
-          description: Firebase token payload
+          description: Current-device backend session
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FirebaseSessionResponse'
+                $ref: '#/components/schemas/BackendSessionResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -113,7 +124,11 @@ paths:
       operationId: logoutUser
       tags: [Auth]
       summary: Logout current session
-      description: Invalidates only the current authenticated device/session. Other active sessions remain valid.
+      description: |
+        Invalidates only the backend session identified by `X-Halaqaty-Session-ID`.
+        Other device sessions remain valid. The Flutter client must also call
+        Firebase sign-out locally; Firebase refresh-token rotation and reuse
+        detection remain Firebase-managed.
       responses:
         '204':
           description: Logged out
@@ -235,7 +250,11 @@ paths:
           $ref: '#/components/responses/Unauthorized'
     post:
       operationId: createCircle
-      description: Create a new circle
+      description: |
+        Create a new circle. The creator may assign existing registered users as one
+        or more teachers and one optional backup supervisor. If no teacher is
+        selected, the creator becomes teacher; otherwise the creator becomes
+        supervisor.
       tags: [Circles]
       summary: Create a new circle
       requestBody:
@@ -374,11 +393,15 @@ paths:
         schema:
           type: string
           format: uuid
-    post:
+    put:
       operationId: updateCircleMemberRole
-      description: Assign member role in a circle (supervisor/teacher only)
+      description: |
+        An active teacher or supervisor may update another active member to student,
+        supervisor, or teacher. The actor cannot change their own role, this endpoint
+        cannot leave the circle without a teacher, and it never changes a role in
+        another circle.
       tags: [Circles]
-      summary: Assign member role in a circle (supervisor/teacher only)
+      summary: Manage another circle member's role (teacher or supervisor)
       requestBody:
         required: true
         content:
@@ -1285,6 +1308,11 @@ components:
       type: http
       scheme: bearer
       bearerFormat: Firebase JWT
+    SessionId:
+      type: apiKey
+      in: header
+      name: X-Halaqaty-Session-ID
+      description: Opaque backend-issued identifier for the current device session.
 
   parameters:
     CircleId:
@@ -1310,7 +1338,7 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     Unauthorized:
-      description: Missing or invalid Firebase JWT
+      description: Missing, invalid, expired, or revoked Firebase ID token or backend session
       content:
         application/json:
           schema:
@@ -1333,11 +1361,8 @@ components:
     # ── Users ──────────────────────────────────────────────
     RegisterRequest:
       type: object
-      required: [firebase_uid, display_name]
+      required: [display_name]
       properties:
-        firebase_uid:
-          type: string
-          description: Firebase Auth UID
         display_name:
           type: string
           minLength: 2
@@ -1347,35 +1372,36 @@ components:
           enum: [ar, en]
           default: ar
 
-    LoginRequest:
+    CreateBackendSessionRequest:
       type: object
-      required: [email, password]
       properties:
-        email:
+        device_name:
           type: string
-          format: email
-        password:
-          type: string
-          minLength: 8
+          maxLength: 100
+          description: Optional user-visible device label; not a credential.
 
-    FirebaseSessionResponse:
+    BackendSessionResponse:
       type: object
-      required: [id_token, refresh_token, expires_in_seconds, token_type]
+      required: [session_id, expires_at, user]
       properties:
-        id_token:
+        session_id:
           type: string
-        refresh_token:
+          format: uuid
+          description: Opaque identifier supplied in X-Halaqaty-Session-ID on subsequent requests.
+        expires_at:
           type: string
-        expires_in_seconds:
-          type: integer
-          example: 3600
-        token_type:
-          type: string
-          example: Bearer
+          format: date-time
+          description: Absolute backend-session expiry; sessions also expire after 30 days of inactivity.
+        user:
+          $ref: '#/components/schemas/UserProfile'
 
     UpdateProfileRequest:
       type: object
       properties:
+        full_name:
+          type: string
+          minLength: 2
+          maxLength: 150
         display_name:
           type: string
           minLength: 2
@@ -1383,6 +1409,10 @@ components:
         bio:
           type: string
           maxLength: 500
+        country:
+          type: string
+          minLength: 2
+          maxLength: 2
         preferred_language:
           type: string
           enum: [ar, en]
@@ -1390,6 +1420,10 @@ components:
           type: string
           format: uri
           description: Pre-signed MinIO URL returned by the upload endpoint
+        phone:
+          type: string
+          nullable: true
+          maxLength: 50
 
     UserProfile:
       type: object
@@ -1399,9 +1433,15 @@ components:
           format: uuid
         firebase_uid:
           type: string
+        full_name:
+          type: string
+          nullable: true
         display_name:
           type: string
         bio:
+          type: string
+          nullable: true
+        country:
           type: string
           nullable: true
         avatar_url:
@@ -1410,6 +1450,10 @@ components:
         preferred_language:
           type: string
           enum: [ar, en]
+        phone:
+          type: string
+          nullable: true
+          maxLength: 50
         created_at:
           type: string
           format: date-time
@@ -1448,6 +1492,17 @@ components:
           type: string
           enum: [required, optional]
           default: required
+        teacher_user_ids:
+          type: array
+          description: Existing registered users to add as teachers. If omitted or empty, the creator becomes teacher.
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        backup_supervisor_user_id:
+          type: string
+          format: uuid
+          description: Optional existing registered user to add as supervisor. Must not also be a selected teacher.
 
     UpdateCircleRequest:
       type: object
@@ -1538,7 +1593,7 @@ components:
       properties:
         role:
           type: string
-          enum: [student, teacher, supervisor]
+          enum: [student, supervisor, teacher]
 
     # ── Sessions ───────────────────────────────────────────
     CreateSessionRequest:
@@ -2248,6 +2303,7 @@ components:
       properties:
         error:
           type: object
+          required: [code, message]
           properties:
             code:
               type: string
@@ -2255,14 +2311,9 @@ components:
             message:
               type: string
             fields:
-              type: array
-              items:
-                type: object
-                properties:
-                  field:
-                    type: string
-                  message:
-                    type: string
+              type: object
+              additionalProperties:
+                type: string
 
     # ── Config ─────────────────────────────────────────────
     FeatureFlags:

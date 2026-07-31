@@ -1,80 +1,27 @@
 # Data Model: Authentication, Roles, and User Profile
 
-## 1) User
-- **Purpose**: Authenticated platform account.
-- **Core fields**:
-  - `id` (UUID, PK)
-  - `firebase_uid` (string, unique)
-  - `email` (string, unique, normalized lowercase)
-  - `account_type` (enum: `student | teacher`)
-  - `status` (enum: `active | disabled`)
-  - `created_at`, `updated_at` (UTC timestamps)
-- **Validation**:
-  - Email unique and valid format
-  - `account_type` can only be `student` or `teacher` during self-registration
+## User and Profile
 
-## 2) Profile (user-owned)
-- **Purpose**: User identity/profile details used in app experiences.
-- **Core fields**:
-  - `user_id` (UUID, PK/FK -> User.id)
-  - `full_name` (string, required for first completion)
-  - `display_name` (string, optional)
-  - `bio` (string, optional)
-  - `country` (ISO country code, required for first completion)
-  - `avatar_url` (string, optional)
-  - `profile_completed_at` (timestamp, nullable until completed)
-  - `updated_at` (UTC timestamp)
-- **Validation**:
-  - First completion requires both `full_name` and `country`
-  - Country must be valid ISO code
-  - Field length and trimming rules enforced server-side
+`users` holds the immutable local identity: `id` (UUID), `firebase_uid` (unique), `email` (unique), and timestamps. `profiles` is a 1:1 extension keyed by `user_id`, holding `full_name`, `country`, `phone`, `bio`, `avatar_url`, `completed_at`, and timestamps. There is no global role column.
 
-## 3) UserSession
-- **Purpose**: Durable backend session activity state for inactivity timeout and logout invalidation.
-- **Core fields**:
-  - `id` (UUID, PK)
-  - `user_id` (UUID, FK -> User.id)
-  - `device_id` (string, nullable)
-  - `last_activity_at` (UTC timestamp)
-  - `revoked_at` (UTC timestamp, nullable)
-  - `created_by_ip` (string, nullable)
-  - `created_by_user_agent` (string, nullable)
-  - `created_at` (UTC timestamp)
-- **Validation**:
-  - Session is invalid after 30 days of inactivity
-  - Revoked session cannot access protected endpoints
+First profile completion requires trimmed `full_name` and a valid ISO country code. Firebase UID is derived only from the verified bearer and is never client supplied.
 
-## 4) CircleMember
-- **Purpose**: Per-circle authorization source of truth.
-- **Core fields**:
-  - `circle_id` (UUID, PK/FK)
-  - `user_id` (UUID, PK/FK)
-  - `role` (enum: `student | teacher | supervisor`)
-  - `status` (enum: `active | removed`)
-  - `joined_at` (UTC timestamp)
-  - `updated_at` (UTC timestamp)
-- **Validation**:
-  - Role checks for protected actions query this table
-  - Non-members and insufficient roles are rejected with `403`
+## UserSession
 
-## Relationships
-- User **1:1** Profile
-- User **1:N** UserSession
-- User **N:M** Circle via CircleMember
+`user_sessions` holds an opaque, server-generated UUID `id` exposed as `X-Halaqaty-Session-ID`; `user_id` is a required foreign key. It also stores nullable `device_name`, `last_activity_at`, non-null `expires_at`, nullable `revoked_at`, and creation metadata/timestamps. A session is valid only when it belongs to the bearer-derived user, is not revoked, and has not exceeded its inactivity/expiry policy.
 
-## State Transitions
+Migration plan: retain existing deployed session values; introduce/standardize the UUID session identifier and required expiry through a new sequential migration, with a compatibility backfill before enforcing `NOT NULL`/foreign-key constraints.
 
-### UserSession
-1. `active` (not revoked and activity within 30 days)
-2. `revoked` (explicit logout or admin disablement)
-3. `expired` (30-day inactivity timeout)
+## Circle and CircleMember
 
-### CircleMember Role Authorization
-1. `member` (role assigned in circle_members)
-2. `authorized` (role meets endpoint requirement)
-3. `forbidden` (missing membership or insufficient role)
+`circles` remains the canonical parent table. `circle_members` is the authorization table with `circle_id` and `user_id` foreign keys, unique `(circle_id, user_id)`, `role` constrained to `student | supervisor | teacher`, and join/update timestamps.
 
-### Profile Completion
-1. `incomplete` (missing required fields for first completion)
-2. `complete` (`full_name` and `country` present)
-3. `updated` (subsequent edits preserve completion unless required fields removed, which is rejected)
+Creation is one transaction: insert the circle, add selected registered teachers, add an optional registered backup supervisor, and add the creator as teacher when no teacher is selected or supervisor otherwise. Reject duplicate/overlapping selections and unknown users. Invite acceptance inserts only `student`.
+
+Role changes lock the target circle membership set in one transaction. The actor and target must be distinct active members of that circle; actor role must be teacher or supervisor; the resulting set must contain at least one teacher.
+
+## Relationships and state
+
+- User 1:1 Profile; User 1:N UserSession; User N:M Circle through CircleMember.
+- Session: active → revoked (logout) or expired (inactivity/expiry).
+- Membership: active role may transition only through a permitted manager mutation; removal is rejected if it leaves no teacher.

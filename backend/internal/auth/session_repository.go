@@ -7,13 +7,20 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var ErrSessionNotFound = errors.New("session not found")
-var ErrUserNotFound = errors.New("user not found")
+var (
+	// ErrSessionNotFound is returned when a session ID does not exist.
+	ErrSessionNotFound = errors.New("session not found")
+	// ErrUserNotFound is returned when a Firebase UID or email cannot be resolved.
+	ErrUserNotFound = errors.New("user not found")
+	// ErrDuplicateEmail is returned when a user record with the same email already exists.
+	ErrDuplicateEmail = errors.New("email already exists")
+)
 
-// SessionRepository persists and invalidates user sessions.
+// SessionRepository persists and invalidates user sessions and identity mappings.
 type SessionRepository struct {
 	pool *pgxpool.Pool
 }
@@ -23,59 +30,80 @@ func NewSessionRepository(pool *pgxpool.Pool) *SessionRepository {
 	return &SessionRepository{pool: pool}
 }
 
-// Upsert inserts or updates session state.
-func (r *SessionRepository) Upsert(ctx context.Context, session Session) error {
-	_, err := r.pool.Exec(
-		ctx,
-		upsertSessionQuery,
-		session.ID,
-		session.UserID,
-		session.LastActivityAt.UTC(),
-		nullIfZero(session.ExpiresAt),
-		session.RevokedAt,
-	)
-	if err != nil {
-		return fmt.Errorf("upsert session: %w", err)
+// UpsertUserByFirebaseUID provisions or refreshes a local user mapped to a Firebase UID.
+func (r *SessionRepository) UpsertUserByFirebaseUID(ctx context.Context, firebaseUID, email string) (User, error) {
+	var user User
+	row := r.pool.QueryRow(ctx, upsertUserByFirebaseUIDQuery, firebaseUID, email)
+	if err := row.Scan(&user.ID, &user.FirebaseUID, &user.Email, &user.CreatedAt, &user.UpdatedAt); err != nil {
+		return User{}, fmt.Errorf("upsert user by firebase uid: %w", err)
 	}
-
-	return nil
+	return user, nil
 }
 
-// GetByID fetches a session by ID.
-func (r *SessionRepository) GetByID(ctx context.Context, sessionID string) (Session, error) {
-	var session Session
-	var expiresAt time.Time
-	err := r.pool.QueryRow(ctx, getSessionByIDQuery, sessionID).Scan(
-		&session.ID,
-		&session.UserID,
-		&session.LastActivityAt,
-		&expiresAt,
-		&session.RevokedAt,
+// GetUserByFirebaseUID resolves a full user record by Firebase UID.
+func (r *SessionRepository) GetUserByFirebaseUID(ctx context.Context, firebaseUID string) (User, error) {
+	var user User
+	err := r.pool.QueryRow(ctx, getUserByFirebaseUIDQuery, firebaseUID).Scan(
+		&user.ID, &user.FirebaseUID, &user.Email, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return Session{}, ErrSessionNotFound
+			return User{}, ErrUserNotFound
 		}
-		return Session{}, fmt.Errorf("get session: %w", err)
+		return User{}, fmt.Errorf("get user by firebase uid: %w", err)
 	}
-	if !expiresAt.Equal(time.Unix(0, 0).UTC()) {
-		session.ExpiresAt = expiresAt
-	}
-
-	return session, nil
+	return user, nil
 }
 
-// Touch updates the session activity timestamp.
-func (r *SessionRepository) Touch(ctx context.Context, sessionID string, lastActivityAt time.Time) error {
-	commandTag, err := r.pool.Exec(ctx, touchSessionQuery, sessionID, lastActivityAt.UTC())
+// GetUserByEmail resolves a user record by email address.
+func (r *SessionRepository) GetUserByEmail(ctx context.Context, email string) (User, error) {
+	var user User
+	err := r.pool.QueryRow(ctx, getUserByEmailQuery, email).Scan(
+		&user.ID, &user.FirebaseUID, &user.Email, &user.CreatedAt, &user.UpdatedAt,
+	)
 	if err != nil {
-		return fmt.Errorf("touch session: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return User{}, ErrUserNotFound
+		}
+		return User{}, fmt.Errorf("get user by email: %w", err)
 	}
-	if commandTag.RowsAffected() == 0 {
-		return ErrSessionNotFound
-	}
+	return user, nil
+}
 
+// CreateEmptyProfile ensures a profile row exists for a user.
+func (r *SessionRepository) CreateEmptyProfile(ctx context.Context, userID string) error {
+	_, err := r.pool.Exec(ctx, createEmptyProfileQuery, userID)
+	if err != nil {
+		return fmt.Errorf("create empty profile: %w", err)
+	}
 	return nil
+}
+
+// CreateSession persists a new backend session.
+func (r *SessionRepository) CreateSession(ctx context.Context, session Session) error {
+	_, err := r.pool.Exec(
+		ctx,
+		createSessionQuery,
+		session.ID,
+		session.UserID,
+		session.DeviceName,
+		session.LastActivityAt.UTC(),
+		session.ExpiresAt.UTC(),
+	)
+	if err != nil {
+		return fmt.Errorf("create session: %w", err)
+	}
+	return nil
+}
+
+// GetByID fetches a session by its opaque UUID.
+func (r *SessionRepository) GetByID(ctx context.Context, sessionID string) (Session, error) {
+	return r.scanSession(ctx, r.pool.QueryRow(ctx, getSessionByIDQuery, sessionID))
+}
+
+// GetByIDAndUserID fetches a session only if it is owned by the given user.
+func (r *SessionRepository) GetByIDAndUserID(ctx context.Context, sessionID, userID string) (Session, error) {
+	return r.scanSession(ctx, r.pool.QueryRow(ctx, getSessionByIDAndUserIDQuery, sessionID, userID))
 }
 
 // GetLocalUserIDByFirebaseUID resolves a local user UUID by Firebase UID.
@@ -88,8 +116,19 @@ func (r *SessionRepository) GetLocalUserIDByFirebaseUID(ctx context.Context, fir
 		}
 		return "", fmt.Errorf("get local user id: %w", err)
 	}
-
 	return userID, nil
+}
+
+// Touch updates the session activity timestamp.
+func (r *SessionRepository) Touch(ctx context.Context, sessionID string, lastActivityAt time.Time) error {
+	commandTag, err := r.pool.Exec(ctx, touchSessionQuery, sessionID, lastActivityAt.UTC())
+	if err != nil {
+		return fmt.Errorf("touch session: %w", err)
+	}
+	if commandTag.RowsAffected() == 0 {
+		return ErrSessionNotFound
+	}
+	return nil
 }
 
 // Revoke marks a session revoked for logout/session invalidation.
@@ -101,7 +140,6 @@ func (r *SessionRepository) Revoke(ctx context.Context, sessionID string, revoke
 	if commandTag.RowsAffected() == 0 {
 		return ErrSessionNotFound
 	}
-
 	return nil
 }
 
@@ -119,10 +157,27 @@ func (r *SessionRepository) RoleForUserInCircle(ctx context.Context, circleID st
 	return role, nil
 }
 
-func nullIfZero(ts time.Time) *time.Time {
-	if ts.IsZero() {
-		return nil
+func (r *SessionRepository) scanSession(ctx context.Context, row pgx.Row) (Session, error) {
+	var session Session
+	var deviceName sql.NullString
+	err := row.Scan(
+		&session.ID,
+		&session.UserID,
+		&deviceName,
+		&session.LastActivityAt,
+		&session.ExpiresAt,
+		&session.RevokedAt,
+		&session.CreatedAt,
+		&session.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Session{}, ErrSessionNotFound
+		}
+		return Session{}, fmt.Errorf("scan session: %w", err)
 	}
-	utc := ts.UTC()
-	return &utc
+	if deviceName.Valid {
+		session.DeviceName = &deviceName.String
+	}
+	return session, nil
 }

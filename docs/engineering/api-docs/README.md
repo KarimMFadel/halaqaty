@@ -18,11 +18,11 @@ Flutter App                 Firebase Auth            Go Backend
     │── signInWithGoogle() ──────►                        │
     │◄── Firebase ID Token ───────                        │
     │                                                     │
-    │── POST /api/v1/auth/login ──────────────────────────►
-    │   Body: { "firebase_token": "<Firebase ID Token>" } │
-    │◄── 200 { "access_token": "<JWT>", "user": {...} } ──│
+    │── POST /api/v1/auth/sessions ───────────────────────►
+    │   Authorization: Bearer <Firebase ID Token>           │
+    │◄── 200 { "session_id": "<opaque id>", "user": {...} }│
     │                                                     │
-    │── GET /api/v1/circles (Bearer <JWT>) ───────────────►
+    │── GET /api/v1/circles (Firebase token + session id) ►
     │◄── 200 { circles: [...] } ──────────────────────────│
 ```
 
@@ -48,23 +48,24 @@ final userCredential = await FirebaseAuth.instance.signInWithCredential(credenti
 final firebaseToken = await userCredential.user!.getIdToken();
 ```
 
-### Step 2 — Backend login (server-side session)
+### Step 2 — Backend device session
 
-Exchange the Firebase ID Token for a Halaqaty JWT:
+The backend verifies the Firebase ID token and creates an opaque, durable session for
+the current device. It does not receive a password, issue a Halaqaty JWT, or return a
+Firebase refresh token:
 
 ```
-POST /api/v1/auth/login
+POST /api/v1/auth/sessions
+Authorization: Bearer <Firebase ID Token>
 Content-Type: application/json
 
-{
-  "firebase_token": "<Firebase ID Token>"
-}
+{ "device_name": "Karim's iPhone" }
 ```
 
 **Success response (200):**
 ```json
 {
-  "access_token": "<Halaqaty JWT>",
+  "session_id": "opaque-backend-session-id",
   "expires_at": "2026-05-01T10:00:00Z",
   "user": {
     "id": "uuid",
@@ -85,33 +86,35 @@ Content-Type: application/json
 
 ### Step 3 — Authenticated requests
 
-Include the Halaqaty JWT in every subsequent request:
+Include both credentials in every protected request:
 
 ```
-Authorization: Bearer <access_token>
+Authorization: Bearer <Firebase ID Token>
+X-Halaqaty-Session-ID: <opaque-backend-session-id>
 ```
 
-The Go backend middleware validates the JWT signature and expiry on every request. If validation fails, the response is `401 ERR_UNAUTHENTICATED`.
+The Go backend verifies the Firebase ID token and checks the backend session's user
+binding, expiry, inactivity, and revocation on every request. Failure returns
+`401 ERR_UNAUTHENTICATED`.
 
 ### Token refresh
 
 - Firebase tokens expire after **1 hour**. The Flutter client calls `user.getIdToken(refresh: true)` transparently.
-- Halaqaty JWTs also expire after 1 hour. The Flutter client detects a `401` and calls `/api/v1/auth/refresh` with the current token.
-- **30-day inactivity logout**: The backend tracks `last_active_at` per user. If the user is inactive for 30 days, the JWT is invalidated regardless of expiry.
-
-```
-POST /api/v1/auth/refresh
-Authorization: Bearer <current_token>
-```
+- Firebase owns refresh-token rotation and reuse detection; Halaqaty has no refresh endpoint.
+- **30-day inactivity logout**: the backend tracks `last_activity_at` per device session.
+  An inactive or revoked session is rejected even if the Firebase ID token is still valid.
 
 ### Logout
 
 ```
 POST /api/v1/auth/logout
-Authorization: Bearer <access_token>
+Authorization: Bearer <Firebase ID Token>
+X-Halaqaty-Session-ID: <opaque-backend-session-id>
 ```
 
-This revokes the backend session. The Flutter client also calls `FirebaseAuth.instance.signOut()` locally.
+This revokes only the identified backend device session. The Flutter client also calls
+`FirebaseAuth.instance.signOut()` locally. A logout-all-devices endpoint is deferred;
+when introduced it will revoke all sessions for the authenticated user.
 
 ---
 
@@ -138,11 +141,11 @@ Standard HTTP semantics: `400` bad input · `401` unauthenticated · `403` forbi
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/api/v1/auth/login` | None | Exchange Firebase token for Halaqaty JWT |
-| `POST` | `/api/v1/auth/refresh` | Bearer | Refresh JWT |
-| `POST` | `/api/v1/auth/logout` | Bearer | Revoke session |
-| `GET` | `/api/v1/users/me` | Bearer | Get current user profile |
-| `PATCH` | `/api/v1/users/me` | Bearer | Update profile (display name, timezone, FCM token) |
+| `POST` | `/api/v1/auth/register` | Firebase bearer | Provision a just-created Firebase identity and device session |
+| `POST` | `/api/v1/auth/sessions` | Firebase bearer | Create a backend device session after Firebase sign-in |
+| `POST` | `/api/v1/auth/logout` | Firebase bearer + session ID | Revoke current device session |
+| `GET` | `/api/v1/auth/me` | Firebase bearer + session ID | Get current user profile |
+| `PUT` | `/api/v1/auth/me` | Firebase bearer + session ID | Update profile (display name, timezone, FCM token) |
 | `POST` | `/api/v1/circles` | Bearer | Create a circle (teacher role) |
 | `GET` | `/api/v1/circles` | Bearer | List circles the user belongs to |
 | `GET` | `/api/v1/circles/:id` | Bearer | Get circle details |

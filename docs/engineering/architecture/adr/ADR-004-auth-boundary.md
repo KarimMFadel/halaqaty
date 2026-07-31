@@ -23,14 +23,15 @@ Firebase Authentication is already mandated by the tech stack for its cross-plat
 
 **Boundary rules:**
 1. The Go backend trusts a Firebase ID token to identify *who* the user is (UID). Period.
-2. The backend **never** reads Firebase custom claims for authorization decisions.
-3. All role checks (`is_teacher`, `is_supervisor`, `is_student` for circle X) are read from the `circle_members` table in PostgreSQL at request time.
-4. The Flutter app **never** makes authorization decisions — it renders UI based on role data returned by the API, not by inspecting the Firebase token locally.
-5. LiveKit room tokens are issued exclusively by the Go backend, never by the Flutter app, and encode the minimum required permissions (`CanPublishAudio: true`, `CanPublishVideo: false`, `CanSubscribe: true`).
+2. The backend also validates the opaque current-device session created after Firebase sign-in; a missing, revoked, unknown, or inactive session is unauthenticated. See ADR-009.
+3. The backend **never** reads Firebase custom claims for authorization decisions.
+4. All role checks (`is_teacher`, `is_supervisor`, `is_student` for circle X) are read from the `circle_members` table in PostgreSQL at request time.
+5. The Flutter app **never** makes authorization decisions — it renders UI based on role data returned by the API, not by inspecting the Firebase token locally.
+6. LiveKit room tokens are issued exclusively by the Go backend, never by the Flutter app, and encode the minimum required permissions (`CanPublishAudio: true`, `CanPublishVideo: false`, `CanSubscribe: true`).
 
 **JWT middleware behavior:**
 - Every protected route calls Firebase Admin SDK `VerifyIDToken()` to validate the token.
-- The extracted `uid` is stored in Echo's request context.
+- The extracted `uid` and verified backend session are stored in Echo's request context.
 - Domain handlers call `circles.GetMemberRole(ctx, circleID, uid)` — not a custom claim.
 
 ---
@@ -63,4 +64,5 @@ Firebase Authentication is already mandated by the tech stack for its cross-plat
 
 - `../ARCHITECTURE.md` — Security Considerations section
 - `../../management/product/MVP_DECISION_REGISTER.md` — OQ-003 (Firebase 1hr refresh), OQ-015 (video disabled)
+- `ADR-009-firebase-device-sessions.md` — Firebase identity and backend session lifecycle
 - `.specify/memory/constitution.md` — Security invariants 1–3

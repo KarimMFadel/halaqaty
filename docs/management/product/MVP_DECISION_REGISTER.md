@@ -13,6 +13,8 @@
 | OQ-001 | Phone-only accounts (no email)? | **No.** Require email or social provider. Phone is supplementary verification only. | Simplifies auth; avoids OTP infrastructure in MVP; all pilot users have email or Google/Apple. |
 | OQ-002 | Teacher identity verification? | **Optional.** Not required in MVP. | Trust built organically in pilot; formal verification adds friction without benefit at this scale. |
 | OQ-003 | Session token expiry? | **Firebase default: 1hr auto-refresh.** Backend enforces 30-day inactivity logout. | Firebase handles silent refresh; 30-day rule protects abandoned devices. |
+| OQ-035 | Authentication, device sessions, and logout ownership? | **Flutter Firebase Auth owns password validation, identity creation, sign-in, and Firebase token refresh.** The Go API verifies Firebase ID tokens and owns durable per-device sessions. The backend never accepts passwords or returns Firebase tokens. Current-device logout revokes one backend session; logout-all-devices is a later explicit endpoint that revokes all sessions. | Preserves the Firebase identity boundary while allowing immediate server-side revocation and 30-day inactivity enforcement. |
+| OQ-036 | Initial circle roles and supervisor management? | Creating a circle atomically makes its creator that circle's teacher; invite joining creates a student membership. Only the circle teacher may promote an existing student to supervisor or revoke a supervisor. No self-registration action creates a circle role, and the teacher role cannot be assigned through the member-role endpoint. | Prevents privilege escalation and keeps roles strictly per-circle. |
 | PRD-4 | Co-teacher model (distinct role vs supervisor)? | **Deferred post-pilot.** MVP: teacher + supervisor only. No co-teacher role. | Adds role complexity without proven need; supervisor covers 95% of pilot use cases. |
 
 ---
@@ -121,6 +123,7 @@
 | 2026-06-30 | OQ-033 | Open | Soft degradation — `memorized` stays but shows ⚠️ badge after 30 days | Preserves student motivation; does not penalise infrequent revision artificially | — |
 | 2026-06-30 | OQ-034 | Open | Medina Mushaf standard — 240 Rub' divisions for `quran_divisions` seed | Most widely used globally; matches printed Mushaf most students use | — |
 | 2026-06-30 | CROSS-CIRCLE | Open | Most recent update wins for global Quran Map cross-circle conflict resolution | Simplest rule; full history always preserved for audit | — |
+| 2026-07-31 | OQ-035, OQ-036 | Underspecified | Firebase/client identity boundary; backend per-device session lifecycle; teacher-owned circle role lifecycle | Removes contradictory backend password/token APIs and prevents self-assigned privileges. | ADR-009 |
 
 ---
 

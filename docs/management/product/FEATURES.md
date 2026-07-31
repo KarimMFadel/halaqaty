@@ -87,7 +87,7 @@ Secure, multi-method user registration and authentication system with role-based
 - [ ] Google Sign-In (OAuth 2.0)
 - [ ] Apple Sign-In (required for iOS App Store policy compliance)
 - [ ] Phone OTP verification (WhatsApp-style; critical for Arabic-speaking markets with lower email usage)
-- [ ] JWT session management backed by Firebase Auth
+- [ ] Firebase Auth registration/sign-in and ID-token refresh in the Flutter client; backend-validated per-device sessions with 30-day inactivity expiry and current-device logout
 - [ ] User profile: display name, avatar (stored in MinIO), bio (optional), preferred language
 - [ ] Password reset via email
 - [ ] Account deletion with data erasure (GDPR/privacy compliance)

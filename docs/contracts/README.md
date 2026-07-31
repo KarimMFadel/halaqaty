@@ -13,7 +13,10 @@ This directory contains the machine-readable and human-readable API contracts fo
 
 - **REST API** handles all CRUD operations and non-real-time commands (create circle, join queue, update profile, etc.).
 - **WebSocket** handles low-latency real-time events (queue position updates, turn notifications, session state changes, chat delivery).
-- All REST endpoints require `Authorization: Bearer <firebase-jwt>` except `/auth/*`.
+- Flutter Firebase Auth owns registration, sign-in, passwords, and ID-token refresh.
+  The backend never accepts passwords or returns Firebase tokens. `POST /auth/register`
+  and `POST /auth/sessions` require only a Firebase ID token; all other REST endpoints
+  also require the opaque `X-Halaqaty-Session-ID` for the current backend device session.
 - WebSocket connections are authenticated via a short-lived token exchanged over REST before the WS handshake.
 
 ## Base URL

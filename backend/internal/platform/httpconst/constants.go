@@ -6,10 +6,12 @@ import (
 )
 
 const (
-	HeaderAuthorization = "Authorization"
-	HeaderContentType   = "Content-Type"
-	HeaderForwardedFor  = "X-Forwarded-For"
-	HeaderSessionID     = "X-Session-ID"
+	HeaderAuthorization  = "Authorization"
+	HeaderContentType    = "Content-Type"
+	HeaderForwardedFor   = "X-Forwarded-For"
+	HeaderSessionID      = "X-Halaqaty-Session-ID"
+	HeaderRequestID      = "X-Request-ID"
+	HeaderIdempotencyKey = "Idempotency-Key"
 )
 
 const (

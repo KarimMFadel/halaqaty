@@ -1,11 +1,12 @@
 package main
 
 import (
-	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"halaqaty/backend/internal/middleware"
+	phttp "halaqaty/backend/internal/platform/http"
 	"halaqaty/backend/internal/platform/httpconst"
 )
 
@@ -15,6 +16,7 @@ type MiddlewareSet struct {
 	Role      *middleware.RoleMiddleware
 	RateLimit *middleware.RateLimitMiddleware
 	Timeout   time.Duration
+	Logger    *slog.Logger
 }
 
 // Router wires API routes and middleware in one place.
@@ -41,6 +43,15 @@ func (r *Router) Handler() http.Handler {
 	}
 	handler = validationMiddleware(handler)
 
+	logger := r.mw.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	handler = phttp.LoggerMiddleware(logger, handler)
+	handler = phttp.RequestIDMiddleware(handler)
+	handler = phttp.IdempotencyKeyMiddleware(handler)
+	handler = phttp.RecoveryMiddleware(logger, handler)
+
 	timeout := r.mw.Timeout
 	if timeout <= 0 {
 		timeout = 15 * time.Second
@@ -54,7 +65,17 @@ func (r *Router) registerRoutes() {
 	}))
 
 	if r.mw.Auth != nil {
-		r.mux.Handle(routeAuthMe, r.mw.Auth.Require(http.HandlerFunc(authMeEndpoint)))
+		// Registration only needs a verified Firebase token; the local user row
+		// does not exist until the handler provisions it.
+		r.mux.Handle(routeAuthRegister, r.mw.Auth.RequireVerifiedFirebase(http.HandlerFunc(authRegisterEndpoint)))
+
+		// Backend session creation requires an already-registered local user.
+		r.mux.Handle(routeAuthSessions, r.mw.Auth.RequireBearer(http.HandlerFunc(authSessionsEndpoint)))
+
+		// Bearer + backend-session endpoints.
+		r.mux.Handle(routeAuthLogout, r.mw.Auth.Require(http.HandlerFunc(authLogoutEndpoint)))
+		r.mux.Handle(routeAuthMeGet, r.mw.Auth.Require(http.HandlerFunc(authMeEndpoint)))
+		r.mux.Handle(routeAuthMePut, r.mw.Auth.Require(http.HandlerFunc(authMeEndpoint)))
 	}
 
 	if r.mw.Auth != nil && r.mw.Role != nil {
@@ -66,31 +87,49 @@ func (r *Router) registerRoutes() {
 	}
 }
 
+func authRegisterEndpoint(w http.ResponseWriter, _ *http.Request) {
+	phttp.WriteError(
+		w,
+		httpconst.ErrorCodeNotImplemented,
+		httpconst.ErrorMessageAuthRegisterNotImplemented,
+		http.StatusNotImplemented,
+	)
+}
+
+func authSessionsEndpoint(w http.ResponseWriter, _ *http.Request) {
+	phttp.WriteError(
+		w,
+		httpconst.ErrorCodeNotImplemented,
+		httpconst.ErrorMessageAuthSessionsNotImplemented,
+		http.StatusNotImplemented,
+	)
+}
+
+func authLogoutEndpoint(w http.ResponseWriter, _ *http.Request) {
+	phttp.WriteError(
+		w,
+		httpconst.ErrorCodeNotImplemented,
+		httpconst.ErrorMessageAuthLogoutNotImplemented,
+		http.StatusNotImplemented,
+	)
+}
+
 func authMeEndpoint(w http.ResponseWriter, _ *http.Request) {
-	writeNotImplementedError(
+	phttp.WriteError(
 		w,
 		httpconst.ErrorCodeNotImplemented,
 		httpconst.ErrorMessageAuthMeNotImplemented,
+		http.StatusNotImplemented,
 	)
 }
 
 func circleRoleAssignmentEndpoint(w http.ResponseWriter, _ *http.Request) {
-	writeNotImplementedError(
+	phttp.WriteError(
 		w,
 		httpconst.ErrorCodeNotImplemented,
 		httpconst.ErrorMessageCircleRoleAssignNotImplemented,
+		http.StatusNotImplemented,
 	)
-}
-
-func writeNotImplementedError(w http.ResponseWriter, code string, message string) {
-	w.Header().Set(httpconst.HeaderContentType, httpconst.ContentTypeApplicationJSON)
-	w.WriteHeader(http.StatusNotImplemented)
-	_ = json.NewEncoder(w).Encode(map[string]map[string]string{
-		"error": {
-			"code":    code,
-			"message": message,
-		},
-	})
 }
 
 func validationMiddleware(next http.Handler) http.Handler {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	phttp "halaqaty/backend/internal/platform/http"
 	"halaqaty/backend/internal/platform/httpconst"
 )
 
@@ -33,13 +34,23 @@ func (m *RoleMiddleware) RequireAny(allowedRoles ...string) func(http.Handler) h
 		normalizedAllowedRoles := normalizeRoles(allowedRoles)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if m.repo == nil {
-				http.Error(w, httpconst.ErrorMessageRoleMiddlewareNotConfigured, http.StatusInternalServerError)
+				phttp.WriteError(
+					w,
+					httpconst.ErrorCodeInternalServerError,
+					httpconst.ErrorMessageRoleMiddlewareNotConfigured,
+					http.StatusInternalServerError,
+				)
 				return
 			}
 
 			principal, ok := CurrentPrincipal(r.Context())
 			if !ok {
-				http.Error(w, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+				phttp.WriteError(
+					w,
+					httpconst.ErrorCodeUnauthorized,
+					httpconst.ErrorMessageUnauthorized,
+					http.StatusUnauthorized,
+				)
 				return
 			}
 
@@ -48,17 +59,31 @@ func (m *RoleMiddleware) RequireAny(allowedRoles ...string) func(http.Handler) h
 				circleID = strings.TrimSpace(r.URL.Query().Get("circleId"))
 			}
 			if circleID == "" {
-				http.Error(w, httpconst.ErrorMessageMissingCircleID, http.StatusBadRequest)
+				phttp.WriteValidationError(
+					w,
+					httpconst.ErrorMessageMissingCircleID,
+					map[string]string{httpconst.FieldCircleID: "required"},
+				)
 				return
 			}
 
 			role, err := m.repo.RoleForUserInCircle(r.Context(), circleID, principal.UserID)
 			if err != nil {
-				http.Error(w, httpconst.ErrorMessageForbidden, http.StatusForbidden)
+				phttp.WriteError(
+					w,
+					httpconst.ErrorCodeForbidden,
+					httpconst.ErrorMessageForbidden,
+					http.StatusForbidden,
+				)
 				return
 			}
 			if !containsRole(normalizedAllowedRoles, normalizeRole(role)) {
-				http.Error(w, httpconst.ErrorMessageForbidden, http.StatusForbidden)
+				phttp.WriteError(
+					w,
+					httpconst.ErrorCodeForbidden,
+					httpconst.ErrorMessageForbidden,
+					http.StatusForbidden,
+				)
 				return
 			}
 

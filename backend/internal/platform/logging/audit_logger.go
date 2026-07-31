@@ -6,6 +6,16 @@ import (
 	"time"
 )
 
+// Audit actions are standardized security-relevant event names.
+const (
+	ActionRegister      = "user.register"
+	ActionSessionCreate = "session.create"
+	ActionLogout        = "session.logout"
+	ActionProfileUpdate = "profile.update"
+	ActionCircleCreate  = "circle.create"
+	ActionRoleChange    = "circle.role_change"
+)
+
 // AuditEvent captures security-relevant state transitions.
 type AuditEvent struct {
 	Action      string
@@ -44,4 +54,74 @@ func (l *AuditLogger) Log(ctx context.Context, event AuditEvent) {
 		slog.Any("metadata", event.Metadata),
 		slog.Time("at", l.nowFn().UTC()),
 	)
+}
+
+// RegisterEvent builds a user registration audit event.
+func RegisterEvent(actorUserID, email string) AuditEvent {
+	return AuditEvent{
+		Action:      ActionRegister,
+		ActorUserID: actorUserID,
+		Metadata:    map[string]any{"email": email},
+	}
+}
+
+// SessionCreateEvent builds a backend session creation audit event.
+func SessionCreateEvent(actorUserID, sessionID, deviceName string) AuditEvent {
+	metadata := map[string]any{"session_id": sessionID}
+	if deviceName != "" {
+		metadata["device_name"] = deviceName
+	}
+	return AuditEvent{
+		Action:      ActionSessionCreate,
+		ActorUserID: actorUserID,
+		Metadata:    metadata,
+	}
+}
+
+// LogoutEvent builds a session logout/revocation audit event.
+func LogoutEvent(actorUserID, sessionID string) AuditEvent {
+	return AuditEvent{
+		Action:      ActionLogout,
+		ActorUserID: actorUserID,
+		Metadata:    map[string]any{"session_id": sessionID},
+	}
+}
+
+// ProfileUpdateEvent builds a profile update audit event.
+func ProfileUpdateEvent(actorUserID string, changedFields []string) AuditEvent {
+	return AuditEvent{
+		Action:      ActionProfileUpdate,
+		ActorUserID: actorUserID,
+		Metadata:    map[string]any{"changed_fields": changedFields},
+	}
+}
+
+// CircleCreateEvent builds a circle creation audit event.
+func CircleCreateEvent(actorUserID, circleID string, teacherCount int, hasSupervisor bool) AuditEvent {
+	metadata := map[string]any{
+		"circle_id":     circleID,
+		"teacher_count": teacherCount,
+	}
+	if hasSupervisor {
+		metadata["has_supervisor"] = true
+	}
+	return AuditEvent{
+		Action:      ActionCircleCreate,
+		ActorUserID: actorUserID,
+		Metadata:    metadata,
+	}
+}
+
+// RoleChangeEvent builds a circle role change audit event.
+func RoleChangeEvent(actorUserID, targetUserID, circleID, oldRole, newRole string) AuditEvent {
+	return AuditEvent{
+		Action:      ActionRoleChange,
+		ActorUserID: actorUserID,
+		TargetUser:  targetUserID,
+		CircleID:    circleID,
+		Metadata: map[string]any{
+			"old_role": oldRole,
+			"new_role": newRole,
+		},
+	}
 }

@@ -2,15 +2,6 @@ package auth
 
 import "time"
 
-// Session is the domain model for backend-managed user sessions.
-type Session struct {
-	ID             string
-	UserID         string
-	LastActivityAt time.Time
-	ExpiresAt      time.Time
-	RevokedAt      *time.Time
-}
-
 // SessionService enforces inactivity and absolute session expiration.
 type SessionService struct {
 	inactivityTimeout time.Duration

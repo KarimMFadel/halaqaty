@@ -105,7 +105,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 TextFormField(
                   key: const Key('displayNameField'),
                   controller: _displayNameController,
-                  textDirection: TextDirection.rtl,
+                  textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
                   decoration: InputDecoration(
                     labelText: isRtl ? 'الاسم المعروض' : 'Display Name',
                   ),

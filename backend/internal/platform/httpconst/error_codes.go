@@ -33,13 +33,15 @@ const (
 
 // ValidationField names are used in the error envelope field map.
 const (
-	FieldAuthorization = "authorization"
-	FieldSessionID     = "session_id"
-	FieldBody          = "body"
-	FieldDisplayName   = "display_name"
-	FieldFullName      = "full_name"
-	FieldCountry       = "country"
-	FieldCircleID      = "circle_id"
-	FieldUserID        = "user_id"
-	FieldRole          = "role"
+	FieldAuthorization     = "authorization"
+	FieldSessionID         = "session_id"
+	FieldBody              = "body"
+	FieldDisplayName       = "display_name"
+	FieldPreferredLanguage = "preferred_language"
+	FieldDeviceName        = "device_name"
+	FieldFullName          = "full_name"
+	FieldCountry           = "country"
+	FieldCircleID          = "circle_id"
+	FieldUserID            = "user_id"
+	FieldRole              = "role"
 )

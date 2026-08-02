@@ -68,16 +68,20 @@ func main() {
 	sessionService := auth.NewSessionService(cfg.SessionInactivityTTL)
 	verifier := auth.NewFirebaseVerifier(firebaseAuthClient)
 
+	authService := auth.NewService(sessionRepo, nil, cfg.SessionAbsoluteTTL)
+	authHandler := auth.NewHandler(authService)
+
 	authMW := middleware.NewAuthMiddleware(verifier, sessionService, sessionRepo)
 	roleMW := middleware.NewRoleMiddleware(sessionRepo)
 	rateLimitMW := middleware.NewRateLimitMiddleware(cfg.RateLimitPerIPPerMin, cfg.RateLimitPerUserPerMin)
 
 	mwSet := MiddlewareSet{
-		Auth:      authMW,
-		Role:      roleMW,
-		RateLimit: rateLimitMW,
-		Timeout:   cfg.RequestTimeout,
-		Logger:    logger,
+		Auth:        authMW,
+		Role:        roleMW,
+		RateLimit:   rateLimitMW,
+		AuthHandler: authHandler,
+		Timeout:     cfg.RequestTimeout,
+		Logger:      logger,
 	}
 
 	// ── Router ────────────────────────────────────────────────────────────────

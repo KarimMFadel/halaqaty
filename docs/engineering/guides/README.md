@@ -31,6 +31,7 @@ docker compose logs postgres # check for init errors
 ```bash
 make migrate-up             # apply all pending migrations
 # or manually:
+cd backend
 migrate -path ./migrations -database $DATABASE_URL up
 ```
 
@@ -78,8 +79,8 @@ WS tokens are valid for 60 seconds from issuance. If the network round-trip take
 Look for server log: "ws_token expired" or "token validation failed"
 ```
 
-**Check 2 — Max connection limit hit:**
-Each user can have max 3 simultaneous WS connections. Extra connections are closed with code `4001`.
+**Check 2 — Proposed max connection limit hit:**
+The system-design notes propose a max of 3 simultaneous WS connections per user and close code `4001`, but this is not yet codified in `ws_events.md`. Treat this as a future-policy check only until the WS contract is updated.
 ```
 Look for server log: "max_connections_exceeded user_id=..."
 ```
@@ -129,14 +130,8 @@ echo "<token>" | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool
 # Verify: "video" claims contain CanPublish, CanSubscribe, room name
 ```
 
-**Check 5 — Audio config check:**
-LiveKit rooms must be created with noise suppression and AGC disabled. Check `backend/internal/sessions/livekit.go` for:
-```go
-AudioConfig: &livekit.AudioConfig{
-    NoiseCancellation: false,
-    AgcEnabled:        false,
-}
-```
+**Check 5 — Audio config boundary:**
+Room-level LiveKit settings and client-side Flutter audio capture settings are separate. Verify room creation and token issuance in the backend, then verify microphone capture, echo cancellation, noise suppression, and AGC behavior in the Flutter client or platform layer.
 
 ---
 
@@ -148,6 +143,7 @@ AudioConfig: &livekit.AudioConfig{
 ```bash
 make migrate-status   # check for "dirty: true"
 # If dirty, the migration was partially applied. Fix manually:
+cd backend
 migrate -path ./migrations -database $DATABASE_URL force <version>
 ```
 
@@ -171,7 +167,7 @@ make migrate-fresh    # drops all tables, applies all migrations from scratch
 
 **Check 1 — Flutter version mismatch:**
 ```bash
-flutter --version     # must be ≥ 3.24
+flutter --version     # use the version resolved for the project/toolchain
 flutter upgrade       # upgrade if needed
 ```
 

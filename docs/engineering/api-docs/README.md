@@ -137,32 +137,99 @@ Standard HTTP semantics: `400` bad input · `401` unauthenticated · `403` forbi
 
 ## Endpoint Index
 
-> Full schemas are in [`docs/contracts/openapi.yaml`](../../contracts/openapi.yaml). This is a quick-reference index.
+> Full schemas, query parameters, and validation rules are in [`docs/contracts/openapi.yaml`](../../contracts/openapi.yaml) — the authoritative source. This index mirrors that file; if it ever disagrees with the contract, the contract wins.
+>
+> All paths are relative to the API base URL (`/api/v1`). "Bearer" = `Authorization: Bearer <Firebase ID Token>`; "Session ID" = `X-Halaqaty-Session-ID` header. See the [Authentication Flow](#authentication-flow) above.
+
+### Auth
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/api/v1/auth/register` | Firebase bearer | Provision a just-created Firebase identity and device session |
-| `POST` | `/api/v1/auth/sessions` | Firebase bearer | Create a backend device session after Firebase sign-in |
-| `POST` | `/api/v1/auth/logout` | Firebase bearer + session ID | Revoke current device session |
-| `GET` | `/api/v1/auth/me` | Firebase bearer + session ID | Get current user profile |
-| `PUT` | `/api/v1/auth/me` | Firebase bearer + session ID | Update profile (display name, timezone, FCM token) |
-| `POST` | `/api/v1/circles` | Bearer | Create a circle (teacher role) |
-| `GET` | `/api/v1/circles` | Bearer | List circles the user belongs to |
-| `GET` | `/api/v1/circles/:id` | Bearer | Get circle details |
-| `POST` | `/api/v1/circles/:id/invite` | Bearer (teacher) | Generate invite code |
-| `POST` | `/api/v1/circles/:id/join` | Bearer | Join circle with invite code |
-| `DELETE` | `/api/v1/circles/:id/members/:uid` | Bearer (teacher) | Remove member |
-| `POST` | `/api/v1/sessions` | Bearer (teacher) | Start a live session |
-| `PATCH` | `/api/v1/sessions/:id` | Bearer (teacher) | End/update session |
-| `GET` | `/api/v1/sessions/:id/token` | Bearer | Get LiveKit room token |
-| `POST` | `/api/v1/sessions/:id/ws-token` | Bearer | Get short-lived WebSocket token |
-| `POST` | `/api/v1/sessions/:id/queue` | Bearer (teacher) | Add/reorder queue entries |
-| `PATCH` | `/api/v1/sessions/:id/queue/:entry_id` | Bearer (teacher) | Advance queue / set status |
-| `POST` | `/api/v1/sessions/:id/queue/reset` | Bearer (teacher) | Reset queue for new round |
-| `GET` | `/api/v1/messages` | Bearer | List messages in a circle (paginated) |
-| `POST` | `/api/v1/messages` | Bearer | Send a message |
-| `GET` | `/api/v1/progress/:circle_id` | Bearer | Get student progress records |
-| `GET` | `/healthz` | None | Health check |
+| `POST` | `/auth/register` | Bearer | Provision a just-created Firebase identity and create a current-device backend session |
+| `POST` | `/auth/sessions` | Bearer | Create a current-device backend session after Firebase sign-in |
+| `POST` | `/auth/logout` | Bearer + Session ID | Invalidate the current backend device session |
+| `POST` | `/auth/fcm-token` | Bearer + Session ID | Register/upsert a device FCM token for push notifications |
+| `GET` | `/auth/me` | Bearer + Session ID | Get current user profile |
+| `PUT` | `/auth/me` | Bearer + Session ID | Update profile (name, avatar, language) |
+| `DELETE` | `/auth/me` | Bearer + Session ID | Delete account and all associated data (irreversible, GDPR-compliant) |
+
+### Circles
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/circles` | Bearer + Session ID | List circles the user is a member of (optional `?role=` filter) |
+| `POST` | `/circles` | Bearer + Session ID | Create a new circle (assigns teachers/supervisor; creator defaults to teacher if none selected) |
+| `GET` | `/circles/{circleId}` | Bearer + Session ID | Get circle details |
+| `PUT` | `/circles/{circleId}` | Bearer (teacher) | Update circle settings |
+| `DELETE` | `/circles/{circleId}` | Bearer (teacher) | Archive a circle |
+| `GET` | `/circles/{circleId}/members` | Bearer + Session ID | List circle members |
+| `DELETE` | `/circles/{circleId}/members/{userId}` | Bearer (teacher) | Remove a member from the circle |
+| `PUT` | `/circles/{circleId}/members/{userId}/role` | Bearer (teacher/supervisor) | Update another active member's role (student/supervisor/teacher) |
+| `POST` | `/circles/join` | Bearer + Session ID | Join a circle using an invite code |
+
+### Sessions
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/circles/{circleId}/sessions` | Bearer + Session ID | List sessions for a circle (paginated, optional `?status=` filter) |
+| `POST` | `/circles/{circleId}/sessions` | Bearer (teacher) | Create a new session |
+| `POST` | `/sessions/{sessionId}/start` | Bearer (teacher) | Start a session — creates LiveKit room, returns token |
+| `POST` | `/sessions/{sessionId}/join` | Bearer (member) | Join an active session — returns LiveKit token |
+| `POST` | `/sessions/{sessionId}/end` | Bearer (teacher) | End a session |
+| `POST` | `/sessions/{sessionId}/ws-token` | Bearer + Session ID | Issue a short-lived (60 s) WebSocket connection token |
+
+### Queue
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/sessions/{sessionId}/queue` | Bearer + Session ID | Get current queue state (full snapshot) |
+| `POST` | `/sessions/{sessionId}/queue/rounds` | Bearer (teacher/supervisor) | Start a new recitation round (populates queue) |
+| `POST` | `/sessions/{sessionId}/queue/entries/{entryId}/grade` | Bearer (teacher/supervisor) | Submit grade for a completed recitation turn |
+| `POST` | `/sessions/{sessionId}/queue/opt-out` | Bearer (student) | Opt out of the current round (requires teacher/supervisor approval) |
+
+### Chat
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/circles/{circleId}/messages` | Bearer + Session ID | List recent messages (paginated, `?limit=` and `?before=`) |
+| `POST` | `/circles/{circleId}/messages` | Bearer + Session ID | Send a text, image, or file message |
+| `DELETE` | `/circles/{circleId}/messages/{messageId}` | Bearer + Session ID | Delete a message (own within 10 min; teacher can delete any) |
+
+### Schedules
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/circles/{circleId}/schedules` | Bearer + Session ID | List schedules for a circle |
+| `POST` | `/circles/{circleId}/schedules` | Bearer (teacher) | Create a recurring schedule entry |
+
+### Progress (F-007)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/students/me/circles/history` | Bearer + Session ID | Student's circle history with attendance/practice counts (paginated) |
+| `GET` | `/students/me/progress` | Bearer + Session ID | Student's global Quran map — all 114 Surahs with memorization status (optional `?circle_id=`) |
+| `GET` | `/students/me/sessions/history` | Bearer + Session ID | Student's session history (attended vs practiced breakdown, paginated) |
+| `GET` | `/students/me/progress/stats` | Bearer + Session ID | Student's progress analytics (Ayahs per time bucket, attendance %, practice %) |
+| `GET` | `/circles/{circleId}/progress` | Bearer (teacher/supervisor) | All students' progress summary in a circle |
+| `GET` | `/circles/{circleId}/progress/{userId}` | Bearer (teacher) | One student's full cross-circle progress profile |
+| `GET` | `/circles/{circleId}/surah-insights` | Bearer (teacher) | Surahs ranked by weak grade frequency in last N days |
+
+### Uploads (MinIO)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/uploads/avatar` | Bearer + Session ID | Upload user avatar image (≤5 MB; jpeg/png/webp) |
+| `POST` | `/uploads/voice` | Bearer + Session ID | Upload a voice note attachment (≤20 MB, ≤5 min; ogg/mpeg/mp4/webm) |
+| `POST` | `/uploads/image` | Bearer + Session ID | Upload an image attachment for chat (≤20 MB; jpeg/png/webp/gif) |
+| `POST` | `/uploads/file` | Bearer + Session ID | Upload a PDF file attachment for chat (≤20 MB) |
+
+### Config
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/config/features` | Bearer + Session ID | Get active feature flags for the authenticated user (per-tier filtering server-side) |
+
+> **Note on `/healthz`:** a health-check endpoint is not part of the versioned `/api/v1` contract in `openapi.yaml` and is therefore not listed here. Operational/liveness probes live outside the product API surface.
 
 ---
 

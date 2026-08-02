@@ -36,16 +36,19 @@ This directory contains the machine-readable and human-readable API contracts fo
 
 ## How to Use
 
+The canonical lint target is `make api-lint` (defined at repo root), which runs Spectral against this spec using `.spectral.yaml`:
+
 ```bash
-# Validate the OpenAPI spec
-npx @redocly/cli lint openapi.yaml
-
-# Generate interactive docs locally
-npx @redocly/cli preview-docs openapi.yaml
-
-# Generate Go server stubs (optional)
-oapi-codegen -config oapi-codegen.yaml openapi.yaml
+make api-lint                    # lint docs/contracts/openapi.yaml with Spectral
 ```
+
+To run Spectral directly (same command the Makefile invokes):
+
+```bash
+spectral lint docs/contracts/openapi.yaml
+```
+
+> **Note:** Go handlers are hand-written and centralized in `backend/cmd/api/routes.go` (see `AGENTS.md`). There is no OpenAPI → Go codegen pipeline.
 
 ## Related Documents
 

@@ -222,12 +222,10 @@ class AuthController extends StateNotifier<AuthState> {
     final statusCode = response?.statusCode;
     final data = response?.data;
 
-    String? code;
     String? message;
     if (data is Map<String, dynamic>) {
       final error = data['error'];
       if (error is Map<String, dynamic>) {
-        code = error['code'] as String?;
         message = error['message'] as String?;
       }
     }

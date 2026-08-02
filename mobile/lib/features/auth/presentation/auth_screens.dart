@@ -185,7 +185,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 // Preferred language
                 DropdownButtonFormField<String>(
                   key: const Key('languageDropdown'),
-                  value: _selectedLanguage,
+                  initialValue: _selectedLanguage,
                   decoration: InputDecoration(
                     labelText: isRtl ? 'اللغة المفضلة' : 'Preferred Language',
                   ),

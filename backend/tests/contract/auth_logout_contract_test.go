@@ -109,6 +109,11 @@ func TestAuthLogoutContract(t *testing.T) {
 				if env.Error.Code != tc.wantErr {
 					t.Fatalf("error code: got %q, want %q", env.Error.Code, tc.wantErr)
 				}
+				return
+			}
+
+			if !store.revokeCalled {
+				t.Fatal("expected logout to revoke the current session")
 			}
 		})
 	}

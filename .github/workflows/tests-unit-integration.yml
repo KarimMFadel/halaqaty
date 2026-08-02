@@ -20,25 +20,26 @@ jobs:
         id: detect
         shell: bash
         run: |
-          if [[ -f "go.mod" ]]; then
+          # Monorepo layout: backend/go.mod, mobile/pubspec.yaml
+          if [[ -f "backend/go.mod" ]]; then
             echo "go_enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "go_enabled=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if [[ -f "pubspec.yaml" ]]; then
+          if [[ -f "mobile/pubspec.yaml" ]]; then
             echo "flutter_enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "flutter_enabled=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if [[ -d "test" ]]; then
+          if [[ -d "mobile/test" ]]; then
             echo "flutter_unit_enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "flutter_unit_enabled=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if [[ -d "integration_test" ]]; then
+          if [[ -d "mobile/integration_test" ]]; then
             echo "flutter_integration_enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "flutter_integration_enabled=false" >> "$GITHUB_OUTPUT"
@@ -48,12 +49,16 @@ jobs:
     needs: detect-test-targets
     if: needs.detect-test-targets.outputs.go_enabled == 'true'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
       - name: Run Go unit tests
         run: go test -short ./...
 
@@ -61,12 +66,16 @@ jobs:
     needs: detect-test-targets
     if: needs.detect-test-targets.outputs.go_enabled == 'true'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
       - name: Run Go integration tests
         run: go test -tags=integration ./...
 
@@ -74,6 +83,9 @@ jobs:
     needs: detect-test-targets
     if: needs.detect-test-targets.outputs.flutter_enabled == 'true' && needs.detect-test-targets.outputs.flutter_unit_enabled == 'true'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
     steps:
       - uses: actions/checkout@v4
       - name: Setup Flutter
@@ -89,13 +101,20 @@ jobs:
     needs: detect-test-targets
     if: needs.detect-test-targets.outputs.flutter_enabled == 'true' && needs.detect-test-targets.outputs.flutter_integration_enabled == 'true'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
     steps:
       - uses: actions/checkout@v4
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+      - name: Install Linux desktop dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libgtk-3-dev libblkid-dev liblzma-dev
       - name: Install Flutter dependencies
         run: flutter pub get
+      - name: Enable linux desktop test target
+        run: flutter create . --platforms linux --no-pub
       - name: Run Flutter integration tests
-        run: flutter test integration_test
+        run: flutter test integration_test -d linux

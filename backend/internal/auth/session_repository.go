@@ -8,7 +8,15 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+const (
+	// pgUniqueViolation is the PostgreSQL SQLSTATE for unique-constraint breaches.
+	pgUniqueViolation = "23505"
+	// usersEmailConstraint is the unique index on users.email from migration 000010.
+	usersEmailConstraint = "users_email_key"
 )
 
 var (
@@ -30,14 +38,61 @@ func NewSessionRepository(pool *pgxpool.Pool) *SessionRepository {
 	return &SessionRepository{pool: pool}
 }
 
-// UpsertUserByFirebaseUID provisions or refreshes a local user mapped to a Firebase UID.
-func (r *SessionRepository) UpsertUserByFirebaseUID(ctx context.Context, firebaseUID, email string) (User, error) {
+// UpsertUserByFirebaseUID provisions or refreshes a local user mapped to a
+// Firebase UID. inserted is true when a new user row was created, false when
+// an existing user replayed registration. Returns ErrDuplicateEmail when the
+// email belongs to a different Firebase UID.
+func (r *SessionRepository) UpsertUserByFirebaseUID(ctx context.Context, firebaseUID, email string) (User, bool, error) {
 	var user User
+	var inserted bool
 	row := r.pool.QueryRow(ctx, upsertUserByFirebaseUIDQuery, firebaseUID, email)
-	if err := row.Scan(&user.ID, &user.FirebaseUID, &user.Email, &user.CreatedAt, &user.UpdatedAt); err != nil {
-		return User{}, fmt.Errorf("upsert user by firebase uid: %w", err)
+	if err := row.Scan(&user.ID, &user.FirebaseUID, &user.Email, &user.CreatedAt, &user.UpdatedAt, &inserted); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation && pgErr.ConstraintName == usersEmailConstraint {
+			return User{}, false, ErrDuplicateEmail
+		}
+		return User{}, false, fmt.Errorf("upsert user by firebase uid: %w", err)
 	}
-	return user, nil
+	return user, inserted, nil
+}
+
+// UpsertProfileOnRegister writes display_name/preferred_language exactly once
+// per user; replays leave an existing profile untouched.
+func (r *SessionRepository) UpsertProfileOnRegister(ctx context.Context, userID, displayName, preferredLanguage string) error {
+	_, err := r.pool.Exec(ctx, upsertProfileOnRegisterQuery, userID, displayName, preferredLanguage)
+	if err != nil {
+		return fmt.Errorf("upsert profile on register: %w", err)
+	}
+	return nil
+}
+
+// GetUserProfileByUserID reads the API profile projection for a user.
+func (r *SessionRepository) GetUserProfileByUserID(ctx context.Context, userID string) (UserProfile, error) {
+	var profile UserProfile
+	var fullName, displayName, bio, country, avatarURL sql.NullString
+	err := r.pool.QueryRow(ctx, getUserProfileByUserIDQuery, userID).Scan(
+		&profile.ID,
+		&profile.FirebaseUID,
+		&fullName,
+		&displayName,
+		&bio,
+		&country,
+		&avatarURL,
+		&profile.PreferredLanguage,
+		&profile.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return UserProfile{}, ErrUserNotFound
+		}
+		return UserProfile{}, fmt.Errorf("get user profile by user id: %w", err)
+	}
+	profile.FullName = nullStringPtr(fullName)
+	profile.DisplayName = nullStringPtr(displayName)
+	profile.Bio = nullStringPtr(bio)
+	profile.Country = nullStringPtr(country)
+	profile.AvatarURL = nullStringPtr(avatarURL)
+	return profile, nil
 }
 
 // GetUserByFirebaseUID resolves a full user record by Firebase UID.
@@ -180,4 +235,11 @@ func (r *SessionRepository) scanSession(ctx context.Context, row pgx.Row) (Sessi
 		session.DeviceName = &deviceName.String
 	}
 	return session, nil
+}
+
+func nullStringPtr(value sql.NullString) *string {
+	if !value.Valid {
+		return nil
+	}
+	return &value.String
 }

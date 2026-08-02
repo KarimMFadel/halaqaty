@@ -1,11 +1,41 @@
 package auth
 
+// upsertUserByFirebaseUIDQuery inserts a new user or refreshes the email on
+// replay. The inserted flag uses the xmax = 0 idiom: a freshly inserted row
+// has no transaction ID stamped on it, an updated (conflict) row does.
 const upsertUserByFirebaseUIDQuery = `
 INSERT INTO users (firebase_uid, email) VALUES ($1, $2)
 ON CONFLICT (firebase_uid) DO UPDATE SET
     email = EXCLUDED.email,
     updated_at = NOW()
-RETURNING id, firebase_uid, email, created_at, updated_at
+RETURNING id, firebase_uid, email, created_at, updated_at, (xmax = 0) AS inserted
+`
+
+// upsertProfileOnRegisterQuery writes the registration profile fields once.
+// Replays (same Firebase UID) must not overwrite an existing profile.
+const upsertProfileOnRegisterQuery = `
+INSERT INTO profiles (user_id, display_name, preferred_language)
+VALUES ($1, $2, $3)
+ON CONFLICT (user_id) DO NOTHING
+`
+
+// getUserProfileByUserIDQuery projects the API UserProfile from users+profiles.
+// The LEFT JOIN keeps pre-profile users readable; preferred_language falls
+// back to the contract default.
+const getUserProfileByUserIDQuery = `
+SELECT
+    u.id,
+    u.firebase_uid,
+    p.full_name,
+    p.display_name,
+    p.bio,
+    p.country,
+    p.avatar_url,
+    COALESCE(p.preferred_language, 'ar') AS preferred_language,
+    u.created_at
+FROM users u
+LEFT JOIN profiles p ON p.user_id = u.id
+WHERE u.id = $1
 `
 
 const getUserByFirebaseUIDQuery = `

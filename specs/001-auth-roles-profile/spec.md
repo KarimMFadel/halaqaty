@@ -32,6 +32,8 @@ As a new or returning user, I can register or sign in with email and password so
 **Acceptance Scenarios**:
 
 1. **Given** a new email, **When** the user registers with a valid password through the Flutter Firebase SDK and provisions their profile with the API, **Then** the account and local user record are created and a current-device backend session is returned.
+   - **Given** a re-registration with the **same** Firebase UID, **When** the Flutter client re-sends provisioning, **Then** the API returns HTTP 409 with a valid `BackendSessionResponse` and the mobile client stores it as a fresh session.
+   - **Given** a registration with a **different** Firebase UID but an email already bound to a local user, **When** the Flutter client sends provisioning, **Then** the API returns HTTP 409 with `ERR_CONFLICT` and no session body.
 2. **Given** valid credentials, **When** the user signs in through the Flutter Firebase SDK and creates a backend session, **Then** the mobile session becomes active.
 3. **Given** an authenticated user, **When** the user logs out from the current device/session, **Then** only that session is invalidated and protected backend access is rejected until sign-in.
 
@@ -71,7 +73,7 @@ As a system owner, I need protected endpoints to enforce per-circle authorizatio
 
 ### Edge Cases
 
-- Duplicate email registration attempt is rejected with conflict error and no account overwrite.
+- Same-Firebase-UID re-registration returns HTTP 409 with a valid `BackendSessionResponse` (idempotent session replay — treated as success by mobile). Different-Firebase-UID registration with an already-bound email returns HTTP 409 with `ERR_CONFLICT` and no session body; Firebase Auth prevents this at the identity layer but the API enforces a safety net.
 - Missing or malformed Firebase ID token is rejected.
 - A missing, revoked, unknown, inactive, or user-mismatched backend session ID is rejected on a protected request.
 - Backend session inactivity beyond 30 days forces re-authentication.
@@ -82,7 +84,7 @@ As a system owner, I need protected endpoints to enforce per-circle authorizatio
 
 ### Functional Requirements
 
-- **FR-001**: The Flutter client MUST allow account registration with unique email/password through Firebase Auth, which rejects duplicate email attempts; the API MUST provision the corresponding local user from a verified Firebase ID token.
+- **FR-001**: The Flutter client MUST allow account registration with email/password through Firebase Auth. Firebase Auth MUST reject any registration attempt that uses the same email under a different Firebase identity before the request reaches the API. The API MUST provision the corresponding local user from a verified Firebase ID token and MUST apply the following idempotency rules: (a) if the Firebase UID is already provisioned, the API MUST return HTTP 409 with a valid `BackendSessionResponse` body (a fresh session is issued and stored by the mobile client — treated as success); (b) if a different Firebase UID attempts to register with an email already bound to an existing local user, the API MUST return HTTP 409 with `{ "error": { "code": "ERR_CONFLICT", "message": "..." } }` and MUST NOT create or return a session.
 - **FR-002**: System MUST securely store passwords in non-plaintext form (via Firebase credential handling) and MUST never return passwords in API responses.
 - **FR-003**: The Flutter Firebase SDK MUST authenticate credentials, create identities, and refresh Firebase ID tokens. The API MUST verify Firebase ID tokens and return only an opaque current-device backend session identifier, never Firebase tokens.
 - **FR-004**: System MUST enforce backend session inactivity logout at 30 days and require re-authentication after inactivity expiration.

@@ -12,22 +12,14 @@ import (
 	"halaqaty/backend/internal/platform/httpconst"
 )
 
-type authContextKey string
-
-const principalContextKey authContextKey = "auth-principal"
-
 // AuthPrincipal is the authenticated request identity.
-type AuthPrincipal struct {
-	UserID      string // local PostgreSQL UUID; empty before registration
-	FirebaseUID string
-	Email       string
-	Claims      map[string]any
-}
+// It is an alias of auth.AuthPrincipal so the auth package handlers can read
+// the principal without importing this package (which would create a cycle).
+type AuthPrincipal = auth.AuthPrincipal
 
 // CurrentPrincipal returns the request principal from context, if available.
 func CurrentPrincipal(ctx context.Context) (AuthPrincipal, bool) {
-	principal, ok := ctx.Value(principalContextKey).(AuthPrincipal)
-	return principal, ok
+	return auth.CurrentPrincipal(ctx)
 }
 
 // SessionRepository defines the session storage needed by auth middleware.
@@ -84,8 +76,7 @@ func (m *AuthMiddleware) RequireBearer(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), principalContextKey, principal)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), principal)))
 	})
 }
 
@@ -121,8 +112,7 @@ func (m *AuthMiddleware) RequireVerifiedFirebase(next http.Handler) http.Handler
 			Email:       decoded.Email,
 			Claims:      decoded.Claims,
 		}
-		ctx := context.WithValue(r.Context(), principalContextKey, principal)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), principal)))
 	})
 }
 

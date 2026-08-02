@@ -17,10 +17,17 @@ const (
 	ErrorMessageWebSocketConnLimitExceeded  = "websocket connection limit exceeded"
 	ErrorMessageRateLimitExceeded           = "rate limit exceeded"
 
-	ErrorMessageAuthRegisterNotImplemented     = "auth register endpoint is not implemented yet"
-	ErrorMessageAuthSessionsNotImplemented     = "auth sessions endpoint is not implemented yet"
-	ErrorMessageAuthLogoutNotImplemented       = "auth logout endpoint is not implemented yet"
 	ErrorMessageAuthMeNotImplemented           = "auth me endpoint is not implemented yet"
 	ErrorMessageCircleRoleAssignNotImplemented = "circle role assignment endpoint is not implemented yet"
 	ErrorMessageRoleMiddlewareNotConfigured    = "role middleware not configured"
+
+	ErrorMessageValidationFailed         = "validation failed"
+	ErrorMessageRequestBodyInvalid       = "request body must be valid json"
+	ErrorMessageRequestBodyUnknownFields = "request body contains unknown fields"
+	ErrorMessageDisplayNameRequired      = "display_name is required"
+	ErrorMessageDisplayNameInvalid       = "display_name must be between 2 and 100 characters"
+	ErrorMessagePreferredLanguageInvalid = "preferred_language must be one of: ar, en"
+	ErrorMessageDeviceNameTooLong        = "device_name must be at most 100 characters"
+	ErrorMessageEmailAlreadyRegistered   = "email is already registered to another account"
+	ErrorMessageAuthHandlerNotConfigured = "auth handler not configured"
 )

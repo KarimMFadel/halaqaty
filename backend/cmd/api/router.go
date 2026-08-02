@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"halaqaty/backend/internal/auth"
 	"halaqaty/backend/internal/middleware"
 	phttp "halaqaty/backend/internal/platform/http"
 	"halaqaty/backend/internal/platform/httpconst"
@@ -12,11 +13,12 @@ import (
 
 // MiddlewareSet defines all cross-cutting middleware dependencies.
 type MiddlewareSet struct {
-	Auth      *middleware.AuthMiddleware
-	Role      *middleware.RoleMiddleware
-	RateLimit *middleware.RateLimitMiddleware
-	Timeout   time.Duration
-	Logger    *slog.Logger
+	Auth        *middleware.AuthMiddleware
+	Role        *middleware.RoleMiddleware
+	RateLimit   *middleware.RateLimitMiddleware
+	AuthHandler *auth.Handler
+	Timeout     time.Duration
+	Logger      *slog.Logger
 }
 
 // Router wires API routes and middleware in one place.
@@ -65,15 +67,31 @@ func (r *Router) registerRoutes() {
 	}))
 
 	if r.mw.Auth != nil {
+		authH := r.mw.AuthHandler
+
 		// Registration only needs a verified Firebase token; the local user row
 		// does not exist until the handler provisions it.
-		r.mux.Handle(routeAuthRegister, r.mw.Auth.RequireVerifiedFirebase(http.HandlerFunc(authRegisterEndpoint)))
+		var registerHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageAuthHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		if authH != nil {
+			registerHandler = http.HandlerFunc(authH.Register)
+		}
+		r.mux.Handle(routeAuthRegister, r.mw.Auth.RequireVerifiedFirebase(registerHandler))
 
 		// Backend session creation requires an already-registered local user.
-		r.mux.Handle(routeAuthSessions, r.mw.Auth.RequireBearer(http.HandlerFunc(authSessionsEndpoint)))
+		var sessionsHandler http.Handler = http.HandlerFunc(authMeEndpoint)
+		if authH != nil {
+			sessionsHandler = http.HandlerFunc(authH.CreateSession)
+		}
+		r.mux.Handle(routeAuthSessions, r.mw.Auth.RequireBearer(sessionsHandler))
 
-		// Bearer + backend-session endpoints.
-		r.mux.Handle(routeAuthLogout, r.mw.Auth.Require(http.HandlerFunc(authLogoutEndpoint)))
+		// Backend-session-scoped endpoints.
+		var logoutHandler http.Handler = http.HandlerFunc(authMeEndpoint)
+		if authH != nil {
+			logoutHandler = http.HandlerFunc(authH.Logout)
+		}
+		r.mux.Handle(routeAuthLogout, r.mw.Auth.Require(logoutHandler))
 		r.mux.Handle(routeAuthMeGet, r.mw.Auth.Require(http.HandlerFunc(authMeEndpoint)))
 		r.mux.Handle(routeAuthMePut, r.mw.Auth.Require(http.HandlerFunc(authMeEndpoint)))
 	}
@@ -85,33 +103,6 @@ func (r *Router) registerRoutes() {
 			r.mw.Role.RequireAny("supervisor", "teacher")(protected),
 		)
 	}
-}
-
-func authRegisterEndpoint(w http.ResponseWriter, _ *http.Request) {
-	phttp.WriteError(
-		w,
-		httpconst.ErrorCodeNotImplemented,
-		httpconst.ErrorMessageAuthRegisterNotImplemented,
-		http.StatusNotImplemented,
-	)
-}
-
-func authSessionsEndpoint(w http.ResponseWriter, _ *http.Request) {
-	phttp.WriteError(
-		w,
-		httpconst.ErrorCodeNotImplemented,
-		httpconst.ErrorMessageAuthSessionsNotImplemented,
-		http.StatusNotImplemented,
-	)
-}
-
-func authLogoutEndpoint(w http.ResponseWriter, _ *http.Request) {
-	phttp.WriteError(
-		w,
-		httpconst.ErrorCodeNotImplemented,
-		httpconst.ErrorMessageAuthLogoutNotImplemented,
-		http.StatusNotImplemented,
-	)
 }
 
 func authMeEndpoint(w http.ResponseWriter, _ *http.Request) {

@@ -74,25 +74,25 @@
 
 ### Tests for User Story 1
 
-- [ ] T033 [P] [US1] Add contract tests for `POST /auth/register` Firebase-bearer-only provisioning, idempotent replay, and duplicate-email `409` response in `backend/tests/contract/auth_register_contract_test.go`
-- [ ] T034 [P] [US1] Add contract tests for `POST /auth/sessions` Firebase-bearer-only session creation, invalid-Firebase-token `401`, and backend session response shape in `backend/tests/contract/auth_session_contract_test.go`
-- [ ] T035 [P] [US1] Add contract tests for `POST /auth/logout` current-session invalidation, missing session header `401`, and session-expired `401` response in `backend/tests/contract/auth_logout_contract_test.go`
-- [ ] T036 [P] [US1] Add unit tests for Firebase token verification success/failure paths in `backend/internal/auth/firebase_verifier_test.go`
-- [ ] T037 [P] [US1] Add unit tests for session inactivity expiration and logout invalidation in `backend/internal/auth/session_service_test.go`
-- [ ] T038 [US1] Add integration test for Firebase registration/sign-in -> backend-session creation -> protected route with bearer plus session -> logout flow in `backend/tests/integration/auth_flow_test.go`
-- [ ] T039 [P] [US1] Add response-safety tests asserting no plaintext password in responses in `backend/tests/contract/auth_response_safety_contract_test.go`
-- [ ] T040 [P] [US1] Add Flutter widget tests for register/login validation in `mobile/test/widget/auth/auth_forms_test.dart`
-- [ ] T041 [US1] Add Flutter integration test for register/login/logout journey in `mobile/integration_test/auth_journey_test.dart`
+- [X] T033 [P] [US1] Add contract tests for `POST /auth/register` Firebase-bearer-only provisioning, idempotent replay, and duplicate-email `409` response in `backend/tests/contract/auth_register_contract_test.go`
+- [X] T034 [P] [US1] Add contract tests for `POST /auth/sessions` Firebase-bearer-only session creation, invalid-Firebase-token `401`, and backend session response shape in `backend/tests/contract/auth_session_contract_test.go`
+- [X] T035 [P] [US1] Add contract tests for `POST /auth/logout` current-session invalidation, missing session header `401`, and session-expired `401` response in `backend/tests/contract/auth_logout_contract_test.go`
+- [X] T036 [P] [US1] Add unit tests for Firebase token verification success/failure paths in `backend/internal/auth/firebase_verifier_test.go`
+- [X] T037 [P] [US1] Add unit tests for session inactivity expiration and logout invalidation in `backend/internal/auth/session_service_test.go`
+- [X] T038 [US1] Add integration test for Firebase registration/sign-in -> backend-session creation -> protected route with bearer plus session -> logout flow in `backend/tests/integration/auth_flow_test.go`
+- [X] T039 [P] [US1] Add response-safety tests asserting no plaintext password in responses in `backend/tests/contract/auth_response_safety_contract_test.go`
+- [X] T040 [P] [US1] Add Flutter widget tests for register/login validation in `mobile/test/widget/auth/auth_forms_test.dart`
+- [X] T041 [US1] Add Flutter integration test for register/login/logout journey in `mobile/integration_test/auth_journey_test.dart`
 
 ### Implementation for User Story 1
 
-- [ ] T042 [P] [US1] Implement auth request/response models in `backend/internal/auth/models.go`
-- [ ] T043 [US1] Implement auth application service for Firebase-backed register/session/logout, idempotent provisioning, and current-device session recording in `backend/internal/auth/service.go`
-- [ ] T044 [US1] Implement auth HTTP handlers in `backend/internal/auth/handler.go`
-- [ ] T045 [US1] Wire auth routes and validators in `backend/cmd/api/router.go`
-- [ ] T046 [P] [US1] Implement Flutter auth API client in `mobile/lib/features/auth/data/auth_api_client.dart`
-- [ ] T047 [US1] Implement Flutter auth controller, Firebase ID-token refresh, secure backend session-ID persistence, and `401` session clearing in `mobile/lib/features/auth/application/auth_controller.dart`
-- [ ] T048 [US1] Implement Flutter register/login/logout screens that call Firebase first, then backend register/session endpoints in `mobile/lib/features/auth/presentation/auth_screens.dart`
+- [X] T042 [P] [US1] Implement auth request/response models in `backend/internal/auth/models.go`
+- [X] T043 [US1] Implement auth application service for Firebase-backed register/session/logout, idempotent provisioning, and current-device session recording in `backend/internal/auth/service.go`
+- [X] T044 [US1] Implement auth HTTP handlers in `backend/internal/auth/handler.go`
+- [X] T045 [US1] Wire auth routes and validators in `backend/cmd/api/router.go`
+- [X] T046 [P] [US1] Implement Flutter auth API client in `mobile/lib/features/auth/data/auth_api_client.dart`
+- [X] T047 [US1] Implement Flutter auth controller, Firebase ID-token refresh, secure backend session-ID persistence, and `401` session clearing in `mobile/lib/features/auth/application/auth_controller.dart`
+- [X] T048 [US1] Implement Flutter register/login/logout screens that call Firebase first, then backend register/session endpoints in `mobile/lib/features/auth/presentation/auth_screens.dart`
 
 **Checkpoint**: US1 is independently functional and is the MVP scope.
 

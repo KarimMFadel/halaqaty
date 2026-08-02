@@ -71,7 +71,9 @@ func (r *Router) registerRoutes() {
 
 		// Registration only needs a verified Firebase token; the local user row
 		// does not exist until the handler provisions it.
-		var registerHandler http.Handler = http.HandlerFunc(authMeEndpoint)
+		var registerHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageAuthHandlerNotConfigured, http.StatusInternalServerError)
+		})
 		if authH != nil {
 			registerHandler = http.HandlerFunc(authH.Register)
 		}

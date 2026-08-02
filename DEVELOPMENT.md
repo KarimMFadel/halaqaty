@@ -109,11 +109,11 @@ flowchart LR
     style S7 fill:#e8f5e9,stroke:#4CAF50
 ```
 
-> **No shortcuts.** Every feature must complete all 7 phases. All agents collaborate throughout. See [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) for agent roles.
+> **No shortcuts.** Every feature must complete all 7 phases. All agent roles remain available throughout, but only the smallest relevant set is dispatched for each phase. See [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) for agent roles.
 
 **Phase 1: Specify** → **Phase 2: Clarify** → **Phase 3: Checklist** → **Phase 4: Plan** → **Phase 5: Tasks** → **Phase 6: Analyze** → **Phase 7: Implement**
 
-All agents (Senior Golang Developer, Senior Flutter Mobile Engineer, Architect, Tech Lead, Team Leader) collaborate throughout all phases. See [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) for agent roles and collaboration patterns.
+The Team Leader can consult any role throughout the cycle, but dispatches only agents whose specialty is material to the current phase. See [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) and [`docs/engineering/collaboration/AGENT_WORKFLOW_HARNESS.md`](docs/engineering/collaboration/AGENT_WORKFLOW_HARNESS.md).
 
 ### ✅ Pre-flight checklist
 
@@ -163,7 +163,7 @@ This automatically:
 
 Run this if the spec has open areas or if agents ask clarifying questions. Generates structured questions; answer them to close gaps before planning.
 
-**When to run**: Whenever any agent (Golang, Flutter, Architect, Tech Lead, Team Leader) identifies ambiguous requirements, they will ask 5-7 clarifying questions. Use `/speckit.clarify` to resolve them formally.
+**When to run**: Whenever a relevant agent identifies a material ambiguity. The Team Leader consolidates cross-domain input into 5-7 non-duplicative questions total, then uses `/speckit.clarify` to resolve them formally.
 
 ---
 
@@ -349,21 +349,21 @@ Halaqaty development is powered by 5 specialized Copilot agents working autonomo
 **Autonomous Communication** (no explicit prompting needed):
 - Agents are aware of each other's roles and responsibilities
 - They communicate asynchronously on integration points
-- When ambiguous: **Agents ask Karim clarifying questions** (5-7 focused questions)
+- When ambiguous: relevant agents submit material questions and the Team Leader asks Karim **5-7 consolidated questions total** through `/speckit.clarify`
 - When blocked: Agents escalate to Team Leader or relevant peer
 
 **Throughout Spec-Kit Phases**:
-1. **Specify**: All agents review for feasibility and constraints
-2. **Clarify**: Agents ask Karim clarifying questions on ambiguous requirements
-3. **Checklist**: Agents validate spec quality from their specialties
-4. **Plan**: Architect + Backend/Mobile engineers design together
+1. **Specify**: Relevant agents review feasibility and constraints
+2. **Clarify**: Relevant agents submit material questions; Team Leader consolidates them through `/speckit.clarify`
+3. **Checklist**: Checklist agent consults a domain specialist only when needed
+4. **Plan**: Team Leader selects Architect, Backend, Mobile, or other specialists only for affected domains
 5. **Tasks**: Team Leader sequences with explicit dependencies
 6. **Analyze**: Verify consistency before implementation
-7. **Implement**: Agents execute with proactive coordination
+7. **Implement**: The assigned domain owner executes; other agents join only for dependencies or review
 
 ### Clarification Protocols
 
-Each agent can ask Karim 5-7 focused questions when unclear:
+Relevant agents submit focused questions in their specialties. The Team Leader removes overlap and asks Karim 5-7 questions total through `/speckit.clarify`:
 
 | Agent | Asks About | Example |
 |-------|---|---|

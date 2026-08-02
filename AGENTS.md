@@ -1,6 +1,6 @@
 # AGENTS.md
 
-High-signal guidance for OpenCode sessions working in this repo. Read alongside `DEVELOPMENT.md` and `.specify/memory/constitution.md`.
+High-signal guidance for Codex, OpenCode, GitHub Copilot, and other supported coding-agent sessions working in this repo. Read alongside `DEVELOPMENT.md` and `.specify/memory/constitution.md`.
 
 ## Repo shape
 
@@ -26,7 +26,23 @@ Branch naming: `NNN-feature-name` (Spec-Kit creates these). PR title format enfo
 
 ## Agents & Skills
 
-This project uses a multi-agent workflow with specialized agents and quality-guard skills defined in `.opencode/agents/` and `.opencode/skills/`. The Team Leader (`team-leader`) is the default agent and coordinates all delivery.
+This project uses a multi-agent workflow with specialized agents and quality-guard skills. OpenCode definitions live under `.opencode/agents/` and `.opencode/skills/`; GitHub Copilot definitions live under `.github/agents/` and `.github/skills/`. In Codex, use a callable role agent when available; otherwise read the matching `.github/agents/<role>.agent.md` as the role instructions. The Team Leader (`team-leader`) is the default coordinator.
+
+### Agentic Workflow Harness
+
+Spec-Kit, Superpowers, role-based agents, and project quality skills have distinct responsibilities. The authoritative integration and token-efficiency policy is:
+
+`docs/engineering/collaboration/AGENT_WORKFLOW_HARNESS.md`
+
+Apply these rules on every feature task:
+
+1. **Spec-Kit owns scope and artifacts** — `specify → clarify → checklist → plan → tasks → analyze → implement` remains the only feature lifecycle.
+2. **Superpowers owns implementation discipline** — use its TDD, debugging, focused review, and verification skills during implementation; do not recreate approved Spec-Kit specifications or plans with Superpowers.
+3. **Role agents own domain work** — dispatch only the smallest set of agents needed for the current phase and task. Collaboration does not mean dispatching every agent.
+4. **Project guards remain quality gates** — `$clean-code-guard`, `$test-guard`, and `$docs-guard` audit their respective changed artifacts without duplicating the Tech Lead review.
+5. **Minimize context** — pass task IDs and file paths instead of pasting documents; keep one implementer and one reviewer per coherent batch by default.
+
+If instructions conflict, follow the precedence and escalation rules in the harness. Never silently choose between contradictory approved artifacts.
 
 ### Spec-Kit Workflow
 

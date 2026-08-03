@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"halaqaty/backend/internal/platform/logging"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/logging"
 )
 
 // defaultSessionAbsoluteTTL mirrors config.DefaultAuthConfig when no TTL is injected.

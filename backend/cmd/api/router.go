@@ -5,20 +5,22 @@ import (
 	"net/http"
 	"time"
 
-	"halaqaty/backend/internal/auth"
-	"halaqaty/backend/internal/middleware"
-	phttp "halaqaty/backend/internal/platform/http"
-	"halaqaty/backend/internal/platform/httpconst"
+	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
+	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
+	phttp "github.com/KarimMFadel/halaqaty/backend/internal/platform/http"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
+	"github.com/KarimMFadel/halaqaty/backend/internal/profile"
 )
 
 // MiddlewareSet defines all cross-cutting middleware dependencies.
 type MiddlewareSet struct {
-	Auth        *middleware.AuthMiddleware
-	Role        *middleware.RoleMiddleware
-	RateLimit   *middleware.RateLimitMiddleware
-	AuthHandler *auth.Handler
-	Timeout     time.Duration
-	Logger      *slog.Logger
+	Auth           *middleware.AuthMiddleware
+	Role           *middleware.RoleMiddleware
+	RateLimit      *middleware.RateLimitMiddleware
+	AuthHandler    *auth.Handler
+	ProfileHandler *profile.Handler
+	Timeout        time.Duration
+	Logger         *slog.Logger
 }
 
 // Router wires API routes and middleware in one place.
@@ -80,20 +82,32 @@ func (r *Router) registerRoutes() {
 		r.mux.Handle(routeAuthRegister, r.mw.Auth.RequireVerifiedFirebase(registerHandler))
 
 		// Backend session creation requires an already-registered local user.
-		var sessionsHandler http.Handler = http.HandlerFunc(authMeEndpoint)
+		var sessionsHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageAuthHandlerNotConfigured, http.StatusInternalServerError)
+		})
 		if authH != nil {
 			sessionsHandler = http.HandlerFunc(authH.CreateSession)
 		}
 		r.mux.Handle(routeAuthSessions, r.mw.Auth.RequireBearer(sessionsHandler))
 
 		// Backend-session-scoped endpoints.
-		var logoutHandler http.Handler = http.HandlerFunc(authMeEndpoint)
+		var logoutHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageAuthHandlerNotConfigured, http.StatusInternalServerError)
+		})
 		if authH != nil {
 			logoutHandler = http.HandlerFunc(authH.Logout)
 		}
 		r.mux.Handle(routeAuthLogout, r.mw.Auth.Require(logoutHandler))
-		r.mux.Handle(routeAuthMeGet, r.mw.Auth.Require(http.HandlerFunc(authMeEndpoint)))
-		r.mux.Handle(routeAuthMePut, r.mw.Auth.Require(http.HandlerFunc(authMeEndpoint)))
+		var profileGetHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageProfileHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		var profilePutHandler http.Handler = profileGetHandler
+		if r.mw.ProfileHandler != nil {
+			profileGetHandler = http.HandlerFunc(r.mw.ProfileHandler.GetMe)
+			profilePutHandler = http.HandlerFunc(r.mw.ProfileHandler.UpdateMe)
+		}
+		r.mux.Handle(routeAuthMeGet, r.mw.Auth.Require(profileGetHandler))
+		r.mux.Handle(routeAuthMePut, r.mw.Auth.Require(profilePutHandler))
 	}
 
 	if r.mw.Auth != nil && r.mw.Role != nil {
@@ -103,15 +117,6 @@ func (r *Router) registerRoutes() {
 			r.mw.Role.RequireAny("supervisor", "teacher")(protected),
 		)
 	}
-}
-
-func authMeEndpoint(w http.ResponseWriter, _ *http.Request) {
-	phttp.WriteError(
-		w,
-		httpconst.ErrorCodeNotImplemented,
-		httpconst.ErrorMessageAuthMeNotImplemented,
-		http.StatusNotImplemented,
-	)
 }
 
 func circleRoleAssignmentEndpoint(w http.ResponseWriter, _ *http.Request) {

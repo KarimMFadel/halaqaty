@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	phttp "halaqaty/backend/internal/platform/http"
-	"halaqaty/backend/internal/platform/httpconst"
+	phttp "github.com/KarimMFadel/halaqaty/backend/internal/platform/http"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 )
 
 // CircleMembershipRepository resolves role by circle and user.

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"halaqaty/backend/internal/platform/httpconst"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 )
 
 type wsRateWindow struct {

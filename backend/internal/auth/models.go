@@ -70,6 +70,7 @@ type UserProfile struct {
 	Bio               *string   `json:"bio"`
 	Country           *string   `json:"country"`
 	AvatarURL         *string   `json:"avatar_url"`
+	Phone             *string   `json:"phone"`
 	PreferredLanguage string    `json:"preferred_language"`
 	CreatedAt         time.Time `json:"created_at"`
 }

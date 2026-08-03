@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"halaqaty/backend/internal/platform/httpconst"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 )
 
 // TestResponseSafety asserts that auth endpoints never leak sensitive fields

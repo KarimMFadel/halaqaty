@@ -28,3 +28,9 @@
 
 - **Decision**: Use request timeouts, validation, per-IP/user rate limits, audit records for registration/session/profile/role mutations, request IDs, structured logs, and retry only safe idempotent reads. Test Go unit, integration, and contract paths plus Flutter widget and integration flows.
 - **Rationale**: Meets the feature and constitution baselines.
+
+## Decision 6: Profile display_name contract alignment
+
+- **Decision**: `UpdateProfileRequest.display_name` enforces `minLength: 2` and `maxLength: 100`, matching registration/profile expectations.
+- **Rationale**: Resolves the generated-contract mismatch while preserving existing API behavior and avoiding broader schema changes.
+- **Alternatives considered**: Keep update payload less strict (inconsistent validation semantics); widen limits (unjustified behavioral change).

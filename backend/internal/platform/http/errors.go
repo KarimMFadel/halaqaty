@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"halaqaty/backend/internal/platform/httpconst"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 )
 
 // ErrorEnvelope is the standard error response shape.

@@ -15,6 +15,7 @@ Halaqaty uses one lifecycle with complementary tools:
 - **Spec-Kit decides what is built.** It owns feature requirements, clarification, quality checklists, technical plans, tasks, cross-artifact analysis, and implementation scope.
 - **Superpowers controls how approved work is executed.** It supplies test-first development, systematic debugging, bounded delegation, code-review procedure, worktree safety, and verification before completion.
 - **Role-based agents supply domain judgment.** They participate only when their specialty is needed.
+- **Ponytail controls implementation restraint.** It prefers the smallest correct diff, existing code, standard libraries, native platform features, and already-installed dependencies inside approved scope.
 - **Project quality guards audit changed artifacts.** They do not create a second review organization.
 - **Karim retains approval.** Mandatory manual review remains required for auth, RBAC, deletion paths, Firebase Auth, MinIO/upload, and other security-sensitive work.
 
@@ -24,6 +25,7 @@ Superpowers is installed in the coding harness, not vendored into this repositor
 
 - Before invoking a named skill or agent workflow, confirm that the active harness exposes it.
 - Codex uses the installed Superpowers plugin. OpenCode and GitHub Copilot require their own Superpowers installation; do not assume a Codex installation is shared with them.
+- Ponytail is installed per harness. OpenCode and GitHub Copilot use their own Ponytail configuration; Codex uses its Codex plugin. If a Ponytail command or skill is unavailable, apply the Ponytail rules manually and report the fallback.
 - OpenCode role definitions live under `.opencode/agents/`; GitHub Copilot role definitions live under `.github/agents/`.
 - In Codex, use a callable matching role agent when available. Otherwise read the matching `.github/agents/<role>.agent.md` and apply it as the role brief for inline work or a bounded subagent.
 - OpenCode project guards live under `.opencode/skills/`; GitHub Copilot project guards live under `.github/skills/`.
@@ -40,9 +42,11 @@ Use this order when deciding what governs work:
 3. Frozen product decisions, approved feature status, `DEVELOPMENT.md`, architecture, ADRs, and canonical API/WebSocket contracts
 4. Current feature artifacts under `specs/NNN-feature/`: `spec.md`, `plan.md`, contracts, and `tasks.md`
 5. Root `AGENTS.md`, this harness, and the collaboration guide
-6. Superpowers process skills and role-agent defaults
+6. Superpowers process skills, role-agent defaults, and Ponytail defaults
 
 Do not silently resolve a contradiction between levels 1–4. Stop, quote the conflicting paths and requirements concisely, and ask Karim which artifact must change. If a current instruction changes constitution-governed or frozen behavior, update the governing artifact through its required approval or amendment process before implementation. Lower-level workflow guidance must never rewrite higher-level scope.
+
+Ponytail is a restraint layer, not an authority layer. If Ponytail suggests skipping work that Spec-Kit, the constitution, security requirements, accessibility, contracts, or tests require, build the required work. If Ponytail can reduce code without weakening those requirements, prefer the smaller path.
 
 ## 3. Spec-Kit Cycle With Agents and Skills
 
@@ -94,12 +98,21 @@ Rules:
 ### Implementation path
 
 1. `superpowers:test-driven-development` drives red-green-refactor for production behavior changes and bug fixes.
-2. The domain agent implements the task against its Spec-Kit acceptance criteria.
+2. The domain agent implements the task against its Spec-Kit acceptance criteria, applying Ponytail to reuse existing code and avoid speculative abstraction.
 3. `$test-guard` audits test quality after test files change; it does not repeat the TDD cycle.
 4. `$clean-code-guard` audits the completed production-code batch.
 5. `$docs-guard` runs only when OpenAPI, WebSocket events, or related contract documentation changes.
 6. `superpowers:requesting-code-review` routes the prepared diff and acceptance criteria to `tech-lead` once per coherent batch.
-7. `superpowers:verification-before-completion` validates current evidence before any completion claim.
+7. Ponytail review is applied during review to flag avoidable code, unused abstraction, unnecessary dependencies, and missed standard-library/native-platform reuse.
+8. `superpowers:verification-before-completion` validates current evidence before any completion claim.
+
+### Ponytail boundaries
+
+- Use Ponytail during `/speckit.implement`, review, and fix waves; do not use it to replace `/speckit.specify`, `/speckit.plan`, `/speckit.tasks`, or `/speckit.analyze`.
+- In OpenCode implementation, Ponytail may use its native plugin commands and hooks, but the Halaqaty harness remains authoritative for scope and gates.
+- In GitHub Copilot implementation or review, apply Ponytail through the installed Copilot plugin or manually from this harness when plugin commands are unavailable.
+- In Codex review, use the normal review skill/procedure and also apply Ponytail review. Findings should still prioritize correctness, security, regressions, and missing tests before over-engineering concerns.
+- Never simplify away trust-boundary validation, authorization checks, persistence safety, error handling that prevents data loss, accessibility basics, localization/RTL requirements, contract compatibility, or required tests.
 
 ### Conditional skills
 
@@ -186,6 +199,7 @@ The integration is working correctly when:
 
 - Every production change traces to an approved Spec-Kit requirement and task.
 - No Superpowers document competes with `spec.md`, `plan.md`, or `tasks.md`.
+- Ponytail reduces implementation size only after approved scope and safety requirements are satisfied.
 - Only relevant agents are dispatched, with non-overlapping ownership.
 - TDD, guards, Tech Lead review, verification, and Karim's manual gate each occur once at the appropriate level.
 - Full documents and conversation history are not copied into agent prompts.

@@ -30,7 +30,7 @@ This project uses a multi-agent workflow with specialized agents and quality-gua
 
 ### Agentic Workflow Harness
 
-Spec-Kit, Superpowers, role-based agents, and project quality skills have distinct responsibilities. The authoritative integration and token-efficiency policy is:
+Spec-Kit, Superpowers, role-based agents, Ponytail, and project quality skills have distinct responsibilities. The authoritative integration and token-efficiency policy is:
 
 `docs/engineering/collaboration/AGENT_WORKFLOW_HARNESS.md`
 
@@ -39,8 +39,9 @@ Apply these rules on every feature task:
 1. **Spec-Kit owns scope and artifacts** — `specify → clarify → checklist → plan → tasks → analyze → implement` remains the only feature lifecycle.
 2. **Superpowers owns implementation discipline** — use its TDD, debugging, focused review, and verification skills during implementation; do not recreate approved Spec-Kit specifications or plans with Superpowers.
 3. **Role agents own domain work** — dispatch only the smallest set of agents needed for the current phase and task. Collaboration does not mean dispatching every agent.
-4. **Project guards remain quality gates** — `$clean-code-guard`, `$test-guard`, and `$docs-guard` audit their respective changed artifacts without duplicating the Tech Lead review.
-5. **Minimize context** — pass task IDs and file paths instead of pasting documents; keep one implementer and one reviewer per coherent batch by default.
+4. **Ponytail owns restraint** — prefer the smallest correct implementation inside approved Spec-Kit scope; never use Ponytail to skip required validation, security, accessibility, contracts, tests, or acceptance criteria.
+5. **Project guards remain quality gates** — `$clean-code-guard`, `$test-guard`, and `$docs-guard` audit their respective changed artifacts without duplicating the Tech Lead review.
+6. **Minimize context** — pass task IDs and file paths instead of pasting documents; keep one implementer and one reviewer per coherent batch by default.
 
 If instructions conflict, follow the precedence and escalation rules in the harness. Never silently choose between contradictory approved artifacts.
 
@@ -82,6 +83,7 @@ Invoke these skills as self-checks on your own output **before presenting, commi
 | `$clean-code-guard` | After writing/editing any production code (Go or Dart) |
 | `$test-guard` | After writing/editing any test code |
 | `$docs-guard` | After updating API contracts, OpenAPI spec, or WebSocket events |
+| Ponytail review | When reviewing in Codex, OpenCode, or GitHub Copilot: apply the over-engineering/YAGNI lens alongside the normal review gate |
 | `$steno-mode` | When brief, compact output is preferred |
 
 Usage: reference the skill by name in conversation (e.g., "run `$clean-code-guard` on the diff I just produced").

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"halaqaty/backend/internal/platform/httpconst"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 )
 
 // RequestIDContextKey is the context key for the request ID.

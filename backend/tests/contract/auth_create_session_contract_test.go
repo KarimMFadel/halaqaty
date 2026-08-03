@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"halaqaty/backend/internal/auth"
-	"halaqaty/backend/internal/middleware"
-	phttp "halaqaty/backend/internal/platform/http"
-	"halaqaty/backend/internal/platform/httpconst"
+	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
+	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
+	phttp "github.com/KarimMFadel/halaqaty/backend/internal/platform/http"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 )
 
 // createSessionStubStore satisfies auth.Store for session-creation contract tests.

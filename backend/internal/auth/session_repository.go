@@ -69,7 +69,7 @@ func (r *SessionRepository) UpsertProfileOnRegister(ctx context.Context, userID,
 // GetUserProfileByUserID reads the API profile projection for a user.
 func (r *SessionRepository) GetUserProfileByUserID(ctx context.Context, userID string) (UserProfile, error) {
 	var profile UserProfile
-	var fullName, displayName, bio, country, avatarURL sql.NullString
+	var fullName, displayName, bio, country, avatarURL, phone sql.NullString
 	err := r.pool.QueryRow(ctx, getUserProfileByUserIDQuery, userID).Scan(
 		&profile.ID,
 		&profile.FirebaseUID,
@@ -78,6 +78,7 @@ func (r *SessionRepository) GetUserProfileByUserID(ctx context.Context, userID s
 		&bio,
 		&country,
 		&avatarURL,
+		&phone,
 		&profile.PreferredLanguage,
 		&profile.CreatedAt,
 	)
@@ -92,6 +93,7 @@ func (r *SessionRepository) GetUserProfileByUserID(ctx context.Context, userID s
 	profile.Bio = nullStringPtr(bio)
 	profile.Country = nullStringPtr(country)
 	profile.AvatarURL = nullStringPtr(avatarURL)
+	profile.Phone = nullStringPtr(phone)
 	return profile, nil
 }
 

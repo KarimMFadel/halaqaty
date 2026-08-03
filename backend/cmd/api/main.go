@@ -12,9 +12,10 @@ import (
 
 	firebaseAdmin "firebase.google.com/go/v4"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"halaqaty/backend/internal/auth"
-	"halaqaty/backend/internal/middleware"
-	"halaqaty/backend/internal/platform/config"
+	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
+	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/config"
+	"github.com/KarimMFadel/halaqaty/backend/internal/profile"
 )
 
 func main() {
@@ -70,18 +71,22 @@ func main() {
 
 	authService := auth.NewService(sessionRepo, nil, cfg.SessionAbsoluteTTL)
 	authHandler := auth.NewHandler(authService)
+	profileRepo := profile.NewRepository(pool)
+	profileService := profile.NewService(profileRepo)
+	profileHandler := profile.NewHandler(profileService)
 
 	authMW := middleware.NewAuthMiddleware(verifier, sessionService, sessionRepo)
 	roleMW := middleware.NewRoleMiddleware(sessionRepo)
 	rateLimitMW := middleware.NewRateLimitMiddleware(cfg.RateLimitPerIPPerMin, cfg.RateLimitPerUserPerMin)
 
 	mwSet := MiddlewareSet{
-		Auth:        authMW,
-		Role:        roleMW,
-		RateLimit:   rateLimitMW,
-		AuthHandler: authHandler,
-		Timeout:     cfg.RequestTimeout,
-		Logger:      logger,
+		Auth:           authMW,
+		Role:           roleMW,
+		RateLimit:      rateLimitMW,
+		AuthHandler:    authHandler,
+		ProfileHandler: profileHandler,
+		Timeout:        cfg.RequestTimeout,
+		Logger:         logger,
 	}
 
 	// ── Router ────────────────────────────────────────────────────────────────

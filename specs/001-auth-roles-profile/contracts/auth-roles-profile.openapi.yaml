@@ -221,6 +221,7 @@ components:
           maxLength: 150
         display_name:
           type: string
+          minLength: 2
           maxLength: 100
         bio:
           type: string

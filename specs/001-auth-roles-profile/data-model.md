@@ -6,6 +6,8 @@
 
 First profile completion requires trimmed `full_name` and a valid ISO country code. Firebase UID is derived only from the verified bearer and is never client supplied.
 
+Profile payload validation keeps `display_name` within 2..100 characters for both registration and profile updates.
+
 ## UserSession
 
 `user_sessions` holds an opaque, server-generated UUID `id` exposed as `X-Halaqaty-Session-ID`; `user_id` is a required foreign key. It also stores nullable `device_name`, `last_activity_at`, non-null `expires_at`, nullable `revoked_at`, and creation metadata/timestamps. A session is valid only when it belongs to the bearer-derived user, is not revoked, and has not exceeded its inactivity/expiry policy.

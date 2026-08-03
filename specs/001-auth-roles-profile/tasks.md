@@ -106,22 +106,22 @@
 
 ### Tests for User Story 2
 
-- [ ] T049 [P] [US2] Add contract tests for `GET /auth/me` and `PUT /auth/me` requiring bearer plus backend session in `backend/tests/contract/profile_me_contract_test.go`
-- [ ] T050 [P] [US2] Add contract tests for profile validation error envelope, field map, and error codes in `backend/tests/contract/profile_validation_contract_test.go`
-- [ ] T051 [P] [US2] Add unit tests for first-completion required `full_name` and ISO `country` rules in `backend/internal/profile/service_test.go`
-- [ ] T052 [US2] Add integration test for profile create/read/update flow in `backend/tests/integration/profile_flow_test.go`
-- [ ] T053 [P] [US2] Add Flutter widget tests for required profile fields and server error mapping in `mobile/test/widget/profile/profile_form_test.dart`
-- [ ] T054 [US2] Add Flutter integration test for login→profile view/edit flow in `mobile/integration_test/profile_flow_test.dart`
+- [X] T049 [P] [US2] Add contract tests for `GET /auth/me` and `PUT /auth/me` requiring bearer plus backend session in `backend/tests/contract/profile_me_contract_test.go`
+- [X] T050 [P] [US2] Add contract tests for profile validation error envelope, field map, and error codes in `backend/tests/contract/profile_validation_contract_test.go`
+- [X] T051 [P] [US2] Add unit tests for first-completion required `full_name` and ISO `country` rules in `backend/internal/profile/service_test.go`
+- [X] T052 [US2] Add integration test for profile create/read/update flow in `backend/tests/integration/profile_flow_test.go`
+- [X] T053 [P] [US2] Add Flutter widget tests for required profile fields and server error mapping in `mobile/test/widget/profile/profile_form_test.dart`
+- [X] T054 [US2] Add Flutter integration test for login→profile view/edit flow in `mobile/integration_test/profile_flow_test.dart`
 
 ### Implementation for User Story 2
 
-- [ ] T055 [P] [US2] Implement profile repository and persistence mapping in `backend/internal/profile/repository.go`
-- [ ] T056 [US2] Implement profile service with completion validation for `full_name`/`country` and error-code mapping in `backend/internal/profile/service.go`
-- [ ] T057 [US2] Implement profile handlers for `GET /auth/me` and `PUT /auth/me` in `backend/internal/profile/handler.go`
-- [ ] T058 [US2] Wire authenticated profile routes in `backend/cmd/api/router.go`
-- [ ] T059 [P] [US2] Implement Flutter profile API client in `mobile/lib/features/profile/data/profile_api_client.dart`
-- [ ] T060 [US2] Implement Flutter profile controller in `mobile/lib/features/profile/application/profile_controller.dart`
-- [ ] T061 [US2] Implement Flutter profile screen for view/edit in `mobile/lib/features/profile/presentation/profile_screen.dart`
+- [X] T055 [P] [US2] Implement profile repository and persistence mapping in `backend/internal/profile/repository.go`
+- [X] T056 [US2] Implement profile service with completion validation for `full_name`/`country` and error-code mapping in `backend/internal/profile/service.go`
+- [X] T057 [US2] Implement profile handlers for `GET /auth/me` and `PUT /auth/me` in `backend/internal/profile/handler.go`
+- [X] T058 [US2] Wire authenticated profile routes in `backend/cmd/api/router.go`
+- [X] T059 [P] [US2] Implement Flutter profile API client in `mobile/lib/features/profile/data/profile_api_client.dart`
+- [X] T060 [US2] Implement Flutter profile controller in `mobile/lib/features/profile/application/profile_controller.dart`
+- [X] T061 [US2] Implement Flutter profile screen for view/edit in `mobile/lib/features/profile/presentation/profile_screen.dart`
 
 **Checkpoint**: US2 is independently functional and testable on top of auth.
 

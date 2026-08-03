@@ -31,6 +31,7 @@ SELECT
     p.bio,
     p.country,
     p.avatar_url,
+    p.phone,
     COALESCE(p.preferred_language, 'ar') AS preferred_language,
     u.created_at
 FROM users u

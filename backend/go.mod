@@ -1,4 +1,4 @@
-module halaqaty/backend
+module github.com/KarimMFadel/halaqaty/backend
 
 go 1.22
 

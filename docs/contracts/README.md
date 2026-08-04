@@ -50,6 +50,35 @@ spectral lint docs/contracts/openapi.yaml
 
 > **Note:** Go handlers are hand-written and centralized in `backend/cmd/api/routes.go` (see `AGENTS.md`). There is no OpenAPI → Go codegen pipeline.
 
+## Error Codes
+
+Most error responses follow this JSON envelope:
+
+```json
+{ "error": { "code": "ERR_...", "message": "human readable", "fields": { "field": "reason" } } }
+```
+
+**Known exception:** 503 timeout responses produced by Go's `http.TimeoutHandler`
+return a plain-text body. All other error paths use the JSON envelope above.
+
+| Code | HTTP Status | Meaning |
+|------|-------------|---------|
+| `ERR_UNAUTHORIZED` | 401 | Missing, invalid, or expired Firebase ID token |
+| `ERR_SESSION_MISSING` | 401 | `X-Halaqaty-Session-ID` header absent |
+| `ERR_SESSION_NOT_FOUND` | 401 | Session ID does not exist |
+| `ERR_SESSION_EXPIRED` | 401 | Session exceeded inactivity (30d) or absolute (90d) TTL |
+| `ERR_SESSION_REVOKED` | 401 | Session was explicitly revoked via logout |
+| `ERR_SESSION_USER_MISMATCH` | 401 | Session belongs to a different Firebase identity |
+| `ERR_FORBIDDEN` | 403 | Authenticated but lacks the required circle role |
+| `ERR_NOT_FOUND` | 404 | Referenced resource does not exist |
+| `ERR_CONFLICT` | 409 | Resource already exists (e.g. duplicate email from a different Firebase UID) |
+| `ERR_VALIDATION_FAILED` | 400 | Request body or parameters failed validation; `fields` map contains per-field messages |
+| `ERR_RATE_LIMIT_EXCEEDED` | 429 | Per-IP or per-user request budget exhausted |
+| `ERR_REQUEST_TIMEOUT` | 503 | Handler exceeded the configured per-request timeout (plain-text body — stdlib limitation) |
+| `ERR_INTERNAL_SERVER_ERROR` | 500 | Unexpected server error |
+
+Registration with an already-provisioned Firebase identity returns **409** with a valid `BackendSessionResponse` body (idempotent replay treated as success by the mobile client). Registration with a different Firebase UID but a conflicting email returns **409** with `ERR_CONFLICT` and no session body.
+
 ## Related Documents
 
 - [ARCHITECTURE.md](../engineering/architecture/ARCHITECTURE.md) — Database schema, security model, LiveKit integration

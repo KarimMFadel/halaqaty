@@ -42,12 +42,18 @@ func NewRouter(mw MiddlewareSet) *Router {
 }
 
 // Handler returns the fully wrapped HTTP handler chain.
+// RateLimit.LimitByIP enforces IP budgets here (no principal yet).
+// Per-user rate limiting is applied per-route inside registerRoutes, after
+// auth middleware sets the principal in context.
 func (r *Router) Handler() http.Handler {
 	handler := http.Handler(r.mux)
+	// Apply IP-only rate limiting globally; per-user limiting is wired per-route.
 	if r.mw.RateLimit != nil {
-		handler = r.mw.RateLimit.Limit(handler)
+		handler = r.mw.RateLimit.LimitByIP(handler)
 	}
 	handler = validationMiddleware(handler)
+	// Limit request body to 1 MiB to prevent unbounded reads on auth/profile routes.
+	handler = phttp.MaxBytesMiddleware(1<<20, handler)
 
 	logger := r.mw.Logger
 	if logger == nil {
@@ -62,7 +68,22 @@ func (r *Router) Handler() http.Handler {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
+	// ponytail: http.TimeoutHandler returns plain-text body on 503 timeout;
+	// JSON envelope is enforced for all non-timeout error paths via WriteError.
 	return http.TimeoutHandler(handler, timeout, httpconst.ErrorMessageRequestTimeout)
+}
+
+// requireWithUserLimit chains: auth (sets principal) → per-user rate limit → handler.
+// Use this instead of Auth.Require for every protected endpoint so that the
+// per-user budget is checked after the principal is known.
+func (r *Router) requireWithUserLimit(next http.Handler) http.Handler {
+	if r.mw.Auth == nil {
+		return next
+	}
+	if r.mw.RateLimit == nil {
+		return r.mw.Auth.Require(next)
+	}
+	return r.mw.Auth.Require(r.mw.RateLimit.Limit(next))
 }
 
 func (r *Router) registerRoutes() {
@@ -99,7 +120,7 @@ func (r *Router) registerRoutes() {
 		if authH != nil {
 			logoutHandler = http.HandlerFunc(authH.Logout)
 		}
-		r.mux.Handle(routeAuthLogout, r.mw.Auth.Require(logoutHandler))
+		r.mux.Handle(routeAuthLogout, r.requireWithUserLimit(logoutHandler))
 		var profileGetHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageProfileHandlerNotConfigured, http.StatusInternalServerError)
 		})
@@ -108,8 +129,8 @@ func (r *Router) registerRoutes() {
 			profileGetHandler = http.HandlerFunc(r.mw.ProfileHandler.GetMe)
 			profilePutHandler = http.HandlerFunc(r.mw.ProfileHandler.UpdateMe)
 		}
-		r.mux.Handle(routeAuthMeGet, r.mw.Auth.Require(profileGetHandler))
-		r.mux.Handle(routeAuthMePut, r.mw.Auth.Require(profilePutHandler))
+		r.mux.Handle(routeAuthMeGet, r.requireWithUserLimit(profileGetHandler))
+		r.mux.Handle(routeAuthMePut, r.requireWithUserLimit(profilePutHandler))
 	}
 
 	if r.mw.Auth != nil {
@@ -120,7 +141,7 @@ func (r *Router) registerRoutes() {
 		if rbacH != nil {
 			createCircleHandler = http.HandlerFunc(rbacH.CreateCircle)
 		}
-		r.mux.Handle(routeCirclesCreate, r.mw.Auth.Require(createCircleHandler))
+		r.mux.Handle(routeCirclesCreate, r.requireWithUserLimit(createCircleHandler))
 	}
 
 	if r.mw.Auth != nil && r.mw.Role != nil {
@@ -134,7 +155,7 @@ func (r *Router) registerRoutes() {
 		// Auth runs first so the principal exists when the role guard reads it.
 		r.mux.Handle(
 			routeCircleAssignRole,
-			r.mw.Auth.Require(r.mw.Role.RequireAny("supervisor", "teacher")(assignRoleHandler)),
+			r.requireWithUserLimit(r.mw.Role.RequireAny("supervisor", "teacher")(assignRoleHandler)),
 		)
 	}
 }
@@ -148,7 +169,12 @@ func validationMiddleware(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			http.Error(w, httpconst.ErrorMessageUnsupportedContentType, http.StatusUnsupportedMediaType)
+			phttp.WriteError(
+				w,
+				httpconst.ErrorCodeValidationFailed,
+				httpconst.ErrorMessageUnsupportedContentType,
+				http.StatusUnsupportedMediaType,
+			)
 			return
 		default:
 			next.ServeHTTP(w, r)

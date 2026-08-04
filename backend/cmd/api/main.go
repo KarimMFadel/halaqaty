@@ -16,6 +16,7 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/config"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/logging"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
 	"github.com/KarimMFadel/halaqaty/backend/internal/profile"
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
 )
@@ -83,6 +84,7 @@ func main() {
 	rbacHandler := rbac.NewHandler(rbacService)
 
 	authMW := middleware.NewAuthMiddleware(verifier, sessionService, sessionRepo)
+	authMW.SetMetrics(new(metrics.AuthMetrics))
 	roleMW := middleware.NewRoleMiddleware(sessionRepo)
 	rateLimitMW := middleware.NewRateLimitMiddleware(cfg.RateLimitPerIPPerMin, cfg.RateLimitPerUserPerMin)
 

@@ -10,6 +10,7 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	phttp "github.com/KarimMFadel/halaqaty/backend/internal/platform/http"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
 )
 
 // AuthPrincipal is the authenticated request identity.
@@ -34,6 +35,7 @@ type AuthMiddleware struct {
 	verifier       auth.TokenVerifier
 	sessionService *auth.SessionService
 	sessionRepo    SessionRepository
+	metrics        *metrics.AuthMetrics
 }
 
 // NewAuthMiddleware creates middleware for protected routes.
@@ -47,6 +49,11 @@ func NewAuthMiddleware(
 		sessionService: sessionService,
 		sessionRepo:    sessionRepo,
 	}
+}
+
+// SetMetrics wires optional auth metrics instrumentation.
+func (m *AuthMiddleware) SetMetrics(am *metrics.AuthMetrics) {
+	m.metrics = am
 }
 
 // RequireBearer validates the Firebase bearer token, resolves the existing local
@@ -65,8 +72,10 @@ func (m *AuthMiddleware) RequireBearer(next http.Handler) http.Handler {
 			return
 		}
 
+		start := time.Now()
 		principal, ok := m.authenticateBearer(r)
 		if !ok {
+			m.metrics.RecordRejection()
 			phttp.WriteError(
 				w,
 				httpconst.ErrorCodeUnauthorized,
@@ -76,6 +85,7 @@ func (m *AuthMiddleware) RequireBearer(next http.Handler) http.Handler {
 			return
 		}
 
+		m.metrics.RecordRequest(time.Since(start))
 		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), principal)))
 	})
 }
@@ -96,8 +106,10 @@ func (m *AuthMiddleware) RequireVerifiedFirebase(next http.Handler) http.Handler
 			return
 		}
 
+		start := time.Now()
 		decoded, ok := m.verifyBearer(r)
 		if !ok {
+			m.metrics.RecordRejection()
 			phttp.WriteError(
 				w,
 				httpconst.ErrorCodeUnauthorized,
@@ -112,6 +124,7 @@ func (m *AuthMiddleware) RequireVerifiedFirebase(next http.Handler) http.Handler
 			Email:       decoded.Email,
 			Claims:      decoded.Claims,
 		}
+		m.metrics.RecordRequest(time.Since(start))
 		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), principal)))
 	})
 }
@@ -121,6 +134,13 @@ func (m *AuthMiddleware) RequireVerifiedFirebase(next http.Handler) http.Handler
 // routes except registration and backend-session creation.
 func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 	return m.RequireBearer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		reject := func(code, msg string, status int) {
+			m.metrics.RecordRejection()
+			phttp.WriteError(w, code, msg, status)
+		}
+
 		if m.sessionService == nil {
 			phttp.WriteError(
 				w,
@@ -133,23 +153,13 @@ func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 
 		principal, ok := CurrentPrincipal(r.Context())
 		if !ok {
-			phttp.WriteError(
-				w,
-				httpconst.ErrorCodeUnauthorized,
-				httpconst.ErrorMessageUnauthorized,
-				http.StatusUnauthorized,
-			)
+			reject(httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
 			return
 		}
 
 		sessionID := strings.TrimSpace(r.Header.Get(httpconst.HeaderSessionID))
 		if sessionID == "" {
-			phttp.WriteError(
-				w,
-				httpconst.ErrorCodeSessionMissing,
-				httpconst.ErrorMessageMissingSessionID,
-				http.StatusUnauthorized,
-			)
+			reject(httpconst.ErrorCodeSessionMissing, httpconst.ErrorMessageMissingSessionID, http.StatusUnauthorized)
 			return
 		}
 
@@ -159,56 +169,33 @@ func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 			if errors.Is(err, auth.ErrSessionNotFound) {
 				code = httpconst.ErrorCodeSessionNotFound
 			}
-			phttp.WriteError(
-				w,
-				code,
-				httpconst.ErrorMessageInvalidSession,
-				http.StatusUnauthorized,
-			)
+			reject(code, httpconst.ErrorMessageInvalidSession, http.StatusUnauthorized)
 			return
 		}
 
 		if !strings.EqualFold(session.UserID, principal.UserID) {
-			phttp.WriteError(
-				w,
-				httpconst.ErrorCodeSessionUserMismatch,
-				httpconst.ErrorMessageSessionUserMismatch,
-				http.StatusUnauthorized,
-			)
+			reject(httpconst.ErrorCodeSessionUserMismatch, httpconst.ErrorMessageSessionUserMismatch, http.StatusUnauthorized)
 			return
 		}
 
 		if session.IsRevoked() {
-			phttp.WriteError(
-				w,
-				httpconst.ErrorCodeSessionRevoked,
-				httpconst.ErrorMessageSessionRevoked,
-				http.StatusUnauthorized,
-			)
+			reject(httpconst.ErrorCodeSessionRevoked, httpconst.ErrorMessageSessionRevoked, http.StatusUnauthorized)
 			return
 		}
 
 		if m.sessionService.IsExpired(session) {
-			phttp.WriteError(
-				w,
-				httpconst.ErrorCodeSessionExpired,
-				httpconst.ErrorMessageSessionExpired,
-				http.StatusUnauthorized,
-			)
+			m.metrics.RecordSessionExpiry()
+			reject(httpconst.ErrorCodeSessionExpired, httpconst.ErrorMessageSessionExpired, http.StatusUnauthorized)
 			return
 		}
 
 		m.sessionService.Touch(&session)
 		if err := m.sessionRepo.Touch(r.Context(), session.ID, session.LastActivityAt); err != nil {
-			phttp.WriteError(
-				w,
-				httpconst.ErrorCodeUnauthorized,
-				httpconst.ErrorMessageInvalidSession,
-				http.StatusUnauthorized,
-			)
+			reject(httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageInvalidSession, http.StatusUnauthorized)
 			return
 		}
 
+		m.metrics.RecordRequest(time.Since(start))
 		next.ServeHTTP(w, r)
 	}))
 }

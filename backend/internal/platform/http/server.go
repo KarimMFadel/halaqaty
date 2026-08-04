@@ -108,6 +108,17 @@ func (rr *responseRecorder) WriteHeader(code int) {
 	rr.ResponseWriter.WriteHeader(code)
 }
 
+// MaxBytesMiddleware wraps each request body with an http.MaxBytesReader so
+// oversized payloads are rejected before reaching handler logic.
+// A 1 MiB cap is sufficient for auth/profile JSON; raise if file upload routes
+// are added (ponytail: single cap, per-route if limits diverge).
+func MaxBytesMiddleware(maxBytes int64, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+		next.ServeHTTP(w, r)
+	})
+}
+
 // RetryPolicy configures retry behavior for safe HTTP requests.
 type RetryPolicy struct {
 	MaxRetries    int

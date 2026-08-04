@@ -10,6 +10,7 @@ import (
 	phttp "github.com/KarimMFadel/halaqaty/backend/internal/platform/http"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 	"github.com/KarimMFadel/halaqaty/backend/internal/profile"
+	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
 )
 
 // MiddlewareSet defines all cross-cutting middleware dependencies.
@@ -19,6 +20,7 @@ type MiddlewareSet struct {
 	RateLimit      *middleware.RateLimitMiddleware
 	AuthHandler    *auth.Handler
 	ProfileHandler *profile.Handler
+	RBACHandler    *rbac.Handler
 	Timeout        time.Duration
 	Logger         *slog.Logger
 }
@@ -110,22 +112,31 @@ func (r *Router) registerRoutes() {
 		r.mux.Handle(routeAuthMePut, r.mw.Auth.Require(profilePutHandler))
 	}
 
+	if r.mw.Auth != nil {
+		rbacH := r.mw.RBACHandler
+		var createCircleHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		if rbacH != nil {
+			createCircleHandler = http.HandlerFunc(rbacH.CreateCircle)
+		}
+		r.mux.Handle(routeCirclesCreate, r.mw.Auth.Require(createCircleHandler))
+	}
+
 	if r.mw.Auth != nil && r.mw.Role != nil {
-		protected := r.mw.Auth.Require(http.HandlerFunc(circleRoleAssignmentEndpoint))
+		rbacH := r.mw.RBACHandler
+		var assignRoleHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		if rbacH != nil {
+			assignRoleHandler = http.HandlerFunc(rbacH.AssignRole)
+		}
+		// Auth runs first so the principal exists when the role guard reads it.
 		r.mux.Handle(
 			routeCircleAssignRole,
-			r.mw.Role.RequireAny("supervisor", "teacher")(protected),
+			r.mw.Auth.Require(r.mw.Role.RequireAny("supervisor", "teacher")(assignRoleHandler)),
 		)
 	}
-}
-
-func circleRoleAssignmentEndpoint(w http.ResponseWriter, _ *http.Request) {
-	phttp.WriteError(
-		w,
-		httpconst.ErrorCodeNotImplemented,
-		httpconst.ErrorMessageCircleRoleAssignNotImplemented,
-		http.StatusNotImplemented,
-	)
 }
 
 func validationMiddleware(next http.Handler) http.Handler {

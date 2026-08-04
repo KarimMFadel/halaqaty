@@ -20,6 +20,10 @@ const (
 	migration010Down = "000010_auth_roles_profile.down.sql"
 	migration011Up   = "000011_auth_roles_profile_alignment.up.sql"
 	migration011Down = "000011_auth_roles_profile_alignment.down.sql"
+	migration012Up   = "000012_auth_profiles_display_name.up.sql"
+	migration013Up   = "000013_create_circles.up.sql"
+	migration014Up   = "000014_circle_members_circle_fk.up.sql"
+	migration014Down = "000014_circle_members_circle_fk.down.sql"
 )
 
 func TestAuthRolesAlignmentMigration_WithoutCircles(t *testing.T) {
@@ -86,6 +90,67 @@ func TestAuthRolesAlignmentMigration_WithCircles(t *testing.T) {
 	runMigrationFile(t, conn, ctx, migration011Down)
 
 	assertConstraintNotExists(t, conn, ctx, schema, "circle_members", "fk_circle_members_circle_id_000011")
+}
+
+func TestCircleMembersCircleFKMigration_RemediatesOrphansAndAddsConstraint(t *testing.T) {
+	ctx := context.Background()
+	pool := openPool(t, ctx)
+	defer pool.Close()
+
+	conn := acquireConn(t, pool, ctx)
+	defer conn.Release()
+
+	schema := uniqueSchemaName(t)
+	createSchema(t, conn, ctx, schema)
+	defer dropSchema(t, pool, ctx, schema)
+
+	runMigrationFile(t, conn, ctx, migration010Up)
+	runMigrationFile(t, conn, ctx, migration011Up)
+	runMigrationFile(t, conn, ctx, migration012Up)
+	runMigrationFile(t, conn, ctx, migration013Up)
+
+	validUserID := "11111111-1111-1111-1111-111111111111"
+	validCircleID := "22222222-2222-2222-2222-222222222222"
+	orphanCircleID := "33333333-3333-3333-3333-333333333333"
+	secondUserID := "44444444-4444-4444-4444-444444444444"
+
+	if _, err := conn.Exec(ctx, `
+		INSERT INTO users (id, firebase_uid, email)
+		VALUES ($1::uuid, 'firebase-a', 'a@example.com'),
+		       ($2::uuid, 'firebase-b', 'b@example.com');
+	`, validUserID, secondUserID); err != nil {
+		t.Fatalf("seed users: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `
+		INSERT INTO circles (id, name, teacher_id, invite_code)
+		VALUES ($1::uuid, 'Circle A', $2::uuid, 'HLQ-AAAA');
+	`, validCircleID, validUserID); err != nil {
+		t.Fatalf("seed circle: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `
+		INSERT INTO circle_members (circle_id, user_id, role)
+		VALUES ($1::uuid, $2::uuid, 'teacher'),
+		       ($3::uuid, $4::uuid, 'student');
+	`, validCircleID, validUserID, orphanCircleID, secondUserID); err != nil {
+		t.Fatalf("seed circle members: %v", err)
+	}
+
+	runMigrationFile(t, conn, ctx, migration014Up)
+
+	var memberCount int
+	if err := conn.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM circle_members
+	`).Scan(&memberCount); err != nil {
+		t.Fatalf("count members after migration: %v", err)
+	}
+	if memberCount != 1 {
+		t.Fatalf("expected orphan remediation to keep 1 row, got %d", memberCount)
+	}
+	assertConstraintExists(t, conn, ctx, schema, "circle_members", "fk_circle_members_circle_id_000014")
+
+	runMigrationFile(t, conn, ctx, migration014Down)
+	assertConstraintNotExists(t, conn, ctx, schema, "circle_members", "fk_circle_members_circle_id_000014")
 }
 
 func openPool(t *testing.T, ctx context.Context) *pgxpool.Pool {

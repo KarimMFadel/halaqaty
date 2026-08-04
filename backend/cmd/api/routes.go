@@ -13,5 +13,6 @@ const (
 )
 
 const (
+	routeCirclesCreate    = "POST /circles"
 	routeCircleAssignRole = "PUT /circles/{circleId}/members/{userId}/role"
 )

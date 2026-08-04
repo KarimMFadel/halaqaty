@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	phttp "github.com/KarimMFadel/halaqaty/backend/internal/platform/http"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 )
 
@@ -52,14 +53,14 @@ func (m *WSRateLimitMiddleware) LimitUpgrade(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		principal, ok := CurrentPrincipal(r.Context())
 		if !ok {
-			http.Error(w, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+			phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
 			return
 		}
 
 		// Check budget without incrementing — the handler calls OpenConnection
 		// once the WebSocket upgrade succeeds and the connection loop begins.
 		if !m.hasCapacity(principal.UserID) {
-			http.Error(w, httpconst.ErrorMessageWebSocketConnLimitExceeded, http.StatusTooManyRequests)
+			phttp.WriteError(w, httpconst.ErrorCodeRateLimitExceeded, httpconst.ErrorMessageWebSocketConnLimitExceeded, http.StatusTooManyRequests)
 			return
 		}
 

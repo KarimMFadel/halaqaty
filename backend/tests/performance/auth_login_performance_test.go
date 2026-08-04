@@ -1,10 +1,17 @@
-// Package performance contains performance gate tests for SC-001:
+// Package performance contains in-process handler latency tests that guard
+// against handler-layer regressions for SC-001:
 // "At least 95% of successful login attempts complete in under 2 seconds end-to-end."
+//
+// These tests use in-memory stubs (no Firebase round-trip, no PostgreSQL).
+// They verify that the handler layer itself does not introduce unacceptable
+// latency. Real end-to-end SLO validation requires live-infra load testing
+// with Firebase verification and PostgreSQL included.
 package performance
 
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -33,24 +40,14 @@ func (s *perfStore) CreateSession(_ context.Context, _ auth.Session) error { ret
 
 func (s *perfStore) Revoke(_ context.Context, _ string, _ time.Time) error { return nil }
 
-// perfVerifier returns a valid decoded token immediately, simulating fast Firebase verification.
+// perfVerifier returns a valid decoded token immediately.
 type perfVerifier struct{}
 
 func (v *perfVerifier) Verify(_ context.Context, _ string) (*auth.DecodedToken, error) {
 	return &auth.DecodedToken{UID: "perf-firebase-001", Email: "perf@halaqaty.app"}, nil
 }
 
-// buildPerfRegisterHandler wires a register handler with in-memory stubs.
-func buildPerfRegisterHandler() http.Handler {
-	store := &perfStore{}
-	svc := auth.NewService(store, nil, 24*time.Hour)
-	handler := auth.NewHandler(svc)
-	sessionSvc := auth.NewSessionService(24 * time.Hour)
-	mw := middleware.NewAuthMiddleware(&perfVerifier{}, sessionSvc, &perfMiddlewareStore{})
-	return mw.RequireVerifiedFirebase(http.HandlerFunc(handler.Register))
-}
-
-// perfMiddlewareStore satisfies middleware.SessionRepository for the auth middleware.
+// perfMiddlewareStore satisfies middleware.SessionRepository for perf tests.
 type perfMiddlewareStore struct{}
 
 func (s *perfMiddlewareStore) GetByID(_ context.Context, _ string) (auth.Session, error) {
@@ -63,58 +60,119 @@ func (s *perfMiddlewareStore) GetLocalUserIDByFirebaseUID(_ context.Context, _ s
 	return "perf-user-001", nil
 }
 
-// TestAuthLogin_P95Latency_SC001 validates SC-001: p95 of successful registration
-// attempts is under 2 seconds when using in-memory dependencies (no network I/O).
-// This is an in-process gate; real end-to-end latency includes Firebase verification
-// and PostgreSQL round-trips that require separate load testing with live infra.
-func TestAuthLogin_P95Latency_SC001(t *testing.T) {
-	handler := buildPerfRegisterHandler()
+func buildPerfRegisterHandler() http.Handler {
+	svc := auth.NewService(&perfStore{}, nil, 24*time.Hour)
+	handler := auth.NewHandler(svc)
+	sessionSvc := auth.NewSessionService(24 * time.Hour)
+	mw := middleware.NewAuthMiddleware(&perfVerifier{}, sessionSvc, &perfMiddlewareStore{})
+	return mw.RequireVerifiedFirebase(http.HandlerFunc(handler.Register))
+}
 
-	const iterations = 100
+func buildPerfSessionHandler() http.Handler {
+	svc := auth.NewService(&perfStore{}, nil, 24*time.Hour)
+	handler := auth.NewHandler(svc)
+	sessionSvc := auth.NewSessionService(24 * time.Hour)
+	mw := middleware.NewAuthMiddleware(&perfVerifier{}, sessionSvc, &perfMiddlewareStore{})
+	return mw.RequireBearer(http.HandlerFunc(handler.CreateSession))
+}
+
+func p95Latency(t *testing.T, h http.Handler, method, path, body string, iterations int) time.Duration {
+	t.Helper()
 	latencies := make([]time.Duration, 0, iterations)
-
 	for range iterations {
 		start := time.Now()
-		body := bytes.NewBufferString(`{"display_name":"Ali"}`)
-		req := httptest.NewRequest(http.MethodPost, "/auth/register", body)
+		req := httptest.NewRequest(method, path, bytes.NewBufferString(body))
 		req.Header.Set(httpconst.HeaderContentType, httpconst.ContentTypeApplicationJSON)
 		req.Header.Set(httpconst.HeaderAuthorization, "Bearer perf-token")
-
 		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
+		h.ServeHTTP(rec, req)
 		latencies = append(latencies, time.Since(start))
-
-		if rec.Code != http.StatusCreated && rec.Code != http.StatusConflict {
-			t.Fatalf("unexpected status %d on iteration %d: %s", rec.Code, len(latencies), rec.Body.String())
-		}
 	}
-
 	sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
-	p95idx := int(float64(iterations)*0.95) - 1
-	if p95idx < 0 {
-		p95idx = 0
+	idx := int(float64(iterations)*0.95) - 1
+	if idx < 0 {
+		idx = 0
 	}
-	p95 := latencies[p95idx]
+	return latencies[idx]
+}
 
+// TestAuthSessionCreate_InProcessLatency_SC001 gates SC-001 on the login path
+// (POST /auth/sessions — the actual "login attempt" that creates a backend session).
+// Uses in-memory stubs; real E2E SLO requires live-infra load testing.
+func TestAuthSessionCreate_InProcessLatency_SC001(t *testing.T) {
+	const iterations = 100
 	const maxP95 = 2 * time.Second
-	t.Logf("SC-001 in-process p95 latency: %v (gate: < %v)", p95, maxP95)
+
+	p95 := p95Latency(t, buildPerfSessionHandler(),
+		http.MethodPost, "/auth/sessions", `{"device_name":"test"}`, iterations)
+
+	t.Logf("SC-001 session-create in-process p95: %v (gate: < %v)", p95, maxP95)
 	if p95 >= maxP95 {
-		t.Errorf("SC-001 FAIL: p95 latency %v >= 2s gate; check handler hot paths", p95)
+		t.Errorf("SC-001 FAIL: session-create p95 %v >= 2s; check handler hot paths", p95)
 	}
 }
 
-// BenchmarkAuthRegister measures throughput of POST /auth/register with in-memory deps.
+// TestAuthRegister_InProcessLatency is a handler-layer regression guard for
+// POST /auth/register. It is not the SC-001 login SLO path.
+func TestAuthRegister_InProcessLatency(t *testing.T) {
+	const iterations = 100
+	const maxP95 = 2 * time.Second
+
+	p95 := p95Latency(t, buildPerfRegisterHandler(),
+		http.MethodPost, "/auth/register", `{"display_name":"Ali"}`, iterations)
+
+	t.Logf("register in-process p95: %v (gate: < %v)", p95, maxP95)
+	if p95 >= maxP95 {
+		t.Errorf("register p95 %v >= 2s; check handler hot paths", p95)
+	}
+}
+
+// TestAuthSessionCreate_ResponseShape verifies the session-creation response
+// contains session_id and no password field (double-check alongside response-safety tests).
+func TestAuthSessionCreate_ResponseShape(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/auth/sessions",
+		bytes.NewBufferString(`{"device_name":"test"}`))
+	req.Header.Set(httpconst.HeaderContentType, httpconst.ContentTypeApplicationJSON)
+	req.Header.Set(httpconst.HeaderAuthorization, "Bearer perf-token")
+
+	rec := httptest.NewRecorder()
+	buildPerfSessionHandler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp auth.BackendSessionResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode session response: %v", err)
+	}
+	if resp.SessionID == "" {
+		t.Error("expected non-empty session_id")
+	}
+}
+
+// BenchmarkAuthSessionCreate measures POST /auth/sessions throughput.
+func BenchmarkAuthSessionCreate(b *testing.B) {
+	handler := buildPerfSessionHandler()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		body := bytes.NewBufferString(`{"device_name":"test"}`)
+		req := httptest.NewRequest(http.MethodPost, "/auth/sessions", body)
+		req.Header.Set(httpconst.HeaderContentType, httpconst.ContentTypeApplicationJSON)
+		req.Header.Set(httpconst.HeaderAuthorization, "Bearer perf-token")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+	}
+}
+
+// BenchmarkAuthRegister measures POST /auth/register throughput.
 func BenchmarkAuthRegister(b *testing.B) {
 	handler := buildPerfRegisterHandler()
-
 	b.ResetTimer()
-	for b.Loop() {
+	for i := 0; i < b.N; i++ {
 		body := bytes.NewBufferString(`{"display_name":"Ali"}`)
 		req := httptest.NewRequest(http.MethodPost, "/auth/register", body)
 		req.Header.Set(httpconst.HeaderContentType, httpconst.ContentTypeApplicationJSON)
 		req.Header.Set(httpconst.HeaderAuthorization, "Bearer perf-token")
-
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 	}

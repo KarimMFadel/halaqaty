@@ -191,9 +191,45 @@ func TestRateLimitPolicy_WSMessageDifferentCircles(t *testing.T) {
 	}
 }
 
-// stubRateLimitRepo satisfies middleware.SessionRepository interface for
-// rate-limit tests that need an auth principal injected but no real sessions.
-type stubRateLimitRepo struct{}
+// TestRateLimitPolicy_LimitByIPOnlyChecksIP asserts that LimitByIP does not
+// enforce per-user limits even when a principal is present in context.
+func TestRateLimitPolicy_LimitByIPOnlyChecksIP(t *testing.T) {
+	const ipLimit = 2
+	const userLimit = 1 // would block after 1 if enforced
+	rl := middleware.NewRateLimitMiddleware(ipLimit, userLimit)
+	handler := rl.LimitByIP(rateOKHandler)
+
+	// With a principal injected, LimitByIP should still allow > userLimit requests
+	// because it only checks IP, not the user budget.
+	for i := range userLimit + 2 {
+		req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+		req.RemoteAddr = "10.0.1.1:0"
+		req = req.WithContext(auth.WithPrincipal(req.Context(), auth.AuthPrincipal{UserID: "byip-user"}))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		// All within ipLimit should succeed; user budget is irrelevant for LimitByIP.
+		if i < ipLimit && rec.Code != http.StatusOK {
+			t.Errorf("LimitByIP should not enforce user limit; got %d on req %d", rec.Code, i+1)
+		}
+	}
+}
+
+// TestRateLimitPolicy_LimitEnforcesUserAfterPrincipalSet asserts that Limit
+// (used after auth sets the principal) does enforce per-user budgets.
+func TestRateLimitPolicy_LimitEnforcesUserAfterPrincipalSet(t *testing.T) {
+	const userLimit = 3
+	rl := middleware.NewRateLimitMiddleware(1000, userLimit)
+	handler := rl.Limit(rateOKHandler)
+
+	// Simulate requests after auth has set the principal (correct wiring order).
+	ok, limited := hitCount(t, handler, userLimit+2, "", "after-auth-user")
+	if ok != userLimit {
+		t.Errorf("expected %d ok before user cap, got %d", userLimit, ok)
+	}
+	if limited != 2 {
+		t.Errorf("expected 2 limited after user cap, got %d", limited)
+	}
+}
 
 func (s *stubRateLimitRepo) GetByID(_ context.Context, _ string) (auth.Session, error) {
 	return auth.Session{}, nil

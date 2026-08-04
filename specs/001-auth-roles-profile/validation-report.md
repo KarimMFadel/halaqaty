@@ -180,10 +180,11 @@ ok  github.com/KarimMFadel/halaqaty/backend/tests/contract  0.487s
 
 ### SC-001 performance gate (T075)
 
-`TestAuthLogin_P95Latency_SC001` ran 100 register requests against in-process
-mocks. p95 well under 2 s gate. Real end-to-end latency (Firebase round-trip +
-PostgreSQL) requires a live-infra load test; this test provides an in-process
-baseline verifying no obvious handler hot-path regression.
+`TestAuthSessionCreate_InProcessLatency_SC001` tests the login path (POST /auth/sessions)
+and `TestAuthRegister_InProcessLatency` tests the registration path — both using in-process
+mocks. p95 well under 2s gate. Real end-to-end SLO validation (Firebase round-trip +
+PostgreSQL) requires separate live-infra load testing; this suite guards against
+handler-layer hot-path regressions.
 
 ### Coverage gate (T080)
 
@@ -192,26 +193,41 @@ $ go test -short -tags=contract -coverpkg=./internal/... ./internal/... ./tests/
 total: 45.3%
 ```
 
-| Layer | Notes |
-|-------|-------|
-| Unit+contract | 45.3% — handlers, services, middleware, validation paths |
-| Unit only | 24.4% |
-| Integration (DB required) | Not run in this environment; repository methods, migration paths, and DB-level flows are tested by T038, T052, T065 against a live PostgreSQL instance |
+| Layer | Coverage | Notes |
+|-------|----------|-------|
+| Unit + contract | 45.3% | handlers, services, middleware, validation, rate limiters |
+| Unit only | 24.4% | |
+| Integration (DB required) | not run | repository methods, migrations, DB flows covered by T038/T052/T065 against live PostgreSQL |
 
-The 80% target (spec SC-003 / constitution §VI) is achievable when integration tests run against a live DB. All non-DB paths (handlers, services, middleware, validation, rate limiters, audit logger) are covered by the unit + contract layer. Blocker: `DATABASE_URL` not set in this environment.
+**Status: PARTIAL — 80% gate not yet met.** The 80% target (constitution §VI) requires
+integration tests running against a live PostgreSQL instance. `DATABASE_URL` is not set in
+this environment. All non-DB paths are covered at 45.3%; the gap is exclusively in
+repository/migration code that requires a real DB. Full gate verification must be run in
+the CI environment with `make test-integration` before PR merge.
+
+### Phase 7 review fixes (code-review findings)
+
+| Finding | Fix |
+|---------|-----|
+| P1: `b.Loop()` requires Go 1.24 | Replaced with `for i := 0; i < b.N; i++` |
+| P1: per-user rate limit bypassed at global layer | `LimitByIP` applied globally; full `Limit` applied per-route inside `requireWithUserLimit` after auth sets principal |
+| P1: metrics not instrumented | `AuthMiddleware.SetMetrics` added; `RecordRequest`/`RecordRejection`/`RecordSessionExpiry` called inside `Require`; wired in `main.go` |
+| P1: SC-001 gate measured register not login | Renamed to `TestAuthRegister_InProcessLatency`; added `TestAuthSessionCreate_InProcessLatency_SC001` for the session-creation (login) path |
+| P2: WS plain-text error responses | `ws_rate_limit_middleware.go` now uses `phttp.WriteError` (JSON envelope) |
+| P2: coverage gate marked complete at 45.3% | Status updated to PARTIAL above; gate requires live-DB integration run |
 
 ### Phase 7 tasks completed
 
 | Task | Status | Description |
 |------|--------|-------------|
-| T073 | ✅ | `ErrorResponse.code` example → `ERR_FORBIDDEN`; `ValidationError.code` example → `ERR_VALIDATION_FAILED`; added error-codes table to `docs/contracts/README.md` |
-| T074 | ✅ | `backend/internal/platform/metrics/auth_metrics.go` — sync/atomic counters for requests, rejections, session-expiry, avg latency |
-| T075 | ✅ | `backend/tests/performance/auth_login_performance_test.go` — p95 < 2 s gate for SC-001 with in-process mock |
-| T076 | ✅ | `backend/tests/integration/rate_limit_policy_test.go` — IP cap, user cap, WS connection cap, WS message cap, response shape |
-| T077 | ✅ | `MaxBytesMiddleware` (1 MiB) added to `server.go` and wired in `router.go`; `ponytail:` comment on `http.TimeoutHandler` plain-text body limitation |
-| T078 | ✅ | Quickstart steps 3–6 validated: dual-credential auth, idempotent provisioning, audit events, role lifecycle testable; OpenAPI manual validation passed |
-| T079 | ✅ | `backend/tests/integration/password_storage_safety_test.go` — 5 assertions covering request body, response, error envelope, stored session |
-| T080 | ✅ | Coverage recorded above; integration-DB gate documented |
+| T073 | ✅ | `ErrorResponse.code` example → `ERR_FORBIDDEN`; `ValidationError.code` → `ERR_VALIDATION_FAILED`; error-codes table in `docs/contracts/README.md` |
+| T074 | ✅ | `auth_metrics.go` — sync/atomic counters; wired into `AuthMiddleware.Require` via `SetMetrics`; live in `main.go` |
+| T075 | ✅ | `TestAuthSessionCreate_InProcessLatency_SC001` for login path; `TestAuthRegister_InProcessLatency` for registration path |
+| T076 | ✅ | Rate-limit integration tests: IP cap, user cap (after-auth ordering), LimitByIP isolation, WS conn/msg caps, 429 envelope shape |
+| T077 | ✅ | `MaxBytesMiddleware` (1 MiB) in `server.go`; wired in `router.go`; `requireWithUserLimit` fixes per-user rate limit ordering |
+| T078 | ✅ | Quickstart steps validated; OpenAPI manual validation passed; `go vet ./...` clean |
+| T079 | ✅ | `password_storage_safety_test.go` — 5 assertions on request body, response, error envelope, stored session |
+| T080 | ⚠️ | 45.3% unit+contract; 80% gate requires `DATABASE_URL` + `make test-integration`; must pass before PR merge |
 
 
 - **F002 resolved**: `backend/internal/middleware/role_middleware.go` now emits the standard JSON `ErrorEnvelope` via `phttp.WriteError` / `phttp.WriteValidationError`.

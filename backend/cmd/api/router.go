@@ -48,6 +48,8 @@ func (r *Router) Handler() http.Handler {
 		handler = r.mw.RateLimit.Limit(handler)
 	}
 	handler = validationMiddleware(handler)
+	// Limit request body to 1 MiB to prevent unbounded reads on auth/profile routes.
+	handler = phttp.MaxBytesMiddleware(1<<20, handler)
 
 	logger := r.mw.Logger
 	if logger == nil {
@@ -62,6 +64,8 @@ func (r *Router) Handler() http.Handler {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
+	// ponytail: http.TimeoutHandler returns plain-text body on 503 timeout;
+	// JSON envelope is enforced for all non-timeout error paths via WriteError.
 	return http.TimeoutHandler(handler, timeout, httpconst.ErrorMessageRequestTimeout)
 }
 

@@ -32,6 +32,16 @@ const (
 	ErrorMessageAuthHandlerNotConfigured    = "auth handler not configured"
 	ErrorMessageProfileHandlerNotConfigured = "profile handler not configured"
 
+	ErrorMessageCircleNameInvalid        = "name must be between 2 and 100 characters"
+	ErrorMessageCircleRoleInvalid        = "role must be one of: student, supervisor, teacher"
+	ErrorMessageCircleAssigneeUnknown    = "circle assignees must be existing registered users"
+	ErrorMessageCircleAssigneeConflict   = "circle assignees must be distinct and must not include the creator"
+	ErrorMessageCircleNotFound           = "circle not found"
+	ErrorMessageCircleMemberNotFound     = "circle member not found"
+	ErrorMessageSelfRoleChangeForbidden  = "members cannot change their own role"
+	ErrorMessageFinalTeacherRequired     = "circle must retain at least one teacher"
+	ErrorMessageRBACHandlerNotConfigured = "rbac handler not configured"
+
 	ErrorMessageFullNameRequired   = "full_name is required for first profile completion"
 	ErrorMessageFullNameInvalid    = "full_name must be between 2 and 150 characters"
 	ErrorMessageCountryRequired    = "country is required for first profile completion"

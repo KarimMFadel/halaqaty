@@ -135,20 +135,20 @@
 
 ### Tests for User Story 3
 
-- [ ] T062 [P] [US3] Add contract tests for `POST /circles` covering multiple teachers, optional backup supervisor, duplicate/unknown assignees, and creator-teacher fallback in `backend/tests/contract/circle_create_contract_test.go`
-- [ ] T063 [P] [US3] Add contract tests for `PUT /circles/{circleId}/members/{userId}/role`, including teacher/supervisor access, self-change rejection, cross-circle rejection, and final-teacher protection, in `backend/tests/contract/circle_assign_role_contract_test.go`
-- [ ] T064 [P] [US3] Add unit tests for per-circle role guard and final-teacher transactional policy in `backend/internal/rbac/service_test.go`
-- [ ] T065 [US3] Add integration test for circle creation roles, invitee student membership, supervisor/teacher/student/non-member access outcomes, and concurrent final-teacher protection in `backend/tests/integration/circle_role_access_test.go`
-- [ ] T066 [P] [US3] Add Flutter integration test for role-restricted UX behavior and manager-only role controls in `mobile/integration_test/role_access_test.dart`
+- [X] T062 [P] [US3] Add contract tests for `POST /circles` covering multiple teachers, optional backup supervisor, duplicate/unknown assignees, and creator-teacher fallback in `backend/tests/contract/circle_create_contract_test.go`
+- [X] T063 [P] [US3] Add contract tests for `PUT /circles/{circleId}/members/{userId}/role`, including teacher/supervisor access, self-change rejection, cross-circle rejection, and final-teacher protection, in `backend/tests/contract/circle_assign_role_contract_test.go`
+- [X] T064 [P] [US3] Add unit tests for per-circle role guard and final-teacher transactional policy in `backend/internal/rbac/service_test.go`
+- [X] T065 [US3] Add integration test for circle creation roles, invitee student membership, supervisor/teacher/student/non-member access outcomes, and concurrent final-teacher protection in `backend/tests/integration/circle_role_access_test.go`
+- [X] T066 [P] [US3] Add Flutter integration test for role-restricted UX behavior and manager-only role controls in `mobile/integration_test/role_access_test.dart`
 
 ### Implementation for User Story 3
 
-- [ ] T067 [P] [US3] Implement transactional circle creation service using `circle_members` for selected teachers, optional backup supervisor, creator fallback, and invitee-student membership in `backend/internal/rbac/service.go`
-- [ ] T068 [P] [US3] Implement circle role-assignment service using row locks, actor/target validation, self-change rejection, and final-teacher protection in `backend/internal/rbac/service.go`
-- [ ] T069 [US3] Implement circle creation and role-assignment handlers in `backend/internal/rbac/handler.go`
-- [ ] T070 [US3] Enforce supervisor/teacher route policy and session-aware protected routes in `backend/cmd/api/router.go`
-- [ ] T071 [US3] Implement Flutter role-gated navigation guard in `mobile/lib/features/auth/presentation/role_guard.dart`
-- [ ] T072 [US3] Implement Flutter circle creation and role-management API clients in `mobile/lib/features/admin/data/`
+- [X] T067 [P] [US3] Implement transactional circle creation service using `circle_members` for selected teachers, optional backup supervisor, creator fallback, and invitee-student membership in `backend/internal/rbac/service.go`
+- [X] T068 [P] [US3] Implement circle role-assignment service using row locks, actor/target validation, self-change rejection, and final-teacher protection in `backend/internal/rbac/service.go`
+- [X] T069 [US3] Implement circle creation and role-assignment handlers in `backend/internal/rbac/handler.go`
+- [X] T070 [US3] Enforce supervisor/teacher route policy and session-aware protected routes in `backend/cmd/api/router.go`
+- [X] T071 [US3] Implement Flutter role-gated navigation guard in `mobile/lib/features/auth/presentation/role_guard.dart`
+- [X] T072 [US3] Implement Flutter circle creation and role-management API clients in `mobile/lib/features/admin/data/`
 
 **Checkpoint**: US3 is independently functional with per-circle RBAC.
 

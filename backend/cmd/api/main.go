@@ -15,7 +15,9 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/config"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/logging"
 	"github.com/KarimMFadel/halaqaty/backend/internal/profile"
+	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
 )
 
 func main() {
@@ -69,11 +71,16 @@ func main() {
 	sessionService := auth.NewSessionService(cfg.SessionInactivityTTL)
 	verifier := auth.NewFirebaseVerifier(firebaseAuthClient)
 
-	authService := auth.NewService(sessionRepo, nil, cfg.SessionAbsoluteTTL)
+	auditLogger := logging.NewAuditLogger(logger)
+
+	authService := auth.NewService(sessionRepo, auditLogger, cfg.SessionAbsoluteTTL)
 	authHandler := auth.NewHandler(authService)
 	profileRepo := profile.NewRepository(pool)
 	profileService := profile.NewService(profileRepo)
 	profileHandler := profile.NewHandler(profileService)
+	rbacRepo := rbac.NewRepository(pool)
+	rbacService := rbac.NewService(rbacRepo, auditLogger)
+	rbacHandler := rbac.NewHandler(rbacService)
 
 	authMW := middleware.NewAuthMiddleware(verifier, sessionService, sessionRepo)
 	roleMW := middleware.NewRoleMiddleware(sessionRepo)
@@ -85,6 +92,7 @@ func main() {
 		RateLimit:      rateLimitMW,
 		AuthHandler:    authHandler,
 		ProfileHandler: profileHandler,
+		RBACHandler:    rbacHandler,
 		Timeout:        cfg.RequestTimeout,
 		Logger:         logger,
 	}

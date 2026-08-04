@@ -169,7 +169,12 @@ func validationMiddleware(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			http.Error(w, httpconst.ErrorMessageUnsupportedContentType, http.StatusUnsupportedMediaType)
+			phttp.WriteError(
+				w,
+				httpconst.ErrorCodeValidationFailed,
+				httpconst.ErrorMessageUnsupportedContentType,
+				http.StatusUnsupportedMediaType,
+			)
 			return
 		default:
 			next.ServeHTTP(w, r)

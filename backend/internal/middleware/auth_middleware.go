@@ -72,8 +72,10 @@ func (m *AuthMiddleware) RequireBearer(next http.Handler) http.Handler {
 			return
 		}
 
+		start := time.Now()
 		principal, ok := m.authenticateBearer(r)
 		if !ok {
+			m.metrics.RecordRejection()
 			phttp.WriteError(
 				w,
 				httpconst.ErrorCodeUnauthorized,
@@ -83,6 +85,7 @@ func (m *AuthMiddleware) RequireBearer(next http.Handler) http.Handler {
 			return
 		}
 
+		m.metrics.RecordRequest(time.Since(start))
 		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), principal)))
 	})
 }
@@ -103,8 +106,10 @@ func (m *AuthMiddleware) RequireVerifiedFirebase(next http.Handler) http.Handler
 			return
 		}
 
+		start := time.Now()
 		decoded, ok := m.verifyBearer(r)
 		if !ok {
+			m.metrics.RecordRejection()
 			phttp.WriteError(
 				w,
 				httpconst.ErrorCodeUnauthorized,
@@ -119,6 +124,7 @@ func (m *AuthMiddleware) RequireVerifiedFirebase(next http.Handler) http.Handler
 			Email:       decoded.Email,
 			Claims:      decoded.Claims,
 		}
+		m.metrics.RecordRequest(time.Since(start))
 		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), principal)))
 	})
 }

@@ -69,26 +69,17 @@ func (m *RateLimitMiddleware) evict() {
 	}
 }
 
-// Limit rejects requests exceeding either IP or user budget.
+// Limit rejects requests exceeding the per-user budget.
 // It must be applied after auth middleware has set the principal so that
-// per-user limits are enforced. For global pre-auth use, call LimitByIP.
+// per-user limits are enforced. IP limiting is handled separately by LimitByIP
+// at the global layer; calling Limit post-auth avoids counting each protected
+// request twice against the IP budget.
 func (m *RateLimitMiddleware) Limit(next http.Handler) http.Handler {
 	if m == nil {
 		return next
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := clientIP(r)
-		if ip != "" && m.hitLimit(m.ipCounters, ip, m.perIPPerMin) {
-			phttp.WriteError(
-				w,
-				httpconst.ErrorCodeRateLimitExceeded,
-				httpconst.ErrorMessageRateLimitExceeded,
-				http.StatusTooManyRequests,
-			)
-			return
-		}
-
 		if principal, ok := CurrentPrincipal(r.Context()); ok {
 			if m.hitLimit(m.userCounters, principal.UserID, m.perUserPerMin) {
 				phttp.WriteError(

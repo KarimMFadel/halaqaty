@@ -7,11 +7,9 @@
 package integration
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
@@ -54,11 +52,11 @@ func hitCount(t *testing.T, h http.Handler, n int, ip, userID string) (ok, limit
 }
 
 // TestRateLimitPolicy_IPLimit asserts that requests beyond perIPPerMin from the
-// same IP are rejected with 429.
+// same IP are rejected with 429 by LimitByIP.
 func TestRateLimitPolicy_IPLimit(t *testing.T) {
 	const limit = 5
 	rl := middleware.NewRateLimitMiddleware(limit, 1000)
-	handler := rl.Limit(rateOKHandler)
+	handler := rl.LimitByIP(rateOKHandler)
 
 	ok, limited := hitCount(t, handler, limit+3, "10.0.0.1", "")
 	if ok != limit {
@@ -69,7 +67,7 @@ func TestRateLimitPolicy_IPLimit(t *testing.T) {
 	}
 }
 
-// TestRateLimitPolicy_UserLimit asserts per-user request cap is enforced with 429.
+// TestRateLimitPolicy_UserLimit asserts per-user request cap is enforced with 429 by Limit.
 func TestRateLimitPolicy_UserLimit(t *testing.T) {
 	const limit = 5
 	rl := middleware.NewRateLimitMiddleware(1000, limit)
@@ -84,11 +82,12 @@ func TestRateLimitPolicy_UserLimit(t *testing.T) {
 	}
 }
 
-// TestRateLimitPolicy_DifferentIPsNotBlocked asserts distinct IPs have independent budgets.
+// TestRateLimitPolicy_DifferentIPsNotBlocked asserts distinct IPs have independent
+// budgets under LimitByIP.
 func TestRateLimitPolicy_DifferentIPsNotBlocked(t *testing.T) {
 	const limit = 3
 	rl := middleware.NewRateLimitMiddleware(limit, 1000)
-	handler := rl.Limit(rateOKHandler)
+	handler := rl.LimitByIP(rateOKHandler)
 
 	// Both IPs should get their own full budget.
 	ok1, _ := hitCount(t, handler, limit, "10.0.0.1", "")
@@ -231,26 +230,18 @@ func TestRateLimitPolicy_LimitEnforcesUserAfterPrincipalSet(t *testing.T) {
 	}
 }
 
-func (s *stubRateLimitRepo) GetByID(_ context.Context, _ string) (auth.Session, error) {
-	return auth.Session{}, nil
-}
-
-func (s *stubRateLimitRepo) Touch(_ context.Context, _ string, _ time.Time) error { return nil }
-
-func (s *stubRateLimitRepo) GetLocalUserIDByFirebaseUID(_ context.Context, uid string) (string, error) {
-	return "user-" + uid, nil
-}
-
 // TestRateLimitPolicy_ResponseShape asserts 429 response contains JSON error envelope.
+// Uses Limit (user-only post-auth limiter) with a principal injected.
 func TestRateLimitPolicy_ResponseShape(t *testing.T) {
 	const limit = 1
-	rl := middleware.NewRateLimitMiddleware(limit, 1000)
+	rl := middleware.NewRateLimitMiddleware(1000, limit)
 	handler := rl.Limit(rateOKHandler)
 
 	// First request consumed; second is rate-limited.
 	for i := range 2 {
 		req := httptest.NewRequest(http.MethodGet, "/ping", nil)
 		req.RemoteAddr = "1.2.3.4:0"
+		req = req.WithContext(auth.WithPrincipal(req.Context(), auth.AuthPrincipal{UserID: "shape-user"}))
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		if i == 1 {

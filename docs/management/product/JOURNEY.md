@@ -106,11 +106,11 @@ Cross-Cutting: Offline Behavior
 **Entry:** Dashboard → "Create Circle" button (or empty state CTA)
 
 1. **Circle creation form:**
-   - Circle name (required, 3–80 chars)
+   - Circle name (required, 2–100 chars)
    - Description (optional, max 500 chars)
    - Curriculum (dropdown: Quran memorization / Revision / Tajweed rules / Custom)
-   - Max students (default 30, cap per tier — Free: 30, Pro: unlimited)
-   - Privacy: Public (discoverable) / Private (invite-only) — MVP: all circles are private
+   - Max students (default 50, maximum 200)
+   - Privacy: Public (discoverable/joinable) / Private (invite-only); both retain invite links
 2. Tap **"Create Circle"**.
 3. **System:** `POST /api/v1/circles` → creates `circles` row + `circle_members` row (teacher role) → returns circle with invite code.
 4. Navigate to Circle Dashboard (empty member list, invite code displayed prominently).
@@ -126,7 +126,7 @@ Cross-Cutting: Offline Behavior
 **Actor:** Teacher  
 **Entry:** Circle Dashboard → "Invite" button
 
-1. Teacher sees: **Invite link** (halaqaty.app/join/[code]) and **QR code**.
+1. Teacher sees: **Invite link** (halaqaty.app/join/[code]) and **QR code**. Public circles are also discoverable and joinable without an invite.
 2. "Copy link" and "Share" (native share sheet) buttons.
 3. Optionally: "Send invite by email" (enters email → system sends invite email).
 4. Teacher can revoke and regenerate the invite code at any time.

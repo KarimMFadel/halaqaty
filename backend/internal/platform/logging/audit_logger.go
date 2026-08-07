@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
 )
 
@@ -13,7 +14,11 @@ const (
 	ActionLogout        = "session.logout"
 	ActionProfileUpdate = "profile.update"
 	ActionCircleCreate  = "circle.create"
+	ActionCircleJoin    = "circle.join"
 	ActionRoleChange    = "circle.role_change"
+	ActionInviteRefresh = "circle.invite_refresh"
+	ActionMemberRemoval = "circle.member_remove"
+	ActionCircleArchive = "circle.archive"
 )
 
 // AuditEvent captures security-relevant state transitions.
@@ -44,6 +49,7 @@ func NewAuditLogger(logger *slog.Logger) *AuditLogger {
 
 // Log writes one audit event.
 func (l *AuditLogger) Log(ctx context.Context, event AuditEvent) {
+	event.Metadata = sanitizeAuditMetadata(event.Metadata)
 	l.logger.InfoContext(
 		ctx,
 		"audit_event",
@@ -54,6 +60,37 @@ func (l *AuditLogger) Log(ctx context.Context, event AuditEvent) {
 		slog.Any("metadata", event.Metadata),
 		slog.Time("at", l.nowFn().UTC()),
 	)
+}
+
+func sanitizeAuditMetadata(metadata map[string]any) map[string]any {
+	if len(metadata) == 0 {
+		return nil
+	}
+	clean := make(map[string]any, len(metadata))
+	for key, value := range metadata {
+		switch strings.ToLower(key) {
+		case "invite_code", "token", "access_token", "authorization", "session_id", "password":
+			continue
+		default:
+			clean[key] = sanitizeAuditValue(value)
+		}
+	}
+	return clean
+}
+
+func sanitizeAuditValue(value any) any {
+	switch value := value.(type) {
+	case map[string]any:
+		return sanitizeAuditMetadata(value)
+	case []any:
+		clean := make([]any, len(value))
+		for i, item := range value {
+			clean[i] = sanitizeAuditValue(item)
+		}
+		return clean
+	default:
+		return value
+	}
 }
 
 // RegisterEvent builds a user registration audit event.
@@ -124,4 +161,24 @@ func RoleChangeEvent(actorUserID, targetUserID, circleID, oldRole, newRole strin
 			"new_role": newRole,
 		},
 	}
+}
+
+// CircleJoinEvent builds a circle-join audit event without logging invite data.
+func CircleJoinEvent(actorUserID, circleID string) AuditEvent {
+	return AuditEvent{Action: ActionCircleJoin, ActorUserID: actorUserID, CircleID: circleID}
+}
+
+// InviteRefreshEvent builds an invite-refresh audit event without logging the code.
+func InviteRefreshEvent(actorUserID, circleID string) AuditEvent {
+	return AuditEvent{Action: ActionInviteRefresh, ActorUserID: actorUserID, CircleID: circleID}
+}
+
+// MemberRemovalEvent builds a member-removal audit event.
+func MemberRemovalEvent(actorUserID, targetUserID, circleID string) AuditEvent {
+	return AuditEvent{Action: ActionMemberRemoval, ActorUserID: actorUserID, TargetUser: targetUserID, CircleID: circleID}
+}
+
+// CircleArchiveEvent builds a circle-archive audit event.
+func CircleArchiveEvent(actorUserID, circleID string) AuditEvent {
+	return AuditEvent{Action: ActionCircleArchive, ActorUserID: actorUserID, CircleID: circleID}
 }

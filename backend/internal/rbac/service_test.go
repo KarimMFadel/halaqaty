@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 const (
@@ -18,10 +20,11 @@ const (
 
 // stubStore is an in-memory rbac.Store for service unit tests.
 type stubStore struct {
-	users   map[string]bool
-	circles map[string]Circle
-	members map[string]map[string]string
-	nextID  int
+	users        map[string]bool
+	circles      map[string]Circle
+	members      map[string]map[string]string
+	nextID       int
+	insertErrors []error
 }
 
 func newStubStore() *stubStore {
@@ -50,11 +53,31 @@ func (s *stubStore) UsersExist(_ context.Context, userIDs []string) (map[string]
 	return existing, nil
 }
 
-func (s *stubStore) InsertCircle(_ context.Context, name, ownerID, inviteCode string) (Circle, error) {
+func (s *stubStore) LockUser(context.Context, string) error { return nil }
+
+func (s *stubStore) InsertCircle(_ context.Context, name, ownerID, inviteCode string, settings CircleSettings) (Circle, error) {
+	if len(s.insertErrors) > 0 {
+		err := s.insertErrors[0]
+		s.insertErrors = s.insertErrors[1:]
+		return Circle{}, err
+	}
 	s.nextID++
-	circle := Circle{ID: unitCircleID, Name: name, TeacherID: ownerID, InviteCode: inviteCode}
+	circle := Circle{ID: unitCircleID, Name: name, TeacherID: ownerID, InviteCode: inviteCode, Description: settings.Description, Rules: settings.Rules, MaxCapacity: settings.MaxCapacity, IsPrivate: settings.IsPrivate, GenderRestriction: settings.GenderRestriction, Language: settings.Language, GradingPolicy: settings.GradingPolicy}
 	s.circles[circle.ID] = circle
 	return circle, nil
+}
+
+func TestCreateCircle_RetriesUniqueInviteCollision(t *testing.T) {
+	store := newStubStore()
+	store.insertErrors = []error{&pgconn.PgError{Code: "23505", ConstraintName: "circles_invite_code_key"}}
+	svc := NewService(store, nil)
+	response, err := svc.CreateCircle(context.Background(), unitCreatorID, CreateCircleRequest{Name: "Retry Circle"})
+	if err != nil {
+		t.Fatalf("CreateCircle: %v", err)
+	}
+	if response.InviteCode == "" || len(store.circles) != 1 {
+		t.Fatalf("retry did not create circle: response=%+v circles=%d", response, len(store.circles))
+	}
 }
 
 func (s *stubStore) InsertMember(_ context.Context, circleID, userID, role string) error {
@@ -81,9 +104,80 @@ func (s *stubStore) LockMembers(_ context.Context, circleID string) ([]Member, e
 	return members, nil
 }
 
+func (s *stubStore) CountActiveMemberships(_ context.Context, userID string) (int, error) {
+	count := 0
+	for circleID, members := range s.members {
+		if _, ok := members[userID]; ok && !s.circles[circleID].IsArchived {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func (s *stubStore) UpdateMemberRole(_ context.Context, circleID, userID, role string) error {
 	s.members[circleID][userID] = role
 	return nil
+}
+
+func (s *stubStore) FindCircleByInviteCode(_ context.Context, inviteCode string) (Circle, error) {
+	for _, circle := range s.circles {
+		if circle.InviteCode == inviteCode {
+			return circle, nil
+		}
+	}
+	return Circle{}, ErrCircleNotFound
+}
+
+func (s *stubStore) FindCircleByID(_ context.Context, circleID string) (Circle, error) {
+	circle, ok := s.circles[circleID]
+	if !ok {
+		return Circle{}, ErrCircleNotFound
+	}
+	return circle, nil
+}
+
+func (s *stubStore) ListPublicCircles(_ context.Context, _ string, _ int) ([]PublicCircleSummary, error) {
+	return nil, nil
+}
+func (s *stubStore) UpdateCircle(_ context.Context, circleID, name string, settings CircleSettings) (Circle, error) {
+	circle, ok := s.circles[circleID]
+	if !ok {
+		return Circle{}, ErrCircleNotFound
+	}
+	circle.Name, circle.Description, circle.Rules, circle.MaxCapacity = name, settings.Description, settings.Rules, settings.MaxCapacity
+	circle.IsPrivate, circle.GenderRestriction, circle.Language, circle.GradingPolicy = settings.IsPrivate, settings.GenderRestriction, settings.Language, settings.GradingPolicy
+	s.circles[circleID] = circle
+	return circle, nil
+}
+func (s *stubStore) RefreshInviteCode(_ context.Context, circleID, inviteCode string) error {
+	circle, ok := s.circles[circleID]
+	if !ok {
+		return ErrCircleNotFound
+	}
+	circle.InviteCode = inviteCode
+	s.circles[circleID] = circle
+	return nil
+}
+func (s *stubStore) RemoveMember(_ context.Context, circleID, userID string) error {
+	delete(s.members[circleID], userID)
+	return nil
+}
+func (s *stubStore) ArchiveCircle(_ context.Context, circleID string) error {
+	circle, ok := s.circles[circleID]
+	if !ok {
+		return ErrCircleNotFound
+	}
+	circle.IsArchived = true
+	s.circles[circleID] = circle
+	return nil
+}
+func (s *stubStore) ListMembers(_ context.Context, circleID string) ([]Member, error) {
+	members := s.members[circleID]
+	result := make([]Member, 0, len(members))
+	for id, role := range members {
+		result = append(result, Member{UserID: id, Role: role})
+	}
+	return result, nil
 }
 
 func TestCreateCircleValidation(t *testing.T) {
@@ -253,6 +347,20 @@ func TestCreateCircle_MembershipAssignment(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestJoinCircle_CapacityCountsStudentsOnly(t *testing.T) {
+	store := newStubStore()
+	store.circles[unitCircleID] = Circle{ID: unitCircleID, Name: "Circle", InviteCode: "HLQ-7X2K", MaxCapacity: 2}
+	store.members[unitCircleID] = map[string]string{
+		unitCreatorID:    RoleTeacher,
+		unitSupervisorID: RoleSupervisor,
+	}
+
+	_, err := NewService(store, nil).JoinCircle(context.Background(), unitStudentID, "HLQ-7X2K")
+	if err != nil {
+		t.Fatalf("JoinCircle: %v", err)
 	}
 }
 
@@ -426,15 +534,6 @@ func TestAddStudentMember_UnknownCircle_ReturnsNotFound(t *testing.T) {
 	}
 }
 
-func (s *stubStore) FindCircleByInviteCode(_ context.Context, inviteCode string) (Circle, error) {
-	for _, circle := range s.circles {
-		if circle.InviteCode == inviteCode {
-			return circle, nil
-		}
-	}
-	return Circle{}, ErrCircleNotFound
-}
-
 func TestJoinCircle_ValidInvite_AddsStudentMembership(t *testing.T) {
 	t.Parallel()
 
@@ -442,11 +541,11 @@ func TestJoinCircle_ValidInvite_AddsStudentMembership(t *testing.T) {
 	store.circles[unitCircleID] = Circle{
 		ID:         unitCircleID,
 		Name:       "Quran Circle",
-		InviteCode: "HLQ-7X2K9Z",
+		InviteCode: "HLQ-7X2K",
 	}
 	svc := NewService(store, nil)
 
-	circle, err := svc.JoinCircle(context.Background(), unitStudentID, "hlq-7x2k9z")
+	circle, err := svc.JoinCircle(context.Background(), unitStudentID, "hlq-7x2k")
 	if err != nil {
 		t.Fatalf("JoinCircle: %v", err)
 	}
@@ -455,6 +554,54 @@ func TestJoinCircle_ValidInvite_AddsStudentMembership(t *testing.T) {
 	}
 	if role := store.members[unitCircleID][unitStudentID]; role != RoleStudent {
 		t.Fatalf("membership role: got %q, want %q", role, RoleStudent)
+	}
+}
+
+func TestInviteCode_IsExactlyEightCharacters(t *testing.T) {
+	if !isInviteCode("HLQ-7X2K") {
+		t.Fatal("expected the approved eight-character invite code to be valid")
+	}
+}
+
+func TestCircleSettings_DefaultToApprovedMVPValues(t *testing.T) {
+	settings, fields := normalizeCircleSettings(CreateCircleRequest{})
+	if len(fields) != 0 {
+		t.Fatalf("unexpected validation fields: %v", fields)
+	}
+	if settings.MaxCapacity != 50 || settings.GenderRestriction != "unspecified" || settings.Language != "ar" || settings.GradingPolicy != "required" {
+		t.Fatalf("unexpected defaults: %+v", settings)
+	}
+}
+
+func TestJoinCircle_RejectsArchivedCircle(t *testing.T) {
+	store := newStubStore()
+	store.circles[unitCircleID] = Circle{ID: unitCircleID, Name: "Archived", InviteCode: "HLQ-7X2K", IsArchived: true}
+	_, err := NewService(store, nil).JoinCircle(context.Background(), unitStudentID, "HLQ-7X2K")
+	if !errors.Is(err, ErrCircleArchived) {
+		t.Fatalf("expected ErrCircleArchived, got %v", err)
+	}
+}
+
+func TestJoinCircle_RejectsFullCircle(t *testing.T) {
+	store := newStubStore()
+	store.circles[unitCircleID] = Circle{ID: unitCircleID, Name: "Full", InviteCode: "HLQ-7X2K", MaxCapacity: 1}
+	store.members[unitCircleID] = map[string]string{unitTeacherBID: RoleStudent}
+	_, err := NewService(store, nil).JoinCircle(context.Background(), unitStudentID, "HLQ-7X2K")
+	if !errors.Is(err, ErrCircleFull) {
+		t.Fatalf("expected ErrCircleFull, got %v", err)
+	}
+}
+
+func TestCreateCircle_SelectedTeacherOwnsLegacyTeacherID(t *testing.T) {
+	store := newStubStore()
+	_, err := NewService(store, nil).CreateCircle(context.Background(), unitCreatorID, CreateCircleRequest{
+		Name: "Quran Circle", TeacherUserIDs: []string{unitTeacherAID},
+	})
+	if err != nil {
+		t.Fatalf("CreateCircle: %v", err)
+	}
+	if got := store.circles[unitCircleID].TeacherID; got != unitTeacherAID {
+		t.Fatalf("legacy teacher_id = %q, want %q", got, unitTeacherAID)
 	}
 }
 

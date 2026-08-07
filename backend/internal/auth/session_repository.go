@@ -22,6 +22,8 @@ const (
 var (
 	// ErrSessionNotFound is returned when a session ID does not exist.
 	ErrSessionNotFound = errors.New("session not found")
+	// ErrCircleMembershipNotFound is returned when a user is not a member of a circle.
+	ErrCircleMembershipNotFound = errors.New("circle membership not found")
 	// ErrUserNotFound is returned when a Firebase UID or email cannot be resolved.
 	ErrUserNotFound = errors.New("user not found")
 	// ErrDuplicateEmail is returned when a user record with the same email already exists.
@@ -207,7 +209,7 @@ func (r *SessionRepository) RoleForUserInCircle(ctx context.Context, circleID st
 	err := r.pool.QueryRow(ctx, getCircleMemberRoleQuery, circleID, userID).Scan(&role)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", ErrSessionNotFound
+			return "", ErrCircleMembershipNotFound
 		}
 		return "", fmt.Errorf("get circle member role: %w", err)
 	}

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -10,8 +11,65 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 )
+
+// TimeoutMiddleware returns the standard JSON timeout envelope when a request exceeds its deadline.
+func TimeoutMiddleware(timeout time.Duration, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), timeout)
+		defer cancel()
+
+		buffered := &timeoutResponseWriter{header: make(http.Header)}
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			next.ServeHTTP(buffered, r.WithContext(ctx))
+		}()
+
+		select {
+		case <-done:
+			buffered.writeTo(w)
+		case <-ctx.Done():
+			WriteError(w, httpconst.ErrorCodeRequestTimeout, httpconst.ErrorMessageRequestTimeout, http.StatusServiceUnavailable)
+		}
+	})
+}
+
+type timeoutResponseWriter struct {
+	header http.Header
+	status int
+	body   bytes.Buffer
+}
+
+func (w *timeoutResponseWriter) Header() http.Header {
+	return w.header
+}
+
+func (w *timeoutResponseWriter) WriteHeader(status int) {
+	if w.status == 0 {
+		w.status = status
+	}
+}
+
+func (w *timeoutResponseWriter) Write(body []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.body.Write(body)
+}
+
+func (w *timeoutResponseWriter) writeTo(target http.ResponseWriter) {
+	for key, values := range w.header {
+		target.Header()[key] = append([]string(nil), values...)
+	}
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	target.WriteHeader(w.status)
+	_, _ = target.Write(w.body.Bytes())
+}
 
 // RequestIDContextKey is the context key for the request ID.
 type RequestIDContextKey struct{}

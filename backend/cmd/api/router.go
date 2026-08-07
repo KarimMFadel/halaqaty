@@ -68,9 +68,7 @@ func (r *Router) Handler() http.Handler {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	// ponytail: http.TimeoutHandler returns plain-text body on 503 timeout;
-	// JSON envelope is enforced for all non-timeout error paths via WriteError.
-	return http.TimeoutHandler(handler, timeout, httpconst.ErrorMessageRequestTimeout)
+	return phttp.TimeoutMiddleware(timeout, handler)
 }
 
 // requireWithUserLimit chains: auth (sets principal) → per-user rate limit → handler.

@@ -95,7 +95,7 @@ X-Halaqaty-Session-ID: <opaque-backend-session-id>
 
 The Go backend verifies the Firebase ID token and checks the backend session's user
 binding, expiry, inactivity, and revocation on every request. Failure returns
-`401 ERR_UNAUTHENTICATED`.
+`401 ERR_UNAUTHORIZED`.
 
 ### Token refresh
 

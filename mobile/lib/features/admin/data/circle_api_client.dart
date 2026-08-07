@@ -117,7 +117,7 @@ class CircleApiClient {
   }
 
   Map<String, String> _bearerHeader(String token) =>
-      {'Authorization': '******'};
+      {'Authorization': 'Bearer $token'};
 }
 
 final circleApiClientProvider = Provider<CircleApiClient>((ref) {

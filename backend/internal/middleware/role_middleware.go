@@ -2,9 +2,13 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
+
+	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	phttp "github.com/KarimMFadel/halaqaty/backend/internal/platform/http"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 )
@@ -66,14 +70,31 @@ func (m *RoleMiddleware) RequireAny(allowedRoles ...string) func(http.Handler) h
 				)
 				return
 			}
+			if _, err := uuid.Parse(circleID); err != nil {
+				phttp.WriteValidationError(
+					w,
+					httpconst.ErrorMessageValidationFailed,
+					map[string]string{httpconst.FieldCircleID: "must be a UUID"},
+				)
+				return
+			}
 
 			role, err := m.repo.RoleForUserInCircle(r.Context(), circleID, principal.UserID)
 			if err != nil {
+				if errors.Is(err, auth.ErrCircleMembershipNotFound) {
+					phttp.WriteError(
+						w,
+						httpconst.ErrorCodeForbidden,
+						httpconst.ErrorMessageForbidden,
+						http.StatusForbidden,
+					)
+					return
+				}
 				phttp.WriteError(
 					w,
-					httpconst.ErrorCodeForbidden,
-					httpconst.ErrorMessageForbidden,
-					http.StatusForbidden,
+					httpconst.ErrorCodeInternalServerError,
+					httpconst.ErrorMessageInternalServerError,
+					http.StatusInternalServerError,
 				)
 				return
 			}

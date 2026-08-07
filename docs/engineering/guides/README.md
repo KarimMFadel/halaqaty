@@ -45,7 +45,7 @@ netstat -an | grep 8080     # find conflicting process
 
 ### RB-02: Firebase Auth token validation fails (401 on all requests)
 
-**Symptom:** All authenticated requests return `401 ERR_UNAUTHENTICATED` even with a fresh token.
+**Symptom:** All authenticated requests return `401 ERR_UNAUTHORIZED` even with a fresh token.
 
 **Check 1 — Service account misconfigured:**
 - Verify `FIREBASE_PROJECT_ID` matches the project in Firebase Console

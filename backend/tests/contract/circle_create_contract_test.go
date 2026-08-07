@@ -106,7 +106,7 @@ func (s *circleStoreStub) UpdateMemberRole(_ context.Context, circleID, userID, 
 // RoleForUserInCircle satisfies middleware.CircleMembershipRepository.
 func (s *circleStoreStub) RoleForUserInCircle(_ context.Context, _, _ string) (string, error) {
 	if s.actorRoleErr {
-		return "", auth.ErrSessionNotFound
+		return "", auth.ErrCircleMembershipNotFound
 	}
 	return s.actorRole, nil
 }

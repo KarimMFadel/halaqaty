@@ -125,7 +125,7 @@ Circles are the core organizational unit. A circle is a Quran memorization group
 - [ ] Teacher can assign Supervisor role to any circle member at any time (before session, during session, after session)
 - [ ] Supervisor role can be revoked by teacher at any time
 - [ ] Circle privacy: **Public** (discoverable in explore/search) vs **Private** (invite-only)
-- [ ] Circle settings: language, gender specification (male/female/mixed/unspecified)
+- [ ] Circle settings: language and gender specification (male/female/mixed/unspecified); this describes the circle's student audience and does not restrict the teacher's gender
 - [ ] Teacher can archive a circle (preserves all history, prevents new activity)
 - [ ] Teacher can delete a circle (with confirmation; permanently deletes all data)
 - [ ] Circle member list shows all members with roles, visible to all members

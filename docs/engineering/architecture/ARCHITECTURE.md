@@ -746,7 +746,7 @@ erDiagram
 | invite_code | VARCHAR(20) | UNIQUE NOT NULL | Join code (e.g., HLQ-7X2K) |
 | max_capacity | INTEGER | DEFAULT 50 | Maximum student capacity (min 2, max 200) |
 | is_private | BOOLEAN | DEFAULT FALSE | Whether circle requires invite to join |
-| gender_restriction | VARCHAR(20) | CHECK IN ('male','female','mixed') DEFAULT 'mixed' | Audience restriction |
+| gender_restriction | VARCHAR(20) | CHECK IN ('male','female','mixed','unspecified') DEFAULT 'unspecified' | Student-audience setting; independent of teacher gender |
 | language | VARCHAR(10) | DEFAULT 'ar' | Primary language |
 | grading_policy | VARCHAR(20) | CHECK IN ('required','optional') DEFAULT 'required' | Whether grading is required after each completed turn |
 | is_archived | BOOLEAN | DEFAULT FALSE | |

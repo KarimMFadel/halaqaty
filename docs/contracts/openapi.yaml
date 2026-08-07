@@ -1485,8 +1485,8 @@ components:
           default: false
         gender_restriction:
           type: string
-          enum: [male, female, mixed]
-          default: mixed
+          enum: [male, female, mixed, unspecified]
+          default: unspecified
         language:
           type: string
           default: ar
@@ -1525,6 +1525,11 @@ components:
           maximum: 200
         is_private:
           type: boolean
+        gender_restriction:
+          type: string
+          enum: [male, female, mixed, unspecified]
+        language:
+          type: string
         grading_policy:
           type: string
           enum: [required, optional]
@@ -1562,6 +1567,9 @@ components:
               type: string
             max_capacity:
               type: integer
+            gender_restriction:
+              type: string
+              enum: [male, female, mixed, unspecified]
             language:
               type: string
             grading_policy:

@@ -45,6 +45,32 @@ func (h *Handler) CreateCircle(w http.ResponseWriter, r *http.Request) {
 	phttp.WriteJSON(w, http.StatusCreated, circle)
 }
 
+// JoinCircle handles POST /circles/join.
+func (h *Handler) JoinCircle(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.service == nil {
+		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		return
+	}
+
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+
+	var req JoinCircleRequest
+	if !phttp.DecodeJSONBody(w, r, &req) {
+		return
+	}
+
+	circle, err := h.service.JoinCircle(r.Context(), principal.UserID, req.InviteCode)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusOK, circle)
+}
+
 // AssignRole handles PUT /circles/{circleId}/members/{userId}/role.
 func (h *Handler) AssignRole(w http.ResponseWriter, r *http.Request) {
 	if h == nil || h.service == nil {
@@ -90,6 +116,8 @@ func writeServiceError(w http.ResponseWriter, err error) {
 		phttp.WriteError(w, httpconst.ErrorCodeNotFound, httpconst.ErrorMessageCircleNotFound, http.StatusNotFound)
 	case errors.Is(err, ErrMemberNotFound):
 		phttp.WriteError(w, httpconst.ErrorCodeNotFound, httpconst.ErrorMessageCircleMemberNotFound, http.StatusNotFound)
+	case errors.Is(err, ErrAlreadyMember):
+		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageCircleAlreadyMember, http.StatusConflict)
 	case errors.Is(err, ErrSelfRoleChange):
 		phttp.WriteError(w, httpconst.ErrorCodeForbidden, httpconst.ErrorMessageSelfRoleChangeForbidden, http.StatusForbidden)
 	case errors.Is(err, ErrFinalTeacher):

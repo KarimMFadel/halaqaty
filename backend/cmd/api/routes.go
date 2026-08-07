@@ -1,7 +1,8 @@
 package main
 
 const (
-	routeHealth = "GET /health"
+	routeHealth  = "GET /health"
+	routeMetrics = "GET /metrics"
 )
 
 const (
@@ -14,5 +15,6 @@ const (
 
 const (
 	routeCirclesCreate    = "POST /api/v1/circles"
+	routeCirclesJoin      = "POST /api/v1/circles/join"
 	routeCircleAssignRole = "PUT /api/v1/circles/{circleId}/members/{userId}/role"
 )

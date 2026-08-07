@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -14,6 +15,24 @@ type querier interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// FindCircleByInviteCode returns the circle associated with an invite code.
+func (r *Repository) FindCircleByInviteCode(ctx context.Context, inviteCode string) (Circle, error) {
+	var circle Circle
+	err := r.q.QueryRow(ctx, findCircleByInviteCodeQuery, inviteCode).Scan(
+		&circle.ID,
+		&circle.Name,
+		&circle.InviteCode,
+		&circle.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Circle{}, ErrCircleNotFound
+	}
+	if err != nil {
+		return Circle{}, fmt.Errorf("find circle by invite code: %w", err)
+	}
+	return circle, nil
 }
 
 // Repository is the PostgreSQL persistence boundary for circle RBAC data.

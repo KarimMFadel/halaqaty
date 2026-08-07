@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/subtle"
 	"log/slog"
 	"net/http"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
 	phttp "github.com/KarimMFadel/halaqaty/backend/internal/platform/http"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
 	"github.com/KarimMFadel/halaqaty/backend/internal/profile"
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
 )
@@ -23,6 +25,8 @@ type MiddlewareSet struct {
 	RBACHandler    *rbac.Handler
 	Timeout        time.Duration
 	Logger         *slog.Logger
+	Metrics        *metrics.AuthMetrics
+	MetricsToken   string
 }
 
 // Router wires API routes and middleware in one place.
@@ -61,7 +65,6 @@ func (r *Router) Handler() http.Handler {
 	}
 	handler = phttp.LoggerMiddleware(logger, handler)
 	handler = phttp.RequestIDMiddleware(handler)
-	handler = phttp.IdempotencyKeyMiddleware(handler)
 	handler = phttp.RecoveryMiddleware(logger, handler)
 
 	timeout := r.mw.Timeout
@@ -88,6 +91,9 @@ func (r *Router) registerRoutes() {
 	r.mux.Handle(routeHealth, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
+	if r.mw.Metrics != nil && r.mw.MetricsToken != "" {
+		r.mux.Handle(routeMetrics, r.metricsHandler())
+	}
 
 	if r.mw.Auth != nil {
 		authH := r.mw.AuthHandler
@@ -140,6 +146,14 @@ func (r *Router) registerRoutes() {
 			createCircleHandler = http.HandlerFunc(rbacH.CreateCircle)
 		}
 		r.mux.Handle(routeCirclesCreate, r.requireWithUserLimit(createCircleHandler))
+
+		var joinCircleHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		if rbacH != nil {
+			joinCircleHandler = http.HandlerFunc(rbacH.JoinCircle)
+		}
+		r.mux.Handle(routeCirclesJoin, r.requireWithUserLimit(joinCircleHandler))
 	}
 
 	if r.mw.Auth != nil && r.mw.Role != nil {
@@ -156,6 +170,18 @@ func (r *Router) registerRoutes() {
 			r.requireWithUserLimit(r.mw.Role.RequireAny("supervisor", "teacher")(assignRoleHandler)),
 		)
 	}
+}
+
+func (r *Router) metricsHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		token := req.Header.Get(httpconst.HeaderAuthorization)
+		want := httpconst.AuthSchemeBearer + " " + r.mw.MetricsToken
+		if subtle.ConstantTimeCompare([]byte(token), []byte(want)) != 1 {
+			phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+			return
+		}
+		phttp.WriteJSON(w, http.StatusOK, r.mw.Metrics.Summary())
+	})
 }
 
 func validationMiddleware(next http.Handler) http.Handler {

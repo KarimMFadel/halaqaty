@@ -90,6 +90,15 @@ func (s *circleStoreStub) CircleExists(_ context.Context, circleID string) (bool
 	return ok, nil
 }
 
+func (s *circleStoreStub) FindCircleByInviteCode(_ context.Context, inviteCode string) (rbac.Circle, error) {
+	for _, circle := range s.circles {
+		if circle.InviteCode == inviteCode {
+			return circle, nil
+		}
+	}
+	return rbac.Circle{}, rbac.ErrCircleNotFound
+}
+
 func (s *circleStoreStub) LockMembers(_ context.Context, circleID string) ([]rbac.Member, error) {
 	members := make([]rbac.Member, 0, len(s.members[circleID]))
 	for userID, role := range s.members[circleID] {
@@ -116,6 +125,59 @@ func buildCreateCircleRoute(store *circleStoreStub) http.Handler {
 	repo := &stubSessionRepo{sessionID: testSessionID, userID: testLocalUserID}
 	authMW := middleware.NewAuthMiddleware(&alwaysOKVerifier{}, auth.NewSessionService(30*24*time.Hour), repo)
 	return authMW.Require(http.HandlerFunc(handler.CreateCircle))
+}
+
+func buildJoinCircleRoute(store *circleStoreStub) http.Handler {
+	handler := rbac.NewHandler(rbac.NewService(store, nil))
+	repo := &stubSessionRepo{sessionID: testSessionID, userID: testLocalUserID}
+	authMW := middleware.NewAuthMiddleware(&alwaysOKVerifier{}, auth.NewSessionService(30*24*time.Hour), repo)
+	return authMW.Require(http.HandlerFunc(handler.JoinCircle))
+}
+
+func TestCircleJoinContract(t *testing.T) {
+	store := newCircleStoreStub()
+	store.circles[contractCircleID] = rbac.Circle{
+		ID:         contractCircleID,
+		Name:       "Quran Circle",
+		InviteCode: "HLQ-7X2K9Z",
+		CreatedAt:  time.Now().UTC(),
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/circles/join", bytes.NewBufferString(`{"invite_code":"hlq-7x2k9z"}`))
+	req.Header.Set(httpconst.HeaderAuthorization, "Bearer valid-token")
+	req.Header.Set(httpconst.HeaderSessionID, testSessionID)
+	req.Header.Set(httpconst.HeaderContentType, httpconst.ContentTypeApplicationJSON)
+	rec := httptest.NewRecorder()
+	buildJoinCircleRoute(store).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("join status: got %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if role := store.members[contractCircleID][testLocalUserID]; role != rbac.RoleStudent {
+		t.Fatalf("joined role: got %q, want %q", role, rbac.RoleStudent)
+	}
+}
+
+func TestCircleJoinContract_ExistingMemberReturnsConflict(t *testing.T) {
+	store := newCircleStoreStub()
+	store.circles[contractCircleID] = rbac.Circle{
+		ID:         contractCircleID,
+		Name:       "Quran Circle",
+		InviteCode: "HLQ-7X2K9Z",
+		CreatedAt:  time.Now().UTC(),
+	}
+	store.members[contractCircleID] = map[string]string{testLocalUserID: rbac.RoleStudent}
+
+	req := httptest.NewRequest(http.MethodPost, "/circles/join", bytes.NewBufferString(`{"invite_code":"HLQ-7X2K9Z"}`))
+	req.Header.Set(httpconst.HeaderAuthorization, "Bearer valid-token")
+	req.Header.Set(httpconst.HeaderSessionID, testSessionID)
+	req.Header.Set(httpconst.HeaderContentType, httpconst.ContentTypeApplicationJSON)
+	rec := httptest.NewRecorder()
+	buildJoinCircleRoute(store).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("join status: got %d, want %d: %s", rec.Code, http.StatusConflict, rec.Body.String())
+	}
 }
 
 func TestCircleCreateContract(t *testing.T) {

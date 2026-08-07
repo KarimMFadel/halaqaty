@@ -426,6 +426,38 @@ func TestAddStudentMember_UnknownCircle_ReturnsNotFound(t *testing.T) {
 	}
 }
 
+func (s *stubStore) FindCircleByInviteCode(_ context.Context, inviteCode string) (Circle, error) {
+	for _, circle := range s.circles {
+		if circle.InviteCode == inviteCode {
+			return circle, nil
+		}
+	}
+	return Circle{}, ErrCircleNotFound
+}
+
+func TestJoinCircle_ValidInvite_AddsStudentMembership(t *testing.T) {
+	t.Parallel()
+
+	store := newStubStore()
+	store.circles[unitCircleID] = Circle{
+		ID:         unitCircleID,
+		Name:       "Quran Circle",
+		InviteCode: "HLQ-7X2K9Z",
+	}
+	svc := NewService(store, nil)
+
+	circle, err := svc.JoinCircle(context.Background(), unitStudentID, "hlq-7x2k9z")
+	if err != nil {
+		t.Fatalf("JoinCircle: %v", err)
+	}
+	if circle.ID != unitCircleID {
+		t.Fatalf("circle ID: got %q, want %q", circle.ID, unitCircleID)
+	}
+	if role := store.members[unitCircleID][unitStudentID]; role != RoleStudent {
+		t.Fatalf("membership role: got %q, want %q", role, RoleStudent)
+	}
+}
+
 func strPtr(value string) *string {
 	return &value
 }

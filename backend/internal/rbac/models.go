@@ -16,6 +16,11 @@ type CreateCircleRequest struct {
 	BackupSupervisorUserID *string  `json:"backup_supervisor_user_id"`
 }
 
+// JoinCircleRequest is the payload for POST /circles/join.
+type JoinCircleRequest struct {
+	InviteCode string `json:"invite_code"`
+}
+
 // AssignCircleRoleRequest is the payload for PUT /circles/{circleId}/members/{userId}/role.
 type AssignCircleRoleRequest struct {
 	Role string `json:"role"`

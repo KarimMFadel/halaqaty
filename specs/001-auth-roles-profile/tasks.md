@@ -158,13 +158,13 @@
 
 **Purpose**: Final hardening, observability, and measurable acceptance gates.
 
-- [ ] T073 [P] Align final API docs, error envelopes, explicit error codes, and security requirements in `docs/contracts/openapi.yaml` and `docs/contracts/README.md`
-- [ ] T074 [P] Add auth latency/rejection/session-expiry metrics instrumentation in `backend/internal/platform/metrics/auth_metrics.go`
-- [ ] T075 Add explicit login/session performance benchmark or load-test gate for SC-001 in `backend/tests/performance/auth_login_performance_test.go`
-- [ ] T076 Add explicit rate-limit integration tests for IP/user REST caps and WebSocket connection/message caps in `backend/tests/integration/rate_limit_policy_test.go`
-- [ ] T077 Harden idempotency/retry/timeout handling for auth/profile routes in `backend/internal/platform/http/server.go`
-- [ ] T078 Execute quickstart validation and record evidence in `specs/001-auth-roles-profile/validation-report.md`
-- [ ] T079 Add persistence-safety test asserting Go never receives, logs, stores, or returns plaintext passwords in `backend/tests/integration/password_storage_safety_test.go`
+- [X] T073 [P] Align final API docs, error envelopes, explicit error codes, and security requirements in `docs/contracts/openapi.yaml` and `docs/contracts/README.md`
+- [X] T074 [P] Add auth latency/rejection/session-expiry metrics instrumentation in `backend/internal/platform/metrics/auth_metrics.go`
+- [X] T075 Add explicit login/session performance benchmark or load-test gate for SC-001 in `backend/tests/performance/auth_login_performance_test.go`
+- [X] T076 Add explicit rate-limit integration tests for IP/user REST caps and WebSocket connection/message caps in `backend/tests/integration/rate_limit_policy_test.go`
+- [X] T077 Harden idempotency/retry/timeout handling for auth/profile routes in `backend/internal/platform/http/server.go`
+- [X] T078 Execute quickstart validation and record evidence in `specs/001-auth-roles-profile/validation-report.md`
+- [X] T079 Add persistence-safety test asserting Go never receives, logs, stores, or returns plaintext passwords in `backend/tests/integration/password_storage_safety_test.go`
 - [ ] T080 Add coverage gate task for `backend/internal/` >=80% and record output in `specs/001-auth-roles-profile/validation-report.md`
 
 ---

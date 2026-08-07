@@ -17,6 +17,7 @@ type AuthConfig struct {
 	RateLimitPerUserPerMin int
 	WSMaxConnectionsPerUsr int
 	WSMaxMessagesPerMin    int
+	MetricsToken           string
 }
 
 // DefaultAuthConfig provides production-safe defaults.
@@ -40,6 +41,7 @@ func LoadAuthConfig() (AuthConfig, error) {
 func loadAuthConfig(getenv func(string) string) (AuthConfig, error) {
 	cfg := DefaultAuthConfig()
 	cfg.FirebaseProjectID = getenv("FIREBASE_PROJECT_ID")
+	cfg.MetricsToken = getenv("METRICS_TOKEN")
 
 	var err error
 	cfg.SessionInactivityTTL, err = envDuration(getenv, "AUTH_SESSION_INACTIVITY_TTL", cfg.SessionInactivityTTL)

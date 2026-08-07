@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
 )
 
 func TestRouter_RegistersVersionedAuthRoutes(t *testing.T) {
@@ -20,6 +22,36 @@ func TestRouter_RegistersVersionedAuthRoutes(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status: got %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestRouter_MetricsRequiresToken(t *testing.T) {
+	metricStore := new(metrics.AuthMetrics)
+	metricStore.RecordRequest(time.Millisecond)
+	router := NewRouter(MiddlewareSet{
+		Metrics:      metricStore,
+		MetricsToken: "metrics-secret",
+	})
+
+	unauthorized := httptest.NewRecorder()
+	router.Handler().ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized status: got %d, want %d", unauthorized.Code, http.StatusUnauthorized)
+	}
+
+	authorizedRequest := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	authorizedRequest.Header.Set("Authorization", "Bearer metrics-secret")
+	authorized := httptest.NewRecorder()
+	router.Handler().ServeHTTP(authorized, authorizedRequest)
+	if authorized.Code != http.StatusOK {
+		t.Fatalf("authorized status: got %d, want %d", authorized.Code, http.StatusOK)
+	}
+	var summary metrics.MetricsSummary
+	if err := json.NewDecoder(authorized.Body).Decode(&summary); err != nil {
+		t.Fatalf("decode metrics response: %v", err)
+	}
+	if summary.RequestsTotal != 1 {
+		t.Fatalf("request count: got %d, want 1", summary.RequestsTotal)
 	}
 }
 

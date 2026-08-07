@@ -58,8 +58,7 @@ Most error responses follow this JSON envelope:
 { "error": { "code": "ERR_...", "message": "human readable", "fields": { "field": "reason" } } }
 ```
 
-**Known exception:** 503 timeout responses produced by Go's `http.TimeoutHandler`
-return a plain-text body. All other error paths use the JSON envelope above.
+All error paths, including request timeouts, use the JSON envelope above.
 
 | Code | HTTP Status | Meaning |
 |------|-------------|---------|
@@ -74,10 +73,12 @@ return a plain-text body. All other error paths use the JSON envelope above.
 | `ERR_CONFLICT` | 409 | Resource already exists (e.g. duplicate email from a different Firebase UID) |
 | `ERR_VALIDATION_FAILED` | 400 | Request body or parameters failed validation; `fields` map contains per-field messages |
 | `ERR_RATE_LIMIT_EXCEEDED` | 429 | Per-IP or per-user request budget exhausted |
-| `ERR_REQUEST_TIMEOUT` | 503 | Handler exceeded the configured per-request timeout (plain-text body — stdlib limitation) |
+| `ERR_REQUEST_TIMEOUT` | 503 | Handler exceeded the configured per-request timeout |
 | `ERR_INTERNAL_SERVER_ERROR` | 500 | Unexpected server error |
 
 Registration with an already-provisioned Firebase identity returns **409** with a valid `BackendSessionResponse` body (idempotent replay treated as success by the mobile client). Registration with a different Firebase UID but a conflicting email returns **409** with `ERR_CONFLICT` and no session body.
+
+Only registration is idempotent, keyed by the Firebase identity. Clients must not automatically retry `POST /auth/sessions`, because each successful request intentionally creates a separate device session.
 
 ## Related Documents
 

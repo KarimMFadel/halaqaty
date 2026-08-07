@@ -50,4 +50,5 @@ const (
 	FieldName              = "name"
 	FieldTeacherUserIDs    = "teacher_user_ids"
 	FieldBackupSupervisor  = "backup_supervisor_user_id"
+	FieldInviteCode        = "invite_code"
 )

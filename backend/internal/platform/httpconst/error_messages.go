@@ -33,6 +33,8 @@ const (
 	ErrorMessageProfileHandlerNotConfigured = "profile handler not configured"
 
 	ErrorMessageCircleNameInvalid        = "name must be between 2 and 100 characters"
+	ErrorMessageInviteCodeInvalid        = "invite_code must be a valid invite code"
+	ErrorMessageCircleAlreadyMember      = "user is already a circle member"
 	ErrorMessageCircleRoleInvalid        = "role must be one of: student, supervisor, teacher"
 	ErrorMessageCircleAssigneeUnknown    = "circle assignees must be existing registered users"
 	ErrorMessageCircleAssigneeConflict   = "circle assignees must be distinct and must not include the creator"

@@ -26,6 +26,13 @@ const circleExistsQuery = `
 SELECT EXISTS(SELECT 1 FROM circles WHERE id = $1::uuid)
 `
 
+const findCircleByInviteCodeQuery = `
+SELECT id::text, name, invite_code, created_at
+FROM circles
+WHERE invite_code = $1
+FOR UPDATE
+`
+
 // lockCircleMembersQuery locks the full membership set of one circle for a
 // role-change transaction. ORDER BY keeps lock acquisition deterministic so
 // concurrent role changes serialize instead of deadlocking.

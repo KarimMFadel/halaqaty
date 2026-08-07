@@ -305,8 +305,9 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - DB_URL=${DB_URL}
+      - DATABASE_URL=${DATABASE_URL}
       - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - METRICS_TOKEN=${METRICS_TOKEN}
       - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
       - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
       - LIVEKIT_HOST=livekit:7880
@@ -388,6 +389,17 @@ networks:
   halaqaty:
     driver: bridge
 ```
+
+### Mobile API URL and Metrics
+
+Release builds must set `API_BASE_URL` to the versioned API root, for example
+`https://api.halaqaty.app/api/v1` (or the equivalent staging URL). The local
+default is `http://localhost:8080/api/v1`.
+
+When `METRICS_TOKEN` is set, the API exposes `GET /metrics` outside the
+versioned product API. The caller must send `Authorization: Bearer <METRICS_TOKEN>`.
+Keep this token in deployment secrets and allow access only from the monitoring
+system at the reverse proxy.
 
 ### LiveKit Configuration (`livekit.yaml`)
 

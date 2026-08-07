@@ -12,6 +12,7 @@ import (
 
 	firebaseAdmin "firebase.google.com/go/v4"
 	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/config"
@@ -83,8 +84,9 @@ func main() {
 	rbacService := rbac.NewService(rbacRepo, auditLogger)
 	rbacHandler := rbac.NewHandler(rbacService)
 
+	authMetrics := new(metrics.AuthMetrics)
 	authMW := middleware.NewAuthMiddleware(verifier, sessionService, sessionRepo)
-	authMW.SetMetrics(new(metrics.AuthMetrics))
+	authMW.SetMetrics(authMetrics)
 	roleMW := middleware.NewRoleMiddleware(sessionRepo)
 	rateLimitMW := middleware.NewRateLimitMiddleware(cfg.RateLimitPerIPPerMin, cfg.RateLimitPerUserPerMin)
 
@@ -97,6 +99,8 @@ func main() {
 		RBACHandler:    rbacHandler,
 		Timeout:        cfg.RequestTimeout,
 		Logger:         logger,
+		Metrics:        authMetrics,
+		MetricsToken:   cfg.MetricsToken,
 	}
 
 	// ── Router ────────────────────────────────────────────────────────────────

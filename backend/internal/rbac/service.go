@@ -35,6 +35,8 @@ var (
 	ErrFinalTeacher = errors.New("circle must retain at least one teacher")
 	// ErrForbidden is returned when the actor may not manage roles in the circle.
 	ErrForbidden = errors.New("forbidden")
+	// ErrAlreadyMember is returned when a user joins a circle they already belong to.
+	ErrAlreadyMember = errors.New("user is already a circle member")
 )
 
 // ValidationError carries field-level circle validation failures.
@@ -53,9 +55,43 @@ type Store interface {
 	UsersExist(ctx context.Context, userIDs []string) (map[string]bool, error)
 	InsertCircle(ctx context.Context, name, ownerID, inviteCode string) (Circle, error)
 	InsertMember(ctx context.Context, circleID, userID, role string) error
+	FindCircleByInviteCode(ctx context.Context, inviteCode string) (Circle, error)
 	CircleExists(ctx context.Context, circleID string) (bool, error)
 	LockMembers(ctx context.Context, circleID string) ([]Member, error)
 	UpdateMemberRole(ctx context.Context, circleID, userID, role string) error
+}
+
+// JoinCircle adds the authenticated user as a student using a circle invite code.
+func (s *Service) JoinCircle(ctx context.Context, userID, inviteCode string) (CircleResponse, error) {
+	inviteCode = strings.ToUpper(strings.TrimSpace(inviteCode))
+	if !isInviteCode(inviteCode) {
+		return CircleResponse{}, &ValidationError{Fields: map[string]string{httpconst.FieldInviteCode: httpconst.ErrorMessageInviteCodeInvalid}}
+	}
+
+	var circle Circle
+	err := s.store.WithinTransaction(ctx, func(tx Store) error {
+		found, err := tx.FindCircleByInviteCode(ctx, inviteCode)
+		if err != nil {
+			return err
+		}
+		members, err := tx.LockMembers(ctx, found.ID)
+		if err != nil {
+			return err
+		}
+		if _, exists := memberRole(members, userID); exists {
+			return ErrAlreadyMember
+		}
+		if err := tx.InsertMember(ctx, found.ID, userID, RoleStudent); err != nil {
+			return err
+		}
+		circle = found
+		return nil
+	})
+	if err != nil {
+		return CircleResponse{}, fmt.Errorf("join circle: %w", err)
+	}
+
+	return CircleResponse{ID: circle.ID, Name: circle.Name, InviteCode: circle.InviteCode, CreatedAt: circle.CreatedAt}, nil
 }
 
 // AuditLogger records security-relevant circle events.
@@ -337,6 +373,18 @@ func generateInviteCode() (string, error) {
 		code.WriteByte(inviteCodeAlphabet[int(b)&31])
 	}
 	return code.String(), nil
+}
+
+func isInviteCode(value string) bool {
+	if len(value) != len(inviteCodePrefix)+inviteCodeLength || !strings.HasPrefix(value, inviteCodePrefix) {
+		return false
+	}
+	for _, char := range value[len(inviteCodePrefix):] {
+		if !strings.ContainsRune(inviteCodeAlphabet, char) {
+			return false
+		}
+	}
+	return true
 }
 
 func isUUID(value string) bool {

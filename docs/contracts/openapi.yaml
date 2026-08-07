@@ -96,7 +96,9 @@ paths:
       description: |
         Creates a backend session for the current device after the Flutter Firebase
         SDK has signed the user in. This endpoint does not validate a password,
-        create Firebase identities, or return Firebase tokens.
+        create Firebase identities, or return Firebase tokens. Clients must not
+        automatically retry this request because each successful call creates a
+        distinct backend device session.
       tags: [Auth]
       summary: Create a current-device backend session
       security:
@@ -434,8 +436,8 @@ paths:
               properties:
                 invite_code:
                   type: string
-                  pattern: '^[A-Z0-9]{3}-[A-Z0-9]{4}$'
-                  example: HLQ-7X2K
+                  pattern: '^HLQ-[A-HJ-NP-Z2-9]{6}$'
+                  example: HLQ-7X2K9Z
       responses:
         '200':
           description: Joined the circle

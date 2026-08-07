@@ -22,8 +22,8 @@ lib/generated_plugin_registrant.dart
 *.so
 *.dylib
 /bin/
+/backend/bin/
 /vendor/
-go.sum
 
 # Test binary
 *.test

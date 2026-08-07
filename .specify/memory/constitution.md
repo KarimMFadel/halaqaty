@@ -143,7 +143,7 @@ These are final decisions. Do not re-open or work around them during implementat
 |---|---|
 | Phone auth | No phone-only accounts. Require email or social provider. Phone is supplementary only. |
 | Token expiry | Firebase 1hr auto-refresh. Backend enforces 30-day inactivity logout. |
-| Co-teacher role | Deferred post-pilot. MVP: teacher + supervisor only. |
+| Circle teaching roles | Multiple teachers are allowed per circle; a supervisor is a distinct per-circle role. See ADR-010. |
 | Queue timer | No per-student timer in MVP. Teacher manages timing verbally. |
 | Pre-set queue | Teacher can pre-order queue before starting the session. |
 | Double-queue | No. One position per student per round. Use sequential rounds. |

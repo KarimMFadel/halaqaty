@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS circle_members;
+DROP TABLE IF EXISTS user_sessions;
+DROP TABLE IF EXISTS profiles;
+DROP TABLE IF EXISTS users;

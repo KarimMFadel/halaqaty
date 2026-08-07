@@ -1,0 +1,318 @@
+openapi: 3.0.3
+info:
+  title: Halaqaty Auth/Roles/Profile Feature Contract
+  version: 0.3.0
+  description: Firebase-owned identity, backend device sessions, profiles, and per-circle role authorization.
+
+security:
+  - BearerAuth: []
+    SessionId: []
+
+paths:
+  /circles:
+    post:
+      operationId: createCircle
+      summary: Create a circle with initial role assignments
+      description: Existing registered users may be assigned as one or more teachers and one optional backup supervisor. If no teacher is selected, the creator becomes teacher; otherwise the creator becomes supervisor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCircleRequest'
+      responses:
+        '201':
+          description: Circle created
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/register:
+    post:
+      operationId: registerUser
+      summary: Provision a user after Firebase registration
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Local user provisioned and current-device session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackendSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /auth/sessions:
+    post:
+      operationId: createBackendSession
+      summary: Create a backend session after Firebase sign-in
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBackendSessionRequest'
+      responses:
+        '200':
+          description: Current-device backend session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackendSessionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      operationId: logoutUser
+      summary: Revoke the current backend session
+      responses:
+        '204':
+          description: Logged out
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      summary: Read current profile
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      summary: Update current profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /circles/{circleId}/members/{userId}/role:
+    put:
+      operationId: updateCircleMemberRole
+      summary: Manage another member's role as teacher or supervisor
+      description: A teacher or supervisor may change another member between student, supervisor, and teacher. Self-changes and removal of the final teacher are forbidden.
+      parameters:
+        - $ref: '#/components/parameters/CircleId'
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignCircleRoleRequest'
+      responses:
+        '200':
+          description: Role updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase JWT
+    SessionId:
+      type: apiKey
+      in: header
+      name: X-Halaqaty-Session-ID
+  parameters:
+    CircleId:
+      name: circleId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    CreateCircleRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        teacher_user_ids:
+          type: array
+          description: Existing registered users to add as teachers. If omitted or empty, the creator becomes teacher.
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        backup_supervisor_user_id:
+          type: string
+          format: uuid
+          description: Optional existing registered user to add as supervisor. Must not also be a selected teacher.
+
+    RegisterRequest:
+      type: object
+      required: [display_name]
+      properties:
+        display_name:
+          type: string
+          minLength: 2
+          maxLength: 100
+    CreateBackendSessionRequest:
+      type: object
+      properties:
+        device_name:
+          type: string
+          maxLength: 100
+    BackendSessionResponse:
+      type: object
+      required: [session_id, expires_at, user]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        expires_at:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/ProfileResponse'
+    UpdateProfileRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+          minLength: 2
+          maxLength: 150
+        display_name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        bio:
+          type: string
+          maxLength: 500
+        country:
+          type: string
+          minLength: 2
+          maxLength: 2
+        avatar_url:
+          type: string
+          format: uri
+    ProfileResponse:
+      type: object
+      required: [id, firebase_uid, display_name, preferred_language, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        firebase_uid:
+          type: string
+        full_name:
+          type: string
+          nullable: true
+        display_name:
+          type: string
+        bio:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        avatar_url:
+          type: string
+          nullable: true
+        preferred_language:
+          type: string
+          enum: [ar, en]
+        created_at:
+          type: string
+          format: date-time
+    AssignCircleRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [student, supervisor, teacher]
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            fields:
+              type: object
+              additionalProperties:
+                type: string
+  responses:
+    BadRequest:
+      description: Invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Unauthorized:
+      description: Missing, invalid, expired, revoked, inactive, or user-mismatched Firebase token or backend session
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Forbidden:
+      description: Insufficient circle role or prohibited role change
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Conflict:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'

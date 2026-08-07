@@ -193,7 +193,7 @@ Sprints are **2 weeks** long. Each sprint has a single goal, a defined feature s
 
 **Goal:** Deliver a working Go server with Firebase Auth middleware and PostgreSQL connectivity, paired with a Flutter login/register screen that issues a real Firebase JWT validated end-to-end by the backend.
 
-**Feature slice:** F-001 (Authentication) — register, login, token refresh, logout
+**Feature slice:** F-001 (Authentication) — Firebase client registration/sign-in, backend device-session creation, current-device logout
 
 #### Tasks
 
@@ -202,15 +202,16 @@ Sprints are **2 weeks** long. Each sprint has a single goal, a defined feature s
 - Implement `GET /health` endpoint (returns `{"status":"ok"}`) — used by Docker health check
 - Integrate Firebase Admin SDK for JWT verification; implement `backend/internal/auth` middleware
 - Write migration `000001_create_users.up.sql` / `.down.sql` (users table: `id`, `firebase_uid`, `email`, `display_name`, `timezone`, `created_at`, `updated_at`)
-- Implement `POST /api/v1/auth/register` — create user record on first Firebase sign-in
-- Implement `POST /api/v1/auth/login` — return user profile for an authenticated Firebase UID
+- Implement `POST /api/v1/auth/register` — verify Firebase bearer token, create the local user record, and create a backend device session on first Firebase sign-in
+- Implement `POST /api/v1/auth/sessions` — verify Firebase bearer token and create a backend device session after subsequent Firebase sign-ins; do not accept passwords or return Firebase tokens
+- Implement `POST /api/v1/auth/logout` — revoke only the authenticated current-device backend session
 - Provision Hetzner CX22, configure DNS/TLS via Cloudflare, deploy Docker Compose (`api`, `postgres`)
 
 **Mobile**
 - Scaffold Flutter project under `mobile/` with Riverpod 2.x, `go_router`, and `firebase_auth` dependencies in `pubspec.yaml`
 - Implement login screen and register screen (email + Google Sign-In; Apple Sign-In for iOS)
 - Wire Firebase Auth SDK to login/register screens; store and refresh `idToken` via Riverpod `AsyncNotifier`
-- Call `POST /api/v1/auth/register` on first sign-in; call `POST /api/v1/auth/login` on subsequent logins
+- Call `POST /api/v1/auth/register` on first Firebase sign-in; call `POST /api/v1/auth/sessions` on subsequent Firebase sign-ins; store the opaque backend session ID securely and send it with each protected request
 - Implement basic home screen (placeholder) reached after successful authentication
 
 #### Acceptance Gates
@@ -220,11 +221,11 @@ Sprints are **2 weeks** long. Each sprint has a single goal, a defined feature s
 - [ ] `flutter test` passes with **0 failures**
 - [ ] `docker compose up -d` succeeds on a **fresh clone** with no pre-existing volumes (backend reaches `healthy`, postgres reaches `healthy`)
 - [ ] `make migrate-fresh` runs all migrations on a fresh PostgreSQL schema with **0 errors**
-- [ ] Firebase JWT issued by the test client is accepted by `POST /api/v1/auth/login` and returns `200 OK` with a user profile
+- [ ] Firebase ID token issued by the test client is accepted by `POST /api/v1/auth/sessions`; a revoked or inactive backend session is rejected on a protected route
 - [ ] `golangci-lint run ./...` reports **0 violations**
 - [ ] `flutter analyze` reports **0 issues**
 - [ ] `gitleaks detect --source .` reports **0 secrets detected**
-- [ ] OpenAPI spec `docs/contracts/openapi.yaml` documents `/health`, `/api/v1/auth/register`, and `/api/v1/auth/login`; `spectral lint` passes
+- [ ] OpenAPI spec `docs/contracts/openapi.yaml` documents `/health`, `/api/v1/auth/register`, `/api/v1/auth/sessions`, and the required backend session header; `spectral lint` passes
 
 ---
 

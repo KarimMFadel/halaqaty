@@ -59,7 +59,9 @@ The queue can be **reset and reused multiple times** in a single session — for
 | **File Storage** | MinIO (S3-compatible, self-hosted) | Cost-effective, self-hosted, no vendor lock-in |
 | **Push Notifications** | Firebase Cloud Messaging (FCM) | Industry standard, cross-platform |
 | **Auth** | Firebase Auth | Social sign-in (Google, Apple), phone OTP |
-| **Deployment** | Docker Compose on Hetzner CX22 | Start cheap (~$8/mo), single-server MVP (No Kubernetes in MVP — see ADR-007) |
+| **Deployment** | Docker Compose on Hetzner CX22 | Start cheap (~$8/mo), single-server MVP (No Kubernetes in MVP — see [DEPLOYMENT.md](docs/engineering/deployment/DEPLOYMENT.md)) |
+
+> **⚠️ ADR TODO:** The MVP deployment decision (Docker Compose on Hetzner CX22, no Kubernetes in MVP) is currently documented only in [DEPLOYMENT.md](docs/engineering/deployment/DEPLOYMENT.md). Re-check the deployment plan for the Halaqaty MVP and create a dedicated ADR (next sequential number, ADR-011) under `docs/engineering/architecture/adr/` to formally codify the choice, alternatives considered, and constitutional constraint it satisfies — see [docs/engineering/architecture/README.md](docs/engineering/architecture/README.md) for the ADR index and format guidance.
 
 ---
 
@@ -67,77 +69,46 @@ The queue can be **reset and reused multiple times** in a single session — for
 
 ```
 halaqaty/
-├── README.md                      ← You are here
-├── DEVELOPMENT.md                 ← Developer guide (Spec-Kit, workflow, commands)
-├── LICENSE                        ← MIT License
-├── .specify/                      ← Spec-Kit configuration
-│   └── memory/
-│       └── constitution.md        ← Governing document — read before writing any code
-├── .github/
-│   ├── prompts/                   ← Spec-Kit slash command definitions
-│   └── agents/                    ← Copilot agent configurations
-├── docs/
-│   ├── README.md                  ← Docs overview and navigation
-│   ├── management/                ← Business & product strategy
-│   │   ├── README.md
-│   │   ├── product/               ← PRD, features, user journeys, MVP decisions
-│   │   │   ├── README.md
-│   │   │   ├── PRD.md
-│   │   │   ├── FEATURES.md
-│   │   │   ├── JOURNEY.md
-│   │   │   └── MVP_DECISION_REGISTER.md
-│   │   ├── planning/              ← Master project plan
-│   │   │   ├── README.md
-│   │   │   └── PROJECT_PLAN.md
-│   │   ├── business/              ← Market analysis, competitor research
-│   │   │   ├── README.md
-│   │   │   └── QURAN_MEMORIZATION_COMPETITOR_ANALYSIS.md
-│   │   └── arabic/                ← Arabic business documentation
-│   │       ├── README.md
-│   │       ├── SYNC_GUIDE.md
-│   │       ├── PRD_AR.md
-│   │       ├── PLAN_AR.md
-│   │       └── FEATURES_AR.md
-│   └── engineering/               ← Technical architecture & deployment
-│       ├── README.md
-│       ├── architecture/          ← System design & ADRs
-│       │   ├── README.md
-│       │   ├── ARCHITECTURE.md
-│       │   └── adr/
-│       │       ├── README.md
-│       │       ├── ADR-001-modular-monolith.md
-│       │       ├── ADR-002-go-framework.md
-│       │       ├── ADR-003-flutter-state-management.md
-│       │       ├── ADR-004-auth-boundary.md
-│       │       ├── ADR-005-feature-flags.md
-│       │       ├── ADR-006-db-migrations.md
-│       │       └── ADR-007-monorepo-structure.md
-│       ├── deployment/            ← Deployment strategy & infrastructure
-│       │   ├── README.md
-│       │   └── DEPLOYMENT.md
-│       ├── development/           ← Development setup & execution playbook
-│       │   ├── README.md
-│       │   └── EXECUTION_PLAYBOOK.md
-│       ├── collaboration/         ← Agent collaboration & team coordination
-│       │   ├── README.md
-│       │   ├── AGENT_COLLABORATION_GUIDE.md
-
-
-│       ├── system-design/         ← (Future: Detailed system design)
-│       │   └── README.md
-│       ├── api-docs/              ← (Future: API reference)
-│       │   └── README.md
-│       └── guides/                ← (Future: How-to guides)
-│           └── README.md
-└── specs/                         ← Spec-Kit per-feature specs (generated, do not edit manually)
-    └── NNN-feature-name/
-        ├── spec.md
-        ├── plan.md
-        ├── data-model.md
-        ├── contracts/
-        ├── tasks.md
-        └── quickstart.md
+├── README.md                       ← You are here
+├── AGENTS.md                       ← Agent harness rules (read alongside DEVELOPMENT.md)
+├── DEVELOPMENT.md                  ← Developer guide (Spec-Kit, workflow, commands)
+├── CONTRIBUTING.md                 ← Contribution guidelines
+├── SECURITY.md                     ← Security policy
+├── LICENSE                         ← MIT License
+├── Makefile                        ← Root Makefile (delegates to backend/ and mobile/)
+├── opencode.json                   ← OpenCode configuration
+├── .spectral.yaml                  ← Spectral OAS lint config (used by `make api-lint`)
+├── .specify/                       ← Spec-Kit configuration and governing memory
+│   └── memory/constitution.md       ← Governing document — read before writing any code
+├── .github/                        ← Copilot agents, skills, prompts, workflows
+├── .opencode/                      ← OpenCode agent and skill definitions
+├── backend/                        ← Go 1.22 service (module halaqaty/backend) — see backend/ layout
+├── mobile/                         ← Flutter app (package halaqaty_mobile) — see mobile/ layout
+├── specs/                          ← Spec-Kit per-feature specs (generated, do not edit manually)
+│                                   ← each subdirectory is a feature (e.g., 001-auth-roles-profile)
+└── docs/                           ← Documentation hub — see docs/README.md for full navigation
+    ├── README.md                   ← Docs overview, navigation map, glossary
+    ├── contracts/                  ← REST & WS API contracts (source of truth for the API surface)
+    │   ├── openapi.yaml            ← OpenAPI 3.0 spec for /api/v1/* (Constitution §III)
+    │   └── ws_events.md            ← WebSocket event catalogue
+    ├── engineering/                ← Technical architecture & development
+    │   ├── architecture/           ← System design, ARCHITECTURE.md, and the ADR index (see architecture/README.md)
+    │   ├── deployment/             ← Deployment strategy & infrastructure
+    │   ├── development/            ← Execution playbook & testing strategy
+    │   ├── collaboration/          ← Agent collaboration guide & workflow harness
+    │   ├── design/                 ← Per-feature design docs (e.g., F-007 progress tracking)
+    │   ├── system-design/          ← Runtime lifecycle flows (queue, session, WebSocket)
+    │   ├── api-docs/               ← API auth flow and endpoint quick-reference index
+    │   └── guides/                 ← Troubleshooting runbooks and common dev tasks
+    ├── management/                 ← Business & product strategy
+    │   ├── product/                ← PRD, FEATURES, JOURNEY, ROLES, MVP_DECISION_REGISTER
+    │   ├── planning/               ← Master project plan
+    │   ├── business/               ← Market analysis & competitor research
+    │   └── arabic/                 ← Arabic business/product docs + bilingual sync guide
+    └── plan_review/                ← Historical plan reviews & enhancement tracker
 ```
+
+> **Live contents:** this tree shows the stable top-level structure only. Each subdirectory's `README.md` (where present) holds the authoritative file-level index for that area. Run `Get-ChildItem -Recurse <dir>` (PowerShell) or `ls -R <dir>` (bash) for the current filesystem snapshot — the hand-maintained list below the directory level is intentionally omitted to avoid drift.
 
 ---
 
@@ -145,7 +116,7 @@ halaqaty/
 
 Halaqaty uses **[Spec-Kit](https://github.com/github/spec-kit)** (`v0.8.1`) for spec-driven development with GitHub Copilot. All code is generated from frozen specs — not from ad-hoc prompts.
 
-**Five specialized engineering agents collaborate autonomously:**
+**Specialized engineering agents collaborate through the project workflow harness:**
 - **Senior Golang Developer** — Backend services, APIs, concurrency, database
 - **Senior Flutter Mobile Engineer** — Mobile UI, state management, RTL/Arabic support
 - **Architect** — System design, service boundaries, technology choices

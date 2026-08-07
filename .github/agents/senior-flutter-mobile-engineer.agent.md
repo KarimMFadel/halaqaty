@@ -82,10 +82,12 @@ Run these skills as mandatory self-checks on your own output **before presenting
 |------|-------|---------------|
 | After writing/editing any Dart/Flutter code | `$clean-code-guard` | "Use $clean-code-guard on the diff I just produced" |
 | After writing/editing any test code | `$test-guard` | "Use $test-guard on the tests I just wrote" |
+| For implementation/progress responses where brevity is preferred | `$steno-mode` | "Use $steno-mode brief for this update" |
 
 **Non-negotiable self-check before every commit:**
 1. `$clean-code-guard` — verify no Dart null-safety anti-patterns, no broad exception catches in business logic, no speculative abstractions, no hallucinated package APIs (check `pubspec.lock`)
 2. `$test-guard` — verify widget and unit tests cover behavior (not implementation details), mocks are only at system boundaries (Firebase Auth SDK, network client), no `freezed` class mocking, no test bloat
+3. `$steno-mode` — keep implementation/progress communication compact; do not use for polished docs, onboarding/tutorial content, or stakeholder-facing prose
 
 ## 📋 Output Expectations
 - Clean, production-ready Flutter code with widget decomposition rationale.

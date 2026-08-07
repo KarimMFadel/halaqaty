@@ -13,7 +13,10 @@ This directory contains the machine-readable and human-readable API contracts fo
 
 - **REST API** handles all CRUD operations and non-real-time commands (create circle, join queue, update profile, etc.).
 - **WebSocket** handles low-latency real-time events (queue position updates, turn notifications, session state changes, chat delivery).
-- All REST endpoints require `Authorization: Bearer <firebase-jwt>` except `/auth/*`.
+- Flutter Firebase Auth owns registration, sign-in, passwords, and ID-token refresh.
+  The backend never accepts passwords or returns Firebase tokens. `POST /auth/register`
+  and `POST /auth/sessions` require only a Firebase ID token; all other REST endpoints
+  also require the opaque `X-Halaqaty-Session-ID` for the current backend device session.
 - WebSocket connections are authenticated via a short-lived token exchanged over REST before the WS handshake.
 
 ## Base URL
@@ -33,16 +36,49 @@ This directory contains the machine-readable and human-readable API contracts fo
 
 ## How to Use
 
+The canonical lint target is `make api-lint` (defined at repo root), which runs Spectral against this spec using `.spectral.yaml`:
+
 ```bash
-# Validate the OpenAPI spec
-npx @redocly/cli lint openapi.yaml
-
-# Generate interactive docs locally
-npx @redocly/cli preview-docs openapi.yaml
-
-# Generate Go server stubs (optional)
-oapi-codegen -config oapi-codegen.yaml openapi.yaml
+make api-lint                    # lint docs/contracts/openapi.yaml with Spectral
 ```
+
+To run Spectral directly (same command the Makefile invokes):
+
+```bash
+spectral lint docs/contracts/openapi.yaml
+```
+
+> **Note:** Go handlers are hand-written and centralized in `backend/cmd/api/routes.go` (see `AGENTS.md`). There is no OpenAPI → Go codegen pipeline.
+
+## Error Codes
+
+Most error responses follow this JSON envelope:
+
+```json
+{ "error": { "code": "ERR_...", "message": "human readable", "fields": { "field": "reason" } } }
+```
+
+All error paths, including request timeouts, use the JSON envelope above.
+
+| Code | HTTP Status | Meaning |
+|------|-------------|---------|
+| `ERR_UNAUTHORIZED` | 401 | Missing, invalid, or expired Firebase ID token |
+| `ERR_SESSION_MISSING` | 401 | `X-Halaqaty-Session-ID` header absent |
+| `ERR_SESSION_NOT_FOUND` | 401 | Session ID does not exist |
+| `ERR_SESSION_EXPIRED` | 401 | Session exceeded inactivity (30d) or absolute (90d) TTL |
+| `ERR_SESSION_REVOKED` | 401 | Session was explicitly revoked via logout |
+| `ERR_SESSION_USER_MISMATCH` | 401 | Session belongs to a different Firebase identity |
+| `ERR_FORBIDDEN` | 403 | Authenticated but lacks the required circle role |
+| `ERR_NOT_FOUND` | 404 | Referenced resource does not exist |
+| `ERR_CONFLICT` | 409 | Resource already exists (e.g. duplicate email from a different Firebase UID) |
+| `ERR_VALIDATION_FAILED` | 400 | Request body or parameters failed validation; `fields` map contains per-field messages |
+| `ERR_RATE_LIMIT_EXCEEDED` | 429 | Per-IP or per-user request budget exhausted |
+| `ERR_REQUEST_TIMEOUT` | 503 | Handler exceeded the configured per-request timeout |
+| `ERR_INTERNAL_SERVER_ERROR` | 500 | Unexpected server error |
+
+Registration with an already-provisioned Firebase identity returns **409** with a valid `BackendSessionResponse` body (idempotent replay treated as success by the mobile client). Registration with a different Firebase UID but a conflicting email returns **409** with `ERR_CONFLICT` and no session body.
+
+Only registration is idempotent, keyed by the Firebase identity. Clients must not automatically retry `POST /auth/sessions`, because each successful request intentionally creates a separate device session.
 
 ## Related Documents
 

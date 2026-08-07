@@ -9,7 +9,7 @@
 
 .DEFAULT_GOAL := help
 
-.PHONY: help deps test analyze build-apk build-ios
+.PHONY: help deps test test-feature-001-auth-roles-profile test-feature-001-widget test-feature-001-integration analyze build-apk build-ios
 
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -30,6 +30,37 @@ deps: ## Install Flutter dependencies (run after cloning or pubspec.yaml changes
 
 test: ## Run unit and widget tests
 	flutter test test
+
+FEATURE_001_WIDGET_DIRS := test/widget/auth test/widget/profile
+FEATURE_001_INTEGRATION_FILES := integration_test/auth_journey_test.dart integration_test/profile_flow_test.dart integration_test/role_access_test.dart
+
+test-feature-001-auth-roles-profile: test-feature-001-widget test-feature-001-integration ## Run auth/profile feature tests for feature 001
+
+test-feature-001-widget: ## Run auth/profile widget tests (if present)
+	@set -e; \
+	found=0; \
+	for dir in $(FEATURE_001_WIDGET_DIRS); do \
+		if [ -d "$$dir" ]; then \
+			found=1; \
+			flutter test "$$dir"; \
+		fi; \
+	done; \
+	if [ $$found -eq 0 ]; then \
+		echo "ℹ️  No feature 001 widget test directories found"; \
+	fi
+
+test-feature-001-integration: ## Run auth/profile integration tests (if present)
+	@set -e; \
+	found=0; \
+	for file in $(FEATURE_001_INTEGRATION_FILES); do \
+		if [ -f "$$file" ]; then \
+			found=1; \
+			flutter test "$$file"; \
+		fi; \
+	done; \
+	if [ $$found -eq 0 ]; then \
+		echo "ℹ️  No feature 001 integration test files found"; \
+	fi
 
 analyze: ## Run flutter analyze (static analysis — zero issues required before PR)
 	flutter analyze

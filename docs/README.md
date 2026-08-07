@@ -38,7 +38,7 @@ For engineers, architects, and technical leads.
 
 - **[Architecture](./engineering/architecture/)** — System design & decisions
   - [`ARCHITECTURE.md`](./engineering/architecture/ARCHITECTURE.md) — Technical architecture & schema
-  - [`adr/`](./engineering/architecture/adr/) — Architecture Decision Records (ADR-001 through ADR-006)
+  - [`adr/`](./engineering/architecture/adr/) — Architecture Decision Records (live index in [architecture/README.md](./engineering/architecture/README.md))
 
 - **[Deployment](./engineering/deployment/)** — Infrastructure & scaling
   - [`DEPLOYMENT.md`](./engineering/deployment/DEPLOYMENT.md) — Deployment strategy (MVP to global)

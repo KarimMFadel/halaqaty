@@ -159,6 +159,8 @@ Build and retain expertise in:
 - Automated linting and static analysis integration for all languages.
 - Custom rules for Halaqaty patterns (e.g., must use authorization middleware on all endpoints).
 - Security scanning for dependency vulnerabilities and secrets in code.
+- Enforce centralized HTTP/auth literals via `backend/internal/platform/httpconst/` (no repeated inline protocol strings in production code).
+- Enforce SQL organization: repository method bodies must not embed multiline SQL; runtime queries belong in package-level `*_queries.go` files or generated query layers.
 
 ### Performance Profiling
 - Work with engineers to identify and eliminate performance bottlenecks.

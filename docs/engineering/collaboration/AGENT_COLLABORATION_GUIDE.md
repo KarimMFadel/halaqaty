@@ -8,6 +8,11 @@
 
 ## Overview
 
+> **Execution policy:** This document defines agent responsibilities and
+> collaboration boundaries. The authoritative phase routing, Superpowers
+> integration, and token-efficiency rules are in
+> [`AGENT_WORKFLOW_HARNESS.md`](AGENT_WORKFLOW_HARNESS.md).
+
 This guide documents the collaborative framework for Halaqaty's 5 core engineering agents:
 
 1. **Senior Golang Developer** — Backend services, APIs, concurrency, database
@@ -38,7 +43,7 @@ This guide documents the collaborative framework for Halaqaty's 5 core engineeri
 - **With Team Leader**: Task scheduling, integration point coordination
 
 **Clarification Protocol**:
-- When API requirements are ambiguous, ask Karim **5-7 focused technical questions** before designing
+- When API requirements are ambiguous, send only material technical questions to the Team Leader for the consolidated `/speckit.clarify` round
 - Questions should cover: data format, error handling, real-time update frequency, performance constraints, authorization rules, testing expectations, offline behavior
 
 ---
@@ -61,7 +66,7 @@ This guide documents the collaborative framework for Halaqaty's 5 core engineeri
 - **With Team Leader**: Task scheduling, blocker escalation
 
 **Clarification Protocol**:
-- When feature requirements are incomplete, ask Karim **5-7 focused product questions** before implementing
+- When feature requirements are incomplete, send only material product questions to the Team Leader for the consolidated `/speckit.clarify` round
 - Questions should cover: user flow, edge cases, platform-specific behavior, offline expectations, acceptance criteria, performance targets, localization scope
 
 ---
@@ -84,7 +89,7 @@ This guide documents the collaborative framework for Halaqaty's 5 core engineeri
 - **With Team Leader**: Sequencing architecture phases, communicating constraints
 
 **Clarification Protocol**:
-- If key architectural constraints are missing, ask Karim **5-7 targeted questions** before committing decisions
+- If key architectural constraints are missing, send only material architecture questions to the Team Leader for the consolidated `/speckit.clarify` round
 - Questions should cover: expected scale, reliability expectations, compliance/privacy constraints, launch scope, operational budget, growth timeline, vendor lock-in tolerance
 
 ---
@@ -130,7 +135,7 @@ This guide documents the collaborative framework for Halaqaty's 5 core engineeri
 - **All Agents**: Coordination, task assignment, blocker resolution, escalation
 
 **Clarification Protocol**:
-- When delivery scope is unclear, ask Karim **5-7 practical questions** before splitting work
+- When delivery scope is unclear, consolidate the relevant agents' input into **5-7 practical questions total** for the `/speckit.clarify` round
 - Questions should cover: release priority, must-have behaviors, acceptable compromises, deadlines, blockers, dependencies, rollback strategy
 
 ---
@@ -169,19 +174,19 @@ graph TD
 
 ## Spec-Kit Workflow Integration (COMPLETE FLOW)
 
-### Full Spec-Kit Workflow With All Agents
+### Full Spec-Kit Workflow With Phase-Scoped Agents
 
 ```mermaid
 graph TD
     START(["📋 Feature Request\n(must be ≥🟡 Approved\nin FEATURES.md)"])
 
-    S1["1️⃣ /speckit.specify\nAll agents review\nfor feasibility"]
-    S2["2️⃣ /speckit.clarify\nAgents ask Karim\n5-7 questions"]
+    S1["1️⃣ /speckit.specify\nRelevant agents review\nfor feasibility"]
+    S2["2️⃣ /speckit.clarify\nTeam Leader consolidates\n5-7 questions total"]
     S3["3️⃣ /speckit.checklist\nSpec quality gate\n(completeness · clarity)"]
-    S4["4️⃣ /speckit.plan\nArch + Go + Flutter\nschema · contracts · tests"]
+    S4["4️⃣ /speckit.plan\nAffected domain agents\ndesign · contracts · tests"]
     S5["5️⃣ /speckit.tasks\nTeam Leader sequences\nwith dependencies"]
     S6["6️⃣ /speckit.analyze\nCross-artifact check\n(spec ↔ plan ↔ tasks)"]
-    S7["7️⃣ /speckit.implement\nGo + Flutter build\nTech Lead reviews all"]
+    S7["7️⃣ /speckit.implement\nAssigned domain owner builds\nTech Lead reviews batch"]
     S8["8️⃣ /speckit.git.commit\nStructured commit\nwith spec traceability"]
     MERGE(["✅ PR opened\nKarim reviews & merges"])
 
@@ -202,27 +207,27 @@ graph TD
 ### Key Points for Multi-Agent Collaboration in Spec-Kit
 
 **Specification Phase** (`/speckit.specify`)
-- Architect provides technical feasibility review
-- Tech Lead identifies quality and testing implications
-- Golang Developer flags backend complexity concerns
-- Flutter Engineer flags mobile platform constraints
+- The Team Leader selects only roles material to the feature
+- Architect reviews when architectural feasibility or boundaries are affected
+- Tech Lead reviews when material security, quality, or testing risk is present
+- Golang Developer joins for backend scope; Flutter Engineer joins for mobile scope
 
 **Clarification Phase** (`/speckit.clarify`)
 - Ask Karim clarifying questions across all domains
-- All agents provide input on ambiguities in their specialties
+- Only relevant agents provide input on ambiguities in their specialties; the Team Leader removes duplicates
 - Result: Clear, unambiguous spec ready for planning
 
 **Checklist Phase** (`/speckit.checklist`)
 - Validate spec quality (not implementation)
 - Check: completeness, clarity, consistency, coverage, edge cases
-- All agents confirm requirements are ready for design
+- The checklist agent confirms readiness and consults a domain agent only for a material specialty concern
 
 **Planning Phase** (`/speckit.plan`)
-- **Architect** designs system architecture
-- **Golang Developer** designs backend APIs and database schema
-- **Flutter Engineer** designs mobile state management
 - **Team Leader** documents dependencies and integration points
-- **Tech Lead** reviews for security and quality implications
+- **Architect** joins when architecture, data models, contracts, or ADR implications are affected
+- **Golang Developer** joins for backend API, database, WebSocket, or service work
+- **Flutter Engineer** joins for mobile state, UX, localization, or platform work
+- **Tech Lead** joins when security, performance, or quality risk warrants review
 
 **Task Generation** (`/speckit.tasks`)
 - Break design into independent, testable tasks
@@ -248,7 +253,7 @@ graph TD
 ## Cross-Agent Communication Patterns
 
 ### Asynchronous Communication (Primary)
-All agents can communicate asynchronously without explicit user prompting:
+Selected agents can communicate asynchronously when the current phase has a real integration point:
 
 **Example 1**: Backend API Design
 ```
@@ -394,7 +399,7 @@ All agents should reference this guide and related documents:
    - Team Leader unblocks cross-agent dependencies
 
 3. **When Uncertain**:
-   - Clarification Protocol: Ask Karim 5-7 focused questions
+   - Clarification Protocol: Send material questions to the Team Leader, who consolidates 5-7 focused questions total through `/speckit.clarify`
    - Don't guess; don't make assumptions
    - Get clarity before investing time in wrong direction
 

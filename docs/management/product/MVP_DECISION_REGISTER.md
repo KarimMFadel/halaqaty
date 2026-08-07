@@ -2,7 +2,7 @@
 
 > All frozen decisions for the Halaqaty MVP. Binding on all implementation. To change a decision, create an ADR in [`../../../engineering/architecture/adr/`](../../../engineering/architecture/adr/) and update this file with an entry in the Amendment Log.
 
-**Last updated:** 2026-04-26
+**Last updated:** 2026-08-07
 
 ---
 
@@ -127,5 +127,7 @@
 | 2026-07-31 | OQ-036 | Single creator-teacher; teacher-only supervisor management | Multiple teachers, optional backup supervisor, delegated manager role changes, self-change and final-teacher safeguards | Supports the approved circle-management workflow while preserving per-circle authorization safety. | ADR-010 |
 
 ---
+
+| 2026-08-07 | OQ-006 / F-002 | Circle deletion may permanently remove data | Circle retirement is archive-only; history is retained and hard deletion is prohibited | Prevents accidental loss of circle history and aligns REST DELETE with soft-state retirement. | ADR-011 |
 
 *Any change requires: (1) a new or updated ADR in `../../engineering/architecture/adr/`, (2) an entry in the Amendment Log above, (3) approval from Karim.*

@@ -24,6 +24,14 @@ func (r *Repository) FindCircleByInviteCode(ctx context.Context, inviteCode stri
 		&circle.ID,
 		&circle.Name,
 		&circle.InviteCode,
+		&circle.Description,
+		&circle.Rules,
+		&circle.MaxCapacity,
+		&circle.IsPrivate,
+		&circle.GenderRestriction,
+		&circle.Language,
+		&circle.GradingPolicy,
+		&circle.IsArchived,
 		&circle.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -33,6 +41,97 @@ func (r *Repository) FindCircleByInviteCode(ctx context.Context, inviteCode stri
 		return Circle{}, fmt.Errorf("find circle by invite code: %w", err)
 	}
 	return circle, nil
+}
+
+// FindCircleByID returns a circle by its stable identifier.
+func (r *Repository) FindCircleByID(ctx context.Context, circleID string) (Circle, error) {
+	return r.scanCircle(ctx, findCircleByIDQuery, circleID)
+}
+
+func (r *Repository) scanCircle(ctx context.Context, query string, args ...any) (Circle, error) {
+	var circle Circle
+	err := r.q.QueryRow(ctx, query, args...).Scan(&circle.ID, &circle.Name, &circle.TeacherID, &circle.InviteCode, &circle.Description, &circle.Rules, &circle.MaxCapacity, &circle.IsPrivate, &circle.GenderRestriction, &circle.Language, &circle.GradingPolicy, &circle.IsArchived, &circle.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Circle{}, ErrCircleNotFound
+	}
+	if err != nil {
+		return Circle{}, fmt.Errorf("find circle: %w", err)
+	}
+	return circle, nil
+}
+
+// ListPublicCircles returns only redacted active public circle projections.
+func (r *Repository) ListPublicCircles(ctx context.Context, query string, limit int) ([]PublicCircleSummary, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	rows, err := r.q.Query(ctx, listPublicCirclesQuery, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list public circles: %w", err)
+	}
+	defer rows.Close()
+	var result []PublicCircleSummary
+	for rows.Next() {
+		var circle PublicCircleSummary
+		if err := rows.Scan(&circle.ID, &circle.Name, &circle.Description, &circle.MaxCapacity, &circle.GenderRestriction, &circle.Language, &circle.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan public circle: %w", err)
+		}
+		result = append(result, circle)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate public circles: %w", err)
+	}
+	return result, nil
+}
+
+// UpdateCircle persists validated circle settings.
+func (r *Repository) UpdateCircle(ctx context.Context, circleID, name string, settings CircleSettings) (Circle, error) {
+	return r.scanCircle(ctx, updateCircleQuery, circleID, name, settings.Description, settings.Rules, settings.MaxCapacity, settings.IsPrivate, settings.GenderRestriction, settings.Language, settings.GradingPolicy)
+}
+
+// RefreshInviteCode atomically replaces the current invite code.
+func (r *Repository) RefreshInviteCode(ctx context.Context, circleID, inviteCode string) error {
+	if _, err := r.q.Exec(ctx, refreshInviteCodeQuery, circleID, inviteCode); err != nil {
+		return fmt.Errorf("refresh invite code: %w", err)
+	}
+	return nil
+}
+
+// RemoveMember removes only the active membership row and preserves circle history.
+func (r *Repository) RemoveMember(ctx context.Context, circleID, userID string) error {
+	if _, err := r.q.Exec(ctx, removeCircleMemberQuery, circleID, userID); err != nil {
+		return fmt.Errorf("remove circle member: %w", err)
+	}
+	return nil
+}
+
+// ArchiveCircle marks a circle retired without deleting any data.
+func (r *Repository) ArchiveCircle(ctx context.Context, circleID string) error {
+	if _, err := r.q.Exec(ctx, archiveCircleQuery, circleID); err != nil {
+		return fmt.Errorf("archive circle: %w", err)
+	}
+	return nil
+}
+
+// ListMembers returns the current membership projection.
+func (r *Repository) ListMembers(ctx context.Context, circleID string) ([]Member, error) {
+	rows, err := r.q.Query(ctx, listCircleMembersQuery, circleID)
+	if err != nil {
+		return nil, fmt.Errorf("list circle members: %w", err)
+	}
+	defer rows.Close()
+	var members []Member
+	for rows.Next() {
+		var member Member
+		if err := rows.Scan(&member.UserID, &member.Role); err != nil {
+			return nil, fmt.Errorf("scan circle member: %w", err)
+		}
+		members = append(members, member)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate circle members: %w", err)
+	}
+	return members, nil
 }
 
 // Repository is the PostgreSQL persistence boundary for circle RBAC data.
@@ -88,10 +187,19 @@ func (r *Repository) UsersExist(ctx context.Context, userIDs []string) (map[stri
 	return existing, nil
 }
 
+// LockUser serializes membership-limit checks for one user.
+func (r *Repository) LockUser(ctx context.Context, userID string) error {
+	var id string
+	if err := r.q.QueryRow(ctx, lockUserQuery, userID).Scan(&id); err != nil {
+		return fmt.Errorf("lock user: %w", err)
+	}
+	return nil
+}
+
 // InsertCircle creates one circle owned by ownerID.
-func (r *Repository) InsertCircle(ctx context.Context, name, ownerID, inviteCode string) (Circle, error) {
-	circle := Circle{Name: name, TeacherID: ownerID, InviteCode: inviteCode}
-	err := r.q.QueryRow(ctx, insertCircleQuery, name, ownerID, inviteCode).Scan(&circle.ID, &circle.CreatedAt)
+func (r *Repository) InsertCircle(ctx context.Context, name, ownerID, inviteCode string, settings CircleSettings) (Circle, error) {
+	circle := Circle{Name: name, TeacherID: ownerID, InviteCode: inviteCode, Description: settings.Description, Rules: settings.Rules, MaxCapacity: settings.MaxCapacity, IsPrivate: settings.IsPrivate, GenderRestriction: settings.GenderRestriction, Language: settings.Language, GradingPolicy: settings.GradingPolicy}
+	err := r.q.QueryRow(ctx, insertCircleQuery, name, ownerID, inviteCode, settings.Description, settings.Rules, settings.MaxCapacity, settings.IsPrivate, settings.GenderRestriction, settings.Language, settings.GradingPolicy).Scan(&circle.ID, &circle.CreatedAt)
 	if err != nil {
 		return Circle{}, fmt.Errorf("insert circle: %w", err)
 	}
@@ -135,6 +243,15 @@ func (r *Repository) LockMembers(ctx context.Context, circleID string) ([]Member
 		return nil, fmt.Errorf("iterate circle members: %w", err)
 	}
 	return members, nil
+}
+
+// CountActiveMemberships returns the user's active circle count.
+func (r *Repository) CountActiveMemberships(ctx context.Context, userID string) (int, error) {
+	var count int
+	if err := r.q.QueryRow(ctx, countActiveMembershipsQuery, userID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count active memberships: %w", err)
+	}
+	return count, nil
 }
 
 // UpdateMemberRole applies a validated role change to one membership.

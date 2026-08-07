@@ -127,7 +127,7 @@ Circles are the core organizational unit. A circle is a Quran memorization group
 - [ ] Circle privacy: **Public** (discoverable in explore/search) vs **Private** (invite-only)
 - [ ] Circle settings: language and gender specification (male/female/mixed/unspecified); this describes the circle's student audience and does not restrict the teacher's gender
 - [ ] Teacher can archive a circle (preserves all history, prevents new activity)
-- [ ] Teacher can delete a circle (with confirmation; permanently deletes all data)
+- [ ] Teacher can retire a circle by archiving it (with confirmation; history is retained and hard deletion is prohibited)
 - [ ] Circle member list shows all members with roles, visible to all members
 
 

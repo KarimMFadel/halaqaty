@@ -118,6 +118,12 @@ func writeServiceError(w http.ResponseWriter, err error) {
 		phttp.WriteError(w, httpconst.ErrorCodeNotFound, httpconst.ErrorMessageCircleMemberNotFound, http.StatusNotFound)
 	case errors.Is(err, ErrAlreadyMember):
 		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageCircleAlreadyMember, http.StatusConflict)
+	case errors.Is(err, ErrCircleArchived):
+		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageCircleArchived, http.StatusConflict)
+	case errors.Is(err, ErrCircleFull):
+		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageCircleFull, http.StatusConflict)
+	case errors.Is(err, ErrCircleLimit):
+		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageCircleLimit, http.StatusConflict)
 	case errors.Is(err, ErrSelfRoleChange):
 		phttp.WriteError(w, httpconst.ErrorCodeForbidden, httpconst.ErrorMessageSelfRoleChangeForbidden, http.StatusForbidden)
 	case errors.Is(err, ErrFinalTeacher):

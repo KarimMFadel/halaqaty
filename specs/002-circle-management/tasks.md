@@ -12,12 +12,12 @@
 
 **Purpose**: Resolve the checklist findings before implementation.
 
-- [ ] T001 [US0] Amend F-002 retirement wording and prohibit hard deletion in `docs/management/product/FEATURES.md`.
-- [ ] T002 [US0] Amend T-05 public/private circle behavior and invite-link wording in `docs/management/product/JOURNEY.md`.
-- [ ] T003 [US0] Record the circle-retirement decision and required amendment in `docs/engineering/architecture/adr/ADR-011-circle-retirement.md` and `docs/management/product/MVP_DECISION_REGISTER.md`.
-- [ ] T004 [US0] Align circle gender values `male|female|mixed|unspecified` with default `unspecified` across `docs/management/product/FEATURES.md`, `docs/engineering/architecture/ARCHITECTURE.md`, `docs/contracts/openapi.yaml`, and `specs/002-circle-management/contracts/circle-management.openapi.yaml`, without coupling them to teacher gender.
-- [ ] T005 [US0] Merge public discovery/direct join, redacted public summaries, invite refresh, 8-character invite-code validation, and archive-only deletion semantics into `docs/contracts/openapi.yaml`.
-- [ ] T006 [US0] Create and accept the audit persistence decision in `docs/engineering/architecture/adr/ADR-012-audit-logging-persistence.md`, then run the documentation checklist and OpenAPI lint for all Phase 0 files.
+- [X] T001 [US0] Amend F-002 retirement wording and prohibit hard deletion in `docs/management/product/FEATURES.md`.
+- [X] T002 [US0] Amend T-05 public/private circle behavior and invite-link wording in `docs/management/product/JOURNEY.md`.
+- [X] T003 [US0] Record the circle-retirement decision and required amendment in `docs/engineering/architecture/adr/ADR-011-circle-retirement.md` and `docs/management/product/MVP_DECISION_REGISTER.md`.
+- [X] T004 [US0] Align circle gender values `male|female|mixed|unspecified` with default `unspecified` across `docs/management/product/FEATURES.md`, `docs/engineering/architecture/ARCHITECTURE.md`, `docs/contracts/openapi.yaml`, and `specs/002-circle-management/contracts/circle-management.openapi.yaml`, without coupling them to teacher gender.
+- [X] T005 [US0] Merge public discovery/direct join, redacted public summaries, invite refresh, 8-character invite-code validation, and archive-only deletion semantics into `docs/contracts/openapi.yaml`.
+- [X] T006 [US0] Create and accept the audit persistence decision in `docs/engineering/architecture/adr/ADR-012-audit-logging-persistence.md`, then run the documentation checklist and OpenAPI lint for all Phase 0 files.
 
 **Checkpoint**: T001–T006 must pass before implementation tasks begin.
 
@@ -27,15 +27,15 @@
 
 **Purpose**: Add the smallest shared circle foundation required by all MVP stories.
 
-- [ ] T007 [P] [US0] Add the next paired PostgreSQL migration for F-002 circle fields, defaults, constraints, and indexes in `backend/migrations/000015_circle_management.up.sql` and `backend/migrations/000015_circle_management.down.sql`.
-- [ ] T008 [P] [US0] Add migration integration coverage for fresh apply, upgrade from `000014`, rollback, rerun safety, preserved rows, and no hard-delete objects in `backend/tests/integration/circle_management_migration_test.go`.
-- [ ] T009 [P] [US0] Define circle domain models and API DTOs in `backend/internal/circle/models.go`.
-- [ ] T010 [P] [US0] Define circle error codes and validation mappings using centralized constants in `backend/internal/platform/httpconst/circle_errors.go`.
-- [ ] T011 [US0] Define package-level SQL statements for circles, memberships, discovery, joins, invite refresh, roles, members, and archive in `backend/internal/circle/queries.go`.
-- [ ] T012 [US0] Implement circle repository methods using the SQL statements in `backend/internal/circle/repository.go`.
-- [ ] T013 [US0] Implement transactional circle policies, row locking, membership limits, capacity checks, final-teacher protection, and archive guards in `backend/internal/circle/service.go`.
-- [ ] T014 [P] [US0] Add circle audit-event names and payload builders in `backend/internal/platform/logging/audit_logger.go`.
-- [ ] T015 [P] [US0] Add shared circle response-safety tests proving private/member data and invite codes are omitted from public discovery in `backend/tests/contract/circle_response_safety_contract_test.go`.
+- [X] T007 [P] [US0] Add the next paired PostgreSQL migration for F-002 circle fields, defaults, constraints, and indexes in `backend/migrations/000015_circle_management.up.sql` and `backend/migrations/000015_circle_management.down.sql`.
+- [X] T008 [P] [US0] Add migration integration coverage for fresh apply, upgrade from `000014`, rollback, rerun safety, preserved rows, and no hard-delete objects in `backend/tests/integration/circle_management_migration_test.go`.
+- [X] T009 [P] [US0] Define circle domain models and API DTOs in `backend/internal/rbac/models.go` (existing circle ownership package).
+- [X] T010 [P] [US0] Define circle error codes and validation mappings using centralized constants in `backend/internal/platform/httpconst/error_codes.go` and `error_messages.go`.
+- [X] T011 [US0] Define package-level SQL statements for circles, memberships, discovery, joins, invite refresh, roles, members, and archive in the existing circle ownership package `backend/internal/rbac/queries.go`.
+- [X] T012 [US0] Implement circle repository methods using the SQL statements in the existing circle ownership package `backend/internal/rbac/repository.go`.
+- [X] T013 [US0] Implement transactional circle policies, row locking, membership limits, capacity checks, final-teacher protection, and archive guards in the existing circle ownership package `backend/internal/rbac/service.go`.
+- [X] T014 [P] [US0] Add circle audit-event names and payload builders in `backend/internal/platform/logging/audit_logger.go`.
+- [X] T015 [P] [US0] Add shared circle response-safety tests proving private/member data and invite codes are omitted from public discovery in `backend/tests/contract/circle_response_safety_contract_test.go`.
 
 ---
 

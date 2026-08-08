@@ -51,3 +51,9 @@
 
 - **Decision**: Add and accept `ADR-012-audit-logging-persistence.md` before implementing audit persistence. The ADR must decide the sink/table, schema, retention, sensitive-field redaction, transaction/failure behavior, indexing, and access policy.
 - **Rationale**: The plan requires durable security evidence, but the current architecture does not define a persistence mechanism.
+
+## Decision 10: Minimal registered-user lookup for initial roles
+
+- **Decision**: Keep an authenticated, rate-limited `GET /users/search?q=` endpoint for the create-circle user picker. Validate a trimmed 2–100-character query, return at most 20 matches, and expose only `id` and `display_name`.
+- **Rationale**: Initial teacher and backup-supervisor assignment requires a usable way to select existing registered users without exposing profile, contact, membership, or authentication data.
+- **Alternatives rejected**: Entering raw UUIDs in the mobile UI; returning full profile records; anonymous user search.

@@ -30,11 +30,12 @@ const (
 // actorRole/actorRoleErr feed the role middleware independently of the
 // membership data the service sees, mirroring the defense-in-depth split.
 type circleStoreStub struct {
-	users        map[string]bool
-	circles      map[string]rbac.Circle
-	members      map[string]map[string]string
-	actorRole    string
-	actorRoleErr bool
+	users         map[string]bool
+	circles       map[string]rbac.Circle
+	members       map[string]map[string]string
+	actorRole     string
+	actorRoleErr  bool
+	searchResults []rbac.UserSearchResult
 }
 
 func newCircleStoreStub() *circleStoreStub {
@@ -134,6 +135,9 @@ func (s *circleStoreStub) FindCircleByID(_ context.Context, circleID string) (rb
 func (s *circleStoreStub) ListPublicCircles(_ context.Context, _ string, _ int) ([]rbac.PublicCircleSummary, error) {
 	return nil, nil
 }
+func (s *circleStoreStub) SearchUsers(_ context.Context, _ string, _ int) ([]rbac.UserSearchResult, error) {
+	return s.searchResults, nil
+}
 func (s *circleStoreStub) UpdateCircle(_ context.Context, circleID, name string, settings rbac.CircleSettings) (rbac.Circle, error) {
 	circle, err := s.FindCircleByID(context.Background(), circleID)
 	if err != nil {
@@ -193,6 +197,17 @@ func buildJoinCircleRoute(store *circleStoreStub) http.Handler {
 	repo := &stubSessionRepo{sessionID: testSessionID, userID: testLocalUserID}
 	authMW := middleware.NewAuthMiddleware(&alwaysOKVerifier{}, auth.NewSessionService(30*24*time.Hour), repo)
 	return authMW.Require(http.HandlerFunc(handler.JoinCircle))
+}
+
+func buildUserSearchRoute(store *circleStoreStub, rateLimit *middleware.RateLimitMiddleware) http.Handler {
+	handler := rbac.NewHandler(rbac.NewService(store, nil))
+	repo := &stubSessionRepo{sessionID: testSessionID, userID: testLocalUserID}
+	authMW := middleware.NewAuthMiddleware(&alwaysOKVerifier{}, auth.NewSessionService(30*24*time.Hour), repo)
+	var next http.Handler = http.HandlerFunc(handler.SearchUsers)
+	if rateLimit != nil {
+		next = rateLimit.Limit(next)
+	}
+	return authMW.Require(next)
 }
 
 func TestCircleJoinContract(t *testing.T) {
@@ -311,6 +326,24 @@ func TestCircleCreateContract(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 			wantCode:   httpconst.ErrorCodeValidationFailed,
 			wantField:  httpconst.FieldTeacherUserIDs,
+		},
+		{
+			name:       "creator cannot be selected as teacher",
+			body:       `{"name":"Quran Circle","teacher_user_ids":["` + testLocalUserID + `"]}`,
+			authHeader: bearerValid,
+			sessionID:  testSessionID,
+			wantStatus: http.StatusBadRequest,
+			wantCode:   httpconst.ErrorCodeValidationFailed,
+			wantField:  httpconst.FieldTeacherUserIDs,
+		},
+		{
+			name:       "unknown backup supervisor returns 400",
+			body:       `{"name":"Quran Circle","backup_supervisor_user_id":"99999999-9999-9999-9999-999999999999"}`,
+			authHeader: bearerValid,
+			sessionID:  testSessionID,
+			wantStatus: http.StatusBadRequest,
+			wantCode:   httpconst.ErrorCodeValidationFailed,
+			wantField:  httpconst.FieldBackupSupervisor,
 		},
 		{
 			name:       "multiple teachers and backup supervisor return 201",

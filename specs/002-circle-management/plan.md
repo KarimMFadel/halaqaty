@@ -4,7 +4,7 @@
 
 ## Summary
 
-Extend the existing Feature 001 circle foundation into a complete Circle Management slice: transactional creation and role assignment, public discovery and joining, invite-link joining and rotation, member/role management, and archive retirement. Reuse Firebase/backend-session authentication, PostgreSQL `circle_members` authorization, existing REST conventions, and Flutter Riverpod patterns. No circle hard deletion is designed or implemented.
+Extend the existing Feature 001 circle foundation into a complete Circle Management slice: transactional creation and role assignment, authenticated registered-user lookup for initial assignees, public discovery and joining, invite-link joining and rotation, member/role management, and archive retirement. Reuse Firebase/backend-session authentication, PostgreSQL `circle_members` authorization, existing REST conventions, and Flutter Riverpod patterns. No circle hard deletion is designed or implemented.
 
 ## Technical Context
 
@@ -26,7 +26,7 @@ Extend the existing Feature 001 circle foundation into a complete Circle Managem
 - **Stack**: PASS — Go, Flutter, PostgreSQL, Firebase, and existing LiveKit boundary remain unchanged; LiveKit is out of scope.
 - **Identity and authorization**: PASS — Firebase verifies identity; backend sessions authenticate protected calls; `circle_members` owns per-circle authorization.
 - **Security**: PASS — server validation, role checks, rate limits, audit events, request IDs, safe error responses, and hard-delete prohibition are planned.
-- **Reliability**: PASS — transactions, row locks, uniqueness constraints, idempotency, timeouts, structured logs, and safe retry policy are planned.
+- **Reliability**: PASS — transactions, row locks, uniqueness constraints, archive/join idempotency, timeouts, structured logs, and safe retry policy are planned.
 - **Contract-first**: CONDITIONAL — feature contract is supplied; canonical OpenAPI and stale product/journey wording must be synchronized before implementation.
 
 ## Existing baseline
@@ -34,8 +34,8 @@ Extend the existing Feature 001 circle foundation into a complete Circle Managem
 - Reuse migrations `000013_create_circles` and `000014_circle_members_circle_fk`; do not edit applied migrations.
 - Add the next sequential migration for missing F-002 fields and constraints.
 - Reuse `backend/internal/middleware`, `backend/internal/rbac`, centralized HTTP constants, route constants, and package-level SQL query files.
-- Add `backend/internal/circle` (or the repository's established equivalent after checking current ownership) only if no existing circle package is present; keep one implementation and avoid speculative interfaces.
-- Add `mobile/lib/features/circles/` with Riverpod providers/notifiers and Dio client methods; reuse existing auth/session interceptors and UI primitives.
+- Keep circle backend ownership in the existing `backend/internal/rbac` package; do not create a parallel `backend/internal/circle` package.
+- Add `mobile/lib/features/circles/` with Riverpod providers/notifiers, models, and Dio client methods; reuse existing auth/session behavior and UI primitives.
 
 ## Phase 0 — Canonical alignment gate
 
@@ -62,6 +62,7 @@ Extend the existing Feature 001 circle foundation into a complete Circle Managem
 3. Return the standard `{ "error": { "code", "message", "fields?" } }` envelope and documented `400/401/403/404/409` responses.
 4. Enforce per-IP/user rate limits, request timeouts, request IDs, structured logs, and safe retry semantics at the existing platform boundaries.
 5. Synchronize feature and canonical OpenAPI contracts; validate operation IDs, references, response bodies, code pattern, archive semantics, and backward compatibility.
+6. Provide authenticated, rate-limited `GET /users/search?q=` lookup for initial-role selection; validate 2–100 characters, cap results at 20, and return only `id` and `display_name`.
 
 ## Phase 3 — Flutter circle experience
 

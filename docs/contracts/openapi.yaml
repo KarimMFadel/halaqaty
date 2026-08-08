@@ -35,6 +35,8 @@ tags:
     description: User registration, profile, and device management
   - name: Circles
     description: Circle (halaqah) CRUD and membership
+  - name: Users
+    description: Authenticated registered-user lookup
   - name: Sessions
     description: Live session management
   - name: Queue
@@ -276,6 +278,34 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /users/search:
+    get:
+      operationId: searchUsers
+      description: Search registered users by display name for circle-role selection.
+      tags: [Users]
+      summary: Search registered users
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 100
+      responses:
+        '200':
+          description: Matching registered users, limited to 20 results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSearchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
 
   /circles/{circleId}:
     parameters:
@@ -1435,6 +1465,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    TooManyRequests:
+      description: Request rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
 
   schemas:
 
@@ -1638,6 +1674,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/CircleSummary'
         - type: object
+          required: [invite_code, invite_link]
           properties:
             description:
               type: string
@@ -1647,6 +1684,9 @@ components:
               nullable: true
             invite_code:
               type: string
+            invite_link:
+              type: string
+              format: uri
             max_capacity:
               type: integer
             gender_restriction:
@@ -1678,6 +1718,26 @@ components:
         joined_at:
           type: string
           format: date-time
+
+    UserSearchResult:
+      type: object
+      required: [id, display_name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+
+    UserSearchResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/UserSearchResult'
 
     InviteResponse:
       type: object

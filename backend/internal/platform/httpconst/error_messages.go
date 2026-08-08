@@ -52,6 +52,7 @@ const (
 	ErrorMessageCircleArchived           = "circle is archived"
 	ErrorMessageCircleFull               = "circle has reached its maximum capacity"
 	ErrorMessageCircleLimit              = "user has reached the maximum of 5 circles"
+	ErrorMessageUserSearchQueryInvalid   = "q must be between 2 and 100 characters"
 
 	ErrorMessageFullNameRequired   = "full_name is required for first profile completion"
 	ErrorMessageFullNameInvalid    = "full_name must be between 2 and 150 characters"

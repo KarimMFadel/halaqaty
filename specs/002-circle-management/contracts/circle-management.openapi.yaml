@@ -9,6 +9,25 @@ security:
     SessionId: []
 
 paths:
+  /users/search:
+    get:
+      operationId: searchUsers
+      summary: Search registered users for initial circle-role assignment
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 100 }
+      responses:
+        '200':
+          description: Matching registered users, limited to 20 results
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserSearchResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
   /circles:
     get:
       operationId: listCircles
@@ -226,6 +245,20 @@ components:
       required: true
       schema: { type: string, format: uuid }
   schemas:
+    UserSearchResult:
+      type: object
+      required: [id, display_name]
+      properties:
+        id: { type: string, format: uuid }
+        display_name: { type: string }
+    UserSearchResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/UserSearchResult' }
     CreateCircleRequest:
       type: object
       required: [name]
@@ -259,13 +292,14 @@ components:
         role: { type: string, enum: [teacher, supervisor, student] }
     Circle:
       type: object
-      required: [id, name, invite_code, max_capacity, is_private, is_archived, my_role]
+      required: [id, name, invite_code, invite_link, max_capacity, is_private, gender_restriction, language, is_archived, created_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
         description: { type: string, nullable: true }
         rules: { type: string, nullable: true }
         invite_code: { type: string, pattern: '^HLQ-[A-HJ-NP-Z2-9]{4}$' }
+        invite_link: { type: string, format: uri }
         max_capacity: { type: integer }
         is_private: { type: boolean }
         gender_restriction: { type: string, enum: [male, female, mixed, unspecified] }
@@ -361,6 +395,11 @@ components:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     Conflict:
       description: Duplicate membership, full circle, or conflicting role state
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    TooManyRequests:
+      description: Request rate limit exceeded
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }

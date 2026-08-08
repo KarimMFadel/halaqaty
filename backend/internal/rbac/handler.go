@@ -45,6 +45,26 @@ func (h *Handler) CreateCircle(w http.ResponseWriter, r *http.Request) {
 	phttp.WriteJSON(w, http.StatusCreated, circle)
 }
 
+// SearchUsers handles GET /users/search.
+func (h *Handler) SearchUsers(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.service == nil {
+		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError,
+			httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		return
+	}
+	if _, ok := auth.CurrentPrincipal(r.Context()); !ok {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized,
+			httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	users, err := h.service.SearchUsers(r.Context(), r.URL.Query().Get(httpconst.FieldQuery))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusOK, UserSearchResponse{Data: users})
+}
+
 // JoinCircle handles POST /circles/join.
 func (h *Handler) JoinCircle(w http.ResponseWriter, r *http.Request) {
 	if h == nil || h.service == nil {

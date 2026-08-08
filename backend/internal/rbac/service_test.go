@@ -25,6 +25,8 @@ type stubStore struct {
 	members      map[string]map[string]string
 	nextID       int
 	insertErrors []error
+	searchQuery  string
+	searchLimit  int
 }
 
 func newStubStore() *stubStore {
@@ -138,6 +140,29 @@ func (s *stubStore) FindCircleByID(_ context.Context, circleID string) (Circle, 
 
 func (s *stubStore) ListPublicCircles(_ context.Context, _ string, _ int) ([]PublicCircleSummary, error) {
 	return nil, nil
+}
+
+func (s *stubStore) SearchUsers(_ context.Context, query string, limit int) ([]UserSearchResult, error) {
+	s.searchQuery = query
+	s.searchLimit = limit
+	return nil, nil
+}
+
+func TestSearchUsers_EscapesLikeWildcards(t *testing.T) {
+	store := newStubStore()
+	users, err := NewService(store, nil).SearchUsers(context.Background(), `a%_\b`)
+	if err != nil {
+		t.Fatalf("SearchUsers: %v", err)
+	}
+	if users == nil {
+		t.Fatal("empty search results must encode as an empty array")
+	}
+	if got, want := store.searchQuery, `a\%\_\\b`; got != want {
+		t.Fatalf("search query: got %q want %q", got, want)
+	}
+	if store.searchLimit != userSearchLimit {
+		t.Fatalf("search limit: got %d want %d", store.searchLimit, userSearchLimit)
+	}
 }
 func (s *stubStore) UpdateCircle(_ context.Context, circleID, name string, settings CircleSettings) (Circle, error) {
 	circle, ok := s.circles[circleID]

@@ -22,7 +22,7 @@
 
 ## المستندات العربية (مجمعة في مكان واحد)
 
-> جميع الملفات العربية موجودة تحت `docs/arabic/`.
+> جميع الملفات العربية موجودة تحت `docs/management/arabic/`.
 
 | المستند | الوصف |
 |---|---|
@@ -36,18 +36,18 @@
 
 | المستند | الوصف |
 |---|---|
-| [ARCHITECTURE.md](../ARCHITECTURE.md) | المعمارية التقنية، التدفقات، الـ APIs |
-| [DEPLOYMENT.md](../DEPLOYMENT.md) | خطة النشر والتشغيل والتكلفة |
+| [ARCHITECTURE.md](../../engineering/architecture/ARCHITECTURE.md) | المعمارية التقنية، التدفقات، الـ APIs |
+| [DEPLOYMENT.md](../../engineering/deployment/DEPLOYMENT.md) | خطة النشر والتشغيل والتكلفة |
 
 ---
 
 ## وثيقة المنتج الأساسية
 
 - [PRD_AR.md](PRD_AR.md) — النسخة العربية المتزامنة
-- [PRD.md](../PRD.md) — النسخة الإنجليزية المرجعية
+- [PRD.md](../product/PRD.md) — النسخة الإنجليزية المرجعية
 
 ---
 
 ## الرخصة
 
-هذا المشروع مرخص بموجب MIT — راجع [LICENSE](../../LICENSE).
+هذا المشروع مرخص بموجب MIT — راجع [LICENSE](../../../LICENSE).

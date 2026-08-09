@@ -76,7 +76,7 @@ Secure, multi-method user registration and authentication system with role-based
 
 #### User Stories
 
-- As a new user, I can register with email/password, Google, Apple, or phone OTP so I can start using Halaqaty quickly
+- As a new user, I can register with email/password, Google, or Apple so I can start using Halaqaty quickly; phone may be added as supplementary verification
 - As a registered user, I can log in securely from any device
 - As a user, I can set and update my profile (name, avatar, bio)
 - As a teacher, I can optionally complete verification to build trust with students
@@ -86,7 +86,7 @@ Secure, multi-method user registration and authentication system with role-based
 - [ ] Email/password registration with email verification link
 - [ ] Google Sign-In (OAuth 2.0)
 - [ ] Apple Sign-In (required for iOS App Store policy compliance)
-- [ ] Phone OTP verification (WhatsApp-style; critical for Arabic-speaking markets with lower email usage)
+- [ ] Optional phone OTP verification for an existing email/social account; phone-only accounts are prohibited by OQ-001
 - [ ] Firebase Auth registration/sign-in and ID-token refresh in the Flutter client; backend-validated per-device sessions with 30-day inactivity expiry and current-device logout
 - [ ] User profile: display name, avatar (stored in MinIO), bio (optional), preferred language
 - [ ] Password reset via email
@@ -873,6 +873,6 @@ The [Competitor Analysis](../business/QURAN_MEMORIZATION_COMPETITOR_ANALYSIS.md)
 
 ---
 
-*This document is maintained alongside [arabic/FEATURES_AR.md](arabic/FEATURES_AR.md). Any business-facing changes here must be mirrored there.*
+*This document is maintained alongside [arabic/FEATURES_AR.md](../arabic/FEATURES_AR.md). Any business-facing changes here must be mirrored there.*
 
 *See [SYNC_GUIDE.md](../arabic/SYNC_GUIDE.md) for the documentation sync policy.*

@@ -2,7 +2,7 @@
 
 > **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
 
-**Related Documents:** [product/PRD.md](../product/PRD.md) · [arabic/PLAN_AR.md](../arabic/PLAN_AR.md) · [product/FEATURES.md](../product/FEATURES.md) · [../engineering/architecture/ARCHITECTURE.md](../engineering/architecture/ARCHITECTURE.md) · [../engineering/deployment/DEPLOYMENT.md](../engineering/deployment/DEPLOYMENT.md) · [../../DEVELOPMENT.md](../../DEVELOPMENT.md) · [../engineering/collaboration/AGENT_COLLABORATION_GUIDE.md](../engineering/collaboration/AGENT_COLLABORATION_GUIDE.md)
+**Related Documents:** [product/PRD.md](../product/PRD.md) · [arabic/PLAN_AR.md](../arabic/PLAN_AR.md) · [product/FEATURES.md](../product/FEATURES.md) · [engineering/architecture/ARCHITECTURE.md](../../engineering/architecture/ARCHITECTURE.md) · [engineering/deployment/DEPLOYMENT.md](../../engineering/deployment/DEPLOYMENT.md) · [DEVELOPMENT.md](../../../DEVELOPMENT.md) · [engineering/collaboration/AGENT_COLLABORATION_GUIDE.md](../../engineering/collaboration/AGENT_COLLABORATION_GUIDE.md)
 
 ---
 
@@ -40,7 +40,7 @@
 
 ## 4. Technical Architecture Overview
 
-See [ARCHITECTURE.md](../engineering/architecture/ARCHITECTURE.md) for the complete technical specification.
+See [ARCHITECTURE.md](../../engineering/architecture/ARCHITECTURE.md) for the complete technical specification.
 
 ### 4.1 Communication Protocols Summary
 
@@ -126,7 +126,7 @@ See [ARCHITECTURE.md](../engineering/architecture/ARCHITECTURE.md) for the compl
 - [ ] Teacher notes per student per session
 - [ ] Session history view: past sessions with grades per student
 - [ ] `memorization_progress` auto-creation from completed queue entries (F-007 AC-001–AC-003)
-- [ ] Grade enum migration to 5-grade scale (F-007 AC-005)
+- [ ] Introduce the canonical 5-grade constraints in the F-003/F-007 migrations (ADR-013; F-007 AC-005)
 
 > **Scope note:** F-007 (Enhanced Student Progress Tracking) is now **🟡 Approved** for Phase 3. Full delivery (Quran Map, analytics, teacher dashboard) is planned across Month 7–9. See [FEATURES.md F-007](../../management/product/FEATURES.md#f-007-enhanced-student-progress-tracking) and [F-007-SPEC.md](../../engineering/design/F-007-SPEC.md) for the approved spec. PDF export is F-011 (P2, Month 10).
 
@@ -170,7 +170,7 @@ If in doubt, extend the timeline — do not cut quality gates.
 
 ---
 
-*This document is the source of truth for project planning. Business-facing updates should be reflected in [arabic/PLAN_AR.md](arabic/PLAN_AR.md).*
+*This document is the source of truth for project planning. Business-facing updates should be reflected in [arabic/PLAN_AR.md](../arabic/PLAN_AR.md).*
 
 *See [SYNC_GUIDE.md](../arabic/SYNC_GUIDE.md) for the documentation synchronization policy.*
 

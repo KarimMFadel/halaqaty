@@ -53,7 +53,7 @@
 | ID | Category | Enhancement | Impact | Status | Resolved By | Resolved On |
 |----|----------|-------------|--------|--------|-------------|-------------|
 | E-06 | Docs | Quran data source not documented — `ARCHITECTURE.md` defines a `quran_surahs` table but never explains where canonical Surah/Ayah data originates (static JSON seed, third-party API, bundled asset, etc.) | Implementing agents will make incompatible assumptions; data consistency across environments is undefined | ⬜ Pending | — | — |
-| E-07 | Docs | Rate limiting not documented in `ARCHITECTURE.md §6` Security section — the constitution §IV.8 mandates rate limits (per-IP, per-user, WebSocket 30 msg/min) but these are absent from the architecture document | Implementing agents may omit rate limiting middleware entirely; referenced in constitution but not actionable in code contracts | ⬜ Pending | — | — |
+| E-07 | Docs | Rate limiting was missing from the architecture security section | `ARCHITECTURE.md §6.4` now defines REST, WebSocket, message, and upload rate-limit policies | ✅ Done | Codex | 2026-08-09 |
 | E-08 | Product | No offline / low-bandwidth strategy documented — the primary user base (Middle East, Africa, South Asia) frequently operates on unstable mobile connections | No graceful degradation means a bad connection silently breaks sessions; no guidance for Flutter caching, retry logic, or WebSocket reconnection backoff | ⬜ Pending | — | — |
 | E-09 | Planning | Capacity plan missing — the plan review scored "Roles & Responsibilities" B+ because this gap remained; a solo developer shipping 8 features across 12 months needs explicit monthly hour-budget or per-sprint velocity targets | Without a capacity plan, the 15% buffer warning in `PROJECT_PLAN.md §8` has no actionable trigger; risk of silent timeline slippage | ⬜ Pending | — | — |
 | E-10 | Docs | `PRD.md` Owner field lists `"GPT-5.3-Codex acting as Project Manager"` — a model name is not an appropriate owner for a living product document | Confuses contributors about accountability; model versions change; a person or role name (e.g. "Karim Fadel — Product Owner") is required | ⬜ Pending | — | — |
@@ -74,8 +74,8 @@
 
 | ID | Category | Enhancement | Impact | Status | Resolved By | Resolved On |
 |----|----------|-------------|--------|--------|-------------|-------------|
-| E-11 | Spec-Kit | `specs/001-auth` is incomplete — only `spec.md` and a checklist exist; `plan.md` and `tasks.md` (Spec-Kit phases 4 and 5) have not been generated | Implementation agents cannot start Sprint 1 without the plan and tasks artifacts; the 7-phase pipeline is stalled at phase 3 | ⬜ Pending | — | — |
-| E-12 | Docs | Three placeholder-only directories exist with stub READMEs and no content: `docs/engineering/system-design/`, `docs/engineering/api-docs/`, `docs/engineering/guides/` | Sparse documentation tree signals incomplete planning to contributors and agents; stubs create false impression of coverage | ⬜ Pending | — | — |
+| E-11 | Spec-Kit | Feature 001 lacked `plan.md` and `tasks.md` | The full `specs/001-auth-roles-profile/` artifact set now exists, including plan, tasks, contracts, quickstart, and validation report | ✅ Done | Codex | 2026-08-09 |
+| E-12 | Docs | Engineering system-design, API-docs, and guides directories contained placeholder READMEs | All three READMEs now contain substantive contract-anchored guidance and clearly label proposals | ✅ Done | Codex | 2026-08-09 |
 | E-13 | Docs | No `CHANGELOG.md` — no history of documentation or planning changes beyond git blame | Once implementation begins and releases are cut, the absence of a changelog makes it hard to communicate changes to pilot users or contributors | ⬜ Pending | — | — |
 | E-14 | Docs | Arabic README (`docs/management/arabic/README_AR.md`) is not linked from the main `README.md` top section | Arabic-speaking contributors or teachers landing on the repo see no indication of Arabic documentation; discoverability is zero | ⬜ Pending | — | — |
 | E-15 | Docs | `TESTING_STRATEGY.md` exists in `docs/engineering/development/` but is not referenced or linked from `DEVELOPMENT.md` | Implementing agents and contributors following the developer guide will miss the testing strategy entirely; test patterns will be inconsistent | ⬜ Pending | — | — |
@@ -104,9 +104,9 @@
 | Priority | Total | ✅ Done | 🔄 In Progress | ⬜ Pending |
 |----------|-------|---------|----------------|-----------|
 | P1 — Before Sprint 1 | 5 | **5** | 0 | 0 |
-| P2 — Before Beta | 13 | 0 | 0 | **13** |
-| P3 — Nice to Have | 22 | 0 | 0 | **22** |
-| **Total** | **40** | **5** | **0** | **35** |
+| P2 — Before Beta | 13 | **1** | 0 | **12** |
+| P3 — Nice to Have | 22 | **2** | 0 | **20** |
+| **Total** | **40** | **8** | **0** | **32** |
 
 > **2026-06-30 update:** Grade enum conflict (E-19 partial) resolved. F-007 Enhanced Progress Tracking approved and specced. `updated_at` on `memorization_progress` added (E-21 partial). Pagination strategy applied to all 7 new Progress endpoints (E-22 partial).
 
@@ -124,3 +124,5 @@
 | 2026-06-30 | E-19 (partial) | Grade enum conflict resolved — 4-grade vs 6-grade mismatch across ARCHITECTURE.md and FEATURES.md fixed | Claude Sonnet 4.6 | F-003/F-007 grade scale unified to 5-grade canonical: `excellent/good/acceptable/needs_review/repeat`. Updated ARCHITECTURE.md §4.0, FEATURES.md F-003, openapi.yaml GradeRequest + QueueEntry, ws_events.md. |
 | 2026-06-30 | E-21 (partial) | Added `updated_at` to `memorization_progress` as part of F-007 spec | Claude Sonnet 4.6 | Migration 0008 adds `updated_at TIMESTAMPTZ` to `memorization_progress`. |
 | 2026-06-30 | E-19, E-22 (partial) | F-007 Enhanced Student Progress Tracking approved and fully specced | Claude Sonnet 4.6 | F-007 upgraded from Proposed → Approved. New file `F-007-SPEC.md` created. 7 new Progress API endpoints added to `openapi.yaml` with full schema. 16 new OpenAPI schemas. DB: 2 new tables (`quran_divisions`), 1 materialized view (`mv_student_surah_status`), 2 views, 7 indexes. 10 decisions locked (OQ-027 to OQ-034, GRADE-ENUM, CROSS-CIRCLE). |
+| 2026-08-09 | E-11 | Resolved stale Spec-Kit artifact gap | Codex | Verified Feature 001 has `spec.md`, `plan.md`, `tasks.md`, research, data model, quickstart, contract, checklist, and validation report. |
+| 2026-08-09 | E-07, E-12 | Closed stale documentation gaps | Codex | Verified architecture rate-limit policy and substantive system-design, API-docs, and guides content. |

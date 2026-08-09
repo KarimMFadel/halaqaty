@@ -28,8 +28,12 @@ The `adr/` subdirectory records the key architectural decisions made for Halaqat
 | [ADR-006](adr/ADR-006-db-migrations.md) | Database Migration Tool — golang-migrate | Accepted | 2026-04-26 |
 | [ADR-007](adr/ADR-007-monorepo-structure.md) | Monorepo Structure and CI Strategy | Accepted | 2026-04-26 |
 | [ADR-008](adr/ADR-008-webrtc-solution.md) | WebRTC Solution for Live Audio Sessions — LiveKit | Accepted | 2026-07-25 |
-| [ADR-009](adr/ADR-009-firebase-device-sessions.md) | Firebase Identity and Backend Device Sessions | Superseded by ADR-010 | 2026-07-31 |
+| [ADR-009](adr/ADR-009-firebase-device-sessions.md) | Firebase Identity and Backend Device Sessions | Accepted | 2026-07-31 |
 | [ADR-010](adr/ADR-010-circle-role-management.md) | Multi-Teacher Circle Role Management | Accepted | 2026-07-31 |
+| [ADR-011](adr/ADR-011-circle-retirement.md) | Circle Retirement Uses Archive-Only Semantics | Accepted | 2026-08-07 |
+| [ADR-012](adr/ADR-012-audit-logging-persistence.md) | Circle Audit Events Use Structured Application Logs | Accepted | 2026-08-07 |
+| [ADR-013](adr/ADR-013-recitation-grade-scale.md) | Canonical Five-Grade Recitation Scale | Accepted | 2026-08-09 |
+| [ADR-014](adr/ADR-014-mvp-deployment.md) | Single-Server Docker Compose Deployment for MVP | Accepted | 2026-08-09 |
 
 ---
 

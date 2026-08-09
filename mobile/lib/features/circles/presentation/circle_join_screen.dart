@@ -25,67 +25,74 @@ class _CircleJoinScreenState extends ConsumerState<CircleJoinScreen> {
     final rtl = Directionality.of(context) == TextDirection.rtl;
     return Scaffold(
       appBar: AppBar(title: Text(rtl ? 'الانضمام إلى حلقة' : 'Join a circle')),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              Text(
-                rtl
-                    ? 'أدخل رمز الدعوة أو الرابط الذي شاركه معك المعلّم.'
-                    : 'Enter the invite code or link shared by your teacher.',
-              ),
-              const SizedBox(height: 16),
-              Semantics(
-                textField: true,
-                label: rtl ? 'رمز أو رابط الدعوة' : 'Invite code or link',
-                child: TextFormField(
-                  key: const Key('circleInviteField'),
-                  controller: _invite,
-                  textCapitalization: TextCapitalization.characters,
-                  autocorrect: false,
-                  decoration: InputDecoration(
-                    labelText: rtl ? 'رابط الدعوة' : 'Invite link',
-                    hintText: 'HLQ-7X2K',
-                  ),
-                  validator: (value) => ref
-                              .read(circleDiscoveryControllerProvider.notifier)
-                              .normalizeInvite(value ?? '') ==
-                          null
-                      ? (rtl
-                          ? 'رابط الدعوة غير صالح'
-                          : 'The invite link is invalid')
-                      : null,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                key: const Key('circleInviteSubmitButton'),
-                onPressed: state.joiningCircleId == null ? _confirmJoin : null,
-                child: state.joiningCircleId == null
-                    ? Text(rtl ? 'متابعة' : 'Continue')
-                    : const SizedBox.square(
-                        dimension: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-              ),
-              if (state.failure case final failure?)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      circleFailureText(failure, rtl),
-                      key: const Key('circleJoinError'),
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+      body: SafeArea(child: _inviteForm(state, rtl)),
+    );
+  }
+
+  Widget _inviteForm(CircleDiscoveryState state, bool rtl) {
+    return Form(
+      key: _formKey,
+      child: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          Text(rtl
+              ? 'أدخل رمز الدعوة أو الرابط الذي شاركه معك المعلّم.'
+              : 'Enter the invite code or link shared by your teacher.'),
+          const SizedBox(height: 16),
+          _inviteField(rtl),
+          const SizedBox(height: 16),
+          _submitButton(state, rtl),
+          if (state.failure case final failure?) _error(failure, rtl),
+        ],
+      ),
+    );
+  }
+
+  Widget _inviteField(bool rtl) {
+    return Semantics(
+      textField: true,
+      label: rtl ? 'رمز أو رابط الدعوة' : 'Invite code or link',
+      child: TextFormField(
+        key: const Key('circleInviteField'),
+        controller: _invite,
+        textCapitalization: TextCapitalization.characters,
+        autocorrect: false,
+        decoration: InputDecoration(
+          labelText: rtl ? 'رابط الدعوة' : 'Invite link',
+          hintText: 'HLQ-7X2K',
+        ),
+        validator: (value) => ref
+                    .read(circleDiscoveryControllerProvider.notifier)
+                    .normalizeInvite(value ?? '') ==
+                null
+            ? (rtl ? 'رابط الدعوة غير صالح' : 'The invite link is invalid')
+            : null,
+      ),
+    );
+  }
+
+  Widget _submitButton(CircleDiscoveryState state, bool rtl) {
+    return ElevatedButton(
+      key: const Key('circleInviteSubmitButton'),
+      onPressed: state.joiningCircleId == null ? _confirmJoin : null,
+      child: state.joiningCircleId == null
+          ? Text(rtl ? 'متابعة' : 'Continue')
+          : const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+    );
+  }
+
+  Widget _error(CircleJoinFailure failure, bool rtl) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Semantics(
+        liveRegion: true,
+        child: Text(
+          circleFailureText(failure, rtl),
+          key: const Key('circleJoinError'),
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
       ),
     );

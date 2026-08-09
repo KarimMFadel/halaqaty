@@ -16,11 +16,12 @@ import (
 )
 
 const (
-	circleNameMinLen = 2
-	circleNameMaxLen = 100
-	userSearchMinLen = 2
-	userSearchMaxLen = 100
-	userSearchLimit  = 20
+	circleNameMinLen     = 2
+	circleNameMaxLen     = 100
+	userSearchMinLen     = 2
+	userSearchMaxLen     = 100
+	userSearchLimit      = 20
+	publicCirclePageSize = 20
 	// inviteCodeAlphabet excludes visually ambiguous characters; 32 symbols
 	// divide 256 exactly, so byte-to-symbol mapping stays uniform.
 	inviteCodeAlphabet       = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -45,6 +46,7 @@ var (
 	ErrCircleArchived = errors.New("circle is archived")
 	ErrCircleFull     = errors.New("circle is full")
 	ErrCircleLimit    = errors.New("user has reached the circle limit")
+	ErrCirclePrivate  = errors.New("circle is private")
 )
 
 // ValidationError carries field-level circle validation failures.
@@ -66,7 +68,8 @@ type Store interface {
 	InsertMember(ctx context.Context, circleID, userID, role string) error
 	FindCircleByInviteCode(ctx context.Context, inviteCode string) (Circle, error)
 	FindCircleByID(ctx context.Context, circleID string) (Circle, error)
-	ListPublicCircles(ctx context.Context, query string, limit int) ([]PublicCircleSummary, error)
+	FindCircleByIDForUpdate(ctx context.Context, circleID string) (Circle, error)
+	ListPublicCircles(ctx context.Context, query, cursor string, limit int) ([]PublicCircleSummary, error)
 	UpdateCircle(ctx context.Context, circleID, name string, settings CircleSettings) (Circle, error)
 	RefreshInviteCode(ctx context.Context, circleID, inviteCode string) error
 	RemoveMember(ctx context.Context, circleID, userID string) error
@@ -86,9 +89,32 @@ func (s *Service) JoinCircle(ctx context.Context, userID, inviteCode string) (Ci
 		return CircleResponse{}, &ValidationError{Fields: map[string]string{httpconst.FieldInviteCode: httpconst.ErrorMessageInviteCodeInvalid}}
 	}
 
+	return s.joinCircle(ctx, userID, func(tx Store) (Circle, error) {
+		return tx.FindCircleByInviteCode(ctx, inviteCode)
+	})
+}
+
+// JoinPublicCircle adds the authenticated user as a student of an active public circle.
+func (s *Service) JoinPublicCircle(ctx context.Context, userID, circleID string) (CircleResponse, error) {
+	if !isUUID(circleID) {
+		return CircleResponse{}, &ValidationError{Fields: map[string]string{httpconst.FieldCircleID: httpconst.ErrorMessageCircleIDInvalid}}
+	}
+	return s.joinCircle(ctx, userID, func(tx Store) (Circle, error) {
+		circle, err := tx.FindCircleByIDForUpdate(ctx, circleID)
+		if err != nil {
+			return Circle{}, err
+		}
+		if circle.IsPrivate {
+			return Circle{}, ErrCirclePrivate
+		}
+		return circle, nil
+	})
+}
+
+func (s *Service) joinCircle(ctx context.Context, userID string, find func(Store) (Circle, error)) (CircleResponse, error) {
 	var circle Circle
 	err := s.store.WithinTransaction(ctx, func(tx Store) error {
-		found, err := tx.FindCircleByInviteCode(ctx, inviteCode)
+		found, err := find(tx)
 		if err != nil {
 			return err
 		}
@@ -130,6 +156,10 @@ func (s *Service) JoinCircle(ctx context.Context, userID, inviteCode string) (Ci
 	}
 
 	s.audit.Log(ctx, logging.CircleJoinEvent(userID, circle.ID))
+	return circleResponse(circle), nil
+}
+
+func circleResponse(circle Circle) CircleResponse {
 	return CircleResponse{
 		ID: circle.ID, Name: circle.Name, InviteCode: circle.InviteCode,
 		InviteLink:  "https://halaqaty.app/join/" + circle.InviteCode,
@@ -137,7 +167,7 @@ func (s *Service) JoinCircle(ctx context.Context, userID, inviteCode string) (Ci
 		IsPrivate: circle.IsPrivate, GenderRestriction: circle.GenderRestriction,
 		Language: circle.Language, IsArchived: circle.IsArchived, CreatedAt: circle.CreatedAt,
 		GradingPolicy: circle.GradingPolicy,
-	}, nil
+	}
 }
 
 // AuditLogger records security-relevant circle events.
@@ -181,6 +211,34 @@ func (s *Service) SearchUsers(ctx context.Context, query string) ([]UserSearchRe
 		users = []UserSearchResult{}
 	}
 	return users, nil
+}
+
+// DiscoverPublicCircles returns one redacted public-circle page.
+func (s *Service) DiscoverPublicCircles(ctx context.Context, query, cursor string) (PublicCircleListResponse, error) {
+	query = strings.TrimSpace(query)
+	if utf8.RuneCountInString(query) > userSearchMaxLen {
+		return PublicCircleListResponse{}, &ValidationError{Fields: map[string]string{httpconst.FieldDiscoverQuery: httpconst.ErrorMessageDiscoverQueryInvalid}}
+	}
+	query = strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(query)
+	cursor = strings.TrimSpace(cursor)
+	if cursor != "" && !isUUID(cursor) {
+		return PublicCircleListResponse{}, &ValidationError{Fields: map[string]string{httpconst.FieldCursor: httpconst.ErrorMessageCursorInvalid}}
+	}
+
+	circles, err := s.store.ListPublicCircles(ctx, query, cursor, publicCirclePageSize+1)
+	if err != nil {
+		return PublicCircleListResponse{}, fmt.Errorf("discover public circles: %w", err)
+	}
+	response := PublicCircleListResponse{Data: circles}
+	if len(circles) > publicCirclePageSize {
+		response.Data = circles[:publicCirclePageSize]
+		nextCursor := response.Data[len(response.Data)-1].ID
+		response.NextCursor = &nextCursor
+	}
+	if response.Data == nil {
+		response.Data = []PublicCircleSummary{}
+	}
+	return response, nil
 }
 
 // CreateCircle creates a circle and its initial memberships in one transaction.

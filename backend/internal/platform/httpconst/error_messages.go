@@ -53,6 +53,10 @@ const (
 	ErrorMessageCircleFull               = "circle has reached its maximum capacity"
 	ErrorMessageCircleLimit              = "user has reached the maximum of 5 circles"
 	ErrorMessageUserSearchQueryInvalid   = "q must be between 2 and 100 characters"
+	ErrorMessageCirclePrivate            = "circle is private"
+	ErrorMessageCircleIDInvalid          = "circle_id must be a valid UUID"
+	ErrorMessageDiscoverQueryInvalid     = "query must be at most 100 characters"
+	ErrorMessageCursorInvalid            = "cursor must be a valid UUID"
 
 	ErrorMessageFullNameRequired   = "full_name is required for first profile completion"
 	ErrorMessageFullNameInvalid    = "full_name must be between 2 and 150 characters"

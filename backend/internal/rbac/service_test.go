@@ -138,7 +138,11 @@ func (s *stubStore) FindCircleByID(_ context.Context, circleID string) (Circle, 
 	return circle, nil
 }
 
-func (s *stubStore) ListPublicCircles(_ context.Context, _ string, _ int) ([]PublicCircleSummary, error) {
+func (s *stubStore) FindCircleByIDForUpdate(ctx context.Context, circleID string) (Circle, error) {
+	return s.FindCircleByID(ctx, circleID)
+}
+
+func (s *stubStore) ListPublicCircles(_ context.Context, _, _ string, _ int) ([]PublicCircleSummary, error) {
 	return nil, nil
 }
 

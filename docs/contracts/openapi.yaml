@@ -381,12 +381,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Circle'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           description: Circle is private, full, archived, or already joined
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
 
   /circles/discover:
     get:
@@ -420,8 +428,12 @@ paths:
                   next_cursor:
                     type: string
                     nullable: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
 
   /circles/{circleId}/members:
     parameters:
@@ -538,7 +550,13 @@ paths:
         '404':
           description: Invite code not found or expired
         '409':
-          description: User is already a member
+          description: Circle is full or archived, the user is already a member, or the five-circle limit is reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
 
   /circles/{circleId}/invite-code/refresh:
     parameters:

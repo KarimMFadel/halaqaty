@@ -91,6 +91,44 @@ func (h *Handler) JoinCircle(w http.ResponseWriter, r *http.Request) {
 	phttp.WriteJSON(w, http.StatusOK, circle)
 }
 
+// JoinPublicCircle handles POST /circles/{circleId}/join.
+func (h *Handler) JoinPublicCircle(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.service == nil {
+		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		return
+	}
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	circle, err := h.service.JoinPublicCircle(r.Context(), principal.UserID, r.PathValue("circleId"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusCreated, circle)
+}
+
+// DiscoverPublicCircles handles GET /circles/discover.
+func (h *Handler) DiscoverPublicCircles(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.service == nil {
+		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		return
+	}
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	result, err := h.service.DiscoverPublicCircles(r.Context(), r.URL.Query().Get(httpconst.FieldDiscoverQuery), r.URL.Query().Get(httpconst.FieldCursor))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusOK, result)
+}
+
 // AssignRole handles PUT /circles/{circleId}/members/{userId}/role.
 func (h *Handler) AssignRole(w http.ResponseWriter, r *http.Request) {
 	if h == nil || h.service == nil {
@@ -140,6 +178,8 @@ func writeServiceError(w http.ResponseWriter, err error) {
 		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageCircleAlreadyMember, http.StatusConflict)
 	case errors.Is(err, ErrCircleArchived):
 		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageCircleArchived, http.StatusConflict)
+	case errors.Is(err, ErrCirclePrivate):
+		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageCirclePrivate, http.StatusConflict)
 	case errors.Is(err, ErrCircleFull):
 		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageCircleFull, http.StatusConflict)
 	case errors.Is(err, ErrCircleLimit):

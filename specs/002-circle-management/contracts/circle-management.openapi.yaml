@@ -74,7 +74,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PublicCircleListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /circles/{circleId}:
     parameters:
@@ -129,13 +131,15 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Circle' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /circles/join:
     post:
-      operationId: joinCircleByInvite
+      operationId: joinCircle
       summary: Join a circle using its current invite code
       requestBody:
         required: true
@@ -150,8 +154,8 @@ paths:
                   pattern: '^HLQ-[A-HJ-NP-Z2-9]{4}$'
                   example: HLQ-7X2K
       responses:
-        '201':
-          description: Student membership created
+        '200':
+          description: Joined the circle
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Circle' }
@@ -159,6 +163,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /circles/{circleId}/invite-code/refresh:
     parameters:
@@ -310,18 +315,14 @@ components:
         created_at: { type: string, format: date-time }
     CircleSummary:
       type: object
-      required: [id, name, max_capacity, is_private, is_archived, member_count]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
         description: { type: string, nullable: true }
         max_capacity: { type: integer }
-        is_private: { type: boolean }
         gender_restriction: { type: string, enum: [male, female, mixed, unspecified] }
         language: { type: string }
-        is_archived: { type: boolean }
-        member_count: { type: integer, minimum: 0 }
-        my_role: { type: string, enum: [teacher, supervisor, student], nullable: true }
+        created_at: { type: string, format: date-time }
     PublicCircleListResponse:
       type: object
       required: [data]

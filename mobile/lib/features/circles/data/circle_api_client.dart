@@ -94,6 +94,53 @@ class CircleResponse {
         language: json['language'] as String? ?? 'ar',
         createdAt: DateTime.parse(json['created_at'] as String),
       );
+
+  CircleSummary toSummary() => CircleSummary(
+        id: id,
+        name: name,
+        description: description,
+        maxCapacity: maxCapacity,
+        genderRestriction: genderRestriction,
+        language: language,
+        createdAt: createdAt,
+      );
+}
+
+class CircleSummary {
+  const CircleSummary({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.maxCapacity,
+    required this.genderRestriction,
+    required this.language,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String name;
+  final String? description;
+  final int maxCapacity;
+  final String genderRestriction;
+  final String language;
+  final DateTime createdAt;
+
+  factory CircleSummary.fromJson(Map<String, dynamic> json) => CircleSummary(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        description: json['description'] as String?,
+        maxCapacity: json['max_capacity'] as int,
+        genderRestriction: json['gender_restriction'] as String,
+        language: json['language'] as String,
+        createdAt: DateTime.parse(json['created_at'] as String),
+      );
+}
+
+class CircleDiscoveryPage {
+  const CircleDiscoveryPage({required this.circles, this.nextCursor});
+
+  final List<CircleSummary> circles;
+  final String? nextCursor;
 }
 
 class AssignCircleRoleRequest {
@@ -146,6 +193,62 @@ class CircleApiClient {
     return CircleResponse.fromJson(response.data as Map<String, dynamic>);
   }
 
+  Future<List<CircleSummary>> listCircles({
+    required String firebaseIdToken,
+    required String sessionId,
+  }) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/circles',
+      options: Options(headers: _authHeaders(firebaseIdToken, sessionId)),
+    );
+    return _summaries(response.data?['data']);
+  }
+
+  Future<CircleDiscoveryPage> discoverCircles({
+    required String firebaseIdToken,
+    required String sessionId,
+    String? query,
+    String? cursor,
+  }) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/circles/discover',
+      queryParameters: {
+        if (query != null && query.isNotEmpty) 'query': query,
+        if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+      },
+      options: Options(headers: _authHeaders(firebaseIdToken, sessionId)),
+    );
+    return CircleDiscoveryPage(
+      circles: _summaries(response.data?['data']),
+      nextCursor: response.data?['next_cursor'] as String?,
+    );
+  }
+
+  Future<CircleResponse> joinPublicCircle({
+    required String firebaseIdToken,
+    required String sessionId,
+    required String circleId,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/circles/$circleId/join',
+      options: Options(headers: _authHeaders(firebaseIdToken, sessionId)),
+    );
+    return CircleResponse.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<CircleResponse> joinCircleByInvite({
+    required String firebaseIdToken,
+    required String sessionId,
+    required String inviteCode,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/circles/join',
+      data: {'invite_code': inviteCode},
+      options: Options(headers: _authHeaders(firebaseIdToken, sessionId)),
+    );
+    return CircleResponse.fromJson(response.data as Map<String, dynamic>);
+  }
+
   Future<CircleRoleAssignmentResponse> assignMemberRole({
     required String firebaseIdToken,
     required String sessionId,
@@ -190,6 +293,17 @@ class CircleApiClient {
 
   Map<String, String> _bearerHeader(String token) =>
       {'Authorization': 'Bearer $token'};
+
+  Map<String, String> _authHeaders(String token, String sessionId) => {
+        ..._bearerHeader(token),
+        'X-Halaqaty-Session-ID': sessionId,
+      };
+
+  List<CircleSummary> _summaries(dynamic payload) =>
+      (payload as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(CircleSummary.fromJson)
+          .toList(growable: false);
 }
 
 final circleApiClientProvider = Provider<CircleApiClient>((ref) {

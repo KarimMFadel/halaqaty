@@ -59,4 +59,6 @@ const (
 	FieldLanguage          = "language"
 	FieldGradingPolicy     = "grading_policy"
 	FieldQuery             = "q"
+	FieldDiscoverQuery     = "query"
+	FieldCursor            = "cursor"
 )

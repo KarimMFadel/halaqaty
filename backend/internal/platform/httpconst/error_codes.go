@@ -58,4 +58,5 @@ const (
 	FieldGenderRestriction = "gender_restriction"
 	FieldLanguage          = "language"
 	FieldGradingPolicy     = "grading_policy"
+	FieldQuery             = "q"
 )

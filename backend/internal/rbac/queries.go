@@ -21,6 +21,15 @@ FROM users
 WHERE id = ANY($1::uuid[])
 `
 
+const searchUsersQuery = `
+SELECT u.id::text, COALESCE(p.display_name, p.full_name)
+FROM users u
+JOIN profiles p ON p.user_id = u.id
+WHERE COALESCE(p.display_name, p.full_name) ILIKE '%' || $1 || '%' ESCAPE E'\\'
+ORDER BY COALESCE(p.display_name, p.full_name), u.id
+LIMIT $2
+`
+
 const lockUserQuery = `
 SELECT id::text
 FROM users

@@ -43,6 +43,8 @@ func (v *circleTokenVerifier) Verify(_ context.Context, bearerToken string) (*au
 type circleRoleEnv struct {
 	mux      *http.ServeMux
 	svc      *rbac.Service
+	repo     *rbac.Repository
+	pool     *pgxpool.Pool
 	userIDs  map[string]string
 	sessions map[string]string
 	tokens   map[string]string
@@ -74,6 +76,7 @@ func setupCircleRoleEnv(t *testing.T) *circleRoleEnv {
 		"000012_auth_profiles_display_name.up.sql",
 		"000013_create_circles.up.sql",
 		"000014_circle_members_circle_fk.up.sql",
+		"000015_circle_management.up.sql",
 	} {
 		runMigrationFile(t, conn, ctx, file)
 	}
@@ -124,6 +127,8 @@ func setupCircleRoleEnv(t *testing.T) *circleRoleEnv {
 	env := &circleRoleEnv{
 		mux:      mux,
 		svc:      rbacService,
+		repo:     rbacRepo,
+		pool:     pool,
 		userIDs:  make(map[string]string),
 		sessions: make(map[string]string),
 		tokens:   make(map[string]string),

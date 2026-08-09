@@ -1,8 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:halaqaty_mobile/features/admin/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/auth/data/auth_api_client.dart';
+import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 
 void main() {
   test('dioProvider defaults to the versioned API base URL', () {

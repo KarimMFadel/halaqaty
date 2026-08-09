@@ -187,6 +187,28 @@ func (r *Repository) UsersExist(ctx context.Context, userIDs []string) (map[stri
 	return existing, nil
 }
 
+// SearchUsers returns registered users matching a display-name query.
+func (r *Repository) SearchUsers(ctx context.Context, query string, limit int) ([]UserSearchResult, error) {
+	rows, err := r.q.Query(ctx, searchUsersQuery, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("search users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []UserSearchResult
+	for rows.Next() {
+		var user UserSearchResult
+		if err := rows.Scan(&user.ID, &user.DisplayName); err != nil {
+			return nil, fmt.Errorf("scan user search result: %w", err)
+		}
+		users = append(users, user)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate user search results: %w", err)
+	}
+	return users, nil
+}
+
 // LockUser serializes membership-limit checks for one user.
 func (r *Repository) LockUser(ctx context.Context, userID string) error {
 	var id string

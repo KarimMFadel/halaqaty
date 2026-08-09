@@ -18,6 +18,9 @@ import (
 const (
 	circleNameMinLen = 2
 	circleNameMaxLen = 100
+	userSearchMinLen = 2
+	userSearchMaxLen = 100
+	userSearchLimit  = 20
 	// inviteCodeAlphabet excludes visually ambiguous characters; 32 symbols
 	// divide 256 exactly, so byte-to-symbol mapping stays uniform.
 	inviteCodeAlphabet       = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -73,6 +76,7 @@ type Store interface {
 	LockMembers(ctx context.Context, circleID string) ([]Member, error)
 	CountActiveMemberships(ctx context.Context, userID string) (int, error)
 	UpdateMemberRole(ctx context.Context, circleID, userID, role string) error
+	SearchUsers(ctx context.Context, query string, limit int) ([]UserSearchResult, error)
 }
 
 // JoinCircle adds the authenticated user as a student using a circle invite code.
@@ -158,6 +162,25 @@ func NewService(store Store, audit AuditLogger) *Service {
 		audit = noopAuditLogger{}
 	}
 	return &Service{store: store, audit: audit}
+}
+
+// SearchUsers returns registered users whose display name contains query.
+func (s *Service) SearchUsers(ctx context.Context, query string) ([]UserSearchResult, error) {
+	query = strings.TrimSpace(query)
+	if length := utf8.RuneCountInString(query); length < userSearchMinLen || length > userSearchMaxLen {
+		return nil, &ValidationError{Fields: map[string]string{
+			httpconst.FieldQuery: httpconst.ErrorMessageUserSearchQueryInvalid,
+		}}
+	}
+	query = strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(query)
+	users, err := s.store.SearchUsers(ctx, query, userSearchLimit)
+	if err != nil {
+		return nil, fmt.Errorf("search users: %w", err)
+	}
+	if users == nil {
+		users = []UserSearchResult{}
+	}
+	return users, nil
 }
 
 // CreateCircle creates a circle and its initial memberships in one transaction.

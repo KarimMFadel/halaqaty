@@ -16,6 +16,10 @@
 - Q: Should circles support permanent hard deletion? → A: No. Circles are retired by archiving them. Hard deletion is prohibited; circle data and history must remain available for reports and future needs.
 - Q: Which gender values may a circle use? → A: `male`, `female`, `mixed`, or `unspecified`. This circle setting describes the student audience and is independent of the teacher's personal gender; omission defaults to `unspecified`.
 
+### Session 2026-08-08
+
+- Q: How should circle creators find registered users for initial teacher and backup-supervisor assignment? → A: Keep an authenticated, rate-limited `GET /users/search?q=` picker endpoint that returns only user ID and display name.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Create a Circle (Priority: P1)
@@ -32,6 +36,7 @@ As an authenticated user, I can create a Quran memorization circle with clear se
 2. **Given** no teacher is selected during creation, **When** the circle is created, **Then** the creator receives the `teacher` role.
 3. **Given** one or more existing registered teachers are selected during creation, **When** the circle is created, **Then** the selected users receive `teacher` membership and the creator receives the role defined by OQ-036; at most one optional backup supervisor may be assigned.
 4. **Given** invalid, missing, or over-limit input, **When** the user submits creation, **Then** the request is rejected with standard field validation errors and no partial circle is created.
+5. **Given** an authenticated creator enters at least two search characters, **When** they search for an initial teacher or backup supervisor, **Then** the system returns at most 20 matching registered users with only `id` and `display_name`.
 
 ---
 
@@ -136,6 +141,7 @@ As a circle teacher, I can retire a circle by archiving it so its history is pre
 - **FR-015**: System MUST preserve Feature 001 Firebase ID-token and opaque backend-session validation on every protected circle endpoint.
 - **FR-016**: System MUST provide contract-first REST APIs, PostgreSQL migrations with rollback, OpenAPI documentation, Flutter screens/state, and focused unit, contract, and integration tests for the approved behavior.
 - **FR-017**: System MUST allow only a teacher to remove another active circle member, MUST reject self-removal and removal of the final teacher, and MUST preserve the removed member's historical circle records for reporting and audit purposes.
+- **FR-018**: System MUST provide an authenticated, rate-limited registered-user search for initial role assignment, validate a trimmed 2–100-character query, limit results to 20, and return only user ID and display name.
 
 ### Key Entities
 

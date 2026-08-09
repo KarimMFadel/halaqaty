@@ -47,22 +47,22 @@
 
 ### Tests for User Story 1
 
-- [ ] T016 [P] [US1] Add contract tests for valid circle creation, response shape, 100/500/1000-character limits, capacity 2..200/default 50, privacy, language, all four circle-gender values, omitted-gender default `unspecified`, invalid-value rejection, and invite link in `backend/tests/contract/circle_create_contract_test.go`.
-- [ ] T017 [P] [US1] Add contract tests for teacher assignment, optional backup supervisor, creator-teacher fallback, duplicate/unknown/overlapping assignees, and standard validation errors in `backend/tests/contract/circle_creation_roles_contract_test.go`.
-- [ ] T018 [P] [US1] Add unit tests for invite-code generation, exact 8-character format, uniqueness retry, and collision handling in `backend/internal/circle/invite_test.go`.
-- [ ] T019 [P] [US1] Add integration tests for atomic circle creation and initial membership persistence in `backend/tests/integration/circle_creation_test.go`.
-- [ ] T020 [P] [US1] Add security tests for unauthenticated creation, invalid Firebase/session credentials, and rate-limited repeated creation in `backend/tests/contract/circle_create_security_contract_test.go`.
-- [ ] T021 [P] [US1] Add Flutter widget tests for create-circle validation, RTL rendering, capacity/settings fields, and server field-error mapping in `mobile/test/widget/circles/create_circle_screen_test.dart`.
+- [X] T016 [P] [US1] Add contract tests for valid circle creation, response shape, 100/500/1000-character limits, capacity 2..200/default 50, privacy, language, all four circle-gender values, omitted-gender default `unspecified`, invalid-value rejection, and invite link in `backend/tests/contract/circle_create_contract_test.go` and `backend/tests/contract/circle_create_extended_contract_test.go`.
+- [X] T017 [P] [US1] Add contract tests for teacher assignment, optional backup supervisor, creator-teacher fallback, duplicate/unknown/overlapping assignees, and standard validation errors in `backend/tests/contract/circle_create_contract_test.go`.
+- [X] T018 [P] [US1] Add unit tests for invite-code generation, exact 8-character format, successful uniqueness retry, and collision exhaustion in `backend/internal/rbac/service_test.go` and `backend/internal/rbac/invite_test.go`.
+- [X] T019 [P] [US1] Add integration tests for atomic circle creation and initial membership persistence in `backend/tests/integration/circle_creation_test.go`.
+- [X] T020 [P] [US1] Add security tests for unauthenticated creation, invalid Firebase/session credentials, and rate-limited repeated creation in `backend/tests/contract/circle_create_security_contract_test.go`.
+- [X] T021 [P] [US1] Add Flutter widget tests for create-circle validation, Arabic RTL rendering, localized gender/settings fields, user selection, stale-success clearing, and server field-error mapping in `mobile/test/widget/circles/create_circle_screen_test.dart`.
 
 ### Implementation for User Story 1
 
-- [ ] T022 [US1] Implement create-circle repository transaction and initial membership assignment in `backend/internal/circle/repository.go`.
-- [ ] T023 [US1] Implement create-circle service validation, OQ-036 role fallback, capacity defaults, invite generation, audit event, and idempotency behavior in `backend/internal/circle/service.go`.
-- [ ] T024 [US1] Implement create-circle handler and standard error responses in `backend/internal/circle/handler.go`.
-- [ ] T025 [US1] Add `POST /api/v1/circles` route constant and wire auth/session middleware, validation, handler, and service in `backend/cmd/api/routes.go` and `backend/cmd/api/router.go`.
-- [ ] T026 [US1] Implement circle API client and request/response models in `mobile/lib/features/circles/data/circle_api_client.dart` and `mobile/lib/features/circles/data/circle_models.dart`.
-- [ ] T027 [US1] Implement Riverpod create-circle controller/provider in `mobile/lib/features/circles/application/create_circle_controller.dart`.
-- [ ] T028 [US1] Implement Arabic-first RTL create-circle screen and accessible validation states in `mobile/lib/features/circles/presentation/create_circle_screen.dart`.
+- [X] T022 [US1] Implement create-circle repository transaction and initial membership assignment in `backend/internal/rbac/repository.go`.
+- [X] T023 [US1] Implement create-circle service validation, OQ-036 role fallback, capacity defaults, invite generation, and audit event in `backend/internal/rbac/service.go`.
+- [X] T024 [US1] Implement create-circle and authenticated registered-user-search handlers with standard error responses in `backend/internal/rbac/handler.go`.
+- [X] T025 [US1] Add `POST /api/v1/circles` and `GET /api/v1/users/search` route constants and wire auth/session/rate-limit middleware, validation, handlers, and services in `backend/cmd/api/routes.go` and `backend/cmd/api/router.go`.
+- [X] T026 [US1] Implement circle API client and request/response models in `mobile/lib/features/circles/data/circle_api_client.dart`.
+- [X] T027 [US1] Implement Riverpod create-circle controller/provider in `mobile/lib/features/circles/application/create_circle_controller.dart`.
+- [X] T028 [US1] Implement Arabic-first RTL create-circle screen and accessible validation states in `mobile/lib/features/circles/presentation/create_circle_screen.dart`.
 
 **Checkpoint**: US1 creates a usable circle and is independently testable.
 
@@ -85,9 +85,9 @@
 
 ### Implementation for User Story 2
 
-- [ ] T035 [US2] Implement public discovery and authorized public-summary queries in `backend/internal/circle/queries.go` and `backend/internal/circle/repository.go`.
-- [ ] T036 [US2] Implement public direct join and invite-code join transactions, capacity checks, five-circle limit, archived checks, and audit events in `backend/internal/circle/service.go`.
-- [ ] T037 [US2] Add discovery/join handlers and standard `400/401/404/409` responses in `backend/internal/circle/handler.go`.
+- [ ] T035 [US2] Implement public discovery and authorized public-summary queries in `backend/internal/rbac/queries.go` and `backend/internal/rbac/repository.go`.
+- [ ] T036 [US2] Implement public direct join and invite-code join transactions, capacity checks, five-circle limit, archived checks, and audit events in `backend/internal/rbac/service.go`.
+- [ ] T037 [US2] Add discovery/join handlers and standard `400/401/404/409` responses in `backend/internal/rbac/handler.go`.
 - [ ] T038 [US2] Add discovery/direct-join/invite-join route constants and router wiring in `backend/cmd/api/routes.go` and `backend/cmd/api/router.go`.
 - [ ] T039 [US2] Implement Riverpod circle-list/discovery/join providers in `mobile/lib/features/circles/application/circle_discovery_controller.dart`.
 - [ ] T040 [US2] Implement public discovery, join confirmation, invite-link entry, and error/read-only states in `mobile/lib/features/circles/presentation/circle_discovery_screen.dart` and `mobile/lib/features/circles/presentation/circle_join_screen.dart`.
@@ -111,9 +111,9 @@
 
 ### Implementation for User Story 3
 
-- [ ] T045 [US3] Implement authorized circle-detail and member-list repository queries in `backend/internal/circle/queries.go` and `backend/internal/circle/repository.go`.
-- [ ] T046 [US3] Implement read authorization and archived read-only service behavior in `backend/internal/circle/service.go`.
-- [ ] T047 [US3] Implement circle-detail/member handlers and route wiring in `backend/internal/circle/handler.go` and `backend/cmd/api/router.go`.
+- [ ] T045 [US3] Implement authorized circle-detail and member-list repository queries in `backend/internal/rbac/queries.go` and `backend/internal/rbac/repository.go`.
+- [ ] T046 [US3] Implement read authorization and archived read-only service behavior in `backend/internal/rbac/service.go`.
+- [ ] T047 [US3] Implement circle-detail/member handlers and route wiring in `backend/internal/rbac/handler.go` and `backend/cmd/api/router.go`.
 - [ ] T048 [US3] Implement Riverpod circle-detail/member providers in `mobile/lib/features/circles/application/circle_detail_controller.dart`.
 - [ ] T049 [US3] Implement circle detail/member screens with role labels, safe public fields, archived history, and RTL support in `mobile/lib/features/circles/presentation/circle_detail_screen.dart` and `mobile/lib/features/circles/presentation/circle_members_screen.dart`.
 
@@ -138,9 +138,9 @@
 
 ### Implementation for User Story 4
 
-- [ ] T056 [US4] Implement transactional role-change/member-removal service and audit events in `backend/internal/circle/service.go`.
-- [ ] T057 [US4] Implement transactional invite refresh and invite-link response mapping in `backend/internal/circle/service.go` and `backend/internal/circle/repository.go`.
-- [ ] T058 [US4] Implement role/member/invite handlers with RBAC and standard error responses in `backend/internal/circle/handler.go`.
+- [ ] T056 [US4] Implement transactional role-change/member-removal service and audit events in `backend/internal/rbac/service.go`.
+- [ ] T057 [US4] Implement transactional invite refresh and invite-link response mapping in `backend/internal/rbac/service.go` and `backend/internal/rbac/repository.go`.
+- [ ] T058 [US4] Implement role/member/invite handlers with RBAC and standard error responses in `backend/internal/rbac/handler.go`.
 - [ ] T059 [US4] Add role/member/invite route constants and middleware wiring in `backend/cmd/api/routes.go` and `backend/cmd/api/router.go`.
 - [ ] T060 [US4] Implement Riverpod role/member/invite controllers in `mobile/lib/features/circles/application/circle_management_controller.dart`.
 - [ ] T061 [US4] Implement role-management controls, invite sharing/refresh, and accessible confirmation/error UI in `mobile/lib/features/circles/presentation/circle_management_screen.dart`.
@@ -164,8 +164,8 @@
 
 ### Implementation for User Story 5
 
-- [ ] T066 [US5] Implement archive/retirement transaction, idempotency, audit event, and mutation guards in `backend/internal/circle/service.go` and `backend/internal/circle/repository.go`.
-- [ ] T067 [US5] Implement archive handler and archive-only route semantics in `backend/internal/circle/handler.go` and `backend/cmd/api/router.go`.
+- [ ] T066 [US5] Implement archive/retirement transaction, idempotency, audit event, and mutation guards in `backend/internal/rbac/service.go` and `backend/internal/rbac/repository.go`.
+- [ ] T067 [US5] Implement archive handler and archive-only route semantics in `backend/internal/rbac/handler.go` and `backend/cmd/api/router.go`.
 - [ ] T068 [US5] Implement Riverpod retirement state and archive confirmation/read-only controls in `mobile/lib/features/circles/application/circle_retirement_controller.dart` and `mobile/lib/features/circles/presentation/circle_retirement_screen.dart`.
 
 **Checkpoint**: US5 retires circles safely with no hard-delete path and preserved reporting history.
@@ -181,7 +181,7 @@
 - [ ] T071 [P] [US0] Add contract coverage for backward-compatible existing circle operations and all standard error envelopes in `backend/tests/contract/circle_backward_compatibility_test.go`.
 - [ ] T072 [P] [US0] Add OpenAPI reference/operation/security validation for `docs/contracts/openapi.yaml` and `specs/002-circle-management/contracts/circle-management.openapi.yaml` in `backend/tests/contract/circle_openapi_contract_test.go`.
 - [ ] T073 [P] [US0] Add observability assertions for request IDs, structured circle mutation logs, latency, and rejection metrics in `backend/tests/integration/circle_observability_test.go`.
-- [ ] T074 [US0] Run `$clean-code-guard` on `backend/internal/circle/` and `mobile/lib/features/circles/`; record findings in `specs/002-circle-management/validation-report.md`.
+- [ ] T074 [US0] Run `$clean-code-guard` on `backend/internal/rbac/` and `mobile/lib/features/circles/`; record findings in `specs/002-circle-management/validation-report.md`.
 - [ ] T075 [US0] Run `$test-guard` on changed Go/Dart tests; record findings in `specs/002-circle-management/validation-report.md`.
 - [ ] T076 [US0] Run `$docs-guard` on changed product, ADR, architecture, OpenAPI, and feature-contract files; record findings in `specs/002-circle-management/validation-report.md`.
 - [ ] T077 [US0] Run focused Go/Flutter suites and full applicable gates (`go test -short ./...`, `flutter test test`, formatters, analyzers, lint, Spectral, and gitleaks); record current output in `specs/002-circle-management/validation-report.md`.

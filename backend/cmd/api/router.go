@@ -154,6 +154,14 @@ func (r *Router) registerRoutes() {
 			joinCircleHandler = http.HandlerFunc(rbacH.JoinCircle)
 		}
 		r.mux.Handle(routeCirclesJoin, r.requireWithUserLimit(joinCircleHandler))
+
+		var searchUsersHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		if rbacH != nil {
+			searchUsersHandler = http.HandlerFunc(rbacH.SearchUsers)
+		}
+		r.mux.Handle(routeUsersSearch, r.requireWithUserLimit(searchUsersHandler))
 	}
 
 	if r.mw.Auth != nil && r.mw.Role != nil {

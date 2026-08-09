@@ -102,3 +102,14 @@ type RoleAssignment struct {
 	UserID   string `json:"user_id"`
 	Role     string `json:"role"`
 }
+
+// UserSearchResult is the minimal registered-user projection used during circle creation.
+type UserSearchResult struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+}
+
+// UserSearchResponse is the authenticated user-search response body.
+type UserSearchResponse struct {
+	Data []UserSearchResult `json:"data"`
+}

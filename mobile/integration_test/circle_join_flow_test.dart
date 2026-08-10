@@ -6,6 +6,7 @@ import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_discovery_screen.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_join_screen.dart';
 import 'package:integration_test/integration_test.dart';
 
 final _publicCircle = CircleSummary(
@@ -73,6 +74,13 @@ DioException _conflict(String message) => DioException(
       ),
     );
 
+CircleDiscoveryController _controller() => CircleDiscoveryController(
+      apiClient: _FlowApiClient(),
+      loadFirebaseIdToken: () async => 'firebase-token',
+      readAuthState: () => const AuthState(sessionId: 'session-id'),
+      logout: () async {},
+    );
+
 Widget _app(CircleDiscoveryController controller, Widget home) => ProviderScope(
       overrides: [
         circleDiscoveryControllerProvider.overrideWith((_) => controller),
@@ -97,14 +105,9 @@ Future<void> _joinInvite(WidgetTester tester, String code) async {
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('Circle join flow: preserves public, invite, and rejection states',
+  testWidgets('Circle join flow: supports public and private joins',
       (tester) async {
-    final controller = CircleDiscoveryController(
-      apiClient: _FlowApiClient(),
-      loadFirebaseIdToken: () async => 'firebase-token',
-      readAuthState: () => const AuthState(sessionId: 'session-id'),
-      logout: () async {},
-    );
+    final controller = _controller();
 
     await tester.pumpWidget(_app(controller, const CircleDiscoveryScreen()));
     await tester.pumpAndSettle();
@@ -120,13 +123,21 @@ void main() {
     await tester.pumpAndSettle();
     await _joinInvite(tester, 'https://halaqaty.app/join/HLQ-7X2K');
     expect(controller.state.myCircles.last.id, 'private-circle');
-
-    await _joinInvite(tester, 'HLQ-DUP2');
-    expect(controller.state.failure, CircleJoinFailure.alreadyMember);
-    expect(find.byKey(const Key('circleJoinError')), findsOneWidget);
-
-    await _joinInvite(tester, 'HLQ-LMT5');
-    expect(controller.state.failure, CircleJoinFailure.membershipLimit);
-    expect(find.byKey(const Key('circleJoinError')), findsOneWidget);
   });
+
+  for (final errorCase in <(String, CircleJoinFailure)>[
+    ('HLQ-DUP2', CircleJoinFailure.alreadyMember),
+    ('HLQ-LMT5', CircleJoinFailure.membershipLimit),
+  ]) {
+    testWidgets('Circle join flow: exposes ${errorCase.$2.name}',
+        (tester) async {
+      final controller = _controller();
+      await tester.pumpWidget(_app(controller, const CircleJoinScreen()));
+
+      await _joinInvite(tester, errorCase.$1);
+
+      expect(controller.state.failure, errorCase.$2);
+      expect(find.byKey(const Key('circleJoinError')), findsOneWidget);
+    });
+  }
 }

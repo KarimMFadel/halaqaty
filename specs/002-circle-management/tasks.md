@@ -80,7 +80,7 @@
 - [X] T030 [P] [US2] Add contract tests for public direct join and invite-code join in `backend/tests/contract/circle_join_contract_test.go`.
 - [X] T031 [P] [US2] Add integration tests for duplicate membership, full circle, archived circle, sixth-circle limit, public/private behavior, and atomic join under concurrent requests in `backend/tests/integration/circle_join_test.go`.
 - [X] T032 [P] [US2] Add security/rate-limit tests for unauthenticated discovery/join, invalid credentials, repeated join attempts, and response-safety of public results in `backend/tests/contract/circle_join_security_contract_test.go`.
-- [ ] T033 [P] [US2] Add Flutter widget tests for discovery cards, public/private visibility, join confirmation, invite-link errors, full/archive states, and RTL layouts in `mobile/test/widget/circles/discover_join_screen_test.dart`.
+- [X] T033 [P] [US2] Add Flutter widget tests for discovery cards, public/private visibility, join confirmation, invite-link errors, full/archive states, and RTL layouts in `mobile/test/widget/circles/discover_join_screen_test.dart`.
 - [ ] T034 [US2] Add Flutter integration test for public discovery, public join, private invite join, duplicate join, and sixth-circle rejection in `mobile/integration_test/circle_join_flow_test.dart`.
 
 ### Implementation for User Story 2

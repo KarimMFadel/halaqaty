@@ -115,7 +115,6 @@ void main() {
       (tester) async {
     final apiClient = _StubCircleApiClient();
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
 
     await tester.pumpWidget(
       _build(const CircleDiscoveryScreen(), _controller(apiClient)),
@@ -129,6 +128,7 @@ void main() {
     expect(find.textContaining('HLQ-'), findsNothing);
     expect(find.textContaining('خاصة'), findsNothing);
     expect(find.textContaining('عضو'), findsNothing);
+    semantics.dispose();
   });
 
   testWidgets('CircleDiscoveryScreen: shows loading and join confirmation',

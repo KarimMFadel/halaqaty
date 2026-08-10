@@ -34,6 +34,25 @@ The floating `ghcr.io/cirruslabs/flutter:stable` image is not part of this workf
 - `AGENTS.md` tells coding agents to use the Docker check before committing or pushing Flutter changes when a matching host Flutter SDK is unavailable.
 - The root and mobile Makefile help output expose the new targets.
 
+## Failure Prevention and Troubleshooting
+
+The contributor documentation records the failure modes discovered while stabilizing the Flutter checks and the rule that prevents each one:
+
+| Failure mode | Prevention rule |
+|---|---|
+| Flutter is not installed or is missing from the Windows `PATH`. | Use `make flutter-docker-check`; do not depend on a host Flutter installation. |
+| A floating Docker tag uses a different SDK than CI. | Pin `gmeligio/flutter-web:3.44.9`, matching the workflow SDK version. |
+| Docker Desktop shows an image but `docker ps` is empty. | Explain that images are templates, `docker ps` shows running containers, and this check uses `--rm` to remove its temporary container after completion. |
+| The image name is mistyped or the wrong shell resets its `PATH`. | Keep the exact image name in the Makefile and invoke its command with `sh -c`. |
+| `flutter analyze` fails on warnings or deprecated APIs. | Run analysis before tests and treat every analyzer issue as a failing gate. |
+| Widget taps miss controls below the viewport because a focused field scrolls back into view. | In widget tests, unfocus the field, move the outer form scroll position, settle, and then tap the target. |
+| A test asserts a transient snackbar or platform-channel side effect unrelated to its stated behavior. | Assert durable UI state relevant to the test name; test clipboard/platform behavior separately with an intentional platform mock when required. |
+| Multiple integration scenarios leak controller or provider state. | Give each scenario a fresh widget/controller/provider scope and assert typed state plus stable widget keys. |
+| Running every Linux integration file in one Flutter process causes the debug log reader to stop. | Run each `integration_test/*_test.dart` file in its own `xvfb-run` and Flutter process while aggregating failures. |
+| Integration tests reference moved files or undefined role types. | Run `flutter analyze` before launching integration tests so import and type errors fail quickly. |
+
+These rules guide diagnosis but do not weaken assertions or turn genuine product regressions into ignored test failures.
+
 ## Scope
 
 This workflow validates static analysis plus Flutter unit and widget tests. Linux desktop integration tests remain a separate CI workflow because the selected image is not the project's Linux desktop integration-test environment.

@@ -81,7 +81,7 @@
 - [X] T031 [P] [US2] Add integration tests for duplicate membership, full circle, archived circle, sixth-circle limit, public/private behavior, and atomic join under concurrent requests in `backend/tests/integration/circle_join_test.go`.
 - [X] T032 [P] [US2] Add security/rate-limit tests for unauthenticated discovery/join, invalid credentials, repeated join attempts, and response-safety of public results in `backend/tests/contract/circle_join_security_contract_test.go`.
 - [X] T033 [P] [US2] Add Flutter widget tests for discovery cards, public/private visibility, join confirmation, invite-link errors, full/archive states, and RTL layouts in `mobile/test/widget/circles/discover_join_screen_test.dart`.
-- [ ] T034 [US2] Add Flutter integration test for public discovery, public join, private invite join, duplicate join, and sixth-circle rejection in `mobile/integration_test/circle_join_flow_test.dart`.
+- [X] T034 [US2] Add Flutter integration test for public discovery, public join, private invite join, duplicate join, and sixth-circle rejection in `mobile/integration_test/circle_join_flow_test.dart`.
 
 ### Implementation for User Story 2
 
@@ -89,8 +89,8 @@
 - [X] T036 [US2] Implement public direct join and invite-code join transactions, capacity checks, five-circle limit, archived checks, and audit events in `backend/internal/rbac/service.go`.
 - [X] T037 [US2] Add discovery/join handlers and standard `400/401/404/409` responses in `backend/internal/rbac/handler.go`.
 - [X] T038 [US2] Add discovery/direct-join/invite-join route constants and router wiring in `backend/cmd/api/routes.go` and `backend/cmd/api/router.go`.
-- [ ] T039 [US2] Implement Riverpod circle-list/discovery/join providers in `mobile/lib/features/circles/application/circle_discovery_controller.dart`.
-- [ ] T040 [US2] Implement public discovery, join confirmation, invite-link entry, and error/read-only states in `mobile/lib/features/circles/presentation/circle_discovery_screen.dart` and `mobile/lib/features/circles/presentation/circle_join_screen.dart`.
+- [X] T039 [US2] Implement Riverpod circle-list/discovery/join providers in `mobile/lib/features/circles/application/circle_discovery_controller.dart`.
+- [X] T040 [US2] Implement public discovery, join confirmation, invite-link entry, and error/read-only states in `mobile/lib/features/circles/presentation/circle_discovery_screen.dart` and `mobile/lib/features/circles/presentation/circle_join_screen.dart`.
 
 **Checkpoint**: US2 is independently testable with public and invite-based joining.
 

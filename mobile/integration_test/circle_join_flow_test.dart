@@ -6,7 +6,6 @@ import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_discovery_screen.dart';
-import 'package:halaqaty_mobile/features/circles/presentation/circle_join_screen.dart';
 import 'package:integration_test/integration_test.dart';
 
 final _publicCircle = CircleSummary(

@@ -141,7 +141,7 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
                 ),
                 DropdownButtonFormField<String>(
                   key: const Key('createCircleGenderField'),
-                  value: _gender,
+                  initialValue: _gender,
                   decoration: InputDecoration(
                     labelText: rtl ? 'الفئة' : 'Student audience',
                     errorText: state.fieldErrors['gender_restriction'],
@@ -167,7 +167,7 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
                   onChanged: (value) => setState(() => _gender = value ?? 'unspecified'),
                 ),
                 DropdownButtonFormField<String>(
-                  value: _language,
+                  initialValue: _language,
                   decoration: InputDecoration(
                     labelText: rtl ? 'لغة الحلقة' : 'Circle language',
                     errorText: state.fieldErrors['language'],

@@ -79,7 +79,11 @@ Widget _app(CircleDiscoveryController controller, Widget home) => ProviderScope(
         circleDiscoveryControllerProvider.overrideWith((_) => controller),
       ],
       child: MaterialApp(
-        home: Directionality(textDirection: TextDirection.rtl, child: home),
+        builder: (context, child) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: child!,
+        ),
+        home: home,
       ),
     );
 

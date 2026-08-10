@@ -71,14 +71,23 @@ Widget _buildScreen(CreateCircleController controller) {
   );
 }
 
+Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('requires a circle name before submitting', (tester) async {
     final apiClient = _StubCircleApiClient();
     final controller = _controller(apiClient);
     await tester.pumpWidget(_buildScreen(controller));
 
-    await tester.tap(find.byKey(const Key('createCircleSubmitButton')));
-    await tester.pump();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('createCircleSubmitButton')),
+    );
 
     expect(find.text('اسم الحلقة مطلوب'), findsOneWidget);
     expect(apiClient.submitCalled, isFalse);
@@ -100,13 +109,15 @@ void main() {
     await tester.tap(find.byKey(const Key('createCircleGenderField')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('مختلط').last);
-    await tester.ensureVisible(
+    await tester.pumpAndSettle();
+    await _tapVisible(
+      tester,
       find.byKey(const Key('createCirclePrivateField')),
     );
-    await tester.tap(find.byKey(const Key('createCirclePrivateField')));
-    await tester.ensureVisible(find.byKey(const Key('createCircleSubmitButton')));
-    await tester.tap(find.byKey(const Key('createCircleSubmitButton')));
-    await tester.pump();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('createCircleSubmitButton')),
+    );
 
     expect(find.text('إنشاء حلقة'), findsOneWidget);
     expect(find.text('مختلط'), findsOneWidget);
@@ -127,8 +138,10 @@ void main() {
       find.byKey(const Key('createCircleCapacityField')),
       '1',
     );
-    await tester.tap(find.byKey(const Key('createCircleSubmitButton')));
-    await tester.pump();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('createCircleSubmitButton')),
+    );
 
     expect(find.text('السعة بين 2 و200'), findsOneWidget);
     expect(apiClient.submitCalled, isFalse);
@@ -156,8 +169,10 @@ void main() {
       find.byKey(const Key('createCircleNameField')),
       'Circle',
     );
-    await tester.tap(find.byKey(const Key('createCircleSubmitButton')));
-    await tester.pump();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('createCircleSubmitButton')),
+    );
 
     expect(find.text('This name is unavailable'), findsOneWidget);
   });
@@ -173,8 +188,10 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('معلّم'));
     await tester.enterText(find.byKey(const Key('createCircleNameField')), 'Circle');
-    await tester.tap(find.byKey(const Key('createCircleSubmitButton')));
-    await tester.pump();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('createCircleSubmitButton')),
+    );
 
     expect(apiClient.submittedRequest?.teacherUserIds, ['teacher-1']);
   });
@@ -193,8 +210,10 @@ void main() {
     await tester.pumpWidget(_buildScreen(controller));
 
     await tester.enterText(find.byKey(const Key('createCircleNameField')), 'Circle');
-    await tester.tap(find.byKey(const Key('createCircleSubmitButton')));
-    await tester.pump();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('createCircleSubmitButton')),
+    );
 
     expect(find.text('تم إنشاء الحلقة'), findsOneWidget);
     expect(find.text('https://halaqaty.app/join/HLQ-7X2K'), findsOneWidget);

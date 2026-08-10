@@ -72,10 +72,9 @@ Widget _buildScreen(CreateCircleController controller) {
 }
 
 Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
-  await tester.dragUntilVisible(
-    finder,
+  await tester.drag(
     find.byType(SingleChildScrollView),
-    const Offset(0, -200),
+    const Offset(0, -600),
   );
   await tester.pumpAndSettle();
   await tester.tap(finder);

@@ -132,7 +132,11 @@ func (s *circleStoreStub) FindCircleByID(_ context.Context, circleID string) (rb
 	}
 	return circle, nil
 }
-func (s *circleStoreStub) ListPublicCircles(_ context.Context, _ string, _ int) ([]rbac.PublicCircleSummary, error) {
+
+func (s *circleStoreStub) FindCircleByIDForUpdate(ctx context.Context, circleID string) (rbac.Circle, error) {
+	return s.FindCircleByID(ctx, circleID)
+}
+func (s *circleStoreStub) ListPublicCircles(_ context.Context, _, _ string, _ int) ([]rbac.PublicCircleSummary, error) {
 	return nil, nil
 }
 func (s *circleStoreStub) SearchUsers(_ context.Context, _ string, _ int) ([]rbac.UserSearchResult, error) {

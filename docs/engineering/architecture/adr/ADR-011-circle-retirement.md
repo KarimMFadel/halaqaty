@@ -21,4 +21,4 @@ reporting, while new joins and other activity are rejected.
 ## References
 
 - [ADR-010](ADR-010-circle-role-management.md)
-- [Circle Management feature](../../../specs/002-circle-management/spec.md)
+- [Circle Management feature](../../../../specs/002-circle-management/spec.md)

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:halaqaty_mobile/features/admin/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/auth/presentation/role_guard.dart';
+import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:integration_test/integration_test.dart';
 
 class _IntegrationAuthNotifier extends StateNotifier<AuthState>

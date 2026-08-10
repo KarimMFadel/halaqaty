@@ -111,10 +111,15 @@ jobs:
         with:
           channel: stable
       - name: Install Linux desktop dependencies
-        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libgtk-3-dev libblkid-dev liblzma-dev libsecret-1-dev
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libgtk-3-dev libblkid-dev liblzma-dev libsecret-1-dev xvfb
       - name: Install Flutter dependencies
         run: flutter pub get
       - name: Enable linux desktop test target
         run: flutter create . --platforms linux --no-pub
       - name: Run Flutter integration tests
-        run: flutter test integration_test -d linux
+        run: |
+          status=0
+          for test_file in integration_test/*_test.dart; do
+            xvfb-run -a flutter test "$test_file" -d linux || status=1
+          done
+          exit "$status"

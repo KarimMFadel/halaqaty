@@ -96,6 +96,12 @@ type PublicCircleSummary struct {
 	CreatedAt         time.Time `json:"created_at"`
 }
 
+// PublicCircleListResponse is the paginated public discovery response.
+type PublicCircleListResponse struct {
+	Data       []PublicCircleSummary `json:"data"`
+	NextCursor *string               `json:"next_cursor"`
+}
+
 // RoleAssignment is the PUT role 200 response body.
 type RoleAssignment struct {
 	CircleID string `json:"circle_id"`

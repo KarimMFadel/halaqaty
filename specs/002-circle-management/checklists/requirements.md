@@ -45,13 +45,13 @@
 
 ## Canonical-document alignment findings
 
-- [ ] CHK028 Update `docs/management/product/FEATURES.md` F-002 to replace permanent deletion with archive/retirement and history retention. **Finding**: current text still says “delete a circle” and “permanently deletes all data.”
-- [ ] CHK029 Update `docs/management/product/JOURNEY.md` T-05 to remove the stale “MVP: all circles are private” statement. **Finding**: the approved clarification supports public discovery/join plus invite links.
-- [ ] CHK030 Add or confirm the public-discovery/join and invite-refresh operations in `docs/contracts/openapi.yaml` during `/speckit.plan`. **Finding**: the current contract documents invite-code join and archive, but not public discovery or invite-code refresh.
-- [ ] CHK031 Create and accept `docs/engineering/architecture/adr/ADR-012-audit-logging-persistence.md` before implementing persistent audit logging.
+- [x] CHK028 `docs/management/product/FEATURES.md` F-002 defines archive/retirement with history retention and prohibits hard deletion.
+- [x] CHK029 `docs/management/product/JOURNEY.md` T-05 defines public discovery/join, private invite-only behavior, and invite links for both.
+- [x] CHK030 `docs/contracts/openapi.yaml` defines public discovery, public direct join, and invite-code refresh operations.
+- [x] CHK031 `docs/engineering/architecture/adr/ADR-012-audit-logging-persistence.md` exists with Accepted status and defines the MVP audit sink and constraints.
 
 ## Checklist result
 
-**Result**: Specification quality is structurally ready for planning, with four canonical-document/architecture alignment findings remaining.
+**Result**: PASS — specification quality and canonical-document alignment are ready for implementation.
 
 **Gate**: Resolve CHK028–CHK031 before implementation. `/speckit.plan` may proceed only after the source-document decisions are amended, the API contract is aligned, and the audit-persistence ADR is accepted.

@@ -134,7 +134,8 @@ final createCircleControllerProvider =
   return CreateCircleController(
     apiClient: ref.watch(circleApiClientProvider),
     loadFirebaseIdToken: () =>
-        ref.read(firebaseAuthProvider).currentUser?.getIdToken(),
+        ref.read(firebaseAuthProvider).currentUser?.getIdToken() ??
+        Future<String?>.value(),
     readAuthState: () => ref.read(authControllerProvider),
     logout: ref.read(authControllerProvider.notifier).logout,
   );

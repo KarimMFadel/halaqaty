@@ -48,6 +48,11 @@ func (r *Repository) FindCircleByID(ctx context.Context, circleID string) (Circl
 	return r.scanCircle(ctx, findCircleByIDQuery, circleID)
 }
 
+// FindCircleByIDForUpdate returns a circle while holding its row lock in a transaction.
+func (r *Repository) FindCircleByIDForUpdate(ctx context.Context, circleID string) (Circle, error) {
+	return r.scanCircle(ctx, findCircleByIDForUpdateQuery, circleID)
+}
+
 func (r *Repository) scanCircle(ctx context.Context, query string, args ...any) (Circle, error) {
 	var circle Circle
 	err := r.q.QueryRow(ctx, query, args...).Scan(&circle.ID, &circle.Name, &circle.TeacherID, &circle.InviteCode, &circle.Description, &circle.Rules, &circle.MaxCapacity, &circle.IsPrivate, &circle.GenderRestriction, &circle.Language, &circle.GradingPolicy, &circle.IsArchived, &circle.CreatedAt)
@@ -61,11 +66,11 @@ func (r *Repository) scanCircle(ctx context.Context, query string, args ...any) 
 }
 
 // ListPublicCircles returns only redacted active public circle projections.
-func (r *Repository) ListPublicCircles(ctx context.Context, query string, limit int) ([]PublicCircleSummary, error) {
+func (r *Repository) ListPublicCircles(ctx context.Context, query, cursor string, limit int) ([]PublicCircleSummary, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	rows, err := r.q.Query(ctx, listPublicCirclesQuery, query, limit)
+	rows, err := r.q.Query(ctx, listPublicCirclesQuery, query, cursor, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list public circles: %w", err)
 	}

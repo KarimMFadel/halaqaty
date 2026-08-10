@@ -56,13 +56,20 @@ SELECT id::text, name, teacher_id::text, invite_code, description, rules, max_ca
 FROM circles WHERE id = $1::uuid
 `
 
+const findCircleByIDForUpdateQuery = `
+SELECT id::text, name, teacher_id::text, invite_code, description, rules, max_capacity, is_private,
+       gender_restriction, language, grading_policy, is_archived, created_at
+FROM circles WHERE id = $1::uuid FOR UPDATE
+`
+
 const listPublicCirclesQuery = `
 SELECT id::text, name, description, max_capacity, gender_restriction, language, created_at
 FROM circles
 WHERE is_private = FALSE AND is_archived = FALSE
-  AND ($1 = '' OR name ILIKE '%' || $1 || '%')
-ORDER BY created_at DESC, id DESC
-LIMIT $2
+  AND ($1 = '' OR name ILIKE '%' || $1 || '%' ESCAPE E'\\')
+  AND ($2 = '' OR id::text < $2)
+ORDER BY id::text DESC
+LIMIT $3
 `
 
 const updateCircleQuery = `

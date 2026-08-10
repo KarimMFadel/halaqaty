@@ -122,9 +122,11 @@ void main() {
     expect(controller.state.myCircles.last.id, 'private-circle');
 
     await _joinInvite(tester, 'HLQ-DUP2');
-    expect(find.text('أنت عضو في هذه الحلقة بالفعل'), findsOneWidget);
+    expect(controller.state.failure, CircleJoinFailure.alreadyMember);
+    expect(find.byKey(const Key('circleJoinError')), findsOneWidget);
 
     await _joinInvite(tester, 'HLQ-LMT5');
-    expect(find.text('لا يمكنك الانضمام إلى أكثر من 5 حلقات'), findsOneWidget);
+    expect(controller.state.failure, CircleJoinFailure.membershipLimit);
+    expect(find.byKey(const Key('circleJoinError')), findsOneWidget);
   });
 }

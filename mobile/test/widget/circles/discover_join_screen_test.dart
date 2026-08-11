@@ -185,7 +185,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('openCircle-circle-member')));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.byType(CircleDetailScreen), findsOneWidget);
   });

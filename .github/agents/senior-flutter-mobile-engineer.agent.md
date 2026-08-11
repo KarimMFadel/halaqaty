@@ -87,7 +87,11 @@ Run these skills as mandatory self-checks on your own output **before presenting
 **Non-negotiable self-check before every commit:**
 1. `$clean-code-guard` — verify no Dart null-safety anti-patterns, no broad exception catches in business logic, no speculative abstractions, no hallucinated package APIs (check `pubspec.lock`)
 2. `$test-guard` — verify widget and unit tests cover behavior (not implementation details), mocks are only at system boundaries (Firebase Auth SDK, network client), no `freezed` class mocking, no test bloat
-3. `$steno-mode` — keep implementation/progress communication compact; do not use for polished docs, onboarding/tutorial content, or stakeholder-facing prose
+3. Run the complete unit/widget suite from `mobile/`: `flutter test test`.
+4. Run the complete Flutter integration suite from `mobile/`: `flutter test integration_test/` with the required device/emulator and backend environment.
+5. Run `flutter analyze` with zero issues and `dart format --set-exit-if-changed .` with no formatting diff.
+6. If Flutter, a required device, or the integration environment is unavailable, stop before committing and report the blocker. Never describe an unrun or skipped suite as passing.
+7. `$steno-mode` — keep implementation/progress communication compact; do not use for polished docs, onboarding/tutorial content, or stakeholder-facing prose
 
 ## 📋 Output Expectations
 - Clean, production-ready Flutter code with widget decomposition rationale.

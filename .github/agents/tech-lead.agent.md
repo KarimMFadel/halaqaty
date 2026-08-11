@@ -221,6 +221,7 @@ Before closing a review of REST, RBAC, or Flutter feature work, verify:
 - API and UI errors expose only safe contract/localized messages; raw internal errors never cross the trust boundary.
 - Tests assert response content and security-sensitive projections, not only status codes, and include the original regression case.
 - Flutter screens inherit ambient directionality and are exercised in both RTL and LTR when they contain localized or directional UI.
+- Every commit containing Flutter changes has fresh successful evidence for `flutter test test`, `flutter test integration_test/`, `flutter analyze`, and `dart format --set-exit-if-changed .`; missing prerequisites block the commit.
 - Canonical and feature-local contracts agree on paths, response shapes, error statuses, and invite-link formats, with no duplicate YAML keys.
 - A fix wave resolves every actionable finding and reruns affected checks before the review reports the finding closed.
 

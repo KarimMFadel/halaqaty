@@ -170,6 +170,7 @@ Rules:
 - Combine final-review fixes into one bounded fix wave when safe instead of starting one agent per finding.
 - A finding is closed only after its implementation and smallest useful regression coverage are present and the affected checks have been rerun. Do not restate an assigned finding as if that completed the fix.
 - Review endpoint changes at all affected boundaries: service behavior, HTTP handler, production router/middleware, response projection, canonical contract, and feature-local contract when present.
+- Before any commit containing Flutter changes, run the complete unit/widget suite (`flutter test test`), integration suite (`flutter test integration_test/`), analyzer, and formatter from `mobile/`. Missing SDK/device/backend prerequisites block the commit and must be reported.
 - Never claim success from old output; completion evidence must match the current tree.
 
 ### F. State and recovery

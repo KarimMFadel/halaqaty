@@ -236,3 +236,11 @@ The Mobile Engineer ensures all Flutter implementation aligns with Spec-Kit work
 - Icons and directional UI elements work correctly in RTL mode.
 - Numbers and dates are formatted locale-appropriately.
 - Input validation accounts for Arabic text characteristics.
+
+### Recurring Flutter Regression Checklist
+- Inherit the app's ambient `Directionality`; do not force RTL inside feature screens. Exercise both RTL and LTR in widget tests, including directional icons and semantics.
+- Never render raw exceptions, response bodies, stack traces, or `$error` values. Map failures to safe localized copy and keep diagnostic details in controlled logging only.
+- Treat backend `401` responses as stale authentication: clear the local Halaqaty session through the shared auth controller before presenting the signed-out state.
+- Parse the exact OpenAPI response shape. Do not accept speculative wrapped/unwrapped variants unless both are documented contracts.
+- Make every implemented screen reachable from the real application navigation or an existing feature entry point, and prove that path with a widget or router test.
+- For detail/list views, cover loading, safe error, read-only, role-label, RTL/LTR, and accessibility semantics states when applicable.

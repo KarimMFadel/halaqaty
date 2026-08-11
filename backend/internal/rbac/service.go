@@ -723,12 +723,12 @@ func (s *Service) GetCircle(ctx context.Context, userID, circleID string) (Circl
 
 	circle, err := s.store.FindCircleByID(ctx, circleID)
 	if err != nil {
-		return CircleResponse{}, err
+		return CircleResponse{}, fmt.Errorf("get circle: find circle: %w", err)
 	}
 
 	ok, err := s.store.IsMember(ctx, circleID, userID)
 	if err != nil {
-		return CircleResponse{}, err
+		return CircleResponse{}, fmt.Errorf("get circle: check membership: %w", err)
 	}
 	if !ok {
 		return CircleResponse{}, ErrForbidden
@@ -745,16 +745,20 @@ func (s *Service) ListMembers(ctx context.Context, userID, circleID string) ([]C
 
 	_, err := s.store.FindCircleByID(ctx, circleID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list members: find circle: %w", err)
 	}
 
 	ok, err := s.store.IsMember(ctx, circleID, userID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list members: check membership: %w", err)
 	}
 	if !ok {
 		return nil, ErrForbidden
 	}
 
-	return s.store.ListMembers(ctx, circleID)
+	members, err := s.store.ListMembers(ctx, circleID)
+	if err != nil {
+		return nil, fmt.Errorf("list members: query members: %w", err)
+	}
+	return members, nil
 }

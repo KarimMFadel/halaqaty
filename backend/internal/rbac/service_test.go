@@ -21,13 +21,16 @@ const (
 
 // stubStore is an in-memory rbac.Store for service unit tests.
 type stubStore struct {
-	users        map[string]bool
-	circles      map[string]Circle
-	members      map[string]map[string]string
-	nextID       int
-	insertErrors []error
-	searchQuery  string
-	searchLimit  int
+	users          map[string]bool
+	circles        map[string]Circle
+	members        map[string]map[string]string
+	findCircleErr  error
+	isMemberErr    error
+	listMembersErr error
+	nextID         int
+	insertErrors   []error
+	searchQuery    string
+	searchLimit    int
 }
 
 func newStubStore() *stubStore {
@@ -132,6 +135,9 @@ func (s *stubStore) FindCircleByInviteCode(_ context.Context, inviteCode string)
 }
 
 func (s *stubStore) FindCircleByID(_ context.Context, circleID string) (Circle, error) {
+	if s.findCircleErr != nil {
+		return Circle{}, s.findCircleErr
+	}
 	circle, ok := s.circles[circleID]
 	if !ok {
 		return Circle{}, ErrCircleNotFound
@@ -202,6 +208,9 @@ func (s *stubStore) ArchiveCircle(_ context.Context, circleID string) error {
 	return nil
 }
 func (s *stubStore) ListMembers(_ context.Context, circleID string) ([]CircleMember, error) {
+	if s.listMembersErr != nil {
+		return nil, s.listMembersErr
+	}
 	members := s.members[circleID]
 	result := make([]CircleMember, 0, len(members))
 	for id, role := range members {
@@ -211,8 +220,81 @@ func (s *stubStore) ListMembers(_ context.Context, circleID string) ([]CircleMem
 }
 
 func (s *stubStore) IsMember(_ context.Context, circleID, userID string) (bool, error) {
+	if s.isMemberErr != nil {
+		return false, s.isMemberErr
+	}
 	_, ok := s.members[circleID][userID]
 	return ok, nil
+}
+
+func TestCircleReads_WrapStoreErrorsWithOperation(t *testing.T) {
+	storeErr := errors.New("store unavailable")
+	tests := []struct {
+		name    string
+		prepare func(*stubStore)
+		read    func(*Service) error
+		want    string
+	}{
+		{
+			name:    "get circle lookup",
+			prepare: func(store *stubStore) { store.findCircleErr = storeErr },
+			read: func(service *Service) error {
+				_, err := service.GetCircle(context.Background(), unitStudentID, unitCircleID)
+				return err
+			},
+			want: "get circle: find circle",
+		},
+		{
+			name:    "get circle membership",
+			prepare: func(store *stubStore) { store.isMemberErr = storeErr },
+			read: func(service *Service) error {
+				_, err := service.GetCircle(context.Background(), unitStudentID, unitCircleID)
+				return err
+			},
+			want: "get circle: check membership",
+		},
+		{
+			name:    "list members circle lookup",
+			prepare: func(store *stubStore) { store.findCircleErr = storeErr },
+			read: func(service *Service) error {
+				_, err := service.ListMembers(context.Background(), unitStudentID, unitCircleID)
+				return err
+			},
+			want: "list members: find circle",
+		},
+		{
+			name:    "list members membership",
+			prepare: func(store *stubStore) { store.isMemberErr = storeErr },
+			read: func(service *Service) error {
+				_, err := service.ListMembers(context.Background(), unitStudentID, unitCircleID)
+				return err
+			},
+			want: "list members: check membership",
+		},
+		{
+			name:    "list members query",
+			prepare: func(store *stubStore) { store.listMembersErr = storeErr },
+			read: func(service *Service) error {
+				_, err := service.ListMembers(context.Background(), unitStudentID, unitCircleID)
+				return err
+			},
+			want: "list members: query members",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			store := newStubStore()
+			store.circles[unitCircleID] = Circle{ID: unitCircleID}
+			store.members[unitCircleID] = map[string]string{unitStudentID: RoleStudent}
+			test.prepare(store)
+
+			err := test.read(NewService(store, nil))
+			if !errors.Is(err, storeErr) || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error: got %v, want wrapped %q preserving cause", err, test.want)
+			}
+		})
+	}
 }
 
 func TestCreateCircleValidation(t *testing.T) {

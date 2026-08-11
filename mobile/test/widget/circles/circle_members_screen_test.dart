@@ -10,11 +10,15 @@ import 'package:halaqaty_mobile/features/circles/presentation/circle_members_scr
 void main() {
   Widget createWidgetUnderTest({
     required List<Override> overrides,
+    TextDirection textDirection = TextDirection.rtl,
   }) {
     return ProviderScope(
       overrides: overrides,
-      child: const MaterialApp(
-        home: CircleMembersScreen(circleId: 'circle-1'),
+      child: MaterialApp(
+        home: Directionality(
+          textDirection: textDirection,
+          child: const CircleMembersScreen(circleId: 'circle-1'),
+        ),
       ),
     );
   }
@@ -23,9 +27,12 @@ void main() {
     final completer = Completer<List<CircleMember>>();
     await tester.pumpWidget(createWidgetUnderTest(
       overrides: [
-        circleMembersProvider('circle-1').overrideWith((ref) => completer.future),
+        circleMembersProvider('circle-1')
+            .overrideWith((ref) => completer.future),
         circleDetailProvider('circle-1')
-            .overrideWith((ref) => Future.value(_mockCircle(isArchived: false))),
+            .overrideWith((ref) => Future.value(
+                  _mockCircle(isArchived: false),
+                )),
       ],
     ));
 
@@ -36,14 +43,18 @@ void main() {
   testWidgets('displays error state', (tester) async {
     await tester.pumpWidget(createWidgetUnderTest(
       overrides: [
-        circleMembersProvider('circle-1').overrideWith((ref) => throw Exception('Network error')),
-        circleDetailProvider('circle-1').overrideWith((ref) => Future.value(_mockCircle(isArchived: false))),
+        circleMembersProvider('circle-1')
+            .overrideWith((ref) => throw Exception('Network error')),
+        circleDetailProvider('circle-1').overrideWith(
+          (ref) => Future.value(_mockCircle(isArchived: false)),
+        ),
       ],
     ));
 
     await tester.pump();
 
     expect(find.textContaining('حدث خطأ أثناء تحميل الأعضاء'), findsOneWidget);
+    expect(find.textContaining('Network error'), findsNothing);
   });
 
   testWidgets('displays members with correct roles', (tester) async {
@@ -64,8 +75,11 @@ void main() {
 
     await tester.pumpWidget(createWidgetUnderTest(
       overrides: [
-        circleMembersProvider('circle-1').overrideWith((ref) => Future.value(members)),
-        circleDetailProvider('circle-1').overrideWith((ref) => Future.value(_mockCircle(isArchived: false))),
+        circleMembersProvider('circle-1')
+            .overrideWith((ref) => Future.value(members)),
+        circleDetailProvider('circle-1').overrideWith(
+          (ref) => Future.value(_mockCircle(isArchived: false)),
+        ),
       ],
     ));
 
@@ -77,11 +91,15 @@ void main() {
     expect(find.text('معلم'), findsOneWidget);
   });
 
-  testWidgets('displays archived warning if circle is archived', (tester) async {
+  testWidgets('displays archived warning if circle is archived',
+      (tester) async {
     await tester.pumpWidget(createWidgetUnderTest(
       overrides: [
-        circleMembersProvider('circle-1').overrideWith((ref) => Future.value([])),
-        circleDetailProvider('circle-1').overrideWith((ref) => Future.value(_mockCircle(isArchived: true))),
+        circleMembersProvider('circle-1')
+            .overrideWith((ref) => Future.value([])),
+        circleDetailProvider('circle-1').overrideWith(
+          (ref) => Future.value(_mockCircle(isArchived: true)),
+        ),
       ],
     ));
 
@@ -109,19 +127,16 @@ void main() {
       overrides: [
         circleMembersProvider('circle-1')
             .overrideWith((ref) => Future.value(members)),
-        circleDetailProvider('circle-1').overrideWith((ref) => Future.value(_mockCircle(isArchived: false))),
+        circleDetailProvider('circle-1').overrideWith(
+          (ref) => Future.value(_mockCircle(isArchived: false)),
+        ),
       ],
     ));
 
     await tester.pump();
 
-    final directionality = tester.widget<Directionality>(
-      find.descendant(
-        of: find.byType(CircleMembersScreen),
-        matching: find.byType(Directionality),
-      ).first,
-    );
-    expect(directionality.textDirection, TextDirection.rtl);
+    final screenContext = tester.element(find.byType(CircleMembersScreen));
+    expect(Directionality.of(screenContext), TextDirection.rtl);
     expect(
       find.byWidgetPredicate((widget) =>
           widget is Semantics &&
@@ -129,6 +144,32 @@ void main() {
       findsOneWidget,
     );
     semantics.dispose();
+  });
+
+  testWidgets('uses LTR labels when the app direction is LTR', (tester) async {
+    await tester.pumpWidget(createWidgetUnderTest(
+      textDirection: TextDirection.ltr,
+      overrides: [
+        circleMembersProvider('circle-1').overrideWith(
+          (ref) => Future.value([
+            CircleMember(
+              userId: 'u1',
+              displayName: 'Ahmed',
+              role: CircleRole.student,
+              joinedAt: DateTime(2023, 1, 1),
+            ),
+          ]),
+        ),
+        circleDetailProvider('circle-1').overrideWith(
+          (ref) => Future.value(_mockCircle(isArchived: false)),
+        ),
+      ],
+    ));
+    await tester.pump();
+
+    expect(find.text('Circle members'), findsOneWidget);
+    expect(find.text('Student'), findsOneWidget);
+    expect(find.textContaining('Joined:'), findsOneWidget);
   });
 }
 

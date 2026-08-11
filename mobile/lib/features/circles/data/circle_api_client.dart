@@ -208,8 +208,7 @@ class CircleApiClient {
       '/circles/$circleId',
       options: Options(headers: _authHeaders(firebaseIdToken, sessionId)),
     );
-    final data = response.data!['data'] ?? response.data;
-    return CircleResponse.fromJson(data as Map<String, dynamic>);
+    return CircleResponse.fromJson(response.data!);
   }
 
   Future<List<CircleMember>> listCircleMembers({

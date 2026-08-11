@@ -8,9 +8,19 @@ class CircleDetailScreen extends ConsumerWidget {
 
   final String circleId;
 
-  String _privacyLabel(bool isPrivate) => isPrivate ? 'خاصة' : 'عامة';
+  String _privacyLabel(bool isPrivate, bool rtl) => isPrivate
+      ? (rtl ? 'خاصة' : 'Private')
+      : (rtl ? 'عامة' : 'Public');
 
-  String _genderLabel(String genderRestriction) {
+  String _genderLabel(String genderRestriction, bool rtl) {
+    if (!rtl) {
+      return switch (genderRestriction) {
+        'male' => 'Male',
+        'female' => 'Female',
+        'mixed' => 'Mixed',
+        _ => 'Unspecified',
+      };
+    }
     switch (genderRestriction) {
       case 'male':
         return 'ذكور';
@@ -26,30 +36,31 @@ class CircleDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final circleAsync = ref.watch(circleDetailProvider(circleId));
+    final rtl = Directionality.of(context) == TextDirection.rtl;
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('تفاصيل الحلقة'),
-        ),
-        body: circleAsync.when(
-          data: (circle) {
-            return ListView(
-              padding: const EdgeInsets.all(16.0),
-              children: [
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(rtl ? 'تفاصيل الحلقة' : 'Circle details'),
+      ),
+      body: circleAsync.when(
+        data: (circle) {
+          return ListView(
+            padding: const EdgeInsets.all(16.0),
+            children: [
                 if (circle.isArchived)
                   Container(
                     padding: const EdgeInsets.all(12),
                     color: Colors.amber.shade100,
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.archive, color: Colors.amber),
-                        SizedBox(width: 8),
+                        const Icon(Icons.archive, color: Colors.amber),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'هذه الحلقة مؤرشفة. القراءة فقط متاحة.',
-                            style: TextStyle(color: Colors.black87),
+                            rtl
+                                ? 'هذه الحلقة مؤرشفة. القراءة فقط متاحة.'
+                                : 'This circle is archived and read-only.',
+                            style: const TextStyle(color: Colors.black87),
                           ),
                         ),
                       ],
@@ -70,28 +81,29 @@ class CircleDetailScreen extends ConsumerWidget {
                     children: [
                       ListTile(
                         leading: const Icon(Icons.group),
-                        title: const Text('السعة القصوى'),
+                        title: Text(rtl ? 'السعة القصوى' : 'Maximum capacity'),
                         subtitle: Text('${circle.maxCapacity}'),
                       ),
                       ListTile(
                         leading: const Icon(Icons.lock_outline),
-                        title: const Text('نوع الحلقة'),
-                        subtitle: Text(_privacyLabel(circle.isPrivate)),
+                        title: Text(rtl ? 'نوع الحلقة' : 'Circle visibility'),
+                        subtitle: Text(_privacyLabel(circle.isPrivate, rtl)),
                       ),
                       ListTile(
                         leading: const Icon(Icons.wc),
-                        title: const Text('الفئة المستهدفة'),
-                        subtitle: Text(_genderLabel(circle.genderRestriction)),
+                        title: Text(rtl ? 'الفئة المستهدفة' : 'Audience'),
+                        subtitle:
+                            Text(_genderLabel(circle.genderRestriction, rtl)),
                       ),
                       ListTile(
                         leading: const Icon(Icons.language),
-                        title: const Text('اللغة'),
+                        title: Text(rtl ? 'اللغة' : 'Language'),
                         subtitle: Text(circle.language),
                       ),
                       if (circle.rules != null && circle.rules!.isNotEmpty)
                         ListTile(
                           leading: const Icon(Icons.rule),
-                          title: const Text('قواعد الحلقة'),
+                          title: Text(rtl ? 'قواعد الحلقة' : 'Circle rules'),
                           subtitle: Text(circle.rules!),
                         ),
                     ],
@@ -100,8 +112,9 @@ class CircleDetailScreen extends ConsumerWidget {
                 const Divider(height: 32),
                 ListTile(
                   leading: const Icon(Icons.people),
-                  title: const Text('الأعضاء'),
-                  trailing: const Icon(Icons.chevron_right),
+                  title: Text(rtl ? 'الأعضاء' : 'Members'),
+                  trailing:
+                      Icon(rtl ? Icons.chevron_left : Icons.chevron_right),
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -111,12 +124,15 @@ class CircleDetailScreen extends ConsumerWidget {
                     );
                   },
                 ),
-              ],
-            );
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, stack) => Center(
-            child: Text('حدث خطأ في تحميل بيانات الحلقة'),
+            ],
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stack) => Center(
+          child: Text(
+            rtl
+                ? 'حدث خطأ في تحميل بيانات الحلقة'
+                : 'Could not load circle details',
           ),
         ),
       ),

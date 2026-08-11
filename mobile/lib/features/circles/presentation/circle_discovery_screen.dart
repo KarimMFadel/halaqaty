@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_detail_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_join_screen.dart';
 
 class CircleDiscoveryScreen extends ConsumerStatefulWidget {
@@ -18,9 +19,12 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
-        ref.read(circleDiscoveryControllerProvider.notifier).discover();
+        final controller =
+            ref.read(circleDiscoveryControllerProvider.notifier);
+        await controller.loadMyCircles();
+        if (mounted) await controller.discover();
       }
     });
   }
@@ -88,16 +92,46 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
         ),
       );
     }
-    if (state.publicCircles.isEmpty) {
-      return Center(
-        child: Text(rtl ? 'لا توجد حلقات عامة متاحة' : 'No public circles'),
-      );
-    }
-    return ListView.builder(
+    return ListView(
       padding: const EdgeInsets.all(16),
-      itemCount: state.publicCircles.length,
-      itemBuilder: (context, index) =>
-          _circleCard(state.publicCircles[index], state, rtl),
+      children: [
+        if (state.myCircles.isNotEmpty) ...[
+          Text(
+            rtl ? 'حلقاتي' : 'My circles',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          ...state.myCircles.map((circle) => _myCircleCard(circle, rtl)),
+          const SizedBox(height: 16),
+        ],
+        Text(
+          rtl ? 'الحلقات العامة' : 'Public circles',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        if (state.publicCircles.isEmpty)
+          Text(rtl ? 'لا توجد حلقات عامة متاحة' : 'No public circles')
+        else
+          ...state.publicCircles.map(
+            (circle) => _circleCard(circle, state, rtl),
+          ),
+      ],
+    );
+  }
+
+  Widget _myCircleCard(CircleSummary circle, bool rtl) {
+    return Card(
+      child: ListTile(
+        key: Key('openCircle-${circle.id}'),
+        title: Text(circle.name),
+        subtitle: circle.description == null ? null : Text(circle.description!),
+        trailing: Icon(rtl ? Icons.chevron_left : Icons.chevron_right),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => CircleDetailScreen(circleId: circle.id),
+          ),
+        ),
+      ),
     );
   }
 

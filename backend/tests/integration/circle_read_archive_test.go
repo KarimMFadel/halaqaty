@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -23,45 +24,43 @@ func TestCircleReadArchive(t *testing.T) {
 		t.Fatalf("add student membership: %v", err)
 	}
 
-	details, err := env.svc.GetCircle(ctx, env.userIDs["student"], circle.ID)
-	if err != nil {
-		t.Fatalf("student read circle details: %v", err)
-	}
+	detailsResponse := env.getCircle(t, "student", circle.ID)
+	var details rbac.CircleResponse
+	decodeJSONResponse(t, detailsResponse, &details)
 	if details.IsArchived {
 		t.Fatalf("circle should be active before archive")
 	}
-	members, err := env.svc.ListMembers(ctx, env.userIDs["student"], circle.ID)
-	if err != nil {
-		t.Fatalf("student list members: %v", err)
-	}
+	membersResponse := env.getCircleMembers(t, "student", circle.ID)
+	var membersPayload rbac.MemberListResponse
+	decodeJSONResponse(t, membersResponse, &membersPayload)
+	members := membersPayload.Data
 	if len(members) < 2 {
 		t.Fatalf("expected retained members, got %d", len(members))
 	}
+	assertMemberProjection(t, members, env.userIDs["student"], "student", rbac.RoleStudent)
+	assertMemberProjection(t, members, env.userIDs["creator"], "creator", rbac.RoleTeacher)
 
-	_, err = env.svc.GetCircle(ctx, env.userIDs["outsider"], circle.ID)
-	if !errors.Is(err, rbac.ErrForbidden) {
-		t.Fatalf("outsider read details: got %v want %v", err, rbac.ErrForbidden)
+	if response := env.getCircle(t, "outsider", circle.ID); response.Code != http.StatusForbidden {
+		t.Fatalf("outsider read details: got %d want %d body=%s", response.Code, http.StatusForbidden, response.Body.String())
 	}
-	_, err = env.svc.ListMembers(ctx, env.userIDs["outsider"], circle.ID)
-	if !errors.Is(err, rbac.ErrForbidden) {
-		t.Fatalf("outsider list members: got %v want %v", err, rbac.ErrForbidden)
+	if response := env.getCircleMembers(t, "outsider", circle.ID); response.Code != http.StatusForbidden {
+		t.Fatalf("outsider list members: got %d want %d body=%s", response.Code, http.StatusForbidden, response.Body.String())
 	}
 
 	if err := env.svc.ArchiveCircle(ctx, env.userIDs["creator"], circle.ID); err != nil {
 		t.Fatalf("archive circle: %v", err)
 	}
 
-	archivedDetails, err := env.svc.GetCircle(ctx, env.userIDs["student"], circle.ID)
-	if err != nil {
-		t.Fatalf("student read archived details: %v", err)
-	}
+	archivedDetailsResponse := env.getCircle(t, "student", circle.ID)
+	var archivedDetails rbac.CircleResponse
+	decodeJSONResponse(t, archivedDetailsResponse, &archivedDetails)
 	if !archivedDetails.IsArchived {
 		t.Fatalf("expected archived circle details to report is_archived=true")
 	}
-	archivedMembers, err := env.svc.ListMembers(ctx, env.userIDs["student"], circle.ID)
-	if err != nil {
-		t.Fatalf("student list archived members: %v", err)
-	}
+	archivedMembersResponse := env.getCircleMembers(t, "student", circle.ID)
+	var archivedMembersPayload rbac.MemberListResponse
+	decodeJSONResponse(t, archivedMembersResponse, &archivedMembersPayload)
+	archivedMembers := archivedMembersPayload.Data
 	if len(archivedMembers) != len(members) {
 		t.Fatalf("member retention mismatch after archive: before=%d after=%d", len(members), len(archivedMembers))
 	}
@@ -69,6 +68,45 @@ func TestCircleReadArchive(t *testing.T) {
 	if err := env.svc.AddStudentMember(ctx, circle.ID, env.userIDs["outsider"]); !errors.Is(err, rbac.ErrCircleArchived) {
 		t.Fatalf("mutation after archive should fail with ErrCircleArchived, got %v", err)
 	}
+}
+
+func (e *circleRoleEnv) getCircle(t *testing.T, actor, circleID string) *httptest.ResponseRecorder {
+	t.Helper()
+	return doJSONRequest(t, e.mux, http.MethodGet, "/circles/"+circleID, "", map[string]string{
+		httpconst.HeaderAuthorization: e.tokens[actor],
+		httpconst.HeaderSessionID:     e.sessions[actor],
+	})
+}
+
+func (e *circleRoleEnv) getCircleMembers(t *testing.T, actor, circleID string) *httptest.ResponseRecorder {
+	t.Helper()
+	return doJSONRequest(t, e.mux, http.MethodGet, "/circles/"+circleID+"/members", "", map[string]string{
+		httpconst.HeaderAuthorization: e.tokens[actor],
+		httpconst.HeaderSessionID:     e.sessions[actor],
+	})
+}
+
+func decodeJSONResponse(t *testing.T, response *httptest.ResponseRecorder, destination any) {
+	t.Helper()
+	if response.Code != http.StatusOK {
+		t.Fatalf("status: got %d want %d body=%s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), destination); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+}
+
+func assertMemberProjection(t *testing.T, members []rbac.CircleMember, userID, displayName, role string) {
+	t.Helper()
+	for _, member := range members {
+		if member.UserID == userID {
+			if member.DisplayName != displayName || member.Role != role || member.JoinedAt.IsZero() {
+				t.Fatalf("member projection: got %+v want display_name=%q role=%q and non-zero joined_at", member, displayName, role)
+			}
+			return
+		}
+	}
+	t.Fatalf("member %s not found in %+v", userID, members)
 }
 
 func TestCircleReadArchive_PublicDiscoveryStaysRedacted(t *testing.T) {

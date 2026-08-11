@@ -163,6 +163,22 @@ func (r *Router) registerRoutes() {
 		}
 		r.mux.Handle(routeCircleJoin, r.requireWithUserLimit(joinPublicCircleHandler))
 
+		var getCircleHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		if rbacH != nil {
+			getCircleHandler = http.HandlerFunc(rbacH.GetCircle)
+		}
+		r.mux.Handle(routeCircleGet, r.requireWithUserLimit(getCircleHandler))
+
+		var getCircleMembersHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		if rbacH != nil {
+			getCircleMembersHandler = http.HandlerFunc(rbacH.ListMembers)
+		}
+		r.mux.Handle(routeCircleMembersGet, r.requireWithUserLimit(getCircleMembersHandler))
+
 		var discoverCirclesHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
 		})

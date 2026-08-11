@@ -118,17 +118,30 @@ func (r *Repository) ArchiveCircle(ctx context.Context, circleID string) error {
 	return nil
 }
 
-// ListMembers returns the current membership projection.
-func (r *Repository) ListMembers(ctx context.Context, circleID string) ([]Member, error) {
+// IsMember reports whether userID is an active member of circleID.
+func (r *Repository) IsMember(ctx context.Context, circleID, userID string) (bool, error) {
+	var role string
+	err := r.q.QueryRow(ctx, isMemberQuery, circleID, userID).Scan(&role)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("check circle membership: %w", err)
+	}
+	return true, nil
+}
+
+// ListMembers returns all members of a circle with their display names and roles.
+func (r *Repository) ListMembers(ctx context.Context, circleID string) ([]CircleMember, error) {
 	rows, err := r.q.Query(ctx, listCircleMembersQuery, circleID)
 	if err != nil {
 		return nil, fmt.Errorf("list circle members: %w", err)
 	}
 	defer rows.Close()
-	var members []Member
+	var members []CircleMember
 	for rows.Next() {
-		var member Member
-		if err := rows.Scan(&member.UserID, &member.Role); err != nil {
+		var member CircleMember
+		if err := rows.Scan(&member.UserID, &member.DisplayName, &member.Role, &member.JoinedAt); err != nil {
 			return nil, fmt.Errorf("scan circle member: %w", err)
 		}
 		members = append(members, member)

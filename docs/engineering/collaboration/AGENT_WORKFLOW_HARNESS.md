@@ -168,11 +168,15 @@ Rules:
 - Run full applicable quality gates once before PR or completion. After a fix, rerun the affected focused checks and any full gate invalidated by the change.
 - Do not make reviewers rerun unchanged tests when a trustworthy report contains the command and result. Reviewers rerun tests only when evidence is missing, stale, suspicious, or affected by later changes.
 - Combine final-review fixes into one bounded fix wave when safe instead of starting one agent per finding.
+- A finding is closed only after its implementation and smallest useful regression coverage are present and the affected checks have been rerun. Do not restate an assigned finding as if that completed the fix.
+- Review endpoint changes at all affected boundaries: service behavior, HTTP handler, production router/middleware, response projection, canonical contract, and feature-local contract when present.
+- Before any commit containing Flutter changes, run the complete unit/widget suite (`flutter test test`), integration suite (`flutter test integration_test/`), analyzer, and formatter from `mobile/`. Missing SDK/device/backend prerequisites block the commit and must be reported.
 - Never claim success from old output; completion evidence must match the current tree.
 
 ### F. State and recovery
 
 - Treat the Spec-Kit artifacts and Git history as durable state; chat memory is not authoritative.
+- Mark a `tasks.md` item `[X]` only when its named deliverables exist and current evidence supports completion. A skipped environment-dependent test is reported as residual verification risk, never described as a passing test.
 - When Superpowers subagent-driven development is active, use its plan-specific gitignored ledger and resume from the first incomplete task. Do not create a competing committed plan.
 - After context compaction, inspect the ledger, current task state, `git status`, and `git log` before redispatching work.
 - Preserve user changes and untracked files. Never include unrelated changes in an agent brief, patch, stage, or commit.

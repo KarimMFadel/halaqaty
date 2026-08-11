@@ -25,6 +25,22 @@ func TestRouter_RegistersVersionedAuthRoutes(t *testing.T) {
 	}
 }
 
+func TestRouter_CircleReadRoutesRequireAuth(t *testing.T) {
+	circleID := "00000000-0000-0000-0000-000000000001"
+	router := NewRouter(MiddlewareSet{Auth: middlewareForRouteTest()})
+
+	for _, path := range []string{
+		"/api/v1/circles/" + circleID,
+		"/api/v1/circles/" + circleID + "/members",
+	} {
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("GET %s: got %d, want %d (unauthenticated should be rejected)", path, rec.Code, http.StatusUnauthorized)
+		}
+	}
+}
+
 func TestRouter_MetricsRequiresToken(t *testing.T) {
 	metricStore := new(metrics.AuthMetrics)
 	metricStore.RecordRequest(time.Millisecond)

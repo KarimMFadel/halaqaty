@@ -173,12 +173,17 @@ func (s *circleStoreStub) ArchiveCircle(_ context.Context, circleID string) erro
 	s.circles[circleID] = circle
 	return nil
 }
-func (s *circleStoreStub) ListMembers(_ context.Context, circleID string) ([]rbac.Member, error) {
-	result := make([]rbac.Member, 0, len(s.members[circleID]))
+func (s *circleStoreStub) ListMembers(_ context.Context, circleID string) ([]rbac.CircleMember, error) {
+	result := make([]rbac.CircleMember, 0, len(s.members[circleID]))
 	for id, role := range s.members[circleID] {
-		result = append(result, rbac.Member{UserID: id, Role: role})
+		result = append(result, rbac.CircleMember{UserID: id, Role: role})
 	}
 	return result, nil
+}
+
+func (s *circleStoreStub) IsMember(_ context.Context, circleID, userID string) (bool, error) {
+	_, ok := s.members[circleID][userID]
+	return ok, nil
 }
 
 // RoleForUserInCircle satisfies middleware.CircleMembershipRepository.

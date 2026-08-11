@@ -87,7 +87,11 @@ Run these skills as mandatory self-checks on your own output **before presenting
 **Non-negotiable self-check before every commit:**
 1. `$clean-code-guard` — verify no Dart null-safety anti-patterns, no broad exception catches in business logic, no speculative abstractions, no hallucinated package APIs (check `pubspec.lock`)
 2. `$test-guard` — verify widget and unit tests cover behavior (not implementation details), mocks are only at system boundaries (Firebase Auth SDK, network client), no `freezed` class mocking, no test bloat
-3. `$steno-mode` — keep implementation/progress communication compact; do not use for polished docs, onboarding/tutorial content, or stakeholder-facing prose
+3. Run the complete unit/widget suite from `mobile/`: `flutter test test`.
+4. Run the complete Flutter integration suite from `mobile/`: `flutter test integration_test/` with the required device/emulator and backend environment.
+5. Run `flutter analyze` with zero issues and `dart format --set-exit-if-changed .` with no formatting diff.
+6. If Flutter, a required device, or the integration environment is unavailable, stop before committing and report the blocker. Never describe an unrun or skipped suite as passing.
+7. `$steno-mode` — keep implementation/progress communication compact; do not use for polished docs, onboarding/tutorial content, or stakeholder-facing prose
 
 ## 📋 Output Expectations
 - Clean, production-ready Flutter code with widget decomposition rationale.
@@ -237,3 +241,11 @@ The Mobile Engineer ensures all Flutter implementation aligns with Spec-Kit work
 - Icons and directional UI elements work correctly in RTL mode.
 - Numbers and dates are formatted locale-appropriately.
 - Input validation accounts for Arabic text characteristics.
+
+### Recurring Flutter Regression Checklist
+- Inherit the app's ambient `Directionality`; do not force RTL inside feature screens. Exercise both RTL and LTR in widget tests, including directional icons and semantics.
+- Never render raw exceptions, response bodies, stack traces, or `$error` values. Map failures to safe localized copy and keep diagnostic details in controlled logging only.
+- Treat backend `401` responses as stale authentication: clear the local Halaqaty session through the shared auth controller before presenting the signed-out state.
+- Parse the exact OpenAPI response shape. Do not accept speculative wrapped/unwrapped variants unless both are documented contracts.
+- Make every implemented screen reachable from the real application navigation or an existing feature entry point, and prove that path with a widget or router test.
+- For detail/list views, cover loading, safe error, read-only, role-label, RTL/LTR, and accessibility semantics states when applicable.

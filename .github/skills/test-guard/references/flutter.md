@@ -298,6 +298,8 @@ Circle makeCircle({
 
 Use the project Makefiles. Run from the repo root or from `mobile/` directly:
 
+**Mandatory before every commit containing Flutter production or test changes:** run the complete unit/widget suite, complete integration suite, analyzer, and formatter commands below. Focused tests are useful during development but do not replace the full gate. A missing Flutter SDK, device/emulator, or backend environment blocks the commit and must be reported as a blocker.
+
 ```bash
 # All unit + widget tests — from repo root or mobile/
 make test
@@ -325,4 +327,7 @@ flutter test test/features/circle/domain/circle_service_test.dart
 
 # Integration tests (requires connected device or emulator)
 flutter test integration_test/
+
+# Formatting gate
+dart format --set-exit-if-changed .
 ```

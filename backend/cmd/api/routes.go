@@ -18,6 +18,8 @@ const (
 	routeCirclesJoin      = "POST /api/v1/circles/join"
 	routeCirclesDiscover  = "GET /api/v1/circles/discover"
 	routeCircleJoin       = "POST /api/v1/circles/{circleId}/join"
+	routeCircleGet        = "GET /api/v1/circles/{circleId}"
+	routeCircleMembersGet = "GET /api/v1/circles/{circleId}/members"
 	routeCircleAssignRole = "PUT /api/v1/circles/{circleId}/members/{userId}/role"
 	routeUsersSearch      = "GET /api/v1/users/search"
 )

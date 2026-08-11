@@ -119,3 +119,16 @@ type UserSearchResult struct {
 type UserSearchResponse struct {
 	Data []UserSearchResult `json:"data"`
 }
+
+// CircleMember is the detailed projection for a member returned in the list.
+type CircleMember struct {
+	UserID      string    `json:"user_id"`
+	DisplayName string    `json:"display_name"`
+	Role        string    `json:"role"`
+	JoinedAt    time.Time `json:"joined_at"`
+}
+
+// MemberListResponse is the GET /circles/{circleId}/members response body.
+type MemberListResponse struct {
+	Data []CircleMember `json:"data"`
+}

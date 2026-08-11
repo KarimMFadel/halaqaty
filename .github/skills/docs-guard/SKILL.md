@@ -65,6 +65,7 @@ Halaqaty's critical documentation surfaces are:
 
 5. **A code change owes a docs change.** When editing code whose behavior is documented — rename, signature change, new default, removed field, new error code — update every doc surface that mentions it in the same change.
    - **Go endpoint change**: update `docs/contracts/openapi.yaml` in the same PR. No exceptions.
+   - **Feature contract sync**: when `specs/NNN-feature/contracts/` contains the same REST surface, regenerate or synchronize it through the Spec-Kit workflow; do not hand-edit generated artifacts. Compare methods, paths, schemas, and every documented success/error response against the canonical contract; reject duplicate YAML keys.
    - **WebSocket event change**: update `docs/contracts/ws_events.md` in the same PR.
    - **Grep rule**: before finishing, run `grep -r "old_symbol_name" docs/` to find every docs surface that mentions the old name.
 
@@ -107,7 +108,8 @@ Halaqaty's critical documentation surfaces are:
 5. If this change touched a WebSocket event: did you update `docs/contracts/ws_events.md`?
 6. Any docstring that just restates the signature? Any section that restates its heading?
 7. Are all error response codes (400/401/403/404/409/422) documented in the OpenAPI spec for new endpoints?
-8. If this is an ADR: does it state the real decision? Are alternatives listed? Is it numbered sequentially?
+8. If a feature-local OpenAPI contract covers the changed surface, does it exactly match the canonical paths, shapes, and responses, with no duplicate keys?
+9. If this is an ADR: does it state the real decision? Are alternatives listed? Is it numbered sequentially?
 
 If any answer is wrong, fix it before showing the user.
 

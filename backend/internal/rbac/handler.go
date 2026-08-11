@@ -161,6 +161,44 @@ func (h *Handler) AssignRole(w http.ResponseWriter, r *http.Request) {
 	phttp.WriteJSON(w, http.StatusOK, assignment)
 }
 
+// GetCircle handles GET /circles/{circleId}.
+func (h *Handler) GetCircle(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.service == nil {
+		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		return
+	}
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	circle, err := h.service.GetCircle(r.Context(), principal.UserID, r.PathValue("circleId"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusOK, circle)
+}
+
+// ListMembers handles GET /circles/{circleId}/members.
+func (h *Handler) ListMembers(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.service == nil {
+		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		return
+	}
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	members, err := h.service.ListMembers(r.Context(), principal.UserID, r.PathValue("circleId"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusOK, MemberListResponse{Data: members})
+}
+
 // writeServiceError maps service errors onto the standard error envelope.
 func writeServiceError(w http.ResponseWriter, err error) {
 	var validationErr *ValidationError

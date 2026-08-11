@@ -211,6 +211,19 @@ Use these skills when reviewing code submitted by any agent, and mandate that de
 
 **Require developer agents to self-check before submitting:** No PR is ready for Tech Lead review without the agent having run the relevant guards on their own output first.
 
+### Recurring Regression Review
+
+Before closing a review of REST, RBAC, or Flutter feature work, verify:
+
+- The user-visible flow is reachable through real navigation, and backend endpoints are registered on the production router with the required middleware.
+- Authorization uses the narrowest point lookup and tests distinguish `401` authentication failures from `403` authorization failures.
+- API and UI errors expose only safe contract/localized messages; raw internal errors never cross the trust boundary.
+- Tests assert response content and security-sensitive projections, not only status codes, and include the original regression case.
+- Flutter screens inherit ambient directionality and are exercised in both RTL and LTR when they contain localized or directional UI.
+- Every commit containing Flutter changes has fresh successful evidence for `flutter test test`, `flutter test integration_test/`, `flutter analyze`, and `dart format --set-exit-if-changed .`; missing prerequisites block the commit.
+- Canonical and feature-local contracts agree on paths, response shapes, error statuses, and invite-link formats, with no duplicate YAML keys.
+- A fix wave resolves every actionable finding and reruns affected checks before the review reports the finding closed.
+
 ### Review Standards by Category
 
 **Blockers (Must Fix)**

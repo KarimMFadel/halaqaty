@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
+import 'package:halaqaty_mobile/features/circles/application/circle_detail_controller.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_detail_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_discovery_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_join_screen.dart';
 
@@ -20,14 +22,31 @@ final _publicCircle = CircleSummary(
   createdAt: DateTime.utc(2026, 8, 1),
 );
 
+final _memberCircle = CircleSummary(
+  id: 'circle-member',
+  name: 'حلقتي',
+  description: 'حلقة مسجل بها',
+  maxCapacity: 20,
+  genderRestriction: 'unspecified',
+  language: 'ar',
+  createdAt: DateTime.utc(2026, 8, 1),
+);
+
 class _StubCircleApiClient extends CircleApiClient {
   _StubCircleApiClient({this.discoveryCompleter}) : super(Dio());
 
   final Completer<CircleDiscoveryPage>? discoveryCompleter;
   List<CircleSummary> discovered = [_publicCircle];
+  List<CircleSummary> memberships = const [];
   DioException? joinError;
   String? joinedCircleId;
   String? joinedInviteCode;
+
+  @override
+  Future<List<CircleSummary>> listCircles({
+    required String firebaseIdToken,
+    required String sessionId,
+  }) async => memberships;
 
   @override
   Future<CircleDiscoveryPage> discoverCircles({
@@ -84,6 +103,9 @@ Widget _build(Widget child, CircleDiscoveryController controller) {
   return ProviderScope(
     overrides: [
       circleDiscoveryControllerProvider.overrideWith((_) => controller),
+      circleDetailProvider('circle-member').overrideWith(
+        (_) => Future.value(_joinedCircle('circle-member', 'حلقتي')),
+      ),
     ],
     child: MaterialApp(
       home: Directionality(textDirection: TextDirection.rtl, child: child),
@@ -152,6 +174,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(apiClient.joinedCircleId, 'circle-public');
     expect(find.text('تم الانضمام إلى الحلقة'), findsOneWidget);
+  });
+
+  testWidgets('CircleDiscoveryScreen: opens an authenticated member circle',
+      (tester) async {
+    final apiClient = _StubCircleApiClient()..memberships = [_memberCircle];
+    await tester.pumpWidget(
+      _build(const CircleDiscoveryScreen(), _controller(apiClient)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('openCircle-circle-member')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CircleDetailScreen), findsOneWidget);
   });
 
   testWidgets('CircleJoinScreen: rejects invalid invite before the API call',

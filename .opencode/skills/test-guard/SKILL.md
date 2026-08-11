@@ -147,6 +147,16 @@ Group violations by file. If a file has no violations, don't mention it.
 - **Sacred:** Rule 6 — never delete, always allow
 - **Worth noting:** Rule 9 — test architecture; flag it, but don't block small changes on it
 
+## Flutter pre-commit execution gate
+
+Test Guard approval is not completion evidence by itself. Before any commit containing Flutter production or test changes, require fresh successful output from `mobile/` for:
+
+1. `flutter test test` — the complete unit and widget suite.
+2. `flutter test integration_test/` — the complete integration suite with its required device/emulator and backend environment.
+3. `flutter analyze` and `dart format --set-exit-if-changed .`.
+
+If Flutter, a required target device, or the integration environment is unavailable, the commit is blocked. Report the missing prerequisite; do not call the suite skipped, passing, or verified. Focused tests may be used during development but do not replace these full pre-commit suites.
+
 ## References
 
 - [references/go.md](references/go.md) — Go/testify/gomock patterns: table-driven tests, mock boundaries, real pgx setup, httptest, integration build tags
@@ -154,7 +164,7 @@ Group violations by file. If a file has no violations, don't mention it.
 
 ## What this skill does NOT do
 
-- Run tests. Use `make test` (unit) or `make test-integration` (integration with `DATABASE_URL`). For Flutter: `make test` from root or `flutter test test` from `mobile/`.
+- Replace test execution. Use `make test` (unit) or `make test-integration` (integration with `DATABASE_URL`). For Flutter changes, satisfy the full pre-commit execution gate above.
 - Enforce code style — that is `make lint` and `dart format`.
 - Decide *what* to test — only *how* to test it.
 - Flag pre-existing violations in files you are not touching, unless asked to audit.

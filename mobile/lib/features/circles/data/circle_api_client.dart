@@ -66,6 +66,7 @@ class CircleResponse {
     this.genderRestriction = 'unspecified',
     this.language = 'ar',
     required this.createdAt,
+    this.isArchived = false,
   });
 
   final String id;
@@ -79,6 +80,7 @@ class CircleResponse {
   final String genderRestriction;
   final String language;
   final DateTime createdAt;
+  final bool isArchived;
 
   factory CircleResponse.fromJson(Map<String, dynamic> json) => CircleResponse(
         id: json['id'] as String,
@@ -93,6 +95,7 @@ class CircleResponse {
             json['gender_restriction'] as String? ?? 'unspecified',
         language: json['language'] as String? ?? 'ar',
         createdAt: DateTime.parse(json['created_at'] as String),
+        isArchived: json['is_archived'] as bool? ?? false,
       );
 
   CircleSummary toSummary() => CircleSummary(
@@ -103,6 +106,27 @@ class CircleResponse {
         genderRestriction: genderRestriction,
         language: language,
         createdAt: createdAt,
+      );
+}
+
+class CircleMember {
+  const CircleMember({
+    required this.userId,
+    required this.displayName,
+    required this.role,
+    required this.joinedAt,
+  });
+
+  final String userId;
+  final String displayName;
+  final CircleRole role;
+  final DateTime joinedAt;
+
+  factory CircleMember.fromJson(Map<String, dynamic> json) => CircleMember(
+        userId: json['user_id'] as String,
+        displayName: json['display_name'] as String,
+        role: CircleRole.values.byName(json['role'] as String),
+        joinedAt: DateTime.parse(json['joined_at'] as String),
       );
 }
 
@@ -174,6 +198,34 @@ class CircleApiClient {
   CircleApiClient(this._dio);
 
   final Dio _dio;
+
+  Future<CircleResponse> getCircle({
+    required String firebaseIdToken,
+    required String sessionId,
+    required String circleId,
+  }) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/circles/$circleId',
+      options: Options(headers: _authHeaders(firebaseIdToken, sessionId)),
+    );
+    return CircleResponse.fromJson(response.data!);
+  }
+
+  Future<List<CircleMember>> listCircleMembers({
+    required String firebaseIdToken,
+    required String sessionId,
+    required String circleId,
+  }) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/circles/$circleId/members',
+      options: Options(headers: _authHeaders(firebaseIdToken, sessionId)),
+    );
+    final data = (response.data?['data'] as List<dynamic>? ?? const []);
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(CircleMember.fromJson)
+        .toList(growable: false);
+  }
 
   Future<CircleResponse> createCircle({
     required String firebaseIdToken,

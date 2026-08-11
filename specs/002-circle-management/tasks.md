@@ -104,18 +104,18 @@
 
 ### Tests for User Story 3
 
-- [ ] T041 [P] [US3] Add contract tests for circle details, member list, archived read-only responses, and standard `401/403/404` responses in `backend/tests/contract/circle_read_members_contract_test.go`.
-- [ ] T042 [P] [US3] Add integration tests for member visibility, non-member denial, public-summary redaction, archived history retention, and no mutation after archive in `backend/tests/integration/circle_read_archive_test.go`.
-- [ ] T043 [P] [US3] Add response-safety tests for private member data, invite code exposure, and archived-history visibility in `backend/tests/contract/circle_read_response_safety_test.go`.
-- [ ] T044 [P] [US3] Add Flutter widget tests for member list roles, loading/error states, archived read-only controls, and RTL accessibility in `mobile/test/widget/circles/circle_members_screen_test.dart`.
+- [X] T041 [P] [US3] Add contract tests for circle details, member list, archived read-only responses, and standard `401/403/404` responses in `backend/tests/contract/circle_read_members_contract_test.go`.
+- [X] T042 [P] [US3] Add integration tests for member visibility, non-member denial, public-summary redaction, archived history retention, and no mutation after archive in `backend/tests/integration/circle_read_archive_test.go`.
+- [X] T043 [P] [US3] Add response-safety tests for private member data, invite code exposure, and archived-history visibility in `backend/tests/contract/circle_read_response_safety_test.go`.
+- [X] T044 [P] [US3] Add Flutter widget tests for member list roles, loading/error states, archived read-only controls, and RTL accessibility in `mobile/test/widget/circles/circle_members_screen_test.dart`.
 
 ### Implementation for User Story 3
 
-- [ ] T045 [US3] Implement authorized circle-detail and member-list repository queries in `backend/internal/rbac/queries.go` and `backend/internal/rbac/repository.go`.
-- [ ] T046 [US3] Implement read authorization and archived read-only service behavior in `backend/internal/rbac/service.go`.
-- [ ] T047 [US3] Implement circle-detail/member handlers and route wiring in `backend/internal/rbac/handler.go` and `backend/cmd/api/router.go`.
-- [ ] T048 [US3] Implement Riverpod circle-detail/member providers in `mobile/lib/features/circles/application/circle_detail_controller.dart`.
-- [ ] T049 [US3] Implement circle detail/member screens with role labels, safe public fields, archived history, and RTL support in `mobile/lib/features/circles/presentation/circle_detail_screen.dart` and `mobile/lib/features/circles/presentation/circle_members_screen.dart`.
+- [X] T045 [US3] Implement authorized circle-detail and member-list repository queries in `backend/internal/rbac/queries.go` and `backend/internal/rbac/repository.go`.
+- [X] T046 [US3] Implement read authorization and archived read-only service behavior in `backend/internal/rbac/service.go`.
+- [X] T047 [US3] Implement circle-detail/member handlers and route wiring in `backend/internal/rbac/handler.go` and `backend/cmd/api/router.go`.
+- [X] T048 [US3] Implement Riverpod circle-detail/member providers in `mobile/lib/features/circles/application/circle_detail_controller.dart`.
+- [X] T049 [US3] Implement circle detail/member screens with role labels, safe public fields, archived history, and RTL support in `mobile/lib/features/circles/presentation/circle_detail_screen.dart` and `mobile/lib/features/circles/presentation/circle_members_screen.dart`.
 
 **Checkpoint**: US3 provides the authenticated member read experience and closes the read/data-exposure boundary.
 

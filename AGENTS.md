@@ -137,11 +137,14 @@ Contract tests run with `-tags=contract` and a `-run` regex filter (`Auth|Profil
 | Go lint | `golangci-lint run ./...` (v1.64.x, zero violations) |
 | Go fmt | `gofmt -l .` (empty output) |
 | Flutter test | `flutter test test` (in `mobile/`) |
+| Flutter integration | `flutter test integration_test/` (in `mobile/`; requires a connected device/emulator and configured backend environment) |
 | Flutter analyze | `flutter analyze` (zero issues) |
 | Dart fmt | `dart format --set-exit-if-changed .` (no diff) |
 | OpenAPI lint | `make api-lint` (Spectral OAS rules) |
 | Secret scan | `make secrets` (gitleaks) |
 | Tech Lead review | Hard gate via PR (mandatory manual deep-review by Karim for auth, RBAC, deletion paths, Firebase Auth, MinIO/upload) |
+
+For every commit containing Flutter production or test changes, the Flutter test, Flutter integration, analyze, and Dart format gates above require fresh successful output. If the Flutter SDK, device/emulator, or backend environment is unavailable, stop before committing and report the blocker; never treat an unrun or skipped suite as passing.
 
 CI runs the lint workflow (`lint.yml`) and unit/integration tests (`tests-unit-integration.yml`) on PRs and pushes to `main`.
 

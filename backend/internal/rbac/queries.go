@@ -93,8 +93,24 @@ const archiveCircleQuery = `
 UPDATE circles SET is_archived = TRUE, updated_at = NOW() WHERE id = $1::uuid
 `
 
+// isMemberQuery checks if a user belongs to a circle, returning their role.
+const isMemberQuery = `
+SELECT role
+FROM circle_members
+WHERE circle_id = $1::uuid AND user_id = $2::uuid
+LIMIT 1
+`
+
 const listCircleMembersQuery = `
-SELECT user_id::text, role FROM circle_members WHERE circle_id = $1::uuid ORDER BY user_id
+SELECT
+    cm.user_id::text,
+    COALESCE(NULLIF(BTRIM(p.display_name), ''), NULLIF(BTRIM(p.full_name), ''), 'Member'),
+    cm.role,
+    cm.joined_at
+FROM circle_members cm
+LEFT JOIN profiles p ON p.user_id = cm.user_id
+WHERE cm.circle_id = $1::uuid
+ORDER BY cm.joined_at ASC
 `
 
 const countActiveMembershipsQuery = `

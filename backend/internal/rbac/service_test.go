@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -200,13 +201,18 @@ func (s *stubStore) ArchiveCircle(_ context.Context, circleID string) error {
 	s.circles[circleID] = circle
 	return nil
 }
-func (s *stubStore) ListMembers(_ context.Context, circleID string) ([]Member, error) {
+func (s *stubStore) ListMembers(_ context.Context, circleID string) ([]CircleMember, error) {
 	members := s.members[circleID]
-	result := make([]Member, 0, len(members))
+	result := make([]CircleMember, 0, len(members))
 	for id, role := range members {
-		result = append(result, Member{UserID: id, Role: role})
+		result = append(result, CircleMember{UserID: id, DisplayName: "Stub User", Role: role, JoinedAt: time.Now()})
 	}
 	return result, nil
+}
+
+func (s *stubStore) IsMember(_ context.Context, circleID, userID string) (bool, error) {
+	_, ok := s.members[circleID][userID]
+	return ok, nil
 }
 
 func TestCreateCircleValidation(t *testing.T) {

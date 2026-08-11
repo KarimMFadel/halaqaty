@@ -74,7 +74,8 @@ type Store interface {
 	RefreshInviteCode(ctx context.Context, circleID, inviteCode string) error
 	RemoveMember(ctx context.Context, circleID, userID string) error
 	ArchiveCircle(ctx context.Context, circleID string) error
-	ListMembers(ctx context.Context, circleID string) ([]Member, error)
+	ListMembers(ctx context.Context, circleID string) ([]CircleMember, error)
+	IsMember(ctx context.Context, circleID, userID string) (bool, error)
 	CircleExists(ctx context.Context, circleID string) (bool, error)
 	LockMembers(ctx context.Context, circleID string) ([]Member, error)
 	CountActiveMemberships(ctx context.Context, userID string) (int, error)
@@ -712,4 +713,48 @@ func isInviteCode(value string) bool {
 func isUUID(value string) bool {
 	_, err := uuid.Parse(value)
 	return err == nil
+}
+
+// GetCircle returns full circle details to authorized members.
+func (s *Service) GetCircle(ctx context.Context, userID, circleID string) (CircleResponse, error) {
+	if !isUUID(circleID) {
+		return CircleResponse{}, &ValidationError{Fields: map[string]string{httpconst.FieldCircleID: httpconst.ErrorMessageCircleIDInvalid}}
+	}
+
+	circle, err := s.store.FindCircleByID(ctx, circleID)
+	if err != nil {
+		return CircleResponse{}, err
+	}
+
+	ok, err := s.store.IsMember(ctx, circleID, userID)
+	if err != nil {
+		return CircleResponse{}, err
+	}
+	if !ok {
+		return CircleResponse{}, ErrForbidden
+	}
+
+	return circleResponse(circle), nil
+}
+
+// ListMembers returns the circle's member list to authorized members.
+func (s *Service) ListMembers(ctx context.Context, userID, circleID string) ([]CircleMember, error) {
+	if !isUUID(circleID) {
+		return nil, &ValidationError{Fields: map[string]string{httpconst.FieldCircleID: httpconst.ErrorMessageCircleIDInvalid}}
+	}
+
+	_, err := s.store.FindCircleByID(ctx, circleID)
+	if err != nil {
+		return nil, err
+	}
+
+	ok, err := s.store.IsMember(ctx, circleID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrForbidden
+	}
+
+	return s.store.ListMembers(ctx, circleID)
 }

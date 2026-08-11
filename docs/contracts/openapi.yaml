@@ -322,10 +322,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Circle'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
     put:
       operationId: updateCircle
@@ -455,10 +459,14 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/CircleMember'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /circles/{circleId}/members/{userId}:
     parameters:
@@ -1692,7 +1700,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/CircleSummary'
         - type: object
-          required: [invite_code, invite_link]
+          required: [invite_code, invite_link, is_archived]
           properties:
             description:
               type: string
@@ -1712,6 +1720,8 @@ components:
               enum: [male, female, mixed, unspecified]
             language:
               type: string
+            is_archived:
+              type: boolean
             grading_policy:
               type: string
               enum: [required, optional]

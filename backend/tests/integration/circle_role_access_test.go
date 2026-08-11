@@ -119,6 +119,7 @@ func setupCircleRoleEnv(t *testing.T) *circleRoleEnv {
 	mux := http.NewServeMux()
 	mux.Handle("POST /auth/register", authMW.RequireVerifiedFirebase(http.HandlerFunc(authHandler.Register)))
 	mux.Handle("POST /circles", authMW.Require(http.HandlerFunc(rbacHandler.CreateCircle)))
+	mux.Handle("GET /circles/discover", authMW.Require(http.HandlerFunc(rbacHandler.DiscoverPublicCircles)))
 	mux.Handle("POST /circles/{circleId}/join", authMW.Require(http.HandlerFunc(rbacHandler.JoinPublicCircle)))
 	mux.Handle("POST /circles/join", authMW.Require(http.HandlerFunc(rbacHandler.JoinCircle)))
 	mux.Handle(

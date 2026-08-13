@@ -29,10 +29,9 @@ void main() {
       overrides: [
         circleMembersProvider('circle-1')
             .overrideWith((ref) => completer.future),
-        circleDetailProvider('circle-1')
-            .overrideWith((ref) => Future.value(
-                  _mockCircle(isArchived: false),
-                )),
+        circleDetailProvider('circle-1').overrideWith((ref) => Future.value(
+              _mockCircle(isArchived: false),
+            )),
       ],
     ));
 
@@ -105,7 +104,8 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('circleArchivedReadOnlyBanner')), findsOneWidget);
+    expect(
+        find.byKey(const Key('circleArchivedReadOnlyBanner')), findsOneWidget);
     expect(
       find.textContaining('الحلقة مؤرشفة. لا يمكن تعديل الأعضاء.'),
       findsOneWidget,

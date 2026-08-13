@@ -357,6 +357,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
     delete:
       operationId: archiveCircle
       description: Archive a circle (teacher only). This is soft-state retirement; hard deletion is prohibited.
@@ -369,6 +371,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /circles/{circleId}/join:
     parameters:
@@ -491,6 +495,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /circles/{circleId}/members/{userId}/role:
     parameters:
@@ -525,6 +531,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /circles/join:
     post:
@@ -587,6 +595,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   # ── Sessions ──────────────────────────────────────────────
   /circles/{circleId}/sessions:
@@ -1491,6 +1501,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Request conflicts with the current circle state
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     TooManyRequests:
       description: Request rate limit exceeded
       content:
@@ -1612,9 +1628,11 @@ components:
         description:
           type: string
           maxLength: 500
+          nullable: true
         rules:
           type: string
           maxLength: 1000
+          nullable: true
         max_capacity:
           type: integer
           minimum: 2
@@ -1656,9 +1674,11 @@ components:
         description:
           type: string
           maxLength: 500
+          nullable: true
         rules:
           type: string
           maxLength: 1000
+          nullable: true
         max_capacity:
           type: integer
           minimum: 2

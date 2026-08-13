@@ -194,6 +194,20 @@ class CircleRoleAssignmentResponse {
       );
 }
 
+class CircleInviteResponse {
+  const CircleInviteResponse(
+      {required this.inviteCode, required this.inviteLink});
+
+  final String inviteCode;
+  final String inviteLink;
+
+  factory CircleInviteResponse.fromJson(Map<String, dynamic> json) =>
+      CircleInviteResponse(
+        inviteCode: json['invite_code'] as String,
+        inviteLink: json['invite_link'] as String,
+      );
+}
+
 class CircleApiClient {
   CircleApiClient(this._dio);
 
@@ -322,6 +336,39 @@ class CircleApiClient {
       response.data as Map<String, dynamic>,
     );
   }
+
+  Future<void> removeMember({
+    required String firebaseIdToken,
+    required String sessionId,
+    required String circleId,
+    required String userId,
+  }) =>
+      _dio.delete<void>(
+        '/circles/$circleId/members/$userId',
+        options: Options(headers: _authHeaders(firebaseIdToken, sessionId)),
+      );
+
+  Future<CircleInviteResponse> refreshInviteCode({
+    required String firebaseIdToken,
+    required String sessionId,
+    required String circleId,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/circles/$circleId/invite-code/refresh',
+      options: Options(headers: _authHeaders(firebaseIdToken, sessionId)),
+    );
+    return CircleInviteResponse.fromJson(response.data!);
+  }
+
+  Future<void> archiveCircle({
+    required String firebaseIdToken,
+    required String sessionId,
+    required String circleId,
+  }) =>
+      _dio.delete<void>(
+        '/circles/$circleId',
+        options: Options(headers: _authHeaders(firebaseIdToken, sessionId)),
+      );
 
   Future<List<CircleUser>> searchUsers({
     required String firebaseIdToken,

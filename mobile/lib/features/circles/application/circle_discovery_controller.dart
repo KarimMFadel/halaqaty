@@ -227,7 +227,8 @@ class CircleDiscoveryController extends StateNotifier<CircleDiscoveryState> {
       'circle is private' => CircleJoinFailure.privateCircle,
       _ when error.response?.statusCode == 404 =>
         CircleJoinFailure.invalidInvite,
-      _ when error.type == DioExceptionType.connectionError ||
+      _
+          when error.type == DioExceptionType.connectionError ||
               error.type == DioExceptionType.connectionTimeout =>
         CircleJoinFailure.network,
       _ => CircleJoinFailure.unknown,
@@ -252,8 +253,9 @@ class CircleDiscoveryController extends StateNotifier<CircleDiscoveryState> {
   }
 }
 
-final circleDiscoveryControllerProvider = StateNotifierProvider<
-    CircleDiscoveryController, CircleDiscoveryState>((ref) {
+final circleDiscoveryControllerProvider =
+    StateNotifierProvider<CircleDiscoveryController, CircleDiscoveryState>(
+        (ref) {
   return CircleDiscoveryController(
     apiClient: ref.watch(circleApiClientProvider),
     loadFirebaseIdToken: () =>

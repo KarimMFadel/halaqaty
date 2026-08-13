@@ -44,7 +44,8 @@ class _StubCircleApiClient extends CircleApiClient {
     required String firebaseIdToken,
     required String sessionId,
     required String query,
-  }) async => searchResults;
+  }) async =>
+      searchResults;
 }
 
 CreateCircleController _controller(
@@ -141,7 +142,8 @@ void main() {
     final controller = _controller(apiClient);
     await tester.pumpWidget(_buildScreen(controller));
 
-    await tester.enterText(find.byKey(const Key('createCircleNameField')), 'Circle');
+    await tester.enterText(
+        find.byKey(const Key('createCircleNameField')), 'Circle');
     await tester.enterText(
       find.byKey(const Key('createCircleCapacityField')),
       '1',
@@ -192,10 +194,12 @@ void main() {
     final controller = _controller(apiClient);
     await tester.pumpWidget(_buildScreen(controller));
 
-    await tester.enterText(find.byKey(const Key('createCircleUserSearchField')), 'Ai');
+    await tester.enterText(
+        find.byKey(const Key('createCircleUserSearchField')), 'Ai');
     await tester.pump();
     await tester.tap(find.text('معلّم'));
-    await tester.enterText(find.byKey(const Key('createCircleNameField')), 'Circle');
+    await tester.enterText(
+        find.byKey(const Key('createCircleNameField')), 'Circle');
     await _tapVisible(
       tester,
       find.byKey(const Key('createCircleSubmitButton')),
@@ -217,7 +221,8 @@ void main() {
     final controller = _controller(apiClient);
     await tester.pumpWidget(_buildScreen(controller));
 
-    await tester.enterText(find.byKey(const Key('createCircleNameField')), 'Circle');
+    await tester.enterText(
+        find.byKey(const Key('createCircleNameField')), 'Circle');
     await _tapVisible(
       tester,
       find.byKey(const Key('createCircleSubmitButton')),

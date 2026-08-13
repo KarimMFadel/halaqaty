@@ -209,6 +209,22 @@ func (r *Router) registerRoutes() {
 			routeCircleAssignRole,
 			r.requireWithUserLimit(r.mw.Role.RequireAny("supervisor", "teacher")(assignRoleHandler)),
 		)
+		var refreshInviteHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		var removeMemberHandler http.Handler = refreshInviteHandler
+		var archiveCircleHandler http.Handler = refreshInviteHandler
+		var updateCircleHandler http.Handler = refreshInviteHandler
+		if rbacH != nil {
+			refreshInviteHandler = http.HandlerFunc(rbacH.RefreshInviteCode)
+			removeMemberHandler = http.HandlerFunc(rbacH.RemoveMember)
+			archiveCircleHandler = http.HandlerFunc(rbacH.ArchiveCircle)
+			updateCircleHandler = http.HandlerFunc(rbacH.UpdateCircle)
+		}
+		r.mux.Handle(routeCircleRefreshInvite, r.requireWithUserLimit(r.mw.Role.RequireAny("teacher")(refreshInviteHandler)))
+		r.mux.Handle(routeCircleRemoveMember, r.requireWithUserLimit(r.mw.Role.RequireAny("teacher")(removeMemberHandler)))
+		r.mux.Handle(routeCircleArchive, r.requireWithUserLimit(r.mw.Role.RequireAny("teacher")(archiveCircleHandler)))
+		r.mux.Handle(routeCircleUpdate, r.requireWithUserLimit(r.mw.Role.RequireAny("teacher")(updateCircleHandler)))
 	}
 }
 

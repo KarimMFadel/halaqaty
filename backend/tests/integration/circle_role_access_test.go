@@ -106,7 +106,7 @@ func setupCircleRoleEnv(t *testing.T) *circleRoleEnv {
 
 	verifier := &circleTokenVerifier{tokens: make(map[string]*auth.DecodedToken)}
 	for _, user := range circleRoleUsers {
-		verifier.tokens["Bearer "+user+"-token"] = &auth.DecodedToken{
+		verifier.tokens[user+"-token"] = &auth.DecodedToken{
 			UID:   "firebase-" + user,
 			Email: user + "@halaqaty.app",
 		}

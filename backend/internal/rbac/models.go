@@ -1,6 +1,10 @@
 package rbac
 
-import "time"
+import (
+	"bytes"
+	"encoding/json"
+	"time"
+)
 
 // CircleSettings contains validated persisted circle configuration.
 type CircleSettings struct {
@@ -32,6 +36,39 @@ type CreateCircleRequest struct {
 	GradingPolicy          string   `json:"grading_policy"`
 	TeacherUserIDs         []string `json:"teacher_user_ids"`
 	BackupSupervisorUserID *string  `json:"backup_supervisor_user_id"`
+}
+
+// NullableStringUpdate distinguishes an omitted field from an explicit JSON null.
+type NullableStringUpdate struct {
+	Value *string
+	Set   bool
+}
+
+// UnmarshalJSON records whether a nullable update field was present.
+func (u *NullableStringUpdate) UnmarshalJSON(data []byte) error {
+	u.Set = true
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		u.Value = nil
+		return nil
+	}
+	var value string
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	u.Value = &value
+	return nil
+}
+
+// UpdateCircleRequest is the partial payload for PUT /circles/{circleId}.
+type UpdateCircleRequest struct {
+	Name              *string              `json:"name"`
+	Description       NullableStringUpdate `json:"description"`
+	Rules             NullableStringUpdate `json:"rules"`
+	MaxCapacity       *int                 `json:"max_capacity"`
+	IsPrivate         *bool                `json:"is_private"`
+	GenderRestriction *string              `json:"gender_restriction"`
+	Language          *string              `json:"language"`
+	GradingPolicy     *string              `json:"grading_policy"`
 }
 
 // JoinCircleRequest is the payload for POST /circles/join.
@@ -107,6 +144,12 @@ type RoleAssignment struct {
 	CircleID string `json:"circle_id"`
 	UserID   string `json:"user_id"`
 	Role     string `json:"role"`
+}
+
+// InviteResponse contains the active shareable invite details.
+type InviteResponse struct {
+	InviteCode string `json:"invite_code"`
+	InviteLink string `json:"invite_link"`
 }
 
 // UserSearchResult is the minimal registered-user projection used during circle creation.

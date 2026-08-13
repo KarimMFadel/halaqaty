@@ -9,13 +9,13 @@ Future<CircleCredentials> _loadCircleCredentials(Ref ref) async {
   final authState = ref.watch(authControllerProvider);
   final sessionId = authState.sessionId;
   if (!authState.isAuthenticated || sessionId == null || sessionId.isEmpty) {
-    throw Exception('User not authenticated');
+    throw StateError('User not authenticated');
   }
 
   final firebaseAuth = ref.watch(firebaseAuthProvider);
   final token = await firebaseAuth.currentUser?.getIdToken();
   if (token == null || token.isEmpty) {
-    throw Exception('No auth token available');
+    throw StateError('No auth token available');
   }
 
   return (token: token, sessionId: sessionId);

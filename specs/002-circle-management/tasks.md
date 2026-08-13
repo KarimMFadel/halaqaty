@@ -129,20 +129,20 @@
 
 ### Tests for User Story 4
 
-- [ ] T050 [P] [US4] Add contract tests for teacher/supervisor role changes, student/non-member denial, self-change denial, cross-circle denial, and final-teacher protection in `backend/tests/contract/circle_role_management_contract_test.go`.
-- [ ] T051 [P] [US4] Add contract tests for teacher-only member removal, supervisor/student/non-member denial, self/final-teacher protection, retained history, invite refresh, old-code invalidation, new-code response, and archived-circle denial in `backend/tests/contract/circle_invite_role_contract_test.go`.
-- [ ] T052 [P] [US4] Add integration race tests for concurrent role changes, concurrent invite refresh, final-teacher protection, and duplicate audit events in `backend/tests/integration/circle_role_invite_race_test.go`.
-- [ ] T053 [P] [US4] Add RBAC, response-safety, and rate-limit tests for role/invite mutation endpoints in `backend/tests/contract/circle_role_invite_security_contract_test.go`.
-- [ ] T054 [P] [US4] Add Flutter widget tests for manager-only controls, role confirmation, invite display/share/refresh, and denial states in `mobile/test/widget/circles/circle_management_controls_test.dart`.
+- [X] T050 [P] [US4] Add contract tests for teacher/supervisor role changes, student/non-member denial, self-change denial, cross-circle denial, and final-teacher protection in `backend/tests/contract/circle_role_management_contract_test.go`.
+- [X] T051 [P] [US4] Add contract tests for teacher-only member removal, supervisor/student/non-member denial, self/final-teacher protection, retained history, invite refresh, old-code invalidation, new-code response, and archived-circle denial in `backend/tests/contract/circle_invite_role_contract_test.go`.
+- [X] T052 [P] [US4] Add integration race tests for concurrent role changes, concurrent invite refresh, final-teacher protection, and duplicate audit events in `backend/tests/integration/circle_role_invite_race_test.go`.
+- [X] T053 [P] [US4] Add RBAC, response-safety, and rate-limit tests for role/invite mutation endpoints in `backend/tests/contract/circle_role_invite_security_contract_test.go`.
+- [X] T054 [P] [US4] Add Flutter widget tests for manager-only controls, role confirmation, invite display/share/refresh, and denial states in `mobile/test/widget/circles/circle_management_controls_test.dart`.
 - [ ] T055 [US4] Add Flutter integration test for role management, invite sharing/refresh, and old-link rejection in `mobile/integration_test/circle_role_invite_flow_test.dart`.
 
 ### Implementation for User Story 4
 
-- [ ] T056 [US4] Implement transactional role-change/member-removal service and audit events in `backend/internal/rbac/service.go`.
-- [ ] T057 [US4] Implement transactional invite refresh and invite-link response mapping in `backend/internal/rbac/service.go` and `backend/internal/rbac/repository.go`.
-- [ ] T058 [US4] Implement role/member/invite handlers with RBAC and standard error responses in `backend/internal/rbac/handler.go`.
-- [ ] T059 [US4] Add role/member/invite route constants and middleware wiring in `backend/cmd/api/routes.go` and `backend/cmd/api/router.go`.
-- [ ] T060 [US4] Implement Riverpod role/member/invite controllers in `mobile/lib/features/circles/application/circle_management_controller.dart`.
+- [X] T056 [US4] Implement transactional role-change/member-removal service and audit events in `backend/internal/rbac/service.go`.
+- [X] T057 [US4] Implement transactional invite refresh and invite-link response mapping in `backend/internal/rbac/service.go` and `backend/internal/rbac/repository.go`.
+- [X] T058 [US4] Implement role/member/invite handlers with RBAC and standard error responses in `backend/internal/rbac/handler.go`.
+- [X] T059 [US4] Add role/member/invite route constants and middleware wiring in `backend/cmd/api/routes.go` and `backend/cmd/api/router.go`.
+- [X] T060 [US4] Implement Riverpod role/member/invite controllers in `mobile/lib/features/circles/application/circle_management_controller.dart`.
 - [ ] T061 [US4] Implement role-management controls, invite sharing/refresh, and accessible confirmation/error UI in `mobile/lib/features/circles/presentation/circle_management_screen.dart`.
 
 **Checkpoint**: US4 preserves the per-circle role invariants and invite integrity under concurrent mutation.
@@ -157,15 +157,15 @@
 
 ### Tests for User Story 5
 
-- [ ] T062 [P] [US5] Add contract tests for teacher-only archive, non-teacher denial, idempotent archive, archived reads, and archive-only `DELETE /circles/{circleId}` in `backend/tests/contract/circle_retirement_contract_test.go`.
+- [X] T062 [P] [US5] Add contract tests for teacher-only archive, non-teacher denial, idempotent archive, archived reads, and archive-only `DELETE /circles/{circleId}` in `backend/tests/contract/circle_retirement_contract_test.go`.
 - [ ] T063 [P] [US5] Add integration tests for history retention, blocked joins/settings/member changes after archive, and archive audit events in `backend/tests/integration/circle_retirement_test.go`.
-- [ ] T064 [P] [US5] Add hard-delete absence/response-safety tests proving no circle hard-delete route, SQL statement, repository method, or cascade is introduced in `backend/tests/contract/circle_hard_delete_safety_test.go`.
+- [X] T064 [P] [US5] Add hard-delete absence/response-safety tests proving no circle hard-delete route, SQL statement, repository method, or cascade is introduced in `backend/tests/contract/circle_hard_delete_safety_test.go`.
 - [ ] T065 [P] [US5] Add Flutter widget/integration tests for archive confirmation, archived read-only state, and hidden mutation controls in `mobile/test/widget/circles/circle_retirement_test.dart` and `mobile/integration_test/circle_retirement_flow_test.dart`.
 
 ### Implementation for User Story 5
 
 - [ ] T066 [US5] Implement archive/retirement transaction, idempotency, audit event, and mutation guards in `backend/internal/rbac/service.go` and `backend/internal/rbac/repository.go`.
-- [ ] T067 [US5] Implement archive handler and archive-only route semantics in `backend/internal/rbac/handler.go` and `backend/cmd/api/router.go`.
+- [X] T067 [US5] Implement archive handler and archive-only route semantics in `backend/internal/rbac/handler.go` and `backend/cmd/api/router.go`.
 - [ ] T068 [US5] Implement Riverpod retirement state and archive confirmation/read-only controls in `mobile/lib/features/circles/application/circle_retirement_controller.dart` and `mobile/lib/features/circles/presentation/circle_retirement_screen.dart`.
 
 **Checkpoint**: US5 retires circles safely with no hard-delete path and preserved reporting history.
@@ -176,14 +176,14 @@
 
 **Purpose**: Verify the full MVP feature and enforce project quality gates.
 
-- [ ] T069 [P] [US0] Add focused REST rate-limit and timeout integration coverage for circle reads/discovery and mutation endpoints in `backend/tests/integration/circle_rate_limit_policy_test.go`.
+- [X] T069 [P] [US0] Add focused REST rate-limit and timeout integration coverage for circle reads/discovery and mutation endpoints in `backend/tests/integration/circle_rate_limit_policy_test.go`.
 - [ ] T070 [P] [US0] Add audit-log coverage for create, join, role change, member removal, invite refresh, and archive in `backend/tests/integration/circle_audit_test.go`.
-- [ ] T071 [P] [US0] Add contract coverage for backward-compatible existing circle operations and all standard error envelopes in `backend/tests/contract/circle_backward_compatibility_test.go`.
-- [ ] T072 [P] [US0] Add OpenAPI reference/operation/security validation for `docs/contracts/openapi.yaml` and `specs/002-circle-management/contracts/circle-management.openapi.yaml` in `backend/tests/contract/circle_openapi_contract_test.go`.
-- [ ] T073 [P] [US0] Add observability assertions for request IDs, structured circle mutation logs, latency, and rejection metrics in `backend/tests/integration/circle_observability_test.go`.
-- [ ] T074 [US0] Run `$clean-code-guard` on `backend/internal/rbac/` and `mobile/lib/features/circles/`; record findings in `specs/002-circle-management/validation-report.md`.
-- [ ] T075 [US0] Run `$test-guard` on changed Go/Dart tests; record findings in `specs/002-circle-management/validation-report.md`.
-- [ ] T076 [US0] Run `$docs-guard` on changed product, ADR, architecture, OpenAPI, and feature-contract files; record findings in `specs/002-circle-management/validation-report.md`.
+- [X] T071 [P] [US0] Add contract coverage for backward-compatible existing circle operations and all standard error envelopes in `backend/tests/contract/circle_backward_compatibility_test.go`.
+- [X] T072 [P] [US0] Add OpenAPI reference/operation/security validation for `docs/contracts/openapi.yaml` and `specs/002-circle-management/contracts/circle-management.openapi.yaml` in `backend/tests/contract/circle_openapi_contract_test.go`.
+- [X] T073 [P] [US0] Add observability assertions for request IDs, structured circle mutation logs, latency, and rejection metrics in `backend/tests/integration/circle_observability_test.go`.
+- [X] T074 [US0] Run `$clean-code-guard` on `backend/internal/rbac/` and `mobile/lib/features/circles/`; record findings in `specs/002-circle-management/validation-report.md`.
+- [X] T075 [US0] Run `$test-guard` on changed Go/Dart tests; record findings in `specs/002-circle-management/validation-report.md`.
+- [X] T076 [US0] Run `$docs-guard` on changed product, ADR, architecture, OpenAPI, and feature-contract files; record findings in `specs/002-circle-management/validation-report.md`.
 - [ ] T077 [US0] Run focused Go/Flutter suites and full applicable gates (`go test -short ./...`, `flutter test test`, formatters, analyzers, lint, Spectral, and gitleaks); record current output in `specs/002-circle-management/validation-report.md`.
 - [ ] T078 [US0] Send the completed MVP batch to Tech Lead review and preserve Karim's manual RBAC/data-retention review evidence in `specs/002-circle-management/validation-report.md`.
 

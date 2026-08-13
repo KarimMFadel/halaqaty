@@ -28,7 +28,7 @@ BEGIN
     ) THEN
         ALTER TABLE circle_members
             ADD CONSTRAINT fk_circle_members_circle_id_000014
-            FOREIGN KEY (circle_id) REFERENCES circles(id) ON DELETE CASCADE;
+            FOREIGN KEY (circle_id) REFERENCES circles(id) ON DELETE RESTRICT;
     END IF;
 END
 $$;

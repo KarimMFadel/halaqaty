@@ -159,8 +159,7 @@ String circleFailureText(CircleJoinFailure failure, bool rtl) {
     CircleJoinFailure.invalidInvite => 'رابط الدعوة غير صالح',
     CircleJoinFailure.alreadyMember => 'أنت عضو في هذه الحلقة بالفعل',
     CircleJoinFailure.full => 'الحلقة مكتملة السعة',
-    CircleJoinFailure.archived =>
-      'هذه الحلقة مؤرشفة ومتاحة للقراءة فقط',
+    CircleJoinFailure.archived => 'هذه الحلقة مؤرشفة ومتاحة للقراءة فقط',
     CircleJoinFailure.membershipLimit =>
       'لا يمكنك الانضمام إلى أكثر من 5 حلقات',
     CircleJoinFailure.privateCircle => 'هذه الحلقة خاصة وتتطلب رابط دعوة',

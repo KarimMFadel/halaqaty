@@ -45,6 +45,25 @@ func (h *Handler) CreateCircle(w http.ResponseWriter, r *http.Request) {
 	phttp.WriteJSON(w, http.StatusCreated, circle)
 }
 
+// UpdateCircle handles PUT /circles/{circleId}.
+func (h *Handler) UpdateCircle(w http.ResponseWriter, r *http.Request) {
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if h == nil || h.service == nil || !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	var req UpdateCircleRequest
+	if !phttp.DecodeJSONBody(w, r, &req) {
+		return
+	}
+	circle, err := h.service.UpdateCircle(r.Context(), principal.UserID, r.PathValue("circleId"), req)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusOK, circle)
+}
+
 // SearchUsers handles GET /users/search.
 func (h *Handler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 	if h == nil || h.service == nil {
@@ -159,6 +178,49 @@ func (h *Handler) AssignRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	phttp.WriteJSON(w, http.StatusOK, assignment)
+}
+
+// RefreshInviteCode handles POST /circles/{circleId}/invite-code/refresh.
+func (h *Handler) RefreshInviteCode(w http.ResponseWriter, r *http.Request) {
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if h == nil || h.service == nil || !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	code, err := h.service.RefreshInviteCode(r.Context(), principal.UserID, r.PathValue("circleId"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusOK, InviteResponse{InviteCode: code, InviteLink: "https://halaqaty.app/join/" + code})
+}
+
+// RemoveMember handles DELETE /circles/{circleId}/members/{userId}.
+func (h *Handler) RemoveMember(w http.ResponseWriter, r *http.Request) {
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if h == nil || h.service == nil || !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	if err := h.service.RemoveMember(r.Context(), principal.UserID, r.PathValue("circleId"), r.PathValue("userId")); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ArchiveCircle handles DELETE /circles/{circleId} as soft retirement only.
+func (h *Handler) ArchiveCircle(w http.ResponseWriter, r *http.Request) {
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if h == nil || h.service == nil || !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	if err := h.service.ArchiveCircle(r.Context(), principal.UserID, r.PathValue("circleId")); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // GetCircle handles GET /circles/{circleId}.

@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_detail_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_detail_screen.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_management_screen.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_retirement_screen.dart';
 
 void main() {
   testWidgets('CircleDetailScreen: uses ambient LTR labels', (tester) async {
@@ -43,6 +45,46 @@ void main() {
 
     expect(find.text('Could not load circle details'), findsOneWidget);
     expect(find.textContaining('database secret'), findsNothing);
+  });
+
+  testWidgets('CircleDetailScreen: management and retirement are reachable',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          circleDetailProvider('circle-1').overrideWith(
+            (_) => Future.value(_circle()),
+          ),
+          circleMembersProvider('circle-1').overrideWith(
+            (_) => Future.value([
+              CircleMember(
+                userId: 'teacher-1',
+                displayName: 'Teacher',
+                role: CircleRole.teacher,
+                joinedAt: DateTime.utc(2026, 8, 1),
+              ),
+            ]),
+          ),
+        ],
+        child: const MaterialApp(
+          home: CircleDetailScreen(
+            circleId: 'circle-1',
+            currentUserId: 'teacher-1',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('openCircleManagement')));
+    await tester.pumpAndSettle();
+    expect(find.byType(CircleManagementScreen), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('openCircleRetirement')));
+    await tester.pumpAndSettle();
+    expect(find.byType(CircleRetirementScreen), findsOneWidget);
   });
 }
 

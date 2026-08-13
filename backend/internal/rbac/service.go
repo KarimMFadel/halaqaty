@@ -325,6 +325,80 @@ func (s *Service) CreateCircle(ctx context.Context, creatorID string, req Create
 	}, nil
 }
 
+// UpdateCircle applies a teacher-authorized partial settings update.
+func (s *Service) UpdateCircle(ctx context.Context, actorID, circleID string, req UpdateCircleRequest) (CircleResponse, error) {
+	var updated Circle
+	err := s.store.WithinTransaction(ctx, func(tx Store) error {
+		circle, err := tx.FindCircleByIDForUpdate(ctx, circleID)
+		if err != nil {
+			return err
+		}
+		if circle.IsArchived {
+			return ErrCircleArchived
+		}
+		members, err := tx.LockMembers(ctx, circleID)
+		if err != nil {
+			return err
+		}
+		role, ok := memberRole(members, actorID)
+		if !ok || role != RoleTeacher {
+			return ErrForbidden
+		}
+
+		name, settings, fields := mergeCircleUpdate(circle, req)
+		if len(fields) > 0 {
+			return &ValidationError{Fields: fields}
+		}
+		updated, err = tx.UpdateCircle(ctx, circleID, name, settings)
+		return err
+	})
+	if err != nil {
+		return CircleResponse{}, fmt.Errorf("update circle: %w", err)
+	}
+	return circleResponse(updated), nil
+}
+
+func mergeCircleUpdate(circle Circle, req UpdateCircleRequest) (string, CircleSettings, map[string]string) {
+	name := circle.Name
+	if req.Name != nil {
+		name = strings.TrimSpace(*req.Name)
+	}
+	create := CreateCircleRequest{
+		Name: name, Description: circle.Description, Rules: circle.Rules,
+		MaxCapacity: circle.MaxCapacity, IsPrivate: circle.IsPrivate,
+		GenderRestriction: circle.GenderRestriction, Language: circle.Language,
+		GradingPolicy: circle.GradingPolicy,
+	}
+	if req.Description.Set {
+		create.Description = req.Description.Value
+	}
+	if req.Rules.Set {
+		create.Rules = req.Rules.Value
+	}
+	if req.MaxCapacity != nil {
+		create.MaxCapacity = *req.MaxCapacity
+	}
+	if req.IsPrivate != nil {
+		create.IsPrivate = *req.IsPrivate
+	}
+	if req.GenderRestriction != nil {
+		create.GenderRestriction = *req.GenderRestriction
+	}
+	if req.Language != nil {
+		create.Language = *req.Language
+	}
+	if req.GradingPolicy != nil {
+		create.GradingPolicy = *req.GradingPolicy
+	}
+
+	_, _, _, fields := validateCreateCircleRequest("", create)
+	settings, settingFields := normalizeCircleSettings(create)
+	for field, message := range settingFields {
+		fields[field] = message
+	}
+	return name, settings, fields
+}
+
 func normalizeCircleSettings(req CreateCircleRequest) (CircleSettings, map[string]string) {
 	settings := CircleSettings{
 		Description:       req.Description,
@@ -388,12 +462,12 @@ func (s *Service) AssignRole(ctx context.Context, actorID, circleID, targetUserI
 
 	var oldRole string
 	err := s.store.WithinTransaction(ctx, func(tx Store) error {
-		exists, err := tx.CircleExists(ctx, circleID)
+		circle, err := tx.FindCircleByIDForUpdate(ctx, circleID)
 		if err != nil {
 			return err
 		}
-		if !exists {
-			return ErrCircleNotFound
+		if circle.IsArchived {
+			return ErrCircleArchived
 		}
 
 		members, err := tx.LockMembers(ctx, circleID)
@@ -437,7 +511,7 @@ func (s *Service) AddStudentMember(ctx context.Context, circleID, userID string)
 	}
 
 	err := s.store.WithinTransaction(ctx, func(tx Store) error {
-		circle, err := tx.FindCircleByID(ctx, circleID)
+		circle, err := tx.FindCircleByIDForUpdate(ctx, circleID)
 		if err != nil {
 			return err
 		}
@@ -483,7 +557,7 @@ func (s *Service) RefreshInviteCode(ctx context.Context, actorID, circleID strin
 		return "", err
 	}
 	err = s.store.WithinTransaction(ctx, func(tx Store) error {
-		circle, err := tx.FindCircleByID(ctx, circleID)
+		circle, err := tx.FindCircleByIDForUpdate(ctx, circleID)
 		if err != nil {
 			return err
 		}
@@ -495,7 +569,7 @@ func (s *Service) RefreshInviteCode(ctx context.Context, actorID, circleID strin
 			return err
 		}
 		role, ok := memberRole(members, actorID)
-		if !ok || (role != RoleTeacher && role != RoleSupervisor) {
+		if !ok || role != RoleTeacher {
 			return ErrForbidden
 		}
 		return tx.RefreshInviteCode(ctx, circleID, code)
@@ -513,7 +587,7 @@ func (s *Service) RemoveMember(ctx context.Context, actorID, circleID, targetID 
 		return ErrSelfRoleChange
 	}
 	err := s.store.WithinTransaction(ctx, func(tx Store) error {
-		circle, err := tx.FindCircleByID(ctx, circleID)
+		circle, err := tx.FindCircleByIDForUpdate(ctx, circleID)
 		if err != nil {
 			return err
 		}
@@ -546,8 +620,9 @@ func (s *Service) RemoveMember(ctx context.Context, actorID, circleID, targetID 
 
 // ArchiveCircle retires a circle without deleting its memberships or history.
 func (s *Service) ArchiveCircle(ctx context.Context, actorID, circleID string) error {
+	archived := false
 	err := s.store.WithinTransaction(ctx, func(tx Store) error {
-		circle, err := tx.FindCircleByID(ctx, circleID)
+		circle, err := tx.FindCircleByIDForUpdate(ctx, circleID)
 		if err != nil {
 			return err
 		}
@@ -562,12 +637,18 @@ func (s *Service) ArchiveCircle(ctx context.Context, actorID, circleID string) e
 		if circle.IsArchived {
 			return nil
 		}
-		return tx.ArchiveCircle(ctx, circleID)
+		if err := tx.ArchiveCircle(ctx, circleID); err != nil {
+			return err
+		}
+		archived = true
+		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("archive circle: %w", err)
 	}
-	s.audit.Log(ctx, logging.CircleArchiveEvent(actorID, circleID))
+	if archived {
+		s.audit.Log(ctx, logging.CircleArchiveEvent(actorID, circleID))
+	}
 	return nil
 }
 

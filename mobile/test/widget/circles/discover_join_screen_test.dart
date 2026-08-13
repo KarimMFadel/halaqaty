@@ -46,7 +46,8 @@ class _StubCircleApiClient extends CircleApiClient {
   Future<List<CircleSummary>> listCircles({
     required String firebaseIdToken,
     required String sessionId,
-  }) async => memberships;
+  }) async =>
+      memberships;
 
   @override
   Future<CircleDiscoveryPage> discoverCircles({

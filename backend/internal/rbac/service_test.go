@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -690,12 +691,45 @@ func TestCircleSettings_DefaultToApprovedMVPValues(t *testing.T) {
 	}
 }
 
+func TestUpdateCircle_ExplicitNullClearsNullableFields(t *testing.T) {
+	description, rules := "description", "rules"
+	store := newStubStore()
+	store.circles[unitCircleID] = Circle{
+		ID: unitCircleID, Name: "Circle", Description: &description, Rules: &rules,
+		MaxCapacity: 50, GenderRestriction: "unspecified", Language: "ar", GradingPolicy: "required",
+	}
+	store.members[unitCircleID] = map[string]string{unitCreatorID: RoleTeacher}
+	var request UpdateCircleRequest
+	if err := json.Unmarshal([]byte(`{"description":null,"rules":null}`), &request); err != nil {
+		t.Fatalf("decode update request: %v", err)
+	}
+
+	updated, err := NewService(store, nil).UpdateCircle(context.Background(), unitCreatorID, unitCircleID, request)
+	if err != nil {
+		t.Fatalf("UpdateCircle: %v", err)
+	}
+	if updated.Description != nil || updated.Rules != nil {
+		t.Fatalf("nullable fields were not cleared: description=%v rules=%v", updated.Description, updated.Rules)
+	}
+}
+
 func TestJoinCircle_RejectsArchivedCircle(t *testing.T) {
 	store := newStubStore()
 	store.circles[unitCircleID] = Circle{ID: unitCircleID, Name: "Archived", InviteCode: "HLQ-7X2K", IsArchived: true}
 	_, err := NewService(store, nil).JoinCircle(context.Background(), unitStudentID, "HLQ-7X2K")
 	if !errors.Is(err, ErrCircleArchived) {
 		t.Fatalf("expected ErrCircleArchived, got %v", err)
+	}
+}
+
+func TestRefreshInviteCode_SupervisorIsForbidden(t *testing.T) {
+	store := newStubStore()
+	store.circles[unitCircleID] = Circle{ID: unitCircleID, InviteCode: "HLQ-7X2K"}
+	store.members[unitCircleID] = map[string]string{unitSupervisorID: RoleSupervisor}
+
+	_, err := NewService(store, nil).RefreshInviteCode(context.Background(), unitSupervisorID, unitCircleID)
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("RefreshInviteCode: got %v want ErrForbidden", err)
 	}
 }
 

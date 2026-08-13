@@ -21,8 +21,7 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
-        final controller =
-            ref.read(circleDiscoveryControllerProvider.notifier);
+        final controller = ref.read(circleDiscoveryControllerProvider.notifier);
         await controller.loadMyCircles();
         if (mounted) await controller.discover();
       }
@@ -44,7 +43,8 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
                 key: const Key('circleDiscoverySearchField'),
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
-                  labelText: rtl ? 'ابحث عن حلقة عامة' : 'Search public circles',
+                  labelText:
+                      rtl ? 'ابحث عن حلقة عامة' : 'Search public circles',
                   prefixIcon: const Icon(Icons.search),
                 ),
                 onSubmitted: (query) => ref

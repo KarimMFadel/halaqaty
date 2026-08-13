@@ -68,7 +68,9 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
                   controller: _userSearch,
                   decoration: InputDecoration(
                     labelText: rtl ? 'ابحث عن مستخدم' : 'Search users',
-                    hintText: rtl ? 'اكتب حرفين على الأقل' : 'Type at least 2 characters',
+                    hintText: rtl
+                        ? 'اكتب حرفين على الأقل'
+                        : 'Type at least 2 characters',
                   ),
                   onChanged: _searchUsers,
                 ),
@@ -95,15 +97,18 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
                     children: [
                       for (final teacher in _teachers)
                         InputChip(
-                          label: Text('${rtl ? 'معلّم' : 'Teacher'}: ${teacher.displayName}'),
-                          onDeleted: () => setState(() => _teachers.remove(teacher)),
+                          label: Text(
+                              '${rtl ? 'معلّم' : 'Teacher'}: ${teacher.displayName}'),
+                          onDeleted: () =>
+                              setState(() => _teachers.remove(teacher)),
                         ),
                       if (_backupSupervisor != null)
                         InputChip(
                           label: Text(
                             '${rtl ? 'مشرف' : 'Supervisor'}: ${_backupSupervisor!.displayName}',
                           ),
-                          onDeleted: () => setState(() => _backupSupervisor = null),
+                          onDeleted: () =>
+                              setState(() => _backupSupervisor = null),
                         ),
                     ],
                   ),
@@ -164,7 +169,8 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
                       child: Text(rtl ? 'مختلط' : 'Mixed'),
                     ),
                   ],
-                  onChanged: (value) => setState(() => _gender = value ?? 'unspecified'),
+                  onChanged: (value) =>
+                      setState(() => _gender = value ?? 'unspecified'),
                 ),
                 DropdownButtonFormField<String>(
                   initialValue: _language,
@@ -176,7 +182,8 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
                     DropdownMenuItem(value: 'ar', child: Text('العربية')),
                     DropdownMenuItem(value: 'en', child: Text('English')),
                   ],
-                  onChanged: (value) => setState(() => _language = value ?? 'ar'),
+                  onChanged: (value) =>
+                      setState(() => _language = value ?? 'ar'),
                 ),
                 SwitchListTile(
                   key: const Key('createCirclePrivateField'),
@@ -196,7 +203,8 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
                   Padding(
                     padding: const EdgeInsets.only(top: 12),
                     child: Text(state.errorMessage!,
-                        style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.error)),
                   ),
                 if (state.circle?.inviteLink case final link?)
                   Padding(
@@ -208,7 +216,8 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
                         SelectableText(link),
                         TextButton(
                           onPressed: () => _copyInviteLink(link),
-                          child: Text(rtl ? 'نسخ رابط الدعوة' : 'Copy invite link'),
+                          child: Text(
+                              rtl ? 'نسخ رابط الدعوة' : 'Copy invite link'),
                         ),
                       ],
                     ),
@@ -223,19 +232,23 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    final created = await ref.read(createCircleControllerProvider.notifier).create(
-          CreateCircleRequest(
-            name: _name.text.trim(),
-            description: _description.text.trim().isEmpty ? null : _description.text.trim(),
-            rules: _rules.text.trim().isEmpty ? null : _rules.text.trim(),
-            maxCapacity: int.parse(_capacity.text),
-            isPrivate: _isPrivate,
-            genderRestriction: _gender,
-            language: _language,
-            teacherUserIds: _teachers.map((user) => user.id).toList(growable: false),
-            backupSupervisorUserId: _backupSupervisor?.id,
-          ),
-        );
+    final created =
+        await ref.read(createCircleControllerProvider.notifier).create(
+              CreateCircleRequest(
+                name: _name.text.trim(),
+                description: _description.text.trim().isEmpty
+                    ? null
+                    : _description.text.trim(),
+                rules: _rules.text.trim().isEmpty ? null : _rules.text.trim(),
+                maxCapacity: int.parse(_capacity.text),
+                isPrivate: _isPrivate,
+                genderRestriction: _gender,
+                language: _language,
+                teacherUserIds:
+                    _teachers.map((user) => user.id).toList(growable: false),
+                backupSupervisorUserId: _backupSupervisor?.id,
+              ),
+            );
     if (mounted && created) {
       widget.onCreated?.call(
         ref.read(createCircleControllerProvider).circle!,
@@ -248,13 +261,17 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
       setState(() => _results = const []);
       return;
     }
-    final results = await ref.read(createCircleControllerProvider.notifier).searchUsers(query);
-    if (mounted && _userSearch.text == query) setState(() => _results = results);
+    final results = await ref
+        .read(createCircleControllerProvider.notifier)
+        .searchUsers(query);
+    if (mounted && _userSearch.text == query)
+      setState(() => _results = results);
   }
 
   void _addTeacher(CircleUser user) {
     setState(() {
-      if (!_teachers.any((teacher) => teacher.id == user.id)) _teachers.add(user);
+      if (!_teachers.any((teacher) => teacher.id == user.id))
+        _teachers.add(user);
       if (_backupSupervisor?.id == user.id) _backupSupervisor = null;
     });
   }
@@ -271,7 +288,8 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
     if (mounted) {
       final rtl = Directionality.of(context) == TextDirection.rtl;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(rtl ? 'تم نسخ رابط الدعوة' : 'Invite link copied')),
+        SnackBar(
+            content: Text(rtl ? 'تم نسخ رابط الدعوة' : 'Invite link copied')),
       );
     }
   }

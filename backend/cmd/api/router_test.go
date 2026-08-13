@@ -41,6 +41,33 @@ func TestRouter_CircleReadRoutesRequireAuth(t *testing.T) {
 	}
 }
 
+func TestRouter_InviteRefreshRejectsSupervisor(t *testing.T) {
+	circleID := "00000000-0000-0000-0000-000000000001"
+	authMiddleware := middleware.NewAuthMiddleware(
+		authenticatedRouteVerifier{},
+		auth.NewSessionService(time.Hour),
+		authenticatedRouteSessionRepo{},
+	)
+	router := NewRouter(MiddlewareSet{
+		Auth: authMiddleware,
+		Role: middleware.NewRoleMiddleware(supervisorMembershipRepo{}),
+	})
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/circles/"+circleID+"/invite-code/refresh",
+		nil,
+	)
+	request.Header.Set("Authorization", "Bearer valid-token")
+	request.Header.Set("X-Halaqaty-Session-ID", "session-1")
+	recorder := httptest.NewRecorder()
+
+	router.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+}
+
 func TestRouter_MetricsRequiresToken(t *testing.T) {
 	metricStore := new(metrics.AuthMetrics)
 	metricStore.RecordRequest(time.Millisecond)
@@ -82,6 +109,37 @@ func (routeTestVerifier) Verify(context.Context, string) (*auth.DecodedToken, er
 }
 
 type routeTestSessionRepo struct{}
+
+type supervisorMembershipRepo struct{}
+
+type authenticatedRouteVerifier struct{}
+
+type authenticatedRouteSessionRepo struct{}
+
+func (authenticatedRouteVerifier) Verify(context.Context, string) (*auth.DecodedToken, error) {
+	return &auth.DecodedToken{UID: "firebase-supervisor"}, nil
+}
+
+func (authenticatedRouteSessionRepo) GetByID(context.Context, string) (auth.Session, error) {
+	return auth.Session{
+		ID:             "session-1",
+		UserID:         "00000000-0000-0000-0000-000000000002",
+		LastActivityAt: time.Now(),
+		ExpiresAt:      time.Now().Add(time.Hour),
+	}, nil
+}
+
+func (authenticatedRouteSessionRepo) Touch(context.Context, string, time.Time) error {
+	return nil
+}
+
+func (authenticatedRouteSessionRepo) GetLocalUserIDByFirebaseUID(context.Context, string) (string, error) {
+	return "00000000-0000-0000-0000-000000000002", nil
+}
+
+func (supervisorMembershipRepo) RoleForUserInCircle(context.Context, string, string) (string, error) {
+	return "supervisor", nil
+}
 
 func (routeTestSessionRepo) GetByID(context.Context, string) (auth.Session, error) {
 	return auth.Session{}, auth.ErrSessionNotFound

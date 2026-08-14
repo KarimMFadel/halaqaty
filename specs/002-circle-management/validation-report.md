@@ -1,12 +1,14 @@
 # Circle Management Validation Report
 
-Date: 2026-08-14
+Date: 2026-08-14 (updated: second pass)
 
 ## Current acceptance status
 
-Completed in this pass: T064, T069, T071, T072, and T073.
+Completed in the first pass: T064, T069, T071, T072, and T073.
 
-Still open: T055, T061, T063, T065, T066, T068, T070, T077, and T078. T061 and T068 are implemented but cannot be accepted until the mandatory Flutter gates run. T063, T066, and T070 require a configured PostgreSQL `DATABASE_URL`. T078 also requires Karim's manual RBAC/data-retention approval.
+Completed in this pass: T063, T066, and T070 — verified against a live PostgreSQL 16 (Docker) with fresh per-test schemas. T066 additionally gained service-level unit coverage (`TestArchiveCircle_TeacherArchivesIdempotently`, `TestArchiveCircle_NonTeacherIsForbidden`).
+
+Still open: T055, T061, T065, T068, T077, and T078. T061 and T068 are implemented but cannot be accepted until the mandatory Flutter gates run (`flutter`/`dart` are not installed in this environment). T055 and T065 also carry the Test Guard boundary finding below. T077 records fresh gate output but stays open until the Flutter/Spectral/gitleaks gates can execute. T078 requires Karim's manual RBAC/data-retention approval.
 
 ## Clean Code Guard — T074
 
@@ -43,7 +45,9 @@ Blocking findings:
 - Flutter unit/widget/integration tests, analyzer, and formatter cannot run because neither `flutter` nor `dart` is installed or available on PATH.
 - PostgreSQL-backed T063/T066/T070 tests compile but skip because `DATABASE_URL` is unset.
 
-Result: Test Guard executed; T055, T063, T065, T066, and T070 remain open.
+Second pass: T063, T066, and T070 closed — PostgreSQL-backed tests executed green against a live database (see T077 evidence). New tests added this pass follow the same accepted architecture: service unit tests use the existing stub store; the malformed-ID regression test uses the real PostgreSQL repository so the `$1::uuid` cast path is genuinely exercised.
+
+Result: Test Guard executed; T055 and T065 remain open (Flutter environment unavailable; boundary findings above stand).
 
 ## Docs Guard — T076
 
@@ -60,28 +64,36 @@ Spectral could not run because the `spectral` executable is not installed. The d
 
 ## Verification evidence — T077
 
+Fresh output, second pass (2026-08-14, PostgreSQL 16 via Docker container `halaqaty-pg`, `DATABASE_URL=postgres://postgres:postgres@localhost:5432/halaqaty?sslmode=disable`):
+
 Passed:
 
-- `go test -short ./...`
-- `go test -tags=contract ./tests/contract -count=1`
-- Focused circle service and production-router authorization tests
-- Focused rate-limit/timeout and observability integration-tagged tests that do not require PostgreSQL
-- `go vet ./...`
-- `golangci-lint run ./...`
-- `git diff --check`
+- `go test -short ./... -count=1` — all packages ok, zero FAIL
+- `go test -tags=contract ./tests/contract -count=1` — ok (includes updated retirement contract with empty-204-body assertion)
+- `go test -tags=integration ./... -count=1` — all packages ok against live PostgreSQL, zero FAIL; includes `TestCircleRetirement_RetainsHistoryAndBlocksMutations` (T063), `TestCircleAudit_RecordsCompleteMutationLifecycle` (T070), `TestCircleManagementMigration_PreservesLegacyRowsAndRollsBack` with FK RESTRICT + hard-delete rejection (T064), and new `TestCircleMutations_RejectMalformedIDs`
+- `go vet ./...` — clean
+- `golangci-lint run ./...` — zero violations
+- Focused: `go test -short -run ArchiveCircle ./internal/rbac -count=1 -v` — 2/2 PASS
 
 Blocked or not accepted:
 
-- PostgreSQL integration tests: skipped with `DATABASE_URL is not set`.
-- Flutter tests/integration/analyze/format: Flutter and Dart executables unavailable.
-- Spectral: executable unavailable.
+- Flutter tests/integration/analyze/format: `flutter` and `dart` executables are not installed in this environment. Per AGENTS.md, T061/T068 and the Flutter portions of T055/T065 cannot be marked complete, and no commit of Flutter changes may proceed, until these gates run with fresh successful output.
+- Spectral: executable unavailable. Mitigation unchanged: the Go OpenAPI contract test (T072) passes for local references, required operation IDs, uniqueness, and bearer/session security.
 - Gitleaks: executable unavailable.
-- Full `gofmt -l .`: reports existing repository files outside this feature batch; touched Go files were formatted directly.
+- Full `gofmt -l .`: confirmed environmental — `core.autocrlf=true` checks out CRLF, so `gofmt -d` shows line-ending-only diffs on every repo file, including untouched feature-001 files. Not introduced by this batch.
 
-T077 remains open because all required gates are not green.
+T077 remains open because the Flutter, Spectral, and gitleaks gates cannot execute in this environment.
 
 ## Tech Lead review — T078
 
-The 2026-08-14 Tech Lead review found teacher-only invite authorization, lock ordering, production navigation, credential-error handling, T055 boundary quality, and T051 retained-history evidence gaps. This pass addressed the production authorization, lock ordering, navigation, credential handling, and retained member-removal audit evidence. T055 remains open because its current integration test does not cross the production backend boundary.
+The first 2026-08-14 Tech Lead review found teacher-only invite authorization, lock ordering, production navigation, credential-error handling, T055 boundary quality, and T051 retained-history evidence gaps. Those were addressed in the first pass.
 
-Karim's mandatory manual RBAC/data-retention approval has not been recorded. T078 remains open.
+Second-pass Tech Lead review (2026-08-14, final MVP batch T062–T073): **approve-with-comments**. All prior findings confirmed closed. Security sign-offs: RBAC paths PASS, archive/data-retention PASS, audit logging PASS.
+
+New non-blocking findings and disposition:
+
+1. Malformed `circleId`/`userId` path params reached the `$1::uuid` cast and produced pg 22P02 → 500 in `UpdateCircle`, `RefreshInviteCode`, `RemoveMember`, and `ArchiveCircle`. **Fixed**: `isUUID` guards added, mirroring `AssignRole`/`GetCircle`; regression coverage in `TestCircleMutations_RejectMalformedIDs` (integration, real PostgreSQL). All gates re-run green.
+2. Invite-link base `https://halaqaty.app/join/` inlined at three sites. **Fixed**: single `inviteLinkBase` constant in `backend/internal/rbac/service.go`, referenced by both service response builders and the invite-refresh handler.
+3. Self-removal reuses `ErrSelfRoleChange`, producing a misleading message for remove/leave attempts. **Deferred**: correcting the message changes a contract-asserted error envelope, and leave-circle semantics belong to a separate story; filed as follow-up hardening.
+
+Karim's mandatory manual RBAC/data-retention approval has not been recorded. T078 remains open until Karim signs off on the RBAC, archive/data-retention, and audit paths (all flagged mandatory-review in AGENTS.md).

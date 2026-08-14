@@ -756,6 +756,39 @@ func TestCreateCircle_SelectedTeacherOwnsLegacyTeacherID(t *testing.T) {
 	}
 }
 
+func TestArchiveCircle_TeacherArchivesIdempotently(t *testing.T) {
+	store := newStubStore()
+	store.circles[unitCircleID] = Circle{ID: unitCircleID, Name: "Circle", InviteCode: "HLQ-7X2K"}
+	store.members[unitCircleID] = map[string]string{unitTeacherAID: RoleTeacher, unitStudentID: RoleStudent}
+	svc := NewService(store, nil)
+
+	if err := svc.ArchiveCircle(context.Background(), unitTeacherAID, unitCircleID); err != nil {
+		t.Fatalf("ArchiveCircle: %v", err)
+	}
+	if !store.circles[unitCircleID].IsArchived {
+		t.Fatal("circle must be archived")
+	}
+	if _, ok := store.members[unitCircleID][unitStudentID]; !ok {
+		t.Fatal("archive must retain membership history")
+	}
+	if err := svc.ArchiveCircle(context.Background(), unitTeacherAID, unitCircleID); err != nil {
+		t.Fatalf("second archive must be idempotent: %v", err)
+	}
+}
+
+func TestArchiveCircle_NonTeacherIsForbidden(t *testing.T) {
+	store := newStubStore()
+	store.circles[unitCircleID] = Circle{ID: unitCircleID, Name: "Circle", InviteCode: "HLQ-7X2K"}
+	store.members[unitCircleID] = map[string]string{unitSupervisorID: RoleSupervisor, unitTeacherAID: RoleTeacher}
+
+	if err := NewService(store, nil).ArchiveCircle(context.Background(), unitSupervisorID, unitCircleID); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("ArchiveCircle: got %v want ErrForbidden", err)
+	}
+	if store.circles[unitCircleID].IsArchived {
+		t.Fatal("forbidden archive must not change the circle")
+	}
+}
+
 func strPtr(value string) *string {
 	return &value
 }

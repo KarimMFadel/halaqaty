@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_detail_controller.dart';
+import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_management_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_members_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_retirement_screen.dart';

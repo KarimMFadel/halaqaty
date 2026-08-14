@@ -28,6 +28,8 @@ const (
 	inviteCodeLength         = 4
 	inviteCodePrefix         = "HLQ-"
 	inviteGenerationAttempts = 3
+	// inviteLinkBase is the public join-link origin shared by all invite responses.
+	inviteLinkBase = "https://halaqaty.app/join/"
 )
 
 var (
@@ -163,7 +165,7 @@ func (s *Service) joinCircle(ctx context.Context, userID string, find func(Store
 func circleResponse(circle Circle) CircleResponse {
 	return CircleResponse{
 		ID: circle.ID, Name: circle.Name, InviteCode: circle.InviteCode,
-		InviteLink:  "https://halaqaty.app/join/" + circle.InviteCode,
+		InviteLink:  inviteLinkBase + circle.InviteCode,
 		Description: circle.Description, Rules: circle.Rules, MaxCapacity: circle.MaxCapacity,
 		IsPrivate: circle.IsPrivate, GenderRestriction: circle.GenderRestriction,
 		Language: circle.Language, IsArchived: circle.IsArchived, CreatedAt: circle.CreatedAt,
@@ -312,7 +314,7 @@ func (s *Service) CreateCircle(ctx context.Context, creatorID string, req Create
 		ID:                circle.ID,
 		Name:              circle.Name,
 		InviteCode:        circle.InviteCode,
-		InviteLink:        "https://halaqaty.app/join/" + circle.InviteCode,
+		InviteLink:        inviteLinkBase + circle.InviteCode,
 		Description:       settings.Description,
 		Rules:             settings.Rules,
 		MaxCapacity:       settings.MaxCapacity,
@@ -327,6 +329,9 @@ func (s *Service) CreateCircle(ctx context.Context, creatorID string, req Create
 
 // UpdateCircle applies a teacher-authorized partial settings update.
 func (s *Service) UpdateCircle(ctx context.Context, actorID, circleID string, req UpdateCircleRequest) (CircleResponse, error) {
+	if !isUUID(circleID) {
+		return CircleResponse{}, ErrCircleNotFound
+	}
 	var updated Circle
 	err := s.store.WithinTransaction(ctx, func(tx Store) error {
 		circle, err := tx.FindCircleByIDForUpdate(ctx, circleID)
@@ -552,6 +557,9 @@ func (s *Service) AddStudentMember(ctx context.Context, circleID, userID string)
 
 // RefreshInviteCode rotates the current code for a circle manager.
 func (s *Service) RefreshInviteCode(ctx context.Context, actorID, circleID string) (string, error) {
+	if !isUUID(circleID) {
+		return "", ErrCircleNotFound
+	}
 	code, err := generateInviteCode()
 	if err != nil {
 		return "", err
@@ -585,6 +593,12 @@ func (s *Service) RefreshInviteCode(ctx context.Context, actorID, circleID strin
 func (s *Service) RemoveMember(ctx context.Context, actorID, circleID, targetID string) error {
 	if actorID == targetID {
 		return ErrSelfRoleChange
+	}
+	if !isUUID(circleID) {
+		return ErrCircleNotFound
+	}
+	if !isUUID(targetID) {
+		return ErrMemberNotFound
 	}
 	err := s.store.WithinTransaction(ctx, func(tx Store) error {
 		circle, err := tx.FindCircleByIDForUpdate(ctx, circleID)
@@ -620,6 +634,9 @@ func (s *Service) RemoveMember(ctx context.Context, actorID, circleID, targetID 
 
 // ArchiveCircle retires a circle without deleting its memberships or history.
 func (s *Service) ArchiveCircle(ctx context.Context, actorID, circleID string) error {
+	if !isUUID(circleID) {
+		return ErrCircleNotFound
+	}
 	archived := false
 	err := s.store.WithinTransaction(ctx, func(tx Store) error {
 		circle, err := tx.FindCircleByIDForUpdate(ctx, circleID)

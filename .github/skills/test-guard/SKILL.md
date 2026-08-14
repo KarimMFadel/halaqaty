@@ -37,13 +37,13 @@ Before reviewing:
 ## What to do
 
 1. Read the test code: the diff, the new file, or the section being modified.
-2. Check each test against the nine rules below.
+2. Check each test against the ten rules below.
 3. Report violations concisely: rule number, location, why it violates, suggested fix.
 4. If explicitly invoked before test writing, apply the rules while writing — don't write violations and then flag them.
 
 When writing new tests, ask for each: "What specific bug does this catch that no other test in this suite catches?" If you can't answer clearly, don't write it.
 
-## The Nine Rules
+## The Ten Rules
 
 ### Rule 1: Test behavior, not implementation
 
@@ -130,6 +130,18 @@ When PostgreSQL queries, schema behavior, or migration correctness **is the subj
 
 **Constitutional alignment**: Constitution §VI mandates "every database migration tested against a fresh schema" — Rule 9 is how that gets done.
 
+### Rule 10: Do not mistake source scans for behavioral proof
+
+Do not use fixed-file reads, text searches, AST walks, symbol-name checks, or SQL-string scans to claim that behavior or a forbidden implementation is absent. These checks are refactor-sensitive and non-exhaustive: moving or renaming code can bypass them without changing behavior.
+
+Prefer the boundary that owns the invariant:
+
+- Exercise public API behavior through the production router.
+- Verify persistence rules against a migrated real database.
+- Use compiler/type checks or a dedicated linter/static analyzer when the invariant is genuinely structural.
+
+**Explicit exception**: a hard-coded source-policy guard is allowed only when an approved architecture/security requirement or Karim explicitly requires it. Document why behavioral coverage is insufficient, define the exact bounded files or symbols it guards, state its limitations, and keep it supplemental to behavioral or infrastructure tests rather than presenting it as project-wide proof.
+
 ## Reporting format
 
 ```
@@ -143,7 +155,7 @@ Group violations by file. If a file has no violations, don't mention it.
 ## Severity guide
 
 - **Must fix:** Rules 1, 2, 8 — hide real bugs or make tests brittle
-- **Should fix:** Rules 3, 4, 5, 7 — cause bloat and maintenance drag
+- **Should fix:** Rules 3, 4, 5, 7, 10 — cause bloat, brittleness, and false confidence
 - **Sacred:** Rule 6 — never delete, always allow
 - **Worth noting:** Rule 9 — test architecture; flag it, but don't block small changes on it
 

@@ -48,6 +48,9 @@ func TestCircleRetirementContract_ArchiveOnlyDelete(t *testing.T) {
 			if rec.Code != http.StatusNoContent {
 				t.Fatalf("status: got %d, want %d body=%s", rec.Code, http.StatusNoContent, rec.Body.String())
 			}
+			if rec.Body.Len() != 0 {
+				t.Fatalf("archive response body: got %q, want empty", rec.Body.String())
+			}
 			circle, exists := store.circles[contractCircleID]
 			if !exists || !circle.IsArchived {
 				t.Fatal("DELETE must retain the circle and mark it archived")

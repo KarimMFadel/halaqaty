@@ -4,10 +4,10 @@ package integration
 
 import (
 	"context"
-	"os"
-	"strings"
+	"errors"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -53,6 +53,26 @@ func TestCircleManagementMigration_PreservesLegacyRowsAndRollsBack(t *testing.T)
 	if _, err := conn.Exec(ctx, `INSERT INTO circle_members (circle_id, user_id, role) VALUES ($1::uuid, $2::uuid, 'teacher')`, circleID, userID); err != nil {
 		t.Fatalf("seed legacy membership: %v", err)
 	}
+	var deleteRule string
+	if err := conn.QueryRow(ctx, `
+		SELECT delete_rule
+		FROM information_schema.referential_constraints
+		WHERE constraint_schema = $1
+		  AND constraint_name = 'fk_circle_members_circle_id_000014'
+	`, schema).Scan(&deleteRule); err != nil {
+		t.Fatalf("read circle membership delete rule: %v", err)
+	}
+	if deleteRule != "RESTRICT" {
+		t.Fatalf("circle membership delete rule: got %q, want RESTRICT", deleteRule)
+	}
+	if _, err := conn.Exec(ctx, `DELETE FROM circles WHERE id = $1::uuid`, circleID); err == nil {
+		t.Fatal("hard delete unexpectedly removed a circle with retained membership history")
+	} else {
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "23503" {
+			t.Fatalf("hard delete error: got %v, want foreign-key violation", err)
+		}
+	}
 
 	// The migration is safe to replay: constraints are replaced and the index
 	// is guarded without changing the existing row or membership.
@@ -81,18 +101,6 @@ func TestCircleManagementMigration_PreservesLegacyRowsAndRollsBack(t *testing.T)
 	}
 	if preservedName != "Legacy" {
 		t.Fatalf("rollback removed or changed legacy circle: %q", preservedName)
-	}
-}
-
-func TestCircleManagementMigration_ContainsNoHardDelete(t *testing.T) {
-	for _, name := range []string{"000015_circle_management.up.sql", "000015_circle_management.down.sql"} {
-		contents, err := os.ReadFile("../../migrations/" + name)
-		if err != nil {
-			t.Fatalf("read %s: %v", name, err)
-		}
-		if strings.Contains(strings.ToLower(string(contents)), "delete from circles") {
-			t.Fatalf("%s introduces hard deletion of circles", name)
-		}
 	}
 }
 

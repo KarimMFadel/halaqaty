@@ -192,7 +192,7 @@ func (h *Handler) RefreshInviteCode(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err)
 		return
 	}
-	phttp.WriteJSON(w, http.StatusOK, InviteResponse{InviteCode: code, InviteLink: "https://halaqaty.app/join/" + code})
+	phttp.WriteJSON(w, http.StatusOK, InviteResponse{InviteCode: code, InviteLink: inviteLinkBase + code})
 }
 
 // RemoveMember handles DELETE /circles/{circleId}/members/{userId}.

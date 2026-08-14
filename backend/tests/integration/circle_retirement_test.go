@@ -60,4 +60,28 @@ func TestCircleRetirement_RetainsHistoryAndBlocksMutations(t *testing.T) {
 	}
 }
 
+func TestCircleMutations_RejectMalformedIDs(t *testing.T) {
+	env := setupCircleRoleEnv(t)
+	ctx := context.Background()
+	service := rbac.NewService(env.repo, &recordedCircleAudit{})
+	actor := env.userIDs["creator"]
+
+	if _, err := service.UpdateCircle(ctx, actor, "not-a-uuid", rbac.UpdateCircleRequest{}); !errors.Is(err, rbac.ErrCircleNotFound) {
+		t.Fatalf("update malformed circle: got %v want ErrCircleNotFound", err)
+	}
+	if _, err := service.RefreshInviteCode(ctx, actor, "not-a-uuid"); !errors.Is(err, rbac.ErrCircleNotFound) {
+		t.Fatalf("refresh malformed circle: got %v want ErrCircleNotFound", err)
+	}
+	if err := service.ArchiveCircle(ctx, actor, "not-a-uuid"); !errors.Is(err, rbac.ErrCircleNotFound) {
+		t.Fatalf("archive malformed circle: got %v want ErrCircleNotFound", err)
+	}
+	if err := service.RemoveMember(ctx, actor, "not-a-uuid", env.userIDs["student"]); !errors.Is(err, rbac.ErrCircleNotFound) {
+		t.Fatalf("remove from malformed circle: got %v want ErrCircleNotFound", err)
+	}
+	circle := env.createCircle(t, "creator", `{"name":"Malformed Target"}`)
+	if err := service.RemoveMember(ctx, actor, circle.ID, "not-a-uuid"); !errors.Is(err, rbac.ErrMemberNotFound) {
+		t.Fatalf("remove malformed member: got %v want ErrMemberNotFound", err)
+	}
+}
+
 func stringPointer(value string) *string { return &value }

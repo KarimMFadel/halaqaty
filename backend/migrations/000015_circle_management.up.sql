@@ -24,5 +24,5 @@ ALTER TABLE circles
     ADD CONSTRAINT circles_rules_length_check CHECK (rules IS NULL OR char_length(rules) <= 1000);
 
 CREATE INDEX IF NOT EXISTS idx_circles_public_active
-    ON circles (created_at DESC)
+    ON circles (id DESC)
     WHERE is_private = FALSE AND is_archived = FALSE;

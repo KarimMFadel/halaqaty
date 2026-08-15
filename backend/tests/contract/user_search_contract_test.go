@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
@@ -41,6 +42,20 @@ func TestUserSearchContract(t *testing.T) {
 				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 			}
 		})
+	}
+}
+
+func TestUserSearchContract_RejectsEmptyPrincipalUserID(t *testing.T) {
+	store := newCircleStoreStub()
+	handler := rbac.NewHandler(rbac.NewService(store, nil))
+	req := httptest.NewRequest(http.MethodGet, "/users/search?q=Ai", nil)
+	req = req.WithContext(auth.WithPrincipal(req.Context(), auth.AuthPrincipal{}))
+	rec := httptest.NewRecorder()
+
+	handler.SearchUsers(rec, req)
+
+	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), httpconst.ErrorCodeUnauthorized) {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
 

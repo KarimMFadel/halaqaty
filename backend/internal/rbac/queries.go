@@ -67,8 +67,8 @@ SELECT id::text, name, description, max_capacity, gender_restriction, language, 
 FROM circles
 WHERE is_private = FALSE AND is_archived = FALSE
   AND ($1 = '' OR name ILIKE '%' || $1 || '%' ESCAPE E'\\')
-  AND ($2 = '' OR id::text < $2)
-ORDER BY id::text DESC
+  AND ($2 = '' OR id < $2::uuid)
+ORDER BY id DESC
 LIMIT $3
 `
 

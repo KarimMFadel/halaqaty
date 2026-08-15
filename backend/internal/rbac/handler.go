@@ -71,7 +71,8 @@ func (h *Handler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 			httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
 		return
 	}
-	if _, ok := auth.CurrentPrincipal(r.Context()); !ok {
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if !ok || principal.UserID == "" {
 		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized,
 			httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
 		return

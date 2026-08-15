@@ -5,6 +5,7 @@ package integration
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -85,12 +86,12 @@ func TestCircleManagementMigration_PreservesLegacyRowsAndRollsBack(t *testing.T)
 		t.Fatalf("rerun changed preserved membership count: got %d", memberCount)
 	}
 
-	var indexCount int
-	if err := conn.QueryRow(ctx, `SELECT COUNT(*) FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'idx_circles_public_active'`).Scan(&indexCount); err != nil {
+	var indexDefinition string
+	if err := conn.QueryRow(ctx, `SELECT indexdef FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'idx_circles_public_active'`).Scan(&indexDefinition); err != nil {
 		t.Fatalf("check public index: %v", err)
 	}
-	if indexCount != 1 {
-		t.Fatalf("expected one public index, got %d", indexCount)
+	if !strings.Contains(indexDefinition, "(id DESC)") {
+		t.Fatalf("public discovery index must match ID cursor ordering: %s", indexDefinition)
 	}
 
 	runMigrationFile(t, conn, ctx, "000015_circle_management.down.sql")

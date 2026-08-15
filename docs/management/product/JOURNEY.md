@@ -193,14 +193,15 @@ Cross-Cutting: Offline Behavior
 
 1. Tap **"Start Session"**.
 2. **System:**
-   - Creates LiveKit room via `POST /api/v1/sessions/:id/start`
-   - Backend issues LiveKit token for teacher (`CanPublishAudio: true`, `CanPublishVideo: false`, `RoomAdmin: true`)
+   - Creates the session media room through `SessionMediaGateway` via `POST /api/v1/sessions/:id/start` (LiveKit-backed in MVP)
+   - Backend returns the teacher's required participant-specific `MediaConnection`; the LiveKit MVP adapter maps it to `CanPublishAudio: true`, `CanPublishVideo: false`, `RoomAdmin: true`
    - Session status → `active`
+   - Broadcasts metadata-only `session.started { session_id, circle_id }`; it never contains endpoint, credential, or room reference
    - Push notification to all circle members: "[Circle Name] session is starting now"
 3. Teacher enters the **Session Room** screen: queue panel (left), participant list (right), mute/unmute controls, chat icon.
 4. Teacher microphone is **muted by default** at session start.
 
-**Decision from MVP Register:** Audio-only, video disabled (OQ-015). Max session 4 hours (OQ-016). LiveKit tokens from backend only (constitution security invariant).
+**Decision from MVP Register:** Audio-only, video disabled (OQ-015). Max session 4 hours (OQ-016). Participant media credentials come from the backend only; LiveKit is the MVP adapter (constitution security invariant).
 
 ---
 
@@ -211,7 +212,7 @@ Cross-Cutting: Offline Behavior
 
 1. Tap **"Join Session"**.
 2. **System:**
-   - `POST /api/v1/sessions/:id/join` → issues LiveKit token (student role: `CanPublishAudio: false` until called, `CanSubscribe: true`)
+   - `POST /api/v1/sessions/:id/join` → returns the student's required `MediaConnection`; the LiveKit MVP adapter maps it to `CanPublishAudio: false` until called and `CanSubscribe: true`
    - Student added to participant list
 3. Student enters Session Room: can see queue (their position highlighted), participant list, chat.
 4. Student microphone is muted and **disabled** until the teacher calls them.
@@ -225,7 +226,7 @@ Cross-Cutting: Offline Behavior
 
 1. **System:**
    - `POST /api/v1/sessions/:id/queue/:studentId/start`
-   - Updates student's LiveKit token permissions: `CanPublishAudio: true`
+   - Calls the sessions-owned reciter-audio control to set effective audio publishing; the LiveKit MVP adapter maps it to `CanPublishAudio: true`
    - Broadcasts queue state update to all session participants
    - Creates `recitation_sessions` row with `started_at`
 2. Student's microphone becomes active automatically.
@@ -310,8 +311,8 @@ Cross-Cutting: Offline Behavior
 2. Tap **"End Session"**.
 3. **System:**
    - `POST /api/v1/sessions/:id/end`
-   - Closes LiveKit room (all participants disconnected)
-   - Session status → `completed`
+   - Closes the session media room through the configured adapter (LiveKit in MVP; all participants disconnected)
+   - Session status → `ended`
    - All participants receive push notification: "Session ended"
 4. Teacher navigates to Session Summary screen (T-18).
 5. Students return to Circle view.
@@ -372,10 +373,11 @@ Cross-Cutting: Offline Behavior
 ### S-03 — Join a Live Session (Student)
 
 1. Push notification or session card → "Join".
-2. Enters Session Room (muted, subscribed to audio).
-3. Sees their queue position highlighted.
-4. When called (T-12): microphone activates automatically.
-5. When done (T-13): microphone deactivates. They stay in the room and hear others.
+2. Completes T-11: authorized `POST /sessions/:id/join` returns only their participant-specific `MediaConnection`.
+3. Enters Session Room (muted, subscribed to audio).
+4. Sees their queue position highlighted.
+5. When called (T-12): microphone activates automatically.
+6. When done (T-13): microphone deactivates. They stay in the room and hear others.
 
 ---
 
@@ -384,7 +386,7 @@ Cross-Cutting: Offline Behavior
 | Scenario | User-facing response |
 |---|---|
 | Firebase token expired (silent refresh fails) | Soft logout → login screen with "Your session expired, please sign in again." |
-| LiveKit room unreachable | "Could not connect to the session. Check your network." + Retry button. No spinner loop. |
+| Session media service unreachable (LiveKit in MVP) | "Could not connect to the session. Check your network." + Retry button. No spinner loop. |
 | WebSocket disconnected mid-session | Reconnection attempt (3x backoff). Banner: "Reconnecting…" → "Reconnected." → if final failure: "Connection lost. Tap to rejoin." |
 | API 500 / unexpected server error | Generic error toast: "Something went wrong. Please try again." Do not expose error details. |
 | API 4xx validation error | Inline field error where possible; toast for non-form contexts. |

@@ -163,6 +163,16 @@ From `.github/copilot-instructions.md` — these are not obvious from filenames:
 - `async` functions must handle errors at the call site or bubble them to the nearest error boundary provider.
 - Arabic-first / RTL-aware UI — verify layouts in both directions.
 
+## Session-media provider boundary
+
+- Follow `docs/engineering/architecture/adr/ADR-015-session-media-provider-boundary.md` for F-005 and every live-session media integration.
+- LiveKit is the sole MVP provider, but only `backend/internal/sessions/livekit/` and `mobile/lib/features/sessions/data/livekit_media_session.dart` may import provider SDK types.
+- Backend session/queue code depends on provider-neutral `SessionMediaGateway` / `ReciterAudioControl` boundaries; Flutter session UI/state depends on a provider-neutral `MediaSession` boundary.
+- Use neutral `MediaConnection` and `media_room_ref` names in canonical contracts and persistence. Never broadcast, log, or persist participant credentials outside the approved secure boundary.
+- Do not add provider registries, resolvers, `media_provider`, driver selection, or rollout flags during LiveKit-only MVP. Add the staged dual-provider mechanism from ADR-015 only when a second provider is approved and implemented.
+- F-005 remains audio-only. A future approved video feature may extend the same seam with typed video operations; do not add speculative video APIs or capability bags now.
+- This is a targeted media seam, not authorization for project-wide Clean/Onion Architecture, database abstraction, dynamic plugins, or custom WebRTC infrastructure.
+
 ## Contracts & docs
 
 - Changing REST surface → update `docs/contracts/openapi.yaml` and re-run `make api-lint`. Spectral config in `.spectral.yaml` extends the official OAS ruleset (unique `operationId`, resolvable `$ref`, 2xx on each operation, etc.).

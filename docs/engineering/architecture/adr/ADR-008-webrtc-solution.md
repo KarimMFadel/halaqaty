@@ -4,6 +4,11 @@
 **Date:** 2026-07-25  
 **Deciders:** Karim (product owner)
 
+> **Implementation boundary:** [ADR-015](ADR-015-session-media-provider-boundary.md)
+> refines the package, contract, and mobile integration sketches in this ADR.
+> LiveKit remains the sole MVP provider, but provider SDK types and credentials are
+> confined to feature-local adapters.
+
 ---
 
 ## Context

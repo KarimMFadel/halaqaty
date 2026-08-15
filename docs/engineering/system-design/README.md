@@ -74,8 +74,8 @@ A live session ties together LiveKit audio, the recitation queue, and WebSocket 
 
 | State | Description |
 |-------|-------------|
-| `scheduled` | Session is planned; no LiveKit room exists yet (`POST /circles/{circleId}/sessions` returns this status) |
-| `active` | Teacher started — LiveKit room exists, WebSocket broadcasting (`POST /sessions/{sessionId}/start`) |
+| `scheduled` | Session is planned; no media room exists yet (`POST /circles/{circleId}/sessions` returns this status) |
+| `active` | Teacher started — media room exists through the configured adapter (LiveKit in MVP), WebSocket broadcasting (`POST /sessions/{sessionId}/start`) |
 | `ended` | Teacher explicitly ended; progress records finalized (`POST /sessions/{sessionId}/end`) |
 
 Additional lifecycle states (`idle_timeout`) and a `last_empty_at` timestamp are described in the [Proposed](#proposed-not-yet-in-contract-or-architecture) section.
@@ -87,12 +87,21 @@ Additional lifecycle states (`idle_timeout`) and a `last_empty_at` timestamp are
 ```
 Go Backend
   │
-  ├─ 1. Set session status = active in DB
-  ├─ 2. Call LiveKit API to create room (name = session UUID)
-  ├─ 3. Disable video publishing at room level
-  ├─ 4. Return SessionStartResponse (LiveKit token to caller)
-  └─ 5. Broadcast `session.started` WS event to circle members
+  ├─ 1. Lock and validate the scheduled session; keep it non-joinable
+  ├─ 2. Idempotently ensure a deterministic room through SessionMediaGateway (LiveKit adapter in MVP)
+  ├─ 3. Atomically persist status = active + media_room_ref
+  ├─ 4. Issue required participant MediaConnection (video publishing disabled)
+  └─ 5. Broadcast metadata-only `session.started` after commit (no endpoint, credential, or room ref)
 ```
+
+If the activation commit fails after room creation, close the orphan room. A
+sessions-owned reconciler retries orphan cleanup and missing-room repair after
+process crashes. Repeating start for an already-active session returns the same
+`Session` with a newly issued caller-specific `MediaConnection`.
+
+The broadcast only marks the session available in subscribed clients. A student
+joins only after choosing Join and completing the authorized REST join flow below;
+the event itself neither authorizes entry nor carries connection material.
 
 ### Joining Audio
 
@@ -103,13 +112,17 @@ Go Backend
   │
   ├─ 1. Validate caller is a member of the circle
   ├─ 2. Check session status = active (else 409 "Session is not active")
-  ├─ 3. Generate LiveKit token:
+  ├─ 3. Issue participant MediaConnection through the LiveKit MVP adapter:
   │     - CanPublish: false (default — overridden per-turn for active reciter)
   │     - CanSubscribe: true
   │     - CanPublishVideo: false (always)
-  │     - Expiry: session max duration (4 hours)
-  └─ 4. Return token to client (Flutter calls livekit_client to connect)
+  │     - Credential expiry: at most 1 hour, independent of the 4-hour session maximum
+  └─ 4. Return endpoint, opaque credential, and expiry to the caller (Flutter LiveKit adapter connects)
 ```
+
+Near or after credential expiry, the client repeats the authorized join operation
+to receive a fresh `MediaConnection`. Ended, removed, or revoked participants do
+not receive replacement credentials.
 
 ### Session End
 
@@ -118,12 +131,14 @@ Go Backend
 ```
 Go Backend
   │
-  ├─ 1. Set session status = ended in DB
-  ├─ 2. Close LiveKit room (all participants disconnected)
-  ├─ 3. Finalize any in-progress queue entry
-  ├─ 4. Persist all progress records from queue history
-  └─ 5. Broadcast `session.ended` WS event; clients disconnect gracefully
+  ├─ 1. Set session status = ended in DB, immediately blocking new joins
+  ├─ 2. Close the media room idempotently through SessionMediaGateway
+  ├─ 3. Retry/reconcile provider cleanup after timeout or process crash
+  └─ 4. Broadcast `session.ended`; clients disconnect gracefully
 ```
+
+Queue turn cleanup and progress persistence remain owned by F-003/F-007 and react
+through their integration boundary; F-005 does not write their tables.
 
 ---
 

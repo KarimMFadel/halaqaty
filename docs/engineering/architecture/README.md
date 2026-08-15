@@ -34,6 +34,7 @@ The `adr/` subdirectory records the key architectural decisions made for Halaqat
 | [ADR-012](adr/ADR-012-audit-logging-persistence.md) | Circle Audit Events Use Structured Application Logs | Accepted | 2026-08-07 |
 | [ADR-013](adr/ADR-013-recitation-grade-scale.md) | Canonical Five-Grade Recitation Scale | Accepted | 2026-08-09 |
 | [ADR-014](adr/ADR-014-mvp-deployment.md) | Single-Server Docker Compose Deployment for MVP | Accepted | 2026-08-09 |
+| [ADR-015](adr/ADR-015-session-media-provider-boundary.md) | Replaceable Session-Media Provider Boundary | Accepted | 2026-08-15 |
 
 ---
 

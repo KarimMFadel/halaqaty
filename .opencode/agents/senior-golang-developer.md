@@ -65,6 +65,11 @@ You are the **Senior Golang Developer** for Halaqaty — a specialized backend e
 - Design message protocols that are efficient and forward-compatible.
 
 ### LiveKit Integration & Session Management
+- Follow ADR-015. Session services depend on the provider-neutral `SessionMediaGateway`; only `backend/internal/sessions/livekit/` imports LiveKit SDK/JWT/webhook types.
+- Construct and inject the LiveKit adapter directly during MVP. Do not add a provider registry, resolver, selection flag, or `media_provider` column until a second provider is approved.
+- Expose participant-specific opaque `MediaConnection` values and internal `media_room_ref` values; never leak LiveKit types or credentials into domain models, logs, broadcasts, or F-003.
+- F-003 calls a sessions-owned `ReciterAudioControl` boundary. Revoke-before-grant, idempotent retry, and DB/provider reconciliation must preserve the authoritative queue state.
+- Keep the gateway's F-005 operations audio-specific; add typed video operations only through a future approved feature and ADR.
 - Generate LiveKit tokens exclusively on the backend — never expose keys to clients.
 - Implement proper token expiration, scope management, and revocation.
 - Manage LiveKit room creation, cleanup, and participant tracking.

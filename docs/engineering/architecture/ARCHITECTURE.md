@@ -12,7 +12,7 @@
 
 1. [System Overview Diagram](#1-system-overview-diagram)
 2. [Communication Protocols](#2-communication-protocols)
-3. [LiveKit + Flutter Integration](#3-livekit--flutter-integration)
+3. [Session-Media Provider + Flutter Integration](#3-session-media-provider--flutter-integration)
 4. [Database Schema](#4-database-schema)
 5. [API Endpoint Planning](#5-api-endpoint-planning)
 6. [Security Considerations](#6-security-considerations)
@@ -29,7 +29,7 @@ graph TD
             AuthUI["Auth UI"]
             CirclesUI["Circles UI"]
             ChatUI["Chat UI"]
-            SessionUI["Session UI\n(Queue + LiveKit)"]
+            SessionUI["Session UI\n(Queue + Media)"]
         end
         Pkgs["livekit_client · firebase_auth\nfirebase_messaging · riverpod"]
     end
@@ -38,7 +38,7 @@ graph TD
         subgraph GoServer["Go Backend (Echo v4)"]
             REST["REST API\n/api/v1/*"]
             WSHub["WebSocket Hub\n(Chat · Queue · Presence)"]
-            LKMgr["LiveKit Manager\n(room creation · token gen)"]
+            LKMgr["Media Adapter\n(LiveKit in MVP)"]
         end
         REST --> LKMgr
         WSHub --> LKMgr
@@ -180,7 +180,7 @@ sequenceDiagram
 | `queue.reordered` | Teacher manually reordered the queue |
 | `queue.round_started` | New recitation round started |
 | `queue.grade_submitted` | Grade recorded for a completed turn (teacher/supervisor only) |
-| `session.started` | Session went live; includes `livekit_url` and `livekit_token` |
+| `session.started` | Session went live; contains session metadata only (credentials come from authorized start/join REST responses) |
 | `session.ended` | Session ended by teacher |
 | `session.participant_joined` | A participant joined the session |
 | `session.participant_left` | A participant left the session |
@@ -202,11 +202,12 @@ sequenceDiagram
 
 > **Reconnection:** on reconnect, clients re-fetch state via REST (`GET /api/v1/sessions/{id}/queue`, etc.) rather than relying solely on buffered WebSocket events.
 
-### 2.3 WebRTC via LiveKit
+### 2.3 Session Media via Provider Boundary (MVP Audio-Only with LiveKit)
 
 **Used for:** Audio streaming in live sessions for MVP (video remains post-MVP behind feature flag).
 
-- LiveKit is a Selective Forwarding Unit (SFU) — it receives each participant's stream and forwards it to all others, without mixing
+- Session and queue code depend on the provider-neutral boundaries defined in [ADR-015](adr/ADR-015-session-media-provider-boundary.md); they never import LiveKit SDK types
+- LiveKit is the sole MVP adapter and SFU — it receives each participant's stream and forwards it to all others, without mixing
 - This is more scalable than peer-to-peer WebRTC (which doesn't scale beyond ~4 participants)
 - Flutter client uses `livekit_client` package (official LiveKit Flutter SDK)
 - Go backend uses `livekit-server-sdk-go` for room management and token generation
@@ -238,7 +239,34 @@ flowchart TD
 
 ---
 
-## 3. LiveKit + Flutter Integration
+## 3. Session-Media Provider + Flutter Integration
+
+### 3.0 Provider Boundary
+
+LiveKit is the only MVP implementation, but it is isolated behind feature-local
+compile-time adapters:
+
+- `backend/internal/sessions` owns `SessionMediaGateway` and neutral session/media
+  types; `backend/internal/sessions/livekit` owns all LiveKit SDK, credential, room,
+  track, and webhook details.
+- F-003 calls a sessions-owned `ReciterAudioControl`; queue code never imports or
+  calls the provider gateway directly.
+- `mobile/lib/features/sessions/application` owns `MediaSession`; only
+  `mobile/lib/features/sessions/data/livekit_media_session.dart` imports
+  `livekit_client`.
+- Start/join REST operations return an opaque participant-specific
+  `media_connection`. WebSocket broadcasts never contain connection credentials.
+- MVP constructs the LiveKit adapters directly. Provider identifiers, registries,
+  driver switches, and selection flags are deferred until a second provider is
+  approved and introduced through ADR-015's session-pinned rollout.
+
+This is a targeted dependency-inversion seam, not a project-wide Clean/Onion
+Architecture conversion.
+
+The boundary name deliberately allows a future approved video-session feature,
+but the F-005 gateway and mobile contract remain audio-only. Video, camera,
+screen-share, recording, and generic capability maps are not added speculatively;
+future video extends or composes the seam through its own specification and ADR.
 
 ### 3.1 Complete Integration Flow
 
@@ -247,42 +275,61 @@ sequenceDiagram
     participant T as Teacher (Flutter)
     participant API as Go Backend
     participant DB as PostgreSQL
+    participant Media as SessionMediaGateway
     participant LK as LiveKit Server
     participant S as Student (Flutter)
 
     Note over T,S: Step 1 — Teacher starts session
     T->>API: POST /sessions/{id}/start
-    API->>DB: UPDATE sessions SET status='active'
-    API->>LK: CreateRoom(name: session_uuid)
-    LK-->>API: room created ✓
-    API-->>T: { session, livekit_url, livekit_token [RoomAdmin=true] }
-    T->>LK: room.connect(url, token)
+    API->>DB: Lock session; verify scheduled or active replay
+    DB-->>API: Session remains non-joinable while provisioning
+    API->>Media: EnsureRoom(session_id)
+    Media->>LK: CreateRoom(adapter room ref)
+    LK-->>Media: room created ✓
+    Media-->>API: room ready
+    API->>DB: CAS status='active', media_room_ref=ref
+    Note right of API: Activation failure closes the orphan; reconciler repairs crash windows
+    API-->>T: { session, media_connection [teacher permissions] }
+    T->>LK: LiveKitMediaSession.connect(endpoint, credential)
     LK-->>T: Connected ✓ (WebRTC handshake)
-    API--)S: WS session.started { livekit_url, livekit_token }
+    API--)S: WS session.started { session_id, circle_id } (notification only; no credentials)
 
     Note over T,S: Step 2 — Student joins
     S->>API: POST /sessions/{id}/join
     API->>DB: verify circle membership
-    API->>LK: GenerateToken(uid, CanPublish=false, CanPublishVideo=false)
-    API-->>S: { session, livekit_url, livekit_token }
-    S->>LK: room.connect(url, token)
+    API->>Media: IssueConnection(participant, listen-only)
+    Media->>LK: GenerateToken(uid, CanPublish=false, CanPublishVideo=false)
+    LK-->>Media: identity-scoped credential
+    Media-->>API: MediaConnection
+    API-->>S: { session, media_connection }
+    S->>LK: LiveKitMediaSession.connect(endpoint, credential)
     LK-->>S: Connected ✓ (subscribes to audio streams)
 
     Note over T,S: Step 3 — Student's turn (teacher starts round)
     T->>API: POST /sessions/{id}/queue/rounds\n{ surah_id, from_ayah, to_ayah }
     API->>DB: INSERT recitation_queue + entries
     API--)S: WS queue.your_turn { queue_entry_id, surah_id, from_ayah, to_ayah }
-    API->>LK: UpdateParticipantPermissions(studentUID, CanPublish=true)
+    API->>Media: SetAudioPublishing(studentUID, true)
+    Media->>LK: UpdateParticipantPermissions(CanPublish=true)
     S->>LK: publishAudioTrack() [48kbps Opus]
     LK-->>T: receives student audio stream ✓
 
     Note over T,S: Step 4 — Turn ends, grade recorded
     T->>API: POST /sessions/{id}/queue/entries/{id}/grade\n{ grade: "excellent" }
-    API->>LK: UpdateParticipantPermissions(studentUID, CanPublish=false)
+    API->>Media: SetAudioPublishing(studentUID, false)
+    Media->>LK: UpdateParticipantPermissions(CanPublish=false)
     API->>DB: UPDATE entry status=completed, grade=excellent
     API--)S: WS queue.entry_updated { new_status: completed }
     API--)T: WS queue.grade_submitted { grade, student_id }
 ```
+
+The diagram shows the required safety boundary, not a distributed transaction.
+Room references are deterministic and gateway operations are idempotent. A
+session becomes joinable only after the room is ready and the `active` transition
+commits. If the process crashes between provider and database operations, F-005's
+sessions-owned reconciler closes orphan rooms or repairs missing rooms. Ending a
+session commits `ended` first to block new joins, then closes the provider room;
+failed close operations are retried idempotently.
 
 ### 3.2 LiveKit Token Security Flow
 
@@ -291,28 +338,40 @@ The Go backend is the **sole token issuer** — the Flutter client never calls L
 ```mermaid
 sequenceDiagram
     participant App as Flutter App
+    participant Mobile as LiveKitMediaSession
     participant API as Go Backend
     participant DB as PostgreSQL
+    participant Adapter as Backend LiveKit Adapter
     participant LK as LiveKit Server
 
     Note over App,LK: Teacher token — issued on session start
     App->>API: POST /sessions/{id}/start
     API->>DB: verify role = teacher in circle_members
-    API->>LK: GenerateToken(uid, RoomAdmin=true,\nCanPublish=true, CanPublishVideo=false)
-    API-->>App: { livekit_token }
-    App->>LK: room.connect(token) — RoomAdmin=true ✓
+    API->>Adapter: IssueConnection(teacher permissions)
+    Adapter->>LK: GenerateToken(uid, RoomAdmin=true,\nCanPublish=true, CanPublishVideo=false)
+    LK-->>Adapter: identity-specific token
+    Adapter-->>API: MediaConnection
+    API-->>App: { media_connection }
+    App->>Mobile: connect(media_connection)
+    Mobile->>LK: room.connect(endpoint, credential) — RoomAdmin=true ✓
 
     Note over App,LK: Student token — issued on session join
     App->>API: POST /sessions/{id}/join
     API->>DB: verify role = student/supervisor in circle_members
-    API->>LK: GenerateToken(uid, RoomAdmin=false,\nCanPublish=false, CanPublishVideo=false)
-    API-->>App: { livekit_token }
-    App->>LK: room.connect(token) — listen-only ✓
+    API->>Adapter: IssueConnection(listen-only permissions)
+    Adapter->>LK: GenerateToken(uid, RoomAdmin=false,\nCanPublish=false, CanPublishVideo=false)
+    LK-->>Adapter: identity-specific token
+    Adapter-->>API: MediaConnection
+    API-->>App: { media_connection }
+    App->>Mobile: connect(media_connection)
+    Mobile->>LK: room.connect(endpoint, credential) — listen-only ✓
 
     Note over App,LK: Turn grant — student publish enabled for one turn only
-    API->>LK: UpdateParticipantPermissions(studentUID, CanPublish=true)
+    API->>Adapter: SetAudioPublishing(studentUID, true)
+    Adapter->>LK: UpdateParticipantPermissions(studentUID, CanPublish=true)
     Note right of LK: Student can now publish audio
-    API->>LK: UpdateParticipantPermissions(studentUID, CanPublish=false)
+    API->>Adapter: SetAudioPublishing(studentUID, false)
+    Adapter->>LK: UpdateParticipantPermissions(studentUID, CanPublish=false)
     Note right of LK: Publish revoked immediately after turn
 ```
 
@@ -354,35 +413,48 @@ func generateLiveKitToken(
 }
 ```
 
+MVP participant credentials are valid for at most one hour, independently of the
+four-hour session maximum, and never beyond the usable session lifecycle. The
+adapter derives `MediaConnection.expires_at` from the actual signed credential.
+Before or after expiry, Flutter obtains a fresh connection only through an
+authenticated, authorized start/join call; session end, removal, or revoked
+membership remains terminal.
+
 ### 3.4 Flutter — Room Connection Pattern
 
 ```dart
 // Using livekit_client Flutter package
 
-Future<Room> connectToSession({
-  required String livekitUrl,
-  required String token,
-}) async {
-  final room = Room();
-  
-  // Quran recitation optimized audio settings
-  final roomOptions = RoomOptions(
-    defaultAudioPublishOptions: const AudioPublishOptions(
-      name: 'recitation',
-      audioBitrate: 48000,     // 48kbps minimum
-      // Note: noise suppression and auto-gain are handled
-      // at the platform level via AudioProcessingOptions
-    ),
-    // MVP intentionally omits video publish options.
-    // Post-MVP video can be enabled behind a feature flag without re-architecting.
-    adaptiveStream: true,      // auto-adjust quality to bandwidth
-  );
-  
-  await room.connect(livekitUrl, token, roomOptions: roomOptions);
-  
-  return room;
+// This adapter is the only mobile file that imports LiveKit SDK types.
+final class LiveKitMediaSession implements MediaSession {
+  Room? _room; // Private provider state; never exposed to controllers or UI.
+
+  @override
+  Future<void> connect(MediaConnection connection) async {
+    final room = Room();
+    final roomOptions = RoomOptions(
+      defaultAudioPublishOptions: const AudioPublishOptions(
+        name: 'recitation',
+        audioBitrate: 48000,
+      ),
+      adaptiveStream: true,
+    );
+
+    await room.connect(
+      connection.endpoint,
+      connection.credential,
+      roomOptions: roomOptions,
+    );
+    _room = room;
+    // Map LiveKit events into provider-neutral MediaSession state here.
+  }
 }
 ```
+
+Controllers and UI consume only `MediaSession` state. They retry provider-level
+reconnect only while the current credential is usable. Near or after expiry they
+call the authenticated, idempotent start/join REST operation for a fresh
+`MediaConnection`; credentials stay in memory and are never written to storage.
 
 ### 3.5 Audio Configuration (Critical)
 
@@ -394,7 +466,7 @@ await Hardware.instance.setPreferSpeakerOutput(true);
 
 // Platform-level audio processing
 final audioConstraints = {
-  'echoCancellation': true,    // Keep ON — prevents feedback
+  'echoCancellation': false,   // OFF where the platform permits — preserves natural voice
   'noiseSuppression': false,   // OFF — preserves tajweed phonetics
   'autoGainControl': false,    // OFF — consistent recitation volume
 };
@@ -507,13 +579,13 @@ stateDiagram-v2
     direction LR
     [*] --> scheduled : POST /circles/{id}/sessions\n(teacher only)
 
-    scheduled --> active : POST /sessions/{id}/start\n(teacher only)\nLiveKit room created\nWS → session.started broadcast
+    scheduled --> active : POST /sessions/{id}/start\n(teacher only)\nMedia room ready via adapter\nWS → session.started broadcast
 
-    active --> ended : POST /sessions/{id}/end\n(teacher only)\nLiveKit room closed\nWS → session.ended broadcast
+    active --> ended : POST /sessions/{id}/end\n(teacher only)\nMedia room closed via adapter\nWS → session.ended broadcast
 
     ended --> [*]
 
-    note right of scheduled : Session stored in DB\nNo LiveKit room yet\nQueue rounds not yet possible
+    note right of scheduled : Session stored in DB\nNo ready media room yet\nQueue rounds not yet possible
     note right of active : Queue rounds active\nWS events flowing\nAttendance auto-tracked
 ```
 
@@ -569,7 +641,8 @@ erDiagram
         timestamptz actual_start
         timestamptz actual_end
         varchar status
-        varchar livekit_room_name UK
+        varchar media_mode
+        varchar media_room_ref UK
         int participant_count
         timestamptz created_at
     }
@@ -773,7 +846,7 @@ erDiagram
 | actual_end | TIMESTAMPTZ | | When session actually ended |
 | status | VARCHAR(20) | CHECK IN ('scheduled','active','ended') | |
 | media_mode | VARCHAR(20) | CHECK IN ('audio_only','audio_video'), DEFAULT 'audio_only' | Session media policy (MVP always audio_only) |
-| livekit_room_name | VARCHAR(200) | UNIQUE | LiveKit room identifier |
+| media_room_ref | VARCHAR(200) | UNIQUE | Opaque media-adapter room reference; LiveKit-backed in MVP |
 | created_by | UUID | FK → users.id NOT NULL | Teacher who created the session |
 | participant_count | INTEGER | DEFAULT 0 | Running count updated on join/leave |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
@@ -988,8 +1061,8 @@ token remains valid.
 |--------|------|--------|-------------|
 | GET | `/circles/{id}/sessions` | ✅ | List sessions for a circle |
 | POST | `/circles/{id}/sessions` | ✅ | Create a session (teacher only) |
-| POST | `/sessions/{id}/start` | ✅ | Teacher starts session (creates LiveKit room, returns token) |
-| POST | `/sessions/{id}/join` | ✅ | Join an active session — returns LiveKit token (members only) |
+| POST | `/sessions/{id}/start` | ✅ | Teacher starts session and receives their participant-specific media connection |
+| POST | `/sessions/{id}/join` | ✅ | Join an active session and receive the caller's media connection (members only) |
 | POST | `/sessions/{id}/end` | ✅ | Teacher ends session |
 | POST | `/sessions/{id}/ws-token` | ✅ | Issue short-lived WebSocket connection token |
 | GET | `/sessions/{id}` | 🔲 | Get session details |
@@ -1083,7 +1156,7 @@ token remains valid.
 - **Authorization:** Role-based per circle. After JWT validation, Go backend checks `circle_members` table for user's role in the requested circle
 - **Firebase token lifecycle:** Firebase ID tokens expire after 1 hour; the Flutter Firebase SDK refreshes them silently. Firebase owns refresh-token rotation and reuse detection.
 - **Backend session lifecycle:** The backend creates one opaque session per device after a verified Firebase sign-in. Every protected request includes its session ID; session activity extends the 30-day inactivity window. Current-device logout revokes only that session. A future logout-all-devices operation must revoke every session for the authenticated user. Backend sessions do not mint access or refresh tokens.
-- **LiveKit tokens:** Generated exclusively by Go backend; never by the Flutter client. Student publish scope is turn-based and non-admin.
+- **Media credentials:** Generated exclusively by the Go backend through the LiveKit MVP adapter; never by the Flutter client, persisted client-side, logged, or broadcast. Student publish scope is turn-based and non-admin.
 - **Circle role lifecycle:** Roles are stored only in `circle_members`. On creation, the creator may assign existing registered users as one or more teachers and one optional backup supervisor; if no teacher is selected, the creator becomes teacher, otherwise the creator is supervisor. Invite acceptance creates `student`. Any teacher or supervisor may change another member's role among `student`, `supervisor`, and `teacher`, but cannot change their own role or leave the circle without a teacher. See ADR-010.
 
 #### Circle permission matrix
@@ -1130,9 +1203,9 @@ sequenceDiagram
     Note over API,DB: ⚠️ No Firebase custom claims for authz.\nAll roles are per-circle from circle_members.\nRole changes take effect immediately — no cache delay.
 ```
 
-### 6.3 LiveKit Room Security
+### 6.3 Media Room Security (MVP LiveKit)
 
-- Each session generates a unique LiveKit room name (UUID-based)
+- Each session generates a unique opaque `media_room_ref` mapped to a LiveKit room by the MVP adapter
 - Room names are not publicly guessable
 - Each participant needs a JWT from Go backend to join — no anonymous access
 - Teacher's JWT includes `RoomAdmin: true` (can mute, remove)

@@ -41,7 +41,7 @@ graph LR
 
     subgraph SC["Server → Client (push)"]
         direction TB
-        BCAST["📢 Broadcast\nto all in session room\n─────────────────\nqueue.state\nqueue.entry_updated\nqueue.round_started\nqueue.reordered\nqueue.grade_submitted\nsession.started · session.ended\nsession.participant_joined\nsession.participant_left\nsession.hand_raised\nchat.message · chat.typing\nerror"]
+        BCAST["📢 Broadcast\nto authorized topic subscribers\n─────────────────\nqueue.state\nqueue.entry_updated\nqueue.round_started\nqueue.reordered\nqueue.grade_submitted\nsession.started · session.ended\nsession.participant_joined\nsession.participant_left\nsession.hand_raised\nchat.message · chat.typing\nerror"]
         TARGET["🎯 Targeted\nto one client only\n─────────────────\nqueue.your_turn\nqueue.next_soon\nchat.message_read"]
     end
 
@@ -51,7 +51,7 @@ graph LR
         REST_NOTE["📡 Low-latency actions\nuse WS commands;\nCRUD uses REST API"]
     end
 
-    HUB -->|"room broadcast"| BCAST
+    HUB -->|"authorized topic broadcast"| BCAST
     HUB -->|"user-targeted"| TARGET
     CMD --> HUB
 ```
@@ -212,16 +212,21 @@ Broadcast to teacher/supervisors when a grade is recorded for a completed turn.
 
 ### `session.started` (Server → Client)
 
-Broadcast to all circle members when a session goes live.
+Broadcast to authorized circle subscribers when a session goes live. This event
+announces availability; receiving it does not authorize or automatically join the
+recipient to the media room.
+
+Connection credentials are never included in broadcast events. Each participant
+obtains an identity-specific `media_connection` through the authorized session
+start or join REST operation after current identity, device session, membership,
+session state, lock, removal, and capacity checks.
 
 ```json
 {
   "type": "session.started",
   "payload": {
     "session_id": "uuid",
-    "circle_id": "uuid",
-    "livekit_url": "wss://livekit.halaqaty.app",
-    "livekit_token": "eyJ..."
+    "circle_id": "uuid"
   }
 }
 ```
@@ -238,8 +243,7 @@ Broadcast to all session participants when the teacher ends the session.
   "payload": {
     "session_id": "uuid",
     "ended_by": "uuid",
-    "duration_seconds": 3600,
-    "total_turns_completed": 12
+    "duration_seconds": 3600
   }
 }
 ```

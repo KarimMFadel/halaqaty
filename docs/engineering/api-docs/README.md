@@ -173,8 +173,8 @@ Standard HTTP semantics: `400` bad input · `401` unauthenticated · `403` forbi
 |--------|------|------|-------------|
 | `GET` | `/circles/{circleId}/sessions` | Bearer + Session ID | List sessions for a circle (paginated, optional `?status=` filter) |
 | `POST` | `/circles/{circleId}/sessions` | Bearer (teacher) | Create a new session |
-| `POST` | `/sessions/{sessionId}/start` | Bearer (teacher) | Start a session — creates LiveKit room, returns token |
-| `POST` | `/sessions/{sessionId}/join` | Bearer (member) | Join an active session — returns LiveKit token |
+| `POST` | `/sessions/{sessionId}/start` | Bearer (teacher) | Start a session — ensures its media room and returns the teacher's `MediaConnection` |
+| `POST` | `/sessions/{sessionId}/join` | Bearer (member) | Join an active session — returns the caller's `MediaConnection` |
 | `POST` | `/sessions/{sessionId}/end` | Bearer (teacher) | End a session |
 | `POST` | `/sessions/{sessionId}/ws-token` | Bearer + Session ID | Issue a short-lived (60 s) WebSocket connection token |
 

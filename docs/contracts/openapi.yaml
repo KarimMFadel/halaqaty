@@ -666,12 +666,23 @@ paths:
       - $ref: '#/components/parameters/SessionId'
     post:
       operationId: startSession
-      description: Start a session — creates LiveKit room and returns token (teacher only)
+      description: Start a session, ensure its media room, and return a participant-specific media connection (teacher only)
       tags: [Sessions]
-      summary: Start a session — creates LiveKit room and returns token (teacher only)
+      summary: Start a session and return the teacher's media connection
       responses:
         '200':
-          description: Session started
+          description: Session started, or the already-active session returned idempotently with a newly issued caller-specific media connection
+          headers:
+            Cache-Control:
+              description: Prevent storage of participant credentials
+              schema:
+                type: string
+                enum: [no-store]
+            Pragma:
+              description: Legacy cache prevention for participant credentials
+              schema:
+                type: string
+                enum: [no-cache]
           content:
             application/json:
               schema:
@@ -681,19 +692,36 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '409':
-          description: Session already started
+          description: Session cannot be started from its current state, such as an ended session. Repeating start for an active session returns 200.
+        '503':
+          description: Session media provider is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /sessions/{sessionId}/join:
     parameters:
       - $ref: '#/components/parameters/SessionId'
     post:
       operationId: joinSession
-      description: Join an active session — returns LiveKit token (members only)
+      description: Join an active session and return a participant-specific media connection (members only)
       tags: [Sessions]
-      summary: Join an active session — returns LiveKit token (members only)
+      summary: Join an active session and return the caller's media connection
       responses:
         '200':
-          description: LiveKit token for this session
+          description: Participant-specific media connection for this session
+          headers:
+            Cache-Control:
+              description: Prevent storage of participant credentials
+              schema:
+                type: string
+                enum: [no-store]
+            Pragma:
+              description: Legacy cache prevention for participant credentials
+              schema:
+                type: string
+                enum: [no-cache]
           content:
             application/json:
               schema:
@@ -706,6 +734,12 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           description: Session is not active
+        '503':
+          description: Session media provider is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /sessions/{sessionId}/end:
     parameters:
@@ -1820,6 +1854,7 @@ components:
 
     Session:
       type: object
+      required: [id, circle_id, status, media_mode, created_by, started_at, ended_at, participant_count]
       properties:
         id:
           type: string
@@ -1830,12 +1865,13 @@ components:
         status:
           type: string
           enum: [scheduled, active, ended]
+        media_mode:
+          type: string
+          enum: [audio_only, audio_video]
+          description: Server-controlled session media policy. MVP live sessions always return audio_only; audio_video is reserved for a future approved feature.
         created_by:
           type: string
           format: uuid
-        livekit_room_name:
-          type: string
-          nullable: true
         started_at:
           type: string
           format: date-time
@@ -1849,26 +1885,40 @@ components:
 
     SessionStartResponse:
       type: object
+      required: [session, media_connection]
       properties:
         session:
           $ref: '#/components/schemas/Session'
-        livekit_url:
-          type: string
-          format: uri
-        livekit_token:
-          type: string
-          description: LiveKit room JWT for this user
+        media_connection:
+          $ref: '#/components/schemas/MediaConnection'
 
     SessionJoinResponse:
       type: object
+      required: [session, media_connection]
       properties:
         session:
           $ref: '#/components/schemas/Session'
-        livekit_url:
+        media_connection:
+          $ref: '#/components/schemas/MediaConnection'
+
+    MediaConnection:
+      type: object
+      description: Participant-specific, short-lived connection material for the session's configured media adapter. Returned only by authorized start/join operations. Never broadcast, cache, log, or persist the credential client-side.
+      required: [endpoint, credential, expires_at]
+      properties:
+        endpoint:
           type: string
           format: uri
-        livekit_token:
+          pattern: '^(https|wss)://'
+          description: TLS-protected media connection endpoint supplied by trusted server configuration, never by client input
+        credential:
           type: string
+          minLength: 1
+          description: Opaque participant credential issued only to the authenticated caller
+        expires_at:
+          type: string
+          format: date-time
+          description: UTC expiration time derived from the issued credential. MVP credentials are valid for at most one hour and are renewed only through an authorized start/join operation.
 
     PaginatedSessions:
       type: object
@@ -2536,7 +2586,7 @@ components:
           description: Whether session recording is enabled (default false — requires privacy framework)
         video:
           type: boolean
-          description: Whether video publishing is enabled in LiveKit sessions (default false)
+          description: Whether an approved video-session feature is enabled (default false; F-005 never enables video publishing)
         ai_tajweed:
           type: boolean
           description: Whether AI Tajweed analysis is enabled (default false — requires recording to be enabled first)

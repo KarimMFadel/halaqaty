@@ -300,13 +300,13 @@ Full-featured messaging within circles, replacing WhatsApp/Telegram group chats 
 
 #### Description
 
-Unlimited-time audio-only sessions powered by LiveKit (open-source, self-hosted WebRTC SFU). This is the primary replacement for Zoom/Google Meet in MVP. Video is deferred to post-MVP behind a feature flag.
+Audio-only sessions powered by LiveKit (open-source, self-hosted WebRTC SFU). Halaqaty has no third-party 40-minute meeting limit, but caps each MVP session at 4 hours per OQ-016. This is the primary replacement for Zoom/Google Meet in MVP. Video is deferred to a separately approved post-MVP feature.
 
 #### User Stories
 
 - As a teacher, I can start a live session from the circle page with one tap
 - As a student, I can join a session from a push notification or calendar reminder
-- As a teacher, I can mute/unmute individual participants
+- As a teacher, I can mute participants and restore audio only when their existing role/turn entitlement permits publishing
 - As a teacher, I can lock the room to prevent new joiners mid-session
 - As a participant, I can raise my hand to signal the teacher
 - As a teacher, I can trust that live-session audio is not recorded in MVP
@@ -316,7 +316,7 @@ Unlimited-time audio-only sessions powered by LiveKit (open-source, self-hosted 
 - **Open-source:** No per-minute costs; self-hosted = full control
 - **WebRTC-based:** Industry-standard, browser and mobile compatible
 - **Official Flutter SDK:** `livekit_client` package with active maintenance
-- **No time limits:** Unlike Zoom free tier (40 min), LiveKit sessions are unlimited
+- **No third-party 40-minute limit:** Halaqaty controls the room lifecycle and caps MVP sessions at 4 hours
 - **Audio quality control:** Can disable noise suppression, adjust bitrates — critical for Quran recitation
 
 #### Audio Configuration (Critical)
@@ -330,7 +330,7 @@ audio:
   bitrate: 48000        # 48kbps minimum (vs Zoom's ~32kbps)
   noise_suppression: false   # OFF — preserves makhraj subtleties
   auto_gain_control: false   # OFF — consistent recitation volume
-  echo_cancellation: true    # ON — still needed to prevent feedback
+  echo_cancellation: false   # OFF where platform permits — preserves natural recitation voice
 ```
 
 #### LiveKit Integration Flow
@@ -341,39 +341,62 @@ Step 1: Session Creation
        ↓
   Flutter → POST /api/v1/sessions/{id}/start → Go Backend
        ↓
-  Go Backend calls LiveKit Server API → Creates room "{session_id}"
+  Go Backend calls SessionMediaGateway → LiveKit MVP adapter creates room "{session_id}"
        ↓
-  Go Backend returns: { livekit_token: "eyJ...", livekit_url: "wss://..." }
+  Go Backend returns: { media_connection: { endpoint: "wss://...", credential: "opaque", expires_at: "..." } }
 
-Step 2: Token Generation (Go Backend)
-  Using livekit-server-sdk-go:
+Step 2: Notify Circle Members
+  Go Backend broadcasts WS session.started:
+  { session_id: "...", circle_id: "..." }
+  This event is notification metadata only. It never contains endpoint, credential, or room reference.
+       ↓
+  Student sees "Session started" and chooses Join
+       ↓
+  Flutter → POST /api/v1/sessions/{id}/join → Go Backend
+       ↓
+  Backend revalidates identity, active membership, session state, lock, removal, and capacity
+       ↓
+  Backend returns that caller's required participant-specific media_connection
+
+Step 3: LiveKit Adapter Credential Mapping (Go Backend)
+  Inside backend/internal/sessions/livekit only:
   at := auth.NewAccessToken(lkApiKey, lkApiSecret)
   grant := &auth.VideoGrant{RoomJoin: true, Room: roomName, CanPublishVideo: false} // MVP audio-only
   at.AddGrant(grant).SetIdentity(userID).SetValidFor(time.Hour)
   token, _ := at.ToJWT()
 
-Step 3: Flutter Connects
-  Flutter livekit_client package:
-  room = await LiveKitClient.connect(livekitUrl, token, roomOptions)
+Step 4: Flutter Connects
+  Session controller calls provider-neutral MediaSession.connect(mediaConnection)
+       ↓
+  LiveKitMediaSession privately maps endpoint + credential to livekit_client
 
-Step 4: Media Routing
+Step 5: Media Routing
   LiveKit SFU routes audio streams between all participants
-  Teacher controls (mute, remove) via Flutter → REST → Go → LiveKit API
+  Teacher controls (mute, remove) via Flutter → REST → Go session service → SessionMediaGateway → LiveKit adapter
 ```
+
+> **Provider boundary:** LiveKit is the sole MVP session-media adapter. Session,
+> queue, REST/WebSocket, and Flutter UI/state code use the provider-neutral
+> boundary in [ADR-015](../../engineering/architecture/adr/ADR-015-session-media-provider-boundary.md)
+> so a future approved provider can be introduced without redesigning those
+> consumers. Multi-provider selection is not implemented until a second provider
+> is approved. F-005 remains audio-only; a future approved video feature may
+> extend the same boundary without changing the start/join connection envelope.
 
 #### Acceptance Criteria
 
 - [ ] Flutter package: `livekit_client` (official) integrated
 - [ ] Token generation exclusively on Go backend (never client-side)
 - [ ] Audio-only in MVP (no video toggle in app)
-- [ ] No time limits
+- [ ] Maximum session duration is 4 hours; idle room timeout is 30 minutes after the final participant leaves
 - [ ] Teacher controls: mute all, mute individual, remove participant, lock room (no new joiners)
-- [ ] Hand raise: students tap 🤚 → appears in teacher's UI; integrated with recitation queue
+- [ ] Hand raise: students tap 🤚 → appears in teacher's UI as standalone F-005 session state; F-003 may consume it later without changing F-005 ownership
 - [ ] Screen sharing is deferred to post-MVP (same feature-flag family as video)
 - [ ] Session recording is disabled in MVP and deferred until a privacy consent/retention framework is approved
 - [ ] Audio: Opus 48kbps+, noise suppression OFF, auto-gain OFF
 - [ ] Maximum 50 participants (scalable with server resources)
 - [ ] Graceful reconnection on network drop (LiveKit SDK handles this)
+- [ ] `session.started` contains notification metadata only; each teacher/student receives their own `MediaConnection` exclusively through authorized start/join REST
 
 
 

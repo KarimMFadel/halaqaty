@@ -1,8 +1,11 @@
 # ADR-009: Firebase Identity and Backend Device Sessions
 
-**Status:** Superseded by ADR-010
+**Status:** Accepted
 **Date:** 2026-07-31  
 **Deciders:** Karim (product owner)
+
+> ADR-010 supersedes only the circle-role clause; the identity and backend-session
+> decisions below remain accepted.
 
 ---
 
@@ -30,7 +33,8 @@ manage supervisors.
    out from Firebase locally. A future explicit logout-all-devices endpoint revokes all
    backend sessions for the authenticated user. Firebase remains responsible for
    refresh-token rotation and reuse detection.
-4. Circle-role lifecycle is superseded by ADR-010.
+4. Circle-role lifecycle is governed by ADR-010; it does not alter the identity or
+   backend-session decisions in this ADR.
 
 ## Consequences
 

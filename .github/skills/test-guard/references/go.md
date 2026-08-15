@@ -213,6 +213,17 @@ func TestCircleRepositoryTestSuite(t *testing.T) {
 }
 ```
 
+## Test invariants at their owning boundary
+
+Do not scan fixed Go or SQL files to claim that an implementation is absent. A test that searches for `DELETE FROM circles` or a method name can be bypassed by formatting, renaming, or moving the implementation.
+
+Test the observable invariant instead:
+
+- Exercise the archive operation through the production router and assert the documented status, empty response body, archived state, and retained relationships.
+- Against a migrated PostgreSQL schema, verify the relevant foreign key's `delete_rule`, attempt the prohibited deletion, assert SQLSTATE `23503`, and confirm the retained rows still exist.
+
+A hard-coded source-policy guard is an exception: use one only when an approved architecture/security rule or Karim explicitly requires it. Document its bounded scope and limitations, and retain behavioral or real-infrastructure coverage for the actual invariant.
+
 ## Testing WebSocket handlers
 
 Use `github.com/gorilla/websocket` (or `nhooyr.io/websocket`) test helpers or `net/http/httptest` with a `websocket.Dialer`:

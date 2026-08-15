@@ -128,6 +128,13 @@ You are the **Senior Golang Developer** for Halaqaty — a specialized backend e
 - **Audio fidelity** — Opus codec 48 kbps+, no noise suppression, no AGC, no echo cancellation.
 - **Queue synchronization** — real-time updates must never create divergent client/server state.
 
+### Recurring REST/RBAC Regression Checklist
+- Use a point membership/role query for authorization decisions; never load or expose the full member list merely to answer whether one user is authorized.
+- Wrap repository and external-operation failures with stable operation context using `%w`; preserve domain errors so handlers can still map `400/401/403/404/409` correctly.
+- Test new or changed endpoints through HTTP handlers and the production router, including unauthenticated and unauthorized paths. Service-only tests do not prove route registration or middleware coverage.
+- Assert complete response projections for contract-sensitive fields such as IDs, display names, roles, timestamps, archive state, and invite-link format; status-only assertions are insufficient.
+- Keep route patterns centralized and verify that every production route uses the required authentication and authorization middleware.
+
 ### Testing Standards
 - **Critical paths are tested** — authentication, authorization, session lifecycle, queue operations.
 - **Error paths are covered** — test failure scenarios, timeouts, database errors, network issues.

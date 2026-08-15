@@ -26,7 +26,7 @@ Halaqaty replaces all of that with a single, purpose-built application designed 
 | 💬 **Real-time Chat** | Group and private messages with voice notes, files, and pinning |
 | 🎙️ **Live Sessions** | No-time-limit audio-only sessions via LiveKit (WebRTC), optimized for Quran recitation quality (video post-MVP behind feature flag) |
 | 📅 **Schedule & Calendar** | Recurring weekly schedules, reminders, attendance tracking |
-| 📊 **Progress Tracking** | Session-level memorization logs with grades in MVP; advanced Quran maps/analytics post-MVP |
+| 📊 **Progress Tracking** | Session-level memorization logs with grades, followed by the approved Phase 3 Quran map and analytics work |
 | 🔔 **Smart Notifications** | FCM push + in-app real-time notifications |
 | 🔒 **Privacy-First Sessions** | Live-session recording is disabled in MVP; any future recording requires explicit consent and strict privacy controls |
 | 📊 **Student & Teacher Dashboards** | Post-MVP dashboards for students and teachers across members/circles |
@@ -58,10 +58,8 @@ The queue can be **reset and reused multiple times** in a single session — for
 | **Audio Sessions** | LiveKit (WebRTC, self-hosted) | Open-source, no time limits, Quran audio optimization (video feature-flagged post-MVP) |
 | **File Storage** | MinIO (S3-compatible, self-hosted) | Cost-effective, self-hosted, no vendor lock-in |
 | **Push Notifications** | Firebase Cloud Messaging (FCM) | Industry standard, cross-platform |
-| **Auth** | Firebase Auth | Social sign-in (Google, Apple), phone OTP |
-| **Deployment** | Docker Compose on Hetzner CX22 | Start cheap (~$8/mo), single-server MVP (No Kubernetes in MVP — see [DEPLOYMENT.md](docs/engineering/deployment/DEPLOYMENT.md)) |
-
-> **⚠️ ADR TODO:** The MVP deployment decision (Docker Compose on Hetzner CX22, no Kubernetes in MVP) is currently documented only in [DEPLOYMENT.md](docs/engineering/deployment/DEPLOYMENT.md). Re-check the deployment plan for the Halaqaty MVP and create a dedicated ADR (next sequential number, ADR-011) under `docs/engineering/architecture/adr/` to formally codify the choice, alternatives considered, and constitutional constraint it satisfies — see [docs/engineering/architecture/README.md](docs/engineering/architecture/README.md) for the ADR index and format guidance.
+| **Auth** | Firebase Auth | Email/password, Google, and Apple sign-in; phone is supplementary verification only |
+| **Deployment** | Docker Compose on Hetzner CX22 | Start cheap (~$8/mo), single-server MVP; no Kubernetes in MVP ([ADR-014](docs/engineering/architecture/adr/ADR-014-mvp-deployment.md)) |
 
 ---
 

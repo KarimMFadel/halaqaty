@@ -38,68 +38,15 @@
 
 ## 2. DB Schema Changes
 
-> **Migration file numbering:** The file numbers below (`0006`–`0012`) are placeholders. Before writing actual migration files, run `ls backend/migrations/` to find the current highest sequence number and continue from there. The order of the 7 migrations must be preserved relative to each other.
+> **Migration file numbering:** Names below use `NNNN` as a placeholder. Before implementation, inspect `backend/migrations/`, assign the next available sequential numbers, and preserve the relative order of the six migrations.
 
-### 2.1 Grade Enum — Update to 5-Grade Scale
+### 2.1 Grade Enum — Canonical Constraint
 
 **Affects:** `recitation_queue_entries.grade`, `memorization_progress.grade`
 
-```sql
--- FILE: migrations/0009_grade_enum_5grade.up.sql
--- Replaces the 4-grade scale (excellent/good/needs_improvement/repeat)
--- with the canonical 5-grade scale.
-
--- Step 1: Rename existing value if present (old dev data only)
-UPDATE recitation_queue_entries
-  SET grade = 'needs_review'
-  WHERE grade = 'needs_improvement';
-
-UPDATE memorization_progress
-  SET grade = 'needs_review'
-  WHERE grade = 'needs_improvement';
-
--- Step 2: Drop and recreate the CHECK constraint on recitation_queue_entries
-ALTER TABLE recitation_queue_entries
-  DROP CONSTRAINT IF EXISTS recitation_queue_entries_grade_check;
-
-ALTER TABLE recitation_queue_entries
-  ADD CONSTRAINT recitation_queue_entries_grade_check
-  CHECK (grade IN ('excellent','good','acceptable','needs_review','repeat'));
-
--- Step 3: Same for memorization_progress
-ALTER TABLE memorization_progress
-  DROP CONSTRAINT IF EXISTS memorization_progress_grade_check;
-
-ALTER TABLE memorization_progress
-  ADD CONSTRAINT memorization_progress_grade_check
-  CHECK (grade IN ('excellent','good','acceptable','needs_review','repeat'));
-
--- FILE: migrations/0009_grade_enum_5grade.down.sql
--- ⚠️  SAFETY WARNING: Rolling back the 5-grade constraint is only safe if
--- no rows contain the value 'acceptable'. If 'acceptable' grades were inserted,
--- the constraint below will CONFLICT with existing data. Run this guard first:
---   SELECT COUNT(*) FROM recitation_queue_entries WHERE grade = 'acceptable';
---   SELECT COUNT(*) FROM memorization_progress WHERE grade = 'acceptable';
--- Both must return 0 before proceeding with the rollback.
-
-UPDATE recitation_queue_entries SET grade = 'needs_improvement' WHERE grade = 'needs_review';
-UPDATE memorization_progress    SET grade = 'needs_improvement' WHERE grade = 'needs_review';
--- 'acceptable' has no equivalent in the old 4-grade scale — map to 'good' as best approximation
-UPDATE recitation_queue_entries SET grade = 'good' WHERE grade = 'acceptable';
-UPDATE memorization_progress    SET grade = 'good' WHERE grade = 'acceptable';
-
-ALTER TABLE recitation_queue_entries
-  DROP CONSTRAINT IF EXISTS recitation_queue_entries_grade_check;
-ALTER TABLE recitation_queue_entries
-  ADD CONSTRAINT recitation_queue_entries_grade_check
-  CHECK (grade IN ('excellent','good','needs_improvement','repeat'));
-
-ALTER TABLE memorization_progress
-  DROP CONSTRAINT IF EXISTS memorization_progress_grade_check;
-ALTER TABLE memorization_progress
-  ADD CONSTRAINT memorization_progress_grade_check
-  CHECK (grade IN ('excellent','good','needs_improvement','repeat'));
-```
+No standalone grade-conversion migration is planned. The current implemented schema
+does not contain either grade column; the migrations that introduce them must use the
+ADR-013 values directly: `excellent`, `good`, `acceptable`, `needs_review`, `repeat`.
 
 ---
 
@@ -108,7 +55,7 @@ ALTER TABLE memorization_progress
 #### Phase 1 — Expand (non-breaking, deploy first)
 
 ```sql
--- FILE: migrations/0006_normalize_mp_surah.up.sql
+-- FILE: migrations/NNNN_normalize_mp_surah.up.sql
 
 -- Add nullable surah_id (no downtime — existing code ignores it)
 ALTER TABLE memorization_progress
@@ -133,21 +80,21 @@ WHERE  mp.surah_id IS NULL
 -- Reconciliation check — must return 0 before Phase 2:
 -- SELECT COUNT(*) FROM memorization_progress WHERE surah_id IS NULL;
 
--- FILE: migrations/0006_normalize_mp_surah.down.sql
+-- FILE: migrations/NNNN_normalize_mp_surah.down.sql
 ALTER TABLE memorization_progress DROP COLUMN IF EXISTS surah_id;
 ```
 
 #### Phase 2 — Contract (after backfill verified)
 
 ```sql
--- FILE: migrations/0007_enforce_surah_id_not_null.up.sql
+-- FILE: migrations/NNNN_enforce_surah_id_not_null.up.sql
 ALTER TABLE memorization_progress
   ALTER COLUMN surah_id SET NOT NULL;
 
 COMMENT ON COLUMN memorization_progress.surah_name IS
   'DEPRECATED — use surah_id. Scheduled for removal after v1.1.';
 
--- FILE: migrations/0007_enforce_surah_id_not_null.down.sql
+-- FILE: migrations/NNNN_enforce_surah_id_not_null.down.sql
 ALTER TABLE memorization_progress
   ALTER COLUMN surah_id DROP NOT NULL;
 ```
@@ -157,7 +104,7 @@ ALTER TABLE memorization_progress
 ### 2.3 Add Idempotency + `updated_at` to `memorization_progress`
 
 ```sql
--- FILE: migrations/0008_mp_idempotency.up.sql
+-- FILE: migrations/NNNN_mp_idempotency.up.sql
 
 -- Unique constraint enables safe ON CONFLICT upsert on re-grade
 ALTER TABLE memorization_progress
@@ -171,7 +118,7 @@ ALTER TABLE memorization_progress
 ALTER TABLE memorization_progress
   ALTER COLUMN grade DROP NOT NULL;
 
--- FILE: migrations/0008_mp_idempotency.down.sql
+-- FILE: migrations/NNNN_mp_idempotency.down.sql
 ALTER TABLE memorization_progress DROP CONSTRAINT IF EXISTS uq_mp_queue_entry_id;
 ALTER TABLE memorization_progress DROP COLUMN IF EXISTS updated_at;
 ALTER TABLE memorization_progress ALTER COLUMN grade SET NOT NULL;
@@ -730,13 +677,12 @@ A (Grade enum) ──► B (Migrations) ──┬──► C (Surah map logic + 
 | `backend/internal/store/progress.go` | NEW — `RefreshQuranMap()` |
 | `backend/internal/service/queue.go` | MODIFY — add progress upsert + async refresh after grade |
 | `backend/cmd/api/main.go` | MODIFY — register `/progress` route group |
-| `backend/migrations/0006_normalize_mp_surah.up/down.sql` | NEW |
-| `backend/migrations/0007_enforce_surah_id_not_null.up/down.sql` | NEW |
-| `backend/migrations/0008_mp_idempotency.up/down.sql` | NEW |
-| `backend/migrations/0009_grade_enum_5grade.up/down.sql` | NEW |
-| `backend/migrations/0010_progress_indexes.up/down.sql` | NEW |
-| `backend/migrations/0011_progress_views.up/down.sql` | NEW |
-| `backend/migrations/0012_quran_divisions.up/down.sql` | NEW |
+| `backend/migrations/NNNN_normalize_mp_surah.up/down.sql` | NEW |
+| `backend/migrations/NNNN_enforce_surah_id_not_null.up/down.sql` | NEW |
+| `backend/migrations/NNNN_mp_idempotency.up/down.sql` | NEW |
+| `backend/migrations/NNNN_progress_indexes.up/down.sql` | NEW |
+| `backend/migrations/NNNN_progress_views.up/down.sql` | NEW |
+| `backend/migrations/NNNN_quran_divisions.up/down.sql` | NEW |
 | `backend/migrations/seeds/quran_divisions.sql` | NEW — 240 Rub' seed rows |
 
 ### Flutter (Mobile)

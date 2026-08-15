@@ -133,6 +133,8 @@ The tasks.md should be immediately executable - each task must be specific enoug
 
 **Tests are OPTIONAL**: Only generate test tasks if explicitly requested in the feature specification or if user requests TDD approach.
 
+**Test observable invariants**: Test tasks must target public behavior or the real infrastructure that owns an invariant. Do not generate tasks that claim to prove behavior or implementation absence by scanning fixed files, symbol names, AST nodes, or SQL strings. A hard-coded source-policy guard is allowed only when an approved architecture/security requirement or explicit user instruction requires it; describe its bounded scope and require complementary behavioral or infrastructure coverage.
+
 ### Checklist Format (REQUIRED)
 
 Every task MUST strictly follow this format:

@@ -44,7 +44,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => ref.read(profileControllerProvider.notifier).loadProfile());
+    Future.microtask(
+        () => ref.read(profileControllerProvider.notifier).loadProfile());
   }
 
   @override
@@ -138,7 +139,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         validator: (value) {
                           final v = value?.trim() ?? '';
                           if (v.isEmpty) {
-                            return isRtl ? 'الدولة مطلوبة' : 'Country is required';
+                            return isRtl
+                                ? 'الدولة مطلوبة'
+                                : 'Country is required';
                           }
                           if (v.length != 2) {
                             return isRtl
@@ -153,7 +156,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         key: const Key('profileLanguageDropdown'),
                         initialValue: _selectedLanguage,
                         decoration: InputDecoration(
-                          labelText: isRtl ? 'اللغة المفضلة' : 'Preferred Language',
+                          labelText:
+                              isRtl ? 'اللغة المفضلة' : 'Preferred Language',
                           errorText: state.fieldErrors['preferred_language'],
                         ),
                         items: _supportedLanguages
@@ -198,7 +202,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             ? const SizedBox(
                                 height: 20,
                                 width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : Text(isRtl ? 'حفظ' : 'Save'),
                       ),
@@ -207,7 +212,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         const SizedBox(height: 12),
                         Text(
                           state.errorMessage!,
-                          style: TextStyle(color: Theme.of(context).colorScheme.error),
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.error),
                         ),
                       ],
                     ],
@@ -234,17 +240,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       return;
     }
 
-    final success = await ref.read(profileControllerProvider.notifier).updateProfile(
-          request: UpdateProfileRequest(
-            fullName: _fullNameController.text.trim(),
-            displayName: _displayNameController.text.trim(),
-            bio: _bioController.text.trim(),
-            country: _countryController.text.trim().toUpperCase(),
-            preferredLanguage: _selectedLanguage,
-            avatarUrl: _avatarUrlController.text.trim(),
-            phone: _phoneController.text.trim(),
-          ),
-        );
+    final success =
+        await ref.read(profileControllerProvider.notifier).updateProfile(
+              request: UpdateProfileRequest(
+                fullName: _fullNameController.text.trim(),
+                displayName: _displayNameController.text.trim(),
+                bio: _bioController.text.trim(),
+                country: _countryController.text.trim().toUpperCase(),
+                preferredLanguage: _selectedLanguage,
+                avatarUrl: _avatarUrlController.text.trim(),
+                phone: _phoneController.text.trim(),
+              ),
+            );
 
     if (!mounted || !success) {
       return;

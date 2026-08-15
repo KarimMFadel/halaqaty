@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:halaqaty_mobile/features/admin/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
+import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 
 bool isCircleManagerRole(CircleRole role) {
   return role == CircleRole.teacher || role == CircleRole.supervisor;

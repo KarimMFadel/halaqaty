@@ -466,7 +466,7 @@ These are the canonical enum values used in PostgreSQL CHECK constraints and Go 
 
 #### Recitation Grade (`grade` column)
 
-> **Canonical 5-grade scale — locked 2026-06-30.** Replaces the previous 4-grade scale. The product definition and Arabic display labels are in [FEATURES.md F-003](../../management/product/FEATURES.md#f-003-recitation-queue-system).
+> **Canonical 5-grade scale — locked 2026-06-30.** Replaces the previous 4-grade scale. See [ADR-013](adr/ADR-013-recitation-grade-scale.md); product labels are in [FEATURES.md F-003](../../management/product/FEATURES.md#f-003-recitation-queue-system).
 
 | DB Value | English Label | Arabic Label | Meaning |
 |----------|--------------|--------------|---------|
@@ -478,7 +478,7 @@ These are the canonical enum values used in PostgreSQL CHECK constraints and Go 
 
 Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 
-> **Migration note:** If existing data contains the old value `needs_improvement`, rename it to `needs_review` in migration `0009_grade_enum_5grade.up.sql`.
+> **Migration note:** The current implemented schema does not yet contain these grade columns. The F-003/F-007 migrations must introduce the canonical constraint directly; no legacy-value migration is currently required.
 
 #### Queue Entry State Machine
 
@@ -746,7 +746,7 @@ erDiagram
 | invite_code | VARCHAR(20) | UNIQUE NOT NULL | Join code (e.g., HLQ-7X2K) |
 | max_capacity | INTEGER | DEFAULT 50 | Maximum student capacity (min 2, max 200) |
 | is_private | BOOLEAN | DEFAULT FALSE | Whether circle requires invite to join |
-| gender_restriction | VARCHAR(20) | CHECK IN ('male','female','mixed') DEFAULT 'mixed' | Audience restriction |
+| gender_restriction | VARCHAR(20) | CHECK IN ('male','female','mixed','unspecified') DEFAULT 'unspecified' | Student-audience setting; independent of teacher gender |
 | language | VARCHAR(10) | DEFAULT 'ar' | Primary language |
 | grading_policy | VARCHAR(20) | CHECK IN ('required','optional') DEFAULT 'required' | Whether grading is required after each completed turn |
 | is_archived | BOOLEAN | DEFAULT FALSE | |

@@ -1,8 +1,8 @@
 # MVP Decision Register
 
-> All frozen decisions for the Halaqaty MVP. Binding on all implementation. To change a decision, create an ADR in [`../../../engineering/architecture/adr/`](../../../engineering/architecture/adr/) and update this file with an entry in the Amendment Log.
+> All frozen decisions for the Halaqaty MVP. Binding on all implementation. To change a decision, create an ADR in [`../../engineering/architecture/adr/`](../../engineering/architecture/adr/) and update this file with an entry in the Amendment Log.
 
-**Last updated:** 2026-04-26
+**Last updated:** 2026-08-07
 
 ---
 
@@ -113,7 +113,7 @@
 
 | Date | Decision ID | Old Value | New Value | Rationale | ADR |
 |---|---|---|---|---|---|
-| 2026-06-30 | GRADE-ENUM | 4-grade: `excellent/good/needs_improvement/repeat` (ARCHITECTURE.md) / 6-grade: `excellent/very_good/good/acceptable/needs_review/repeat` (FEATURES.md) | **5-grade canonical:** `excellent/good/acceptable/needs_review/repeat` | Resolved mismatch between ARCHITECTURE.md (4-grade) and FEATURES.md F-003 (6-grade). Merged `very_good` into `good`; renamed `needs_improvement` → `needs_review` for clarity. Approved by Karim 2026-06-30. | Pending ADR-008 |
+| 2026-06-30 | GRADE-ENUM | 4-grade: `excellent/good/needs_improvement/repeat` (ARCHITECTURE.md) / 6-grade: `excellent/very_good/good/acceptable/needs_review/repeat` (FEATURES.md) | **5-grade canonical:** `excellent/good/acceptable/needs_review/repeat` | Resolved mismatch between ARCHITECTURE.md (4-grade) and FEATURES.md F-003 (6-grade). Merged `very_good` into `good`; renamed `needs_improvement` → `needs_review` for clarity. Approved by Karim 2026-06-30. | ADR-013 |
 | 2026-06-30 | OQ-027 | Open | Fixed globally — same Surah status threshold rules for all circles | Simpler to reason about; teacher customisation deferred | — |
 | 2026-06-30 | OQ-028 | Open | "Practiced" = only `completed` turns count; `skipped`/`opted_out` do NOT | Semantic correctness; a skipped turn is not a recitation event | — |
 | 2026-06-30 | OQ-029 | Open | Teacher CAN see student's cross-circle progress (not restricted to own circle) | Teachers need full student context for informed guidance | — |
@@ -125,7 +125,6 @@
 | 2026-06-30 | CROSS-CIRCLE | Open | Most recent update wins for global Quran Map cross-circle conflict resolution | Simplest rule; full history always preserved for audit | — |
 | 2026-07-31 | OQ-035, OQ-036 | Underspecified | Firebase/client identity boundary; backend per-device session lifecycle; teacher-owned circle role lifecycle | Removes contradictory backend password/token APIs and prevents self-assigned privileges. | ADR-009 |
 | 2026-07-31 | OQ-036 | Single creator-teacher; teacher-only supervisor management | Multiple teachers, optional backup supervisor, delegated manager role changes, self-change and final-teacher safeguards | Supports the approved circle-management workflow while preserving per-circle authorization safety. | ADR-010 |
-
----
+| 2026-08-07 | OQ-006 / F-002 | Circle deletion may permanently remove data | Circle retirement is archive-only; history is retained and hard deletion is prohibited | Prevents accidental loss of circle history and aligns REST DELETE with soft-state retirement. | ADR-011 |
 
 *Any change requires: (1) a new or updated ADR in `../../engineering/architecture/adr/`, (2) an entry in the Amendment Log above, (3) approval from Karim.*

@@ -100,7 +100,8 @@ void main() {
 
       await tester.enterText(
           find.byKey(const Key('profileFullNameField')), 'Ali Mahmoud');
-      await tester.enterText(find.byKey(const Key('profileCountryField')), 'EG');
+      await tester.enterText(
+          find.byKey(const Key('profileCountryField')), 'EG');
       await tester.ensureVisible(find.byKey(const Key('profileSaveButton')));
       await tester.tap(find.byKey(const Key('profileSaveButton')));
       await tester.pump();

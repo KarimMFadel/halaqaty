@@ -43,6 +43,8 @@ func (v *circleTokenVerifier) Verify(_ context.Context, bearerToken string) (*au
 type circleRoleEnv struct {
 	mux      *http.ServeMux
 	svc      *rbac.Service
+	repo     *rbac.Repository
+	pool     *pgxpool.Pool
 	userIDs  map[string]string
 	sessions map[string]string
 	tokens   map[string]string
@@ -74,6 +76,7 @@ func setupCircleRoleEnv(t *testing.T) *circleRoleEnv {
 		"000012_auth_profiles_display_name.up.sql",
 		"000013_create_circles.up.sql",
 		"000014_circle_members_circle_fk.up.sql",
+		"000015_circle_management.up.sql",
 	} {
 		runMigrationFile(t, conn, ctx, file)
 	}
@@ -103,7 +106,7 @@ func setupCircleRoleEnv(t *testing.T) *circleRoleEnv {
 
 	verifier := &circleTokenVerifier{tokens: make(map[string]*auth.DecodedToken)}
 	for _, user := range circleRoleUsers {
-		verifier.tokens["Bearer "+user+"-token"] = &auth.DecodedToken{
+		verifier.tokens[user+"-token"] = &auth.DecodedToken{
 			UID:   "firebase-" + user,
 			Email: user + "@halaqaty.app",
 		}
@@ -116,6 +119,11 @@ func setupCircleRoleEnv(t *testing.T) *circleRoleEnv {
 	mux := http.NewServeMux()
 	mux.Handle("POST /auth/register", authMW.RequireVerifiedFirebase(http.HandlerFunc(authHandler.Register)))
 	mux.Handle("POST /circles", authMW.Require(http.HandlerFunc(rbacHandler.CreateCircle)))
+	mux.Handle("GET /circles/discover", authMW.Require(http.HandlerFunc(rbacHandler.DiscoverPublicCircles)))
+	mux.Handle("GET /circles/{circleId}", authMW.Require(http.HandlerFunc(rbacHandler.GetCircle)))
+	mux.Handle("GET /circles/{circleId}/members", authMW.Require(http.HandlerFunc(rbacHandler.ListMembers)))
+	mux.Handle("POST /circles/{circleId}/join", authMW.Require(http.HandlerFunc(rbacHandler.JoinPublicCircle)))
+	mux.Handle("POST /circles/join", authMW.Require(http.HandlerFunc(rbacHandler.JoinCircle)))
 	mux.Handle(
 		"PUT /circles/{circleId}/members/{userId}/role",
 		authMW.Require(roleMW.RequireAny("supervisor", "teacher")(http.HandlerFunc(rbacHandler.AssignRole))),
@@ -124,6 +132,8 @@ func setupCircleRoleEnv(t *testing.T) *circleRoleEnv {
 	env := &circleRoleEnv{
 		mux:      mux,
 		svc:      rbacService,
+		repo:     rbacRepo,
+		pool:     pool,
 		userIDs:  make(map[string]string),
 		sessions: make(map[string]string),
 		tokens:   make(map[string]string),

@@ -14,7 +14,16 @@ const (
 )
 
 const (
-	routeCirclesCreate    = "POST /api/v1/circles"
-	routeCirclesJoin      = "POST /api/v1/circles/join"
-	routeCircleAssignRole = "PUT /api/v1/circles/{circleId}/members/{userId}/role"
+	routeCirclesCreate       = "POST /api/v1/circles"
+	routeCirclesJoin         = "POST /api/v1/circles/join"
+	routeCirclesDiscover     = "GET /api/v1/circles/discover"
+	routeCircleJoin          = "POST /api/v1/circles/{circleId}/join"
+	routeCircleGet           = "GET /api/v1/circles/{circleId}"
+	routeCircleUpdate        = "PUT /api/v1/circles/{circleId}"
+	routeCircleMembersGet    = "GET /api/v1/circles/{circleId}/members"
+	routeCircleAssignRole    = "PUT /api/v1/circles/{circleId}/members/{userId}/role"
+	routeCircleRemoveMember  = "DELETE /api/v1/circles/{circleId}/members/{userId}"
+	routeCircleRefreshInvite = "POST /api/v1/circles/{circleId}/invite-code/refresh"
+	routeCircleArchive       = "DELETE /api/v1/circles/{circleId}"
+	routeUsersSearch         = "GET /api/v1/users/search"
 )

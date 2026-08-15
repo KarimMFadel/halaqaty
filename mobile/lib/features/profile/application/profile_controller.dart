@@ -32,9 +32,8 @@ class ProfileState {
       profile: profile ?? this.profile,
       isLoading: isLoading ?? this.isLoading,
       isSaving: isSaving ?? this.isSaving,
-      errorMessage: clearErrorMessage
-          ? null
-          : (errorMessage ?? this.errorMessage),
+      errorMessage:
+          clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
       fieldErrors:
           clearFieldErrors ? const {} : (fieldErrors ?? this.fieldErrors),
     );

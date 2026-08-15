@@ -119,7 +119,8 @@ void main() {
     );
 
     await tester.enterText(find.byKey(const Key('emailField')), 'a@b.com');
-    await tester.enterText(find.byKey(const Key('passwordField')), 'password123');
+    await tester.enterText(
+        find.byKey(const Key('passwordField')), 'password123');
     await tester.tap(find.byKey(const Key('submitButton')));
     await tester.pumpAndSettle();
 

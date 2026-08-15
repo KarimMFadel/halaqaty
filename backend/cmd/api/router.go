@@ -154,6 +154,46 @@ func (r *Router) registerRoutes() {
 			joinCircleHandler = http.HandlerFunc(rbacH.JoinCircle)
 		}
 		r.mux.Handle(routeCirclesJoin, r.requireWithUserLimit(joinCircleHandler))
+
+		var joinPublicCircleHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		if rbacH != nil {
+			joinPublicCircleHandler = http.HandlerFunc(rbacH.JoinPublicCircle)
+		}
+		r.mux.Handle(routeCircleJoin, r.requireWithUserLimit(joinPublicCircleHandler))
+
+		var getCircleHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		if rbacH != nil {
+			getCircleHandler = http.HandlerFunc(rbacH.GetCircle)
+		}
+		r.mux.Handle(routeCircleGet, r.requireWithUserLimit(getCircleHandler))
+
+		var getCircleMembersHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		if rbacH != nil {
+			getCircleMembersHandler = http.HandlerFunc(rbacH.ListMembers)
+		}
+		r.mux.Handle(routeCircleMembersGet, r.requireWithUserLimit(getCircleMembersHandler))
+
+		var discoverCirclesHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		if rbacH != nil {
+			discoverCirclesHandler = http.HandlerFunc(rbacH.DiscoverPublicCircles)
+		}
+		r.mux.Handle(routeCirclesDiscover, r.requireWithUserLimit(discoverCirclesHandler))
+
+		var searchUsersHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		if rbacH != nil {
+			searchUsersHandler = http.HandlerFunc(rbacH.SearchUsers)
+		}
+		r.mux.Handle(routeUsersSearch, r.requireWithUserLimit(searchUsersHandler))
 	}
 
 	if r.mw.Auth != nil && r.mw.Role != nil {
@@ -169,6 +209,22 @@ func (r *Router) registerRoutes() {
 			routeCircleAssignRole,
 			r.requireWithUserLimit(r.mw.Role.RequireAny("supervisor", "teacher")(assignRoleHandler)),
 		)
+		var refreshInviteHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		var removeMemberHandler http.Handler = refreshInviteHandler
+		var archiveCircleHandler http.Handler = refreshInviteHandler
+		var updateCircleHandler http.Handler = refreshInviteHandler
+		if rbacH != nil {
+			refreshInviteHandler = http.HandlerFunc(rbacH.RefreshInviteCode)
+			removeMemberHandler = http.HandlerFunc(rbacH.RemoveMember)
+			archiveCircleHandler = http.HandlerFunc(rbacH.ArchiveCircle)
+			updateCircleHandler = http.HandlerFunc(rbacH.UpdateCircle)
+		}
+		r.mux.Handle(routeCircleRefreshInvite, r.requireWithUserLimit(r.mw.Role.RequireAny("teacher")(refreshInviteHandler)))
+		r.mux.Handle(routeCircleRemoveMember, r.requireWithUserLimit(r.mw.Role.RequireAny("teacher")(removeMemberHandler)))
+		r.mux.Handle(routeCircleArchive, r.requireWithUserLimit(r.mw.Role.RequireAny("teacher")(archiveCircleHandler)))
+		r.mux.Handle(routeCircleUpdate, r.requireWithUserLimit(r.mw.Role.RequireAny("teacher")(updateCircleHandler)))
 	}
 }
 

@@ -3,7 +3,7 @@
 > الإصدار: 1.0  
 > الحالة: مسودة للمحاذاة  
 > المالك: إدارة المنتج (**GPT-5.3-Codex بدور مدير المشروع**)  
-> وثائق مرتبطة: [PRD.md](../PRD.md) · [PLAN_AR.md](PLAN_AR.md) · [FEATURES_AR.md](FEATURES_AR.md) · [ARCHITECTURE.md](../ARCHITECTURE.md) · [DEPLOYMENT.md](../DEPLOYMENT.md)
+> وثائق مرتبطة: [PRD.md](../product/PRD.md) · [PLAN_AR.md](PLAN_AR.md) · [FEATURES_AR.md](FEATURES_AR.md) · [ARCHITECTURE.md](../../engineering/architecture/ARCHITECTURE.md) · [DEPLOYMENT.md](../../engineering/deployment/DEPLOYMENT.md)
 
 ---
 
@@ -199,5 +199,5 @@
 
 هذه الوثيقة مقصودة لتكون **تجارية/منتجية أولاً**.  
 التفاصيل التقنية التنفيذية تبقى في:
-- [ARCHITECTURE.md](../ARCHITECTURE.md)
-- [DEPLOYMENT.md](../DEPLOYMENT.md)
+- [ARCHITECTURE.md](../../engineering/architecture/ARCHITECTURE.md)
+- [DEPLOYMENT.md](../../engineering/deployment/DEPLOYMENT.md)

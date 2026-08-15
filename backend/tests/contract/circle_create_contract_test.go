@@ -30,11 +30,12 @@ const (
 // actorRole/actorRoleErr feed the role middleware independently of the
 // membership data the service sees, mirroring the defense-in-depth split.
 type circleStoreStub struct {
-	users        map[string]bool
-	circles      map[string]rbac.Circle
-	members      map[string]map[string]string
-	actorRole    string
-	actorRoleErr bool
+	users         map[string]bool
+	circles       map[string]rbac.Circle
+	members       map[string]map[string]string
+	actorRole     string
+	actorRoleErr  bool
+	searchResults []rbac.UserSearchResult
 }
 
 func newCircleStoreStub() *circleStoreStub {
@@ -63,7 +64,9 @@ func (s *circleStoreStub) UsersExist(_ context.Context, userIDs []string) (map[s
 	return existing, nil
 }
 
-func (s *circleStoreStub) InsertCircle(_ context.Context, name, ownerID, inviteCode string) (rbac.Circle, error) {
+func (s *circleStoreStub) LockUser(context.Context, string) error { return nil }
+
+func (s *circleStoreStub) InsertCircle(_ context.Context, name, ownerID, inviteCode string, settings rbac.CircleSettings) (rbac.Circle, error) {
 	circle := rbac.Circle{
 		ID:         contractCircleID,
 		Name:       name,
@@ -107,9 +110,80 @@ func (s *circleStoreStub) LockMembers(_ context.Context, circleID string) ([]rba
 	return members, nil
 }
 
+func (s *circleStoreStub) CountActiveMemberships(_ context.Context, userID string) (int, error) {
+	count := 0
+	for circleID, members := range s.members {
+		if _, ok := members[userID]; ok && !s.circles[circleID].IsArchived {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func (s *circleStoreStub) UpdateMemberRole(_ context.Context, circleID, userID, role string) error {
 	s.members[circleID][userID] = role
 	return nil
+}
+
+func (s *circleStoreStub) FindCircleByID(_ context.Context, circleID string) (rbac.Circle, error) {
+	circle, ok := s.circles[circleID]
+	if !ok {
+		return rbac.Circle{}, rbac.ErrCircleNotFound
+	}
+	return circle, nil
+}
+
+func (s *circleStoreStub) FindCircleByIDForUpdate(ctx context.Context, circleID string) (rbac.Circle, error) {
+	return s.FindCircleByID(ctx, circleID)
+}
+func (s *circleStoreStub) ListPublicCircles(_ context.Context, _, _ string, _ int) ([]rbac.PublicCircleSummary, error) {
+	return nil, nil
+}
+func (s *circleStoreStub) SearchUsers(_ context.Context, _ string, _ int) ([]rbac.UserSearchResult, error) {
+	return s.searchResults, nil
+}
+func (s *circleStoreStub) UpdateCircle(_ context.Context, circleID, name string, settings rbac.CircleSettings) (rbac.Circle, error) {
+	circle, err := s.FindCircleByID(context.Background(), circleID)
+	if err != nil {
+		return rbac.Circle{}, err
+	}
+	circle.Name = name
+	s.circles[circleID] = circle
+	return circle, nil
+}
+func (s *circleStoreStub) RefreshInviteCode(_ context.Context, circleID, code string) error {
+	circle, err := s.FindCircleByID(context.Background(), circleID)
+	if err != nil {
+		return err
+	}
+	circle.InviteCode = code
+	s.circles[circleID] = circle
+	return nil
+}
+func (s *circleStoreStub) RemoveMember(_ context.Context, circleID, userID string) error {
+	delete(s.members[circleID], userID)
+	return nil
+}
+func (s *circleStoreStub) ArchiveCircle(_ context.Context, circleID string) error {
+	circle, err := s.FindCircleByID(context.Background(), circleID)
+	if err != nil {
+		return err
+	}
+	circle.IsArchived = true
+	s.circles[circleID] = circle
+	return nil
+}
+func (s *circleStoreStub) ListMembers(_ context.Context, circleID string) ([]rbac.CircleMember, error) {
+	result := make([]rbac.CircleMember, 0, len(s.members[circleID]))
+	for id, role := range s.members[circleID] {
+		result = append(result, rbac.CircleMember{UserID: id, Role: role})
+	}
+	return result, nil
+}
+
+func (s *circleStoreStub) IsMember(_ context.Context, circleID, userID string) (bool, error) {
+	_, ok := s.members[circleID][userID]
+	return ok, nil
 }
 
 // RoleForUserInCircle satisfies middleware.CircleMembershipRepository.
@@ -134,16 +208,27 @@ func buildJoinCircleRoute(store *circleStoreStub) http.Handler {
 	return authMW.Require(http.HandlerFunc(handler.JoinCircle))
 }
 
+func buildUserSearchRoute(store *circleStoreStub, rateLimit *middleware.RateLimitMiddleware) http.Handler {
+	handler := rbac.NewHandler(rbac.NewService(store, nil))
+	repo := &stubSessionRepo{sessionID: testSessionID, userID: testLocalUserID}
+	authMW := middleware.NewAuthMiddleware(&alwaysOKVerifier{}, auth.NewSessionService(30*24*time.Hour), repo)
+	var next http.Handler = http.HandlerFunc(handler.SearchUsers)
+	if rateLimit != nil {
+		next = rateLimit.Limit(next)
+	}
+	return authMW.Require(next)
+}
+
 func TestCircleJoinContract(t *testing.T) {
 	store := newCircleStoreStub()
 	store.circles[contractCircleID] = rbac.Circle{
 		ID:         contractCircleID,
 		Name:       "Quran Circle",
-		InviteCode: "HLQ-7X2K9Z",
+		InviteCode: "HLQ-7X2K",
 		CreatedAt:  time.Now().UTC(),
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/circles/join", bytes.NewBufferString(`{"invite_code":"hlq-7x2k9z"}`))
+	req := httptest.NewRequest(http.MethodPost, "/circles/join", bytes.NewBufferString(`{"invite_code":"hlq-7x2k"}`))
 	req.Header.Set(httpconst.HeaderAuthorization, "Bearer valid-token")
 	req.Header.Set(httpconst.HeaderSessionID, testSessionID)
 	req.Header.Set(httpconst.HeaderContentType, httpconst.ContentTypeApplicationJSON)
@@ -163,12 +248,12 @@ func TestCircleJoinContract_ExistingMemberReturnsConflict(t *testing.T) {
 	store.circles[contractCircleID] = rbac.Circle{
 		ID:         contractCircleID,
 		Name:       "Quran Circle",
-		InviteCode: "HLQ-7X2K9Z",
+		InviteCode: "HLQ-7X2K",
 		CreatedAt:  time.Now().UTC(),
 	}
 	store.members[contractCircleID] = map[string]string{testLocalUserID: rbac.RoleStudent}
 
-	req := httptest.NewRequest(http.MethodPost, "/circles/join", bytes.NewBufferString(`{"invite_code":"HLQ-7X2K9Z"}`))
+	req := httptest.NewRequest(http.MethodPost, "/circles/join", bytes.NewBufferString(`{"invite_code":"HLQ-7X2K"}`))
 	req.Header.Set(httpconst.HeaderAuthorization, "Bearer valid-token")
 	req.Header.Set(httpconst.HeaderSessionID, testSessionID)
 	req.Header.Set(httpconst.HeaderContentType, httpconst.ContentTypeApplicationJSON)
@@ -252,6 +337,24 @@ func TestCircleCreateContract(t *testing.T) {
 			wantField:  httpconst.FieldTeacherUserIDs,
 		},
 		{
+			name:       "creator cannot be selected as teacher",
+			body:       `{"name":"Quran Circle","teacher_user_ids":["` + testLocalUserID + `"]}`,
+			authHeader: bearerValid,
+			sessionID:  testSessionID,
+			wantStatus: http.StatusBadRequest,
+			wantCode:   httpconst.ErrorCodeValidationFailed,
+			wantField:  httpconst.FieldTeacherUserIDs,
+		},
+		{
+			name:       "unknown backup supervisor returns 400",
+			body:       `{"name":"Quran Circle","backup_supervisor_user_id":"99999999-9999-9999-9999-999999999999"}`,
+			authHeader: bearerValid,
+			sessionID:  testSessionID,
+			wantStatus: http.StatusBadRequest,
+			wantCode:   httpconst.ErrorCodeValidationFailed,
+			wantField:  httpconst.FieldBackupSupervisor,
+		},
+		{
 			name:       "multiple teachers and backup supervisor return 201",
 			body:       `{"name":"Quran Circle","teacher_user_ids":["` + contractTeacherAID + `","` + contractTeacherBID + `"],"backup_supervisor_user_id":"` + contractSupervisorID + `"}`,
 			authHeader: bearerValid,
@@ -311,6 +414,9 @@ func TestCircleCreateContract(t *testing.T) {
 			}
 			if resp.ID == "" || resp.Name == "" || resp.InviteCode == "" || resp.CreatedAt.IsZero() {
 				t.Fatalf("incomplete circle response: %+v", resp)
+			}
+			if resp.GradingPolicy != "required" {
+				t.Fatalf("grading_policy: got %q, want required", resp.GradingPolicy)
 			}
 		})
 	}

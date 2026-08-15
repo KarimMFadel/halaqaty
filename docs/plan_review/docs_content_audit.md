@@ -81,10 +81,10 @@ Every `.md` file was read in full. Each finding is categorized as:
 ## 3. Feature Specifications
 
 All feature specifications, acceptance criteria, open questions, and design decisions 
-are maintained in [FEATURES.md](../product/FEATURES.md).
+are maintained in [FEATURES.md](../management/product/FEATURES.md).
 
 **MVP (P0) Features:** F-001 through F-006 (Auth, Circles, Queue, Chat, Sessions, Schedule)  
-**See:** [Feature Status Table](../product/FEATURES.md#feature-status-table)
+**See:** [Feature Status Table](../management/product/FEATURES.md#feature-status-table)
 ```
 
 ---
@@ -112,13 +112,13 @@ are maintained in [FEATURES.md](../product/FEATURES.md).
 ```markdown
 ## 1. Project Context
 
-See [PRD.md](../product/PRD.md) for:
+See [PRD.md](../management/product/PRD.md) for:
 - Vision statement (§1)
 - Business problem (§2)
 - Target users and JTBD (§4)
 - Value proposition (§5)
 
-See [FEATURES.md](../product/FEATURES.md) for detailed role capabilities and permissions.
+See [FEATURES.md](../management/product/FEATURES.md) for detailed role capabilities and permissions.
 ```
 
 ---
@@ -137,7 +137,7 @@ See [FEATURES.md](../product/FEATURES.md) for detailed role capabilities and per
 ## Open Questions Log
 
 All open questions have been resolved and frozen in the 
-[MVP Decision Register](./MVP_DECISION_REGISTER.md).
+[MVP Decision Register](../management/product/MVP_DECISION_REGISTER.md).
 ```
 
 - Keep the individual `#### Open Questions` sections within each feature (e.g., OQ-007 under F-003) as contextual references, but remove their `Status` and `Decision` columns — just link to the Decision Register for the resolution.
@@ -161,16 +161,16 @@ All open questions have been resolved and frozen in the
 
 ```markdown
 ## 4. Technical Architecture
-See [ARCHITECTURE.md](../../engineering/architecture/ARCHITECTURE.md)
+See [ARCHITECTURE.md](../engineering/architecture/ARCHITECTURE.md)
 
 ## 5. Deployment Strategy
-See [DEPLOYMENT.md](../../engineering/deployment/DEPLOYMENT.md)
+See [DEPLOYMENT.md](../engineering/deployment/DEPLOYMENT.md)
 
 ## 6. Release Strategy
-See [PRD.md](../product/PRD.md#12-milestones) and [DEPLOYMENT.md](../../engineering/deployment/DEPLOYMENT.md#10-cicd-pipeline)
+See [PRD.md](../management/product/PRD.md#12-milestones) and [DEPLOYMENT.md](../engineering/deployment/DEPLOYMENT.md#10-cicd-pipeline)
 
 ## 7. Business Model
-See [PRD.md](../product/PRD.md#9-pricing-and-business-model-future)
+See [PRD.md](../management/product/PRD.md#9-pricing-and-business-model-future)
 ```
 
 **After this cleanup, PLAN.md's remaining content is:**
@@ -212,7 +212,7 @@ This makes PLAN.md a lean **timeline and execution schedule** document — which
 - In FEATURES.md F-005, **remove** the audio config YAML and integration flow. Keep the acceptance criteria and user stories. Add a reference:
 
 ```markdown
-> **Audio Configuration:** See [ARCHITECTURE.md §3](../../engineering/architecture/ARCHITECTURE.md#3-livekit--flutter-integration) for LiveKit audio settings and integration flow.
+> **Audio Configuration:** See [ARCHITECTURE.md §3](../engineering/architecture/ARCHITECTURE.md#3-livekit--flutter-integration) for LiveKit audio settings and integration flow.
 ```
 
 - In PLAN.md, this section is already being removed per D-01.
@@ -468,7 +468,7 @@ The content will be the 12-month execution schedule — a timeline, not a full p
 ### Q5 — OQ Inline Sections After Consolidated Table Removed
 Each feature (e.g., F-003) has an `#### Open Questions` subsection with OQ entries. After removing the consolidated table at lines 595–627:
 - **Option A:** Keep inline OQ sections as-is (they provide useful per-feature context even if decisions are frozen in MVP_DECISION_REGISTER.md)
-- **Option B:** Strip inline OQ sections down to ID + Status + "See [MVP Decision Register](./MVP_DECISION_REGISTER.md)" stub
+- **Option B:** Strip inline OQ sections down to ID + Status + "See [MVP Decision Register](../management/product/MVP_DECISION_REGISTER.md)" stub
 
 Recommend Option A (minimal disruption) unless the goal is a fully slim FEATURES.md.
 
@@ -481,7 +481,7 @@ These items were discovered during the panel review and must be addressed as par
 | # | Finding | Severity | Action Required |
 |---|---------|---------|----------------|
 | **NF-1** | EXECUTION_PLAYBOOK.md §3 contains a feature flag enforcement rule ("live_session_video and session_recording must remain OFF; require PM + architect sign-off") that exists NOWHERE else in the docs. | 🔴 CRITICAL | Migrate to PRD.md §6 before §3 cleanup (PC-4) |
-| **NF-2** | FEATURES.md line 659 has broken inbound link to SYNC_GUIDE.md: `[SYNC_GUIDE.md](SYNC_GUIDE.md)` resolves to wrong path from its current location | 🟠 IMPORTANT | Fix as part of D-15 (step 11) |
+| **NF-2** | FEATURES.md line 659 used the obsolete relative target `SYNC_GUIDE.md`, which resolved from the wrong directory | 🟠 IMPORTANT | Fix as part of D-15 (step 11) |
 | **NF-3** | PLAN.md had a broken inbound link to SYNC_GUIDE.md (original line 708 in 709-line file; that section has since been removed). Current PLAN.md footer uses `../arabic/SYNC_GUIDE.md` which resolves correctly from `docs/management/planning/`. | 🟠 IMPORTANT | ✅ Resolved — link verified correct at current line ~175 |
 | **NF-4** | PLAN.md §2 role matrix contains Supervisor authorization constraints ("Cannot grade students," "Cannot remove the teacher") that are **not present in PRD.md** — unique content | 🔴 CRITICAL | Migrated to ROLES.md (PC-2 ✅ done). Do NOT delete PLAN.md §2 before ROLES.md was verified |
 | **NF-5** | F-005 (FEATURES.md lines 283–295): LiveKit YAML is technically incorrect — `auto_gain_control` is a Flutter platform audio constraint, not a LiveKit `RoomOptions` field | 🟠 IMPORTANT | Remove YAML from FEATURES.md. Fix in ARCHITECTURE.md §3 |
@@ -489,4 +489,3 @@ These items were discovered during the panel review and must be addressed as par
 ---
 
 *Panel review conducted by Architect, Tech Lead, and Team Leader agents. Pre-condition actions PC-1, PC-2, and Q4 have been executed. Remaining actions handed off to Product Manager and Project Manager.*
-

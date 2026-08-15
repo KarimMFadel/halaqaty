@@ -37,13 +37,13 @@ Before reviewing:
 ## What to do
 
 1. Read the test code: the diff, the new file, or the section being modified.
-2. Check each test against the nine rules below.
+2. Check each test against the ten rules below.
 3. Report violations concisely: rule number, location, why it violates, suggested fix.
 4. If explicitly invoked before test writing, apply the rules while writing — don't write violations and then flag them.
 
 When writing new tests, ask for each: "What specific bug does this catch that no other test in this suite catches?" If you can't answer clearly, don't write it.
 
-## The Nine Rules
+## The Ten Rules
 
 ### Rule 1: Test behavior, not implementation
 
@@ -130,6 +130,18 @@ When PostgreSQL queries, schema behavior, or migration correctness **is the subj
 
 **Constitutional alignment**: Constitution §VI mandates "every database migration tested against a fresh schema" — Rule 9 is how that gets done.
 
+### Rule 10: Do not mistake source scans for behavioral proof
+
+Do not use fixed-file reads, text searches, AST walks, symbol-name checks, or SQL-string scans to claim that behavior or a forbidden implementation is absent. These checks are refactor-sensitive and non-exhaustive: moving or renaming code can bypass them without changing behavior.
+
+Prefer the boundary that owns the invariant:
+
+- Exercise public API behavior through the production router.
+- Verify persistence rules against a migrated real database.
+- Use compiler/type checks or a dedicated linter/static analyzer when the invariant is genuinely structural.
+
+**Explicit exception**: a hard-coded source-policy guard is allowed only when an approved architecture/security requirement or Karim explicitly requires it. Document why behavioral coverage is insufficient, define the exact bounded files or symbols it guards, state its limitations, and keep it supplemental to behavioral or infrastructure tests rather than presenting it as project-wide proof.
+
 ## Reporting format
 
 ```
@@ -143,9 +155,19 @@ Group violations by file. If a file has no violations, don't mention it.
 ## Severity guide
 
 - **Must fix:** Rules 1, 2, 8 — hide real bugs or make tests brittle
-- **Should fix:** Rules 3, 4, 5, 7 — cause bloat and maintenance drag
+- **Should fix:** Rules 3, 4, 5, 7, 10 — cause bloat, brittleness, and false confidence
 - **Sacred:** Rule 6 — never delete, always allow
 - **Worth noting:** Rule 9 — test architecture; flag it, but don't block small changes on it
+
+## Flutter pre-commit execution gate
+
+Test Guard approval is not completion evidence by itself. Before any commit containing Flutter production or test changes, require fresh successful output from `mobile/` for:
+
+1. `flutter test test` — the complete unit and widget suite.
+2. `flutter test integration_test/` — the complete integration suite with its required device/emulator and backend environment.
+3. `flutter analyze` and `dart format --set-exit-if-changed .`.
+
+If Flutter, a required target device, or the integration environment is unavailable, the commit is blocked. Report the missing prerequisite; do not call the suite skipped, passing, or verified. Focused tests may be used during development but do not replace these full pre-commit suites.
 
 ## References
 
@@ -154,7 +176,7 @@ Group violations by file. If a file has no violations, don't mention it.
 
 ## What this skill does NOT do
 
-- Run tests. Use `make test` (unit) or `make test-integration` (integration with `DATABASE_URL`). For Flutter: `make test` from root or `flutter test test` from `mobile/`.
+- Replace test execution. Use `make test` (unit) or `make test-integration` (integration with `DATABASE_URL`). For Flutter changes, satisfy the full pre-commit execution gate above.
 - Enforce code style — that is `make lint` and `dart format`.
 - Decide *what* to test — only *how* to test it.
 - Flag pre-existing violations in files you are not touching, unless asked to audit.

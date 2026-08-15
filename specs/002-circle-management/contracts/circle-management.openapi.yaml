@@ -1,0 +1,409 @@
+openapi: 3.0.3
+info:
+  title: Halaqaty Circle Management Feature Contract
+  version: 0.1.0
+  description: Circle creation, discovery, joining, membership, role management, invite rotation, and archive retirement.
+
+security:
+  - BearerAuth: []
+    SessionId: []
+
+paths:
+  /users/search:
+    get:
+      operationId: searchUsers
+      summary: Search registered users for initial circle-role assignment
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 100 }
+      responses:
+        '200':
+          description: Matching registered users, limited to 20 results
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserSearchResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /circles:
+    get:
+      operationId: listCircles
+      summary: List the authenticated user's circles
+      responses:
+        '200':
+          description: Circle list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CircleListResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      operationId: createCircle
+      summary: Create a circle with initial role assignments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCircleRequest' }
+      responses:
+        '201':
+          description: Circle created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Circle' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /circles/discover:
+    get:
+      operationId: discoverPublicCircles
+      summary: Discover public circles
+      parameters:
+        - name: query
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Public circles without private membership data
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicCircleListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /circles/{circleId}:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    get:
+      operationId: getCircle
+      summary: Get an authorized circle
+      responses:
+        '200':
+          description: Circle details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Circle' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateCircle
+      summary: Update circle settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCircleRequest' }
+      responses:
+        '200':
+          description: Circle updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Circle' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      operationId: archiveCircle
+      summary: Retire a circle by archiving it
+      description: This operation is soft-state retirement. Hard deletion is prohibited.
+      responses:
+        '204': { description: Circle archived }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /circles/{circleId}/join:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    post:
+      operationId: joinPublicCircle
+      summary: Join an active public circle
+      responses:
+        '201':
+          description: Student membership created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Circle' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /circles/join:
+    post:
+      operationId: joinCircle
+      summary: Join a circle using its current invite code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invite_code]
+              properties:
+                invite_code:
+                  type: string
+                  pattern: '^HLQ-[A-HJ-NP-Z2-9]{4}$'
+                  example: HLQ-7X2K
+      responses:
+        '200':
+          description: Joined the circle
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Circle' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /circles/{circleId}/invite-code/refresh:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    post:
+      operationId: refreshCircleInviteCode
+      summary: Rotate the circle invite code
+      description: Invalidates the previous code atomically before returning the new code.
+      responses:
+        '200':
+          description: New invite code
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InviteResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /circles/{circleId}/members:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    get:
+      operationId: listCircleMembers
+      summary: List members of an authorized circle
+      responses:
+        '200':
+          description: Circle members
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemberListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /circles/{circleId}/members/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+      - $ref: '#/components/parameters/UserId'
+    delete:
+      operationId: removeCircleMember
+      summary: Remove a member without deleting historical circle data
+      responses:
+        '204': { description: Member removed }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /circles/{circleId}/members/{userId}/role:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+      - $ref: '#/components/parameters/UserId'
+    put:
+      operationId: updateCircleMemberRole
+      summary: Change another member's circle role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssignCircleRoleRequest' }
+      responses:
+        '200': { description: Role updated }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase JWT
+    SessionId:
+      type: apiKey
+      in: header
+      name: X-Halaqaty-Session-ID
+  parameters:
+    CircleId:
+      name: circleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    UserSearchResult:
+      type: object
+      required: [id, display_name]
+      properties:
+        id: { type: string, format: uuid }
+        display_name: { type: string }
+    UserSearchResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/UserSearchResult' }
+    CreateCircleRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+        rules: { type: string, maxLength: 1000 }
+        max_capacity: { type: integer, minimum: 2, maximum: 200, default: 50 }
+        is_private: { type: boolean, default: false }
+        gender_restriction: { type: string, enum: [male, female, mixed, unspecified], default: unspecified }
+        language: { type: string, maxLength: 10, default: ar }
+        teacher_user_ids:
+          type: array
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        backup_supervisor_user_id: { type: string, format: uuid }
+    UpdateCircleRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 2, maxLength: 100 }
+        description: { type: string, maxLength: 500, nullable: true }
+        rules: { type: string, maxLength: 1000, nullable: true }
+        max_capacity: { type: integer, minimum: 2, maximum: 200 }
+        is_private: { type: boolean }
+        gender_restriction: { type: string, enum: [male, female, mixed, unspecified] }
+        language: { type: string, maxLength: 10 }
+    AssignCircleRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string, enum: [teacher, supervisor, student] }
+    Circle:
+      type: object
+      required: [id, name, invite_code, invite_link, max_capacity, is_private, gender_restriction, language, is_archived, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        rules: { type: string, nullable: true }
+        invite_code: { type: string, pattern: '^HLQ-[A-HJ-NP-Z2-9]{4}$' }
+        invite_link: { type: string, format: uri }
+        max_capacity: { type: integer }
+        is_private: { type: boolean }
+        gender_restriction: { type: string, enum: [male, female, mixed, unspecified] }
+        language: { type: string }
+        is_archived: { type: boolean }
+        my_role: { type: string, enum: [teacher, supervisor, student] }
+        member_count: { type: integer, minimum: 0 }
+        created_at: { type: string, format: date-time }
+    CircleSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        max_capacity: { type: integer }
+        gender_restriction: { type: string, enum: [male, female, mixed, unspecified] }
+        language: { type: string }
+        created_at: { type: string, format: date-time }
+    PublicCircleListResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/CircleSummary' } }
+        next_cursor: { type: string, nullable: true }
+    CircleListResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/CircleSummary' } }
+        next_cursor: { type: string, nullable: true }
+    CircleMember:
+      type: object
+      required: [user_id, role]
+      properties:
+        user_id: { type: string, format: uuid }
+        display_name: { type: string }
+        role: { type: string, enum: [teacher, supervisor, student] }
+        joined_at: { type: string, format: date-time }
+    MemberListResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/CircleMember' } }
+    InviteResponse:
+      type: object
+      required: [invite_code, invite_link]
+      properties:
+        invite_code: { type: string, pattern: '^HLQ-[A-HJ-NP-Z2-9]{4}$' }
+        invite_link: { type: string, format: uri }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+    ValidationError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            error:
+              type: object
+              properties:
+                fields: { type: object, additionalProperties: { type: string } }
+  responses:
+    BadRequest:
+      description: Invalid input
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ValidationError' }
+    Unauthorized:
+      description: Invalid or missing authentication/session credentials
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: Caller lacks the required per-circle role
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Circle, member, or invite not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: Duplicate membership, full circle, or conflicting role state
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    TooManyRequests:
+      description: Request rate limit exceeded
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }

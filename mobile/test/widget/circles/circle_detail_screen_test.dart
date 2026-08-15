@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_detail_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_detail_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_management_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_retirement_screen.dart';
 
+import '../../helpers/stub_auth_notifier.dart';
+
 void main() {
   testWidgets('CircleDetailScreen: uses ambient LTR labels', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authControllerProvider.overrideWith((_) => StubAuthNotifier()),
           circleDetailProvider('circle-1').overrideWith(
             (_) => Future.value(_circle()),
           ),
@@ -33,6 +37,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authControllerProvider.overrideWith((_) => StubAuthNotifier()),
           circleDetailProvider('circle-1')
               .overrideWith((_) => throw Exception('database secret')),
         ],
@@ -81,6 +86,8 @@ void main() {
     expect(find.byType(CircleManagementScreen), findsOneWidget);
 
     await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('openCircleRetirement')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('openCircleRetirement')));
     await tester.pumpAndSettle();

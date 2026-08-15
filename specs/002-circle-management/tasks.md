@@ -134,7 +134,7 @@
 - [X] T052 [P] [US4] Add integration race tests for concurrent role changes, concurrent invite refresh, final-teacher protection, and duplicate audit events in `backend/tests/integration/circle_role_invite_race_test.go`.
 - [X] T053 [P] [US4] Add RBAC, response-safety, and rate-limit tests for role/invite mutation endpoints in `backend/tests/contract/circle_role_invite_security_contract_test.go`.
 - [X] T054 [P] [US4] Add Flutter widget tests for manager-only controls, role confirmation, invite display/share/refresh, and denial states in `mobile/test/widget/circles/circle_management_controls_test.dart`.
-- [ ] T055 [US4] Add Flutter integration test for role management, invite sharing/refresh, and old-link rejection in `mobile/integration_test/circle_role_invite_flow_test.dart`.
+- [X] T055 [US4] Add Flutter integration test for role management, invite sharing/refresh, and old-link rejection in `mobile/integration_test/circle_role_invite_flow_test.dart`.
 
 ### Implementation for User Story 4
 
@@ -143,7 +143,7 @@
 - [X] T058 [US4] Implement role/member/invite handlers with RBAC and standard error responses in `backend/internal/rbac/handler.go`.
 - [X] T059 [US4] Add role/member/invite route constants and middleware wiring in `backend/cmd/api/routes.go` and `backend/cmd/api/router.go`.
 - [X] T060 [US4] Implement Riverpod role/member/invite controllers in `mobile/lib/features/circles/application/circle_management_controller.dart`.
-- [ ] T061 [US4] Implement role-management controls, invite sharing/refresh, and accessible confirmation/error UI in `mobile/lib/features/circles/presentation/circle_management_screen.dart`.
+- [X] T061 [US4] Implement role-management controls, invite sharing/refresh, and accessible confirmation/error UI in `mobile/lib/features/circles/presentation/circle_management_screen.dart`.
 
 **Checkpoint**: US4 preserves the per-circle role invariants and invite integrity under concurrent mutation.
 
@@ -160,13 +160,13 @@
 - [X] T062 [P] [US5] Add contract tests for teacher-only archive, non-teacher denial, idempotent archive, archived reads, and archive-only `DELETE /circles/{circleId}` in `backend/tests/contract/circle_retirement_contract_test.go`.
 - [X] T063 [P] [US5] Add integration tests for history retention, blocked joins/settings/member changes after archive, and archive audit events in `backend/tests/integration/circle_retirement_test.go`.
 - [X] T064 [P] [US5] Add archive response-safety and database-retention tests verifying `DELETE /circles/{circleId}` returns an empty `204`, retains the circle and memberships, and PostgreSQL rejects physical deletion through the `circle_members` foreign key in `backend/tests/contract/circle_retirement_contract_test.go` and `backend/tests/integration/circle_management_migration_test.go`.
-- [ ] T065 [P] [US5] Add Flutter widget/integration tests for archive confirmation, archived read-only state, and hidden mutation controls in `mobile/test/widget/circles/circle_retirement_test.dart` and `mobile/integration_test/circle_retirement_flow_test.dart`.
+- [X] T065 [P] [US5] Add Flutter widget/integration tests for archive confirmation, archived read-only state, and hidden mutation controls in `mobile/test/widget/circles/circle_retirement_test.dart` and `mobile/integration_test/circle_retirement_flow_test.dart`.
 
 ### Implementation for User Story 5
 
 - [X] T066 [US5] Implement archive/retirement transaction, idempotency, audit event, and mutation guards in `backend/internal/rbac/service.go` and `backend/internal/rbac/repository.go`.
 - [X] T067 [US5] Implement archive handler and archive-only route semantics in `backend/internal/rbac/handler.go` and `backend/cmd/api/router.go`.
-- [ ] T068 [US5] Implement Riverpod retirement state and archive confirmation/read-only controls in `mobile/lib/features/circles/application/circle_retirement_controller.dart` and `mobile/lib/features/circles/presentation/circle_retirement_screen.dart`.
+- [X] T068 [US5] Implement Riverpod retirement state and archive confirmation/read-only controls in `mobile/lib/features/circles/application/circle_retirement_controller.dart` and `mobile/lib/features/circles/presentation/circle_retirement_screen.dart`.
 
 **Checkpoint**: US5 retires circles safely with no hard-delete path and preserved reporting history.
 
@@ -184,7 +184,7 @@
 - [X] T074 [US0] Run `$clean-code-guard` on `backend/internal/rbac/` and `mobile/lib/features/circles/`; record findings in `specs/002-circle-management/validation-report.md`.
 - [X] T075 [US0] Run `$test-guard` on changed Go/Dart tests; record findings in `specs/002-circle-management/validation-report.md`.
 - [X] T076 [US0] Run `$docs-guard` on changed product, ADR, architecture, OpenAPI, and feature-contract files; record findings in `specs/002-circle-management/validation-report.md`.
-- [ ] T077 [US0] Run focused Go/Flutter suites and full applicable gates (`go test -short ./...`, `flutter test test`, formatters, analyzers, lint, Spectral, and gitleaks); record current output in `specs/002-circle-management/validation-report.md`.
+- [X] T077 [US0] Run focused Go/Flutter suites and full applicable gates (`go test -short ./...`, `flutter test test`, formatters, analyzers, lint, Spectral, and gitleaks); record current output in `specs/002-circle-management/validation-report.md`.
 - [ ] T078 [US0] Send the completed MVP batch to Tech Lead review and preserve Karim's manual RBAC/data-retention review evidence in `specs/002-circle-management/validation-report.md`.
 
 ---

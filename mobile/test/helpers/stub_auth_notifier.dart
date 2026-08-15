@@ -8,7 +8,8 @@ import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 class StubAuthNotifier extends StateNotifier<AuthState>
     implements AuthController {
   StubAuthNotifier({AuthState? initialState})
-      : super(initialState ?? const AuthState(status: AuthStatus.unauthenticated));
+      : super(initialState ??
+            const AuthState(status: AuthStatus.unauthenticated));
 
   @override
   Future<void> register({

@@ -58,8 +58,7 @@ class _RetirementFlowApiClient extends CircleApiClient {
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-      'Circle retirement flow: confirms archive then becomes read-only',
+  testWidgets('Circle retirement flow: confirms archive then becomes read-only',
       (tester) async {
     final apiClient = _RetirementFlowApiClient();
     await tester.pumpWidget(

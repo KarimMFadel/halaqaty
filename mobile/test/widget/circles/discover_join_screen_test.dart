@@ -12,6 +12,8 @@ import 'package:halaqaty_mobile/features/circles/presentation/circle_detail_scre
 import 'package:halaqaty_mobile/features/circles/presentation/circle_discovery_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_join_screen.dart';
 
+import '../../helpers/stub_auth_notifier.dart';
+
 final _publicCircle = CircleSummary(
   id: 'circle-public',
   name: 'حلقة النور',
@@ -103,6 +105,7 @@ CircleDiscoveryController _controller(_StubCircleApiClient apiClient) {
 Widget _build(Widget child, CircleDiscoveryController controller) {
   return ProviderScope(
     overrides: [
+      authControllerProvider.overrideWith((_) => StubAuthNotifier()),
       circleDiscoveryControllerProvider.overrideWith((_) => controller),
       circleDetailProvider('circle-member').overrideWith(
         (_) => Future.value(_joinedCircle('circle-member', 'حلقتي')),

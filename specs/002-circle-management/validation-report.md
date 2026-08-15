@@ -1,6 +1,6 @@
 # Circle Management Validation Report
 
-Date: 2026-08-14 (updated: second pass)
+Date: 2026-08-14 (updated: second pass; third pass 2026-08-15 — Flutter gates via Docker)
 
 ## Current acceptance status
 
@@ -8,7 +8,11 @@ Completed in the first pass: T064, T069, T071, T072, and T073.
 
 Completed in this pass: T063, T066, and T070 — verified against a live PostgreSQL 16 (Docker) with fresh per-test schemas. T066 additionally gained service-level unit coverage (`TestArchiveCircle_TeacherArchivesIdempotently`, `TestArchiveCircle_NonTeacherIsForbidden`).
 
-Still open: T055, T061, T065, T068, T077, and T078. T061 and T068 are implemented but cannot be accepted until the mandatory Flutter gates run (`flutter`/`dart` are not installed in this environment). T055 and T065 also carry the Test Guard boundary finding below. T077 records fresh gate output but stays open until the Flutter/Spectral/gitleaks gates can execute. T078 requires Karim's manual RBAC/data-retention approval.
+Completed in the third pass (2026-08-15): T061 and T068 — accepted on fresh Docker-based Flutter evidence below. Also fixed four widget-test isolation failures and 12 files of pre-existing `dart format` drift (including some feature-001 files).
+
+Completed in the fourth pass (2026-08-15): T055, T065, T077 — all six integration test files executed green on a real Flutter device target (Linux desktop under xvfb) inside Docker, and Spectral ran green via a Node container. Karim directed completion on Docker device-execution evidence.
+
+Still open: T078 only — Karim's manual RBAC/data-retention approval. The Test Guard in-memory-boundary finding on T055/T065 remains documented below as a caveat: production-boundary hardening (real backend + real navigation on a mobile device) is follow-up work, not a blocker.
 
 ## Clean Code Guard — T074
 
@@ -25,7 +29,7 @@ Resolved findings:
 
 Non-blocking reduction: the obsolete archive-race wrapper was deleted after row locking became the real synchronization mechanism. The separate one-method retirement controller still duplicates part of the management mutation pipeline and is a future simplification candidate.
 
-Result: no unresolved blocking Clean Code Guard finding in the changed production code. Mechanical Flutter analysis remains blocked under T077.
+Result: no unresolved blocking Clean Code Guard finding in the changed production code. Mechanical Flutter analysis ran clean in the third pass (`flutter analyze`, zero issues).
 
 ## Test Guard — T075
 
@@ -42,12 +46,16 @@ Blocking findings:
 
 - `mobile/integration_test/circle_role_invite_flow_test.dart` uses an in-memory API boundary and direct screen construction. It is useful component-flow coverage but does not satisfy T055's production navigation/auth/RBAC acceptance boundary.
 - `mobile/integration_test/circle_retirement_flow_test.dart` similarly uses an in-memory API boundary. It does not replace a configured backend/device integration run for T065.
-- Flutter unit/widget/integration tests, analyzer, and formatter cannot run because neither `flutter` nor `dart` is installed or available on PATH.
+- ~~Flutter unit/widget/integration tests, analyzer, and formatter cannot run~~ — resolved in the third pass via the Docker Flutter toolchain; the unit/widget suite, analyzer, and formatter all ran green. Integration tests remain unrunnable (no supported device in the container).
 - PostgreSQL-backed T063/T066/T070 tests compile but skip because `DATABASE_URL` is unset.
 
 Second pass: T063, T066, and T070 closed — PostgreSQL-backed tests executed green against a live database (see T077 evidence). New tests added this pass follow the same accepted architecture: service unit tests use the existing stub store; the malformed-ID regression test uses the real PostgreSQL repository so the `$1::uuid` cast path is genuinely exercised.
 
-Result: Test Guard executed; T055 and T065 remain open (Flutter environment unavailable; boundary findings above stand).
+Third pass: four widget tests failed on first execution (`circle_detail_screen_test.dart` ×3, `discover_join_screen_test.dart` ×1). Root causes: tests rendering `CircleDetailScreen` without `currentUserId` hit the real `authControllerProvider` → uninitialized Firebase (`[core/no-app]`); one tap missed because `openCircleRetirement` lay below the 800×600 surface. Fixes: override `authControllerProvider` with the existing `test/helpers/stub_auth_notifier.dart` (previously dead code, used now) in both files, plus `ensureVisible` before the tap. Re-run: focused 11/11, full suite 47/47. Test Guard re-review of the fix diff: no violations (stub is at the Firebase Auth boundary; assertions stay behavioral).
+
+Fourth pass: all six `integration_test/` files ran green on the Linux desktop device in Docker, including `circle_role_invite_flow_test.dart` (T055) and `circle_retirement_flow_test.dart` (T065). One test-infrastructure fix was required: swapping between two app harnesses changed the ProviderScope override count (Riverpod debug assertion); fixed by unmounting (`SizedBox` pump) between harness swaps. Assertions unchanged.
+
+Result: Test Guard executed; T055 and T065 closed on Docker device execution per Karim's direction, with the in-memory-boundary findings above retained as documented caveats and follow-up hardening.
 
 ## Docs Guard — T076
 
@@ -74,15 +82,30 @@ Passed:
 - `go vet ./...` — clean
 - `golangci-lint run ./...` — zero violations
 - Focused: `go test -short -run ArchiveCircle ./internal/rbac -count=1 -v` — 2/2 PASS
+- `gitleaks detect --source .` (v8.30.1, installed per DEVELOPMENT.md via `go install`) — 35 commits scanned, **no leaks found**, exit 0 (run 2026-08-15)
+
+Fresh output, third pass (2026-08-15, Docker `ghcr.io/cirruslabs/flutter:stable`, Flutter 3.44.0 / Dart 3.12.0, repo bind-mounted at `/workspace`):
+
+Passed:
+
+- `flutter pub get` — resolved (constraint-compatible set per `pubspec.lock`)
+- `dart run build_runner build --delete-conflicting-outputs` — no-op (no `@riverpod` annotations; 0 outputs written)
+- `flutter analyze` — **No issues found** (12.3s)
+- `dart format --set-exit-if-changed .` — first run changed 12 files (real drift, auto-fixed in place; some pre-date feature 002); re-run clean, exit 0
+- `flutter test test` — **47/47 passed** (first run 43/47; four isolation failures fixed, see Test Guard third pass)
+
+Fresh output, fourth pass (2026-08-15, Docker):
+
+- `flutter test integration_test/ -d linux` — **6/6 files green** (auth_journey, profile_flow, role_access, circle_join_flow, circle_role_invite_flow, circle_retirement_flow). Environment: local image `halaqaty-flutter-ci:local` (cirruslabs/flutter:stable + clang/cmake/ninja-build/pkg-config/libgtk-3-dev/libsecret-1-dev/xvfb), run under `xvfb-run -a`, with an ephemeral `flutter create --platforms=linux` scaffold removed afterwards. Files run sequentially with up to 3 retries — multi-file batch launches flake on the debug connection ("log reader stopped").
+- `npx @stoplight/spectral-cli lint docs/contracts/openapi.yaml --ruleset .spectral.yaml` (node:22-alpine container) — **"No results with a severity of 'error' found!"**
+- `dart format --set-exit-if-changed .` — re-verified, 0 changed
 
 Blocked or not accepted:
 
-- Flutter tests/integration/analyze/format: `flutter` and `dart` executables are not installed in this environment. Per AGENTS.md, T061/T068 and the Flutter portions of T055/T065 cannot be marked complete, and no commit of Flutter changes may proceed, until these gates run with fresh successful output.
-- Spectral: executable unavailable. Mitigation unchanged: the Go OpenAPI contract test (T072) passes for local references, required operation IDs, uniqueness, and bearer/session security.
-- Gitleaks: executable unavailable.
+- Caveat carried forward: the integration suite stubs the API boundary in memory; a production-boundary run (real backend + real navigation on Android/iOS) remains follow-up hardening and does not block T077 per Karim's direction.
 - Full `gofmt -l .`: confirmed environmental — `core.autocrlf=true` checks out CRLF, so `gofmt -d` shows line-ending-only diffs on every repo file, including untouched feature-001 files. Not introduced by this batch.
 
-T077 remains open because the Flutter, Spectral, and gitleaks gates cannot execute in this environment.
+T077 closed 2026-08-15: every gate now has fresh green evidence — Go unit/contract/integration/vet/lint, gitleaks, Flutter analyze/format/unit-widget (47/47), Flutter integration (6/6 files, Linux device in Docker), and Spectral.
 
 ## Tech Lead review — T078
 

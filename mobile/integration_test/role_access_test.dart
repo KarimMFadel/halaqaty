@@ -61,7 +61,8 @@ void main() {
     expect(find.text('no-access'), findsOneWidget);
   });
 
-  testWidgets('manager-only control is visible for teacher role', (tester) async {
+  testWidgets('manager-only control is visible for teacher role',
+      (tester) async {
     final authNotifier =
         _IntegrationAuthNotifier(status: AuthStatus.authenticated);
     var tapped = false;

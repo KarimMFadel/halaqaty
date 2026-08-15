@@ -190,8 +190,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('confirmCircleInviteRefresh')));
     await tester.pumpAndSettle();
-    expect(find.text('https://halaqaty.app/join/$_newInviteCode'), findsOneWidget);
+    expect(
+        find.text('https://halaqaty.app/join/$_newInviteCode'), findsOneWidget);
 
+    // Unmount the management ProviderScope first: Riverpod forbids swapping
+    // in a scope with a different number of overrides on the same slot.
+    await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(_joinApp(apiClient));
     await tester.pumpAndSettle();
     await _confirmInviteJoin(tester, _oldInviteCode);

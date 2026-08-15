@@ -92,8 +92,7 @@ void main() {
       expect(stub.registerCalled, isFalse);
     });
 
-    testWidgets(
-        'display_name with 1 character shows minimum-length error',
+    testWidgets('display_name with 1 character shows minimum-length error',
         (WidgetTester tester) async {
       final stub = _StubAuthNotifier();
       await tester.pumpWidget(_buildRegisterScreen(stub));

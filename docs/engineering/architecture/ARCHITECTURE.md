@@ -1240,12 +1240,52 @@ sequenceDiagram
 - Backend grants `CanPublish: true` only for the active reciter turn, then revokes after the turn (audio-only in MVP)
 - Room is deleted from LiveKit server when session ends
 
-### 6.4 Rate Limiting
+### Rate Limiting
 
 - REST API: rate limited by IP and by user ID
 - WebSocket: connections limited per user (max 3 active connections per user)
 - Message sending: max 30 messages per minute per user per circle
 - File uploads: max 10 uploads per hour per user
+
+### 6.4.1 Database Indexing Strategy
+
+**Canonical indexing policy:**
+
+1. **Foreign key indexes (automatic):** All FK columns are indexed by default in PostgreSQL.
+2. **Search & filtering:** Columns in WHERE clauses must be indexed (e.g., `circle_id`, `user_id`, `session_id`, `surah_id`).
+3. **Sorting:** Columns in ORDER BY clauses should have indexes (e.g., `created_at`, `sent_at`).
+4. **Partial indexes:** Use for soft-deletes and status filters (e.g., WHERE `deleted_at IS NULL`).
+
+**Index naming convention:**
+```
+idx_<table>_<column>                    -- simple
+idx_<table>_<col1>_<col2>               -- composite
+idx_<table>_<col>_partial_<condition>   -- partial (e.g., idx_messages_circle_id_partial_not_deleted)
+```
+
+**Index review checklist (before merge):**
+- [ ] Query uses indexed columns in WHERE/JOIN/ORDER BY
+- [ ] Composite indexes follow query predicate order
+- [ ] Partial indexes used for soft-deletes and status filters
+- [ ] No redundant indexes (e.g., don't index both `col` and `(col, col2)` unless both are used)
+- [ ] Index size estimated (large indexes slow writes)
+
+**Periodic audit:** Run `EXPLAIN ANALYZE` on top 10 queries monthly and recommend new indexes.
+
+### 6.4.2 Column Versioning (`updated_at` Coverage)
+
+**Policy:** All tables containing user-modifiable data should have an `updated_at TIMESTAMPTZ DEFAULT NOW()` column.
+
+**Current coverage:**
+- ✅ users, circles, circle_members, circle_invites, schedules, sessions, messages, memorization_progress
+- ⚠️ **Audit required:** recitation_queue, recitation_queue_entries, session_attendance, device_tokens, message_reads
+
+**Tables that should NOT have `updated_at`:**
+- Reference data (quran_surahs, quran_divisions) — immutable
+- Audit logs (session_participant_presence) — append-only
+- Event logs — append-only
+
+**Migration plan:** Create migration to add `updated_at` to missing tables; update repository methods to set `updated_at = NOW()` on all UPDATEs.
 
 ### 6.5 Input Validation
 

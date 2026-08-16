@@ -479,6 +479,74 @@ graph TD
 
 ---
 
+### 7.5 Structured Logging & Request Tracing
+
+**Logging format (Go backend):**
+
+All logs must include request ID, timestamp, level, and context:
+
+```json
+{
+  "timestamp": "2026-08-16T14:32:05.123Z",
+  "level": "INFO",
+  "request_id": "req-abc123xyz789",
+  "user_id": "user-uuid",
+  "circle_id": "circle-uuid",
+  "action": "session.start",
+  "duration_ms": 145,
+  "status": "success",
+  "message": "Session started successfully"
+}
+```
+
+**Request ID propagation:**
+- Generated at API entry point (middleware) as UUID
+- Passed to all subsystems: database, cache, external APIs
+- Included in WebSocket frames for session tracking
+- Logged on every operation
+
+**Trace headers (OpenTelemetry format):**
+- `X-Trace-ID`: matches request_id
+- `X-Span-ID`: generated per operation (database query, API call)
+- Propagated to downstream services (LiveKit, MinIO)
+
+**Log levels:**
+- `DEBUG`: Detailed request/response bodies (dev only, redact PII)
+- `INFO`: Successful operations, deployments, user actions
+- `WARN`: Transient errors, retries, rate limit approaches
+- `ERROR`: Permanent failures, data loss risks, auth failures
+- `FATAL`: Unrecoverable system errors
+
+**Retention:** 30 days in Loki; older logs archived to S3.
+
+### 7.6 Metric Naming & Dashboard Guidance
+
+**Metric categories:**
+
+| Category | Examples | Dashboard |
+|----------|----------|-----------|
+| **Request metrics** | api_request_duration_seconds, api_errors_total, api_response_size_bytes | API Performance |
+| **Database metrics** | pg_query_duration_seconds, pg_connections, pg_transaction_failures | Database |
+| **Session metrics** | active_sessions, avg_session_duration_minutes, livekit_participant_count | Sessions & Recitations |
+| **Message metrics** | messages_sent_total, message_delivery_latency_ms, message_failures | Messaging |
+| **Business metrics** | users_total, circles_active, memorization_progress_ayahs | Growth & Engagement |
+
+**Metric naming convention:**
+```
+<service>_<resource>_<operation>_<unit>
+  e.g., api_session_create_duration_seconds
+        pg_query_select_duration_seconds
+        livekit_room_participant_count
+```
+
+**Dashboard per feature:**
+- F-001 Auth: login success %, failed login %, session lifetime distribution
+- F-003 Sessions: active sessions by circle, participant count distribution, session uptime %
+- F-005 Recitations: recitation queue depth, grading latency, video frame rate
+- F-007 Progress: avg Ayahs memorized/week, completion rate by tier
+
+---
+
 ## 8. Backup Strategy
 
 ### Database Backups

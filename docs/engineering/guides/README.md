@@ -185,6 +185,120 @@ android/app/google-services.json    must exist
 ios/Runner/GoogleService-Info.plist  must exist
 ```
 
+---
+
+## Offline & Low-Bandwidth Support (E-008)
+
+Halaqaty must support users on unstable 3G/EDGE connections and brief offline periods.
+
+### Mobile-Side Strategy
+
+**Connection states (Flutter app):**
+1. **Online:** Full API + WebSocket connectivity
+2. **Degraded (3G/EDGE):** Slow API, high latency, frequent disconnects
+3. **Offline:** No connectivity; use local cache
+
+**Dio HTTP client configuration (in `mobile/lib/features/core/data/dio_client.dart`):**
+
+```dart
+final options = BaseOptions(
+  connectTimeout: Duration(seconds: 10),  // 3G tolerance
+  receiveTimeout: Duration(seconds: 20),  // wait for slow responses
+  sendTimeout: Duration(seconds: 20),
+);
+
+dio.interceptors.add(
+  RetryInterceptor(
+    dio: dio,
+    logPrint: print,
+    retries: 3,
+    retryDelays: [
+      const Duration(seconds: 1),   // retry after 1s, 2s, 4s
+      const Duration(seconds: 2),
+      const Duration(seconds: 4),
+    ],
+  ),
+);
+```
+
+**Cache TTLs (Riverpod + Local SQLite):**
+- User profile: 24 hours (invalidate on login/logout)
+- Circle data: 6 hours (invalidate on refresh action)
+- Session list: 1 hour (invalidate on session end)
+- Messages: 3 hours (fetch newer on connect)
+- Quran data (surahs/ayahs): indefinite (never changes)
+
+**Offline mode triggers:**
+- No network connectivity (WiFi + cellular both offline)
+- HTTP request timeout after 3 retries
+- WebSocket disconnect lasting > 10 seconds
+
+**Offline capabilities (read-only):**
+- View cached user profile, circles, session history
+- View cached messages (up to 24 hours old)
+- View memorization progress (cached from last sync)
+- Read Quran (always cached locally)
+
+**Offline restrictions (unsupported):**
+- Cannot send messages (queue locally, send on reconnect — Phase 2)
+- Cannot update profile
+- Cannot join live sessions (real-time)
+- Cannot grade recitations
+
+**Reconnection backoff (exponential):**
+- 1st attempt: immediate
+- 2nd attempt: after 2 seconds
+- 3rd attempt: after 5 seconds
+- 4th+ attempts: every 30 seconds
+
+**WebSocket reconnection (in `mobile/lib/features/*/data/websocket_gateway.dart`):**
+
+```dart
+Future<void> connect() async {
+  int retries = 0;
+  while (true) {
+    try {
+      _socket = await WebSocket.connect(_url);
+      retries = 0;  // reset on success
+      _onConnected();
+      break;
+    } catch (e) {
+      retries++;
+      if (retries > 10) {
+        // give up; rely on manual refresh
+        return;
+      }
+      await Future.delayed(
+        Duration(seconds: [1, 2, 5, 30, 60][min(retries - 1, 4)]),
+      );
+    }
+  }
+}
+```
+
+### Backend-Side Strategy
+
+**Idempotency & conflict resolution:**
+- All state-changing endpoints must be idempotent (POST should recheck if already done)
+- Message sends and progress updates include client-generated UUIDs to prevent duplicates
+- Last-write-wins for profile updates; timestamps guide conflict resolution
+
+**Message queuing (Riverpod/Drift on mobile; no backend queue in MVP):**
+- User composes message offline
+- Message stored locally with `sent_at: null`
+- On reconnect, app retries send
+- If send succeeds, update local `sent_at` and sync view
+
+**Session graceful exit:**
+- If WebSocket drops during active session, client shows "reconnecting..." UI
+- Backend keeps participant alive for 30 seconds (grace period)
+- After grace period, participant marked as "dropped" (can rejoin)
+- Teacher can manually remove participant or wait 5 minutes for auto-cleanup
+
+---
+
+## Code Snippets
+
 Download from Firebase Console → Project Settings → Your Apps.
 
 **Check 4 — Dart analysis errors blocking build:**

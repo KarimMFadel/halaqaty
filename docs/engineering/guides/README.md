@@ -232,12 +232,13 @@ flutter test test/queue_notifier_test.dart # specific test
 
 Use [websocat](https://github.com/vi/websocat):
 ```bash
-# Get a WS token first (requires a valid session)
-WS_TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/sessions/<id>/ws-token \
-  -H "Authorization: Bearer <jwt>" | jq -r .ws_token)
+# Get a realtime ticket first (requires a valid current device session)
+REALTIME_TICKET=$(curl -s -X POST http://localhost:8080/api/v1/realtime/tickets \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Halaqaty-Session-ID: <session-id>" | jq -r .token)
 
 # Connect and watch events
-websocat "ws://localhost:8080/ws?token=$WS_TOKEN"
+websocat "ws://localhost:8080/ws?token=$REALTIME_TICKET"
 ```
 
 ---

@@ -188,8 +188,8 @@ Cross-Cutting: Offline Behavior
 
 ## T-10 — Start a Live Session
 
-**Actor:** Teacher  
-**Entry:** Session card → "Start Session" (or scheduled time is reached → reminder push)
+**Actor:** Teacher or Supervisor
+**Entry:** Ad-hoc session card → "Start Session"
 
 1. Tap **"Start Session"**.
 2. **System:**
@@ -197,8 +197,7 @@ Cross-Cutting: Offline Behavior
    - Backend returns the teacher's required participant-specific `MediaConnection`; the LiveKit MVP adapter maps it to `CanPublishAudio: true`, `CanPublishVideo: false`, `RoomAdmin: true`
    - Session status → `active`
    - Broadcasts metadata-only `session.started { session_id, circle_id }`; it never contains endpoint, credential, or room reference
-   - Push notification to all circle members: "[Circle Name] session is starting now"
-3. Teacher enters the **Session Room** screen: queue panel (left), participant list (right), mute/unmute controls, chat icon.
+3. Teacher or supervisor enters the **Session Room** screen: participant list, audio state, hand state, and moderation controls. Queue and chat panels are composed later by F-003 and F-004.
 4. Teacher microphone is **muted by default** at session start.
 
 **Decision from MVP Register:** Audio-only, video disabled (OQ-015). Max session 4 hours (OQ-016). Participant media credentials come from the backend only; LiveKit is the MVP adapter (constitution security invariant).
@@ -207,21 +206,21 @@ Cross-Cutting: Offline Behavior
 
 ## T-11 — Student Joins Live Session
 
-**Actor:** Student  
-**Entry:** Push notification or session card → "Join"
+**Actor:** Student or other active circle member
+**Entry:** Session card → "Join"
 
 1. Tap **"Join Session"**.
 2. **System:**
    - `POST /api/v1/sessions/:id/join` → returns the student's required `MediaConnection`; the LiveKit MVP adapter maps it to `CanPublishAudio: false` until called and `CanSubscribe: true`
    - Student added to participant list
-3. Student enters Session Room: can see queue (their position highlighted), participant list, chat.
+3. Participant enters Session Room: sees participant presence, audio state, and hand controls. Queue and chat are provided by F-003/F-004 later.
 4. Student microphone is muted and **disabled** until the teacher calls them.
 
 ---
 
 ## T-12 — Queue: Mark Student Reciting
 
-**Actor:** Teacher  
+**Actor:** Teacher or Supervisor
 **Entry:** Session Room → Queue panel → Tap student name → "Start Recitation"
 
 1. **System:**
@@ -313,7 +312,7 @@ Cross-Cutting: Offline Behavior
    - `POST /api/v1/sessions/:id/end`
    - Closes the session media room through the configured adapter (LiveKit in MVP; all participants disconnected)
    - Session status → `ended`
-   - All participants receive push notification: "Session ended"
+   - All joined participants receive the metadata-only `session.ended` event with `end_reason`; general push delivery belongs to F-008.
 4. Teacher navigates to Session Summary screen (T-18).
 5. Students return to Circle view.
 

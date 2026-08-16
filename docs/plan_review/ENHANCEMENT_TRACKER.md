@@ -52,19 +52,19 @@
 
 | ID | Category | Enhancement | Impact | Status | Resolved By | Resolved On |
 |----|----------|-------------|--------|--------|-------------|-------------|
-| E-06 | Docs | Quran data source not documented — `ARCHITECTURE.md` defines a `quran_surahs` table but never explains where canonical Surah/Ayah data originates (static JSON seed, third-party API, bundled asset, etc.) | Implementing agents will make incompatible assumptions; data consistency across environments is undefined | ⬜ Pending | — | — |
+| E-06 | Docs | Quran data source not documented — `ARCHITECTURE.md` defines a `quran_surahs` table but never explains where canonical Surah/Ayah data originates (static JSON seed, third-party API, bundled asset, etc.) | Canonical data source is now documented through the seeded `quran_surahs` reference table and test seed flow; remaining gap is only if a second source-of-truth is introduced later | ✅ Done | Copilot | 2026-08-16 |
 | E-07 | Docs | Rate limiting was missing from the architecture security section | `ARCHITECTURE.md §6.4` now defines REST, WebSocket, message, and upload rate-limit policies | ✅ Done | Codex | 2026-08-09 |
-| E-08 | Product | No offline / low-bandwidth strategy documented — the primary user base (Middle East, Africa, South Asia) frequently operates on unstable mobile connections | No graceful degradation means a bad connection silently breaks sessions; no guidance for Flutter caching, retry logic, or WebSocket reconnection backoff | ⬜ Pending | — | — |
-| E-09 | Planning | Capacity plan missing — the plan review scored "Roles & Responsibilities" B+ because this gap remained; a solo developer shipping 8 features across 12 months needs explicit monthly hour-budget or per-sprint velocity targets | Without a capacity plan, the 15% buffer warning in `PROJECT_PLAN.md §8` has no actionable trigger; risk of silent timeline slippage | ⬜ Pending | — | — |
+| E-08 | Product | No offline / low-bandwidth strategy documented — the primary user base (Middle East, Africa, South Asia) frequently operates on unstable mobile connections | Some offline behavior is now documented in `JOURNEY.md` and architecture, but a dedicated low-bandwidth / reconnection strategy is still missing; remaining: explicit retry/backoff and 3G/EDGE handling guidance | 🔄 In Progress | Copilot | 2026-08-16 |
+| E-09 | Planning | Capacity plan missing — the plan review scored "Roles & Responsibilities" B+ because this gap remained; a solo developer shipping 8 features across 12 months needs explicit monthly hour-budget or per-sprint velocity targets | Solo-dev buffer guidance now exists, but a formal capacity matrix is still missing; remaining: hours/week, velocity assumptions, and a release-burn policy | 🔄 In Progress | Copilot | 2026-08-16 |
 | E-10 | Docs | `PRD.md` Owner field lists `"GPT-5.3-Codex acting as Project Manager"` — a model name is not an appropriate owner for a living product document | Confuses contributors about accountability; model versions change; a person or role name (e.g. "Karim Fadel — Product Owner") is required | ⬜ Pending | — | — |
 | E-17 | Planning | Add Sprint 3-6 skeletons to `PROJECT_PLAN.md` | Even one-liner sprint goals would help with execution tracking | ⬜ Pending | — | — |
 | E-18 | Docs | Add error code registry | Centralized error codes prevent fragmented API responses | ⬜ Pending | — | — |
-| E-19 | Architecture | Add database indexing strategy | Prevents slow queries at scale, guides developers | ⬜ Pending | — | — |
+| E-19 | Architecture | Add database indexing strategy | Some indexes are now defined in architecture and feature specs, but there is still no single indexing strategy section; remaining: canonical indexing policy and review rules | 🔄 In Progress | Copilot | 2026-08-16 |
 | E-20 | Architecture | Create a data migration runbook | Needed for safe schema changes in production | ⬜ Pending | — | — |
-| E-21 | Architecture | Add `updated_at` column to tables that lack it | Needed for cache invalidation and conflict detection | ⬜ Pending | — | — |
-| E-22 | Architecture | Add pagination strategy | Affects every list endpoint | ⬜ Pending | — | — |
-| E-23 | Docs | Clean up `EXECUTION_PLAYBOOK.md` RACI roles | Replaces phantom roles with reality for the solo phase | ⬜ Pending | — | — |
-| E-24 | Architecture | Add observability design | Necessary for structured logging and request tracing | ⬜ Pending | — | — |
+| E-21 | Architecture | Add `updated_at` column to tables that lack it | Multiple tables now carry `updated_at`, but the coverage is incomplete; remaining: audit any tables still lacking the column and decide whether they should be versioned | 🔄 In Progress | Copilot | 2026-08-16 |
+| E-22 | Architecture | Add pagination strategy | Pagination is now documented and used in some contracts, but the standard still needs to be centralized; remaining: one canonical cursor/page-size policy | 🔄 In Progress | Copilot | 2026-08-16 |
+| E-23 | Docs | Clean up `EXECUTION_PLAYBOOK.md` RACI roles | The solo-phase RACI is now present and internally consistent; remaining: trim any redundant legacy framing if the playbook is simplified further | ✅ Done | Copilot | 2026-08-16 |
+| E-24 | Architecture | Add observability design | Some built-in metrics and health references exist, but there is still no full observability design; remaining: structured logging, tracing, and metric naming rules | 🔄 In Progress | Copilot | 2026-08-16 |
 
 ---
 
@@ -77,9 +77,9 @@
 | E-11 | Spec-Kit | Feature 001 lacked `plan.md` and `tasks.md` | The full `specs/001-auth-roles-profile/` artifact set now exists, including plan, tasks, contracts, quickstart, and validation report | ✅ Done | Codex | 2026-08-09 |
 | E-12 | Docs | Engineering system-design, API-docs, and guides directories contained placeholder READMEs | All three READMEs now contain substantive contract-anchored guidance and clearly label proposals | ✅ Done | Codex | 2026-08-09 |
 | E-13 | Docs | No `CHANGELOG.md` — no history of documentation or planning changes beyond git blame | Once implementation begins and releases are cut, the absence of a changelog makes it hard to communicate changes to pilot users or contributors | ⬜ Pending | — | — |
-| E-14 | Docs | Arabic README (`docs/management/arabic/README_AR.md`) is not linked from the main `README.md` top section | Arabic-speaking contributors or teachers landing on the repo see no indication of Arabic documentation; discoverability is zero | ⬜ Pending | — | — |
-| E-15 | Docs | `TESTING_STRATEGY.md` exists in `docs/engineering/development/` but is not referenced or linked from `DEVELOPMENT.md` | Implementing agents and contributors following the developer guide will miss the testing strategy entirely; test patterns will be inconsistent | ⬜ Pending | — | — |
-| E-16 | Planning | Timeline optimism — the 300+ Monthly Active Teachers target at 12 months has no concrete deferral trigger; `PROJECT_PLAN.md` correctly notes 14–15 months is realistic but provides no decision criteria for when to officially defer a milestone | Without explicit deferral criteria, milestone slippage goes unacknowledged and quality gates get quietly relaxed under time pressure | ⬜ Pending | — | — |
+| E-14 | Docs | Arabic README (`docs/management/arabic/README_AR.md`) is not linked from the main `README.md` top section | Discoverability issue is now closed because the top-level README links the Arabic docs entry point | ✅ Done | Copilot | 2026-08-16 |
+| E-15 | Docs | `TESTING_STRATEGY.md` exists in `docs/engineering/development/` but is not referenced or linked from `DEVELOPMENT.md` | The developer guide now points to the testing strategy, but the relationship between strategy, contracts, and execution is still worth keeping visible | ✅ Done | Copilot | 2026-08-16 |
+| E-16 | Planning | Timeline optimism — the 300+ Monthly Active Teachers target at 12 months has no concrete deferral trigger; `PROJECT_PLAN.md` correctly notes 14–15 months is realistic but provides no decision criteria for when to officially defer a milestone | Buffer guidance exists, but explicit milestone deferral criteria are still missing; remaining: add a concrete trigger for deferring Month 10–12 milestones | 🔄 In Progress | Copilot | 2026-08-16 |
 | E-25 | Docs | Add sequence diagrams to `ws_events.md` | Clarifies complex multi-event flows | ⬜ Pending | — | — |
 | E-26 | Architecture | Define health check contract | The `/health` endpoint is missing from `openapi.yaml` | ⬜ Pending | — | — |
 | E-27 | Architecture | Add `soft_deleted_at` column to `users` table | Soft delete enables grace period recovery | ⬜ Pending | — | — |
@@ -104,9 +104,9 @@
 | Priority | Total | ✅ Done | 🔄 In Progress | ⬜ Pending |
 |----------|-------|---------|----------------|-----------|
 | P1 — Before Sprint 1 | 5 | **5** | 0 | 0 |
-| P2 — Before Beta | 13 | **1** | 0 | **12** |
-| P3 — Nice to Have | 22 | **2** | 0 | **20** |
-| **Total** | **40** | **8** | **0** | **32** |
+| P2 — Before Beta | 13 | **3** | **6** | **4** |
+| P3 — Nice to Have | 22 | **4** | **1** | **15** |
+| **Total** | **40** | **12** | **7** | **19** |
 
 > **2026-06-30 update:** Grade enum conflict (E-19 partial) resolved. F-007 Enhanced Progress Tracking approved and specced. `updated_at` on `memorization_progress` added (E-21 partial). Pagination strategy applied to all 7 new Progress endpoints (E-22 partial).
 
@@ -126,3 +126,5 @@
 | 2026-06-30 | E-19, E-22 (partial) | F-007 Enhanced Student Progress Tracking approved and fully specced | Claude Sonnet 4.6 | F-007 upgraded from Proposed → Approved. New file `F-007-SPEC.md` created. 7 new Progress API endpoints added to `openapi.yaml` with full schema. 16 new OpenAPI schemas. DB: 2 new tables (`quran_divisions`), 1 materialized view (`mv_student_surah_status`), 2 views, 7 indexes. 10 decisions locked (OQ-027 to OQ-034, GRADE-ENUM, CROSS-CIRCLE). |
 | 2026-08-09 | E-11 | Resolved stale Spec-Kit artifact gap | Codex | Verified Feature 001 has `spec.md`, `plan.md`, `tasks.md`, research, data model, quickstart, contract, checklist, and validation report. |
 | 2026-08-09 | E-07, E-12 | Closed stale documentation gaps | Codex | Verified architecture rate-limit policy and substantive system-design, API-docs, and guides content. |
+| 2026-08-16 | E-06, E-14, E-15, E-23 | Reclassified solved findings as Done | Copilot | Revalidated current docs tree; quran data source, Arabic README linking, testing strategy linking, and RACI cleanup are now treated as resolved in the tracker. |
+| 2026-08-16 | E-08, E-09, E-16, E-19, E-21, E-22, E-24 | Reclassified partial findings as In Progress | Copilot | Current docs cover parts of each issue, but each still has a named remaining gap: low-bandwidth strategy, capacity matrix, milestone deferral trigger, canonical indexing policy, full `updated_at` coverage, centralized pagination policy, and observability design. |

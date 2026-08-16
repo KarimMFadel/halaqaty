@@ -176,7 +176,7 @@ Standard HTTP semantics: `400` bad input · `401` unauthenticated · `403` forbi
 | `POST` | `/sessions/{sessionId}/start` | Bearer (teacher) | Start a session — ensures its media room and returns the teacher's `MediaConnection` |
 | `POST` | `/sessions/{sessionId}/join` | Bearer (member) | Join an active session — returns the caller's `MediaConnection` |
 | `POST` | `/sessions/{sessionId}/end` | Bearer (teacher) | End a session |
-| `POST` | `/sessions/{sessionId}/ws-token` | Bearer + Session ID | Issue a short-lived (60 s) WebSocket connection token |
+| `POST` | `/realtime/tickets` | Bearer + Session ID | Issue a short-lived (60 s) ticket for authorized circle and session topics |
 
 ### Queue
 

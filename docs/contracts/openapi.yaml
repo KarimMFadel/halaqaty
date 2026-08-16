@@ -39,6 +39,8 @@ tags:
     description: Authenticated registered-user lookup
   - name: Sessions
     description: Live session management
+  - name: Realtime
+    description: Authenticated WebSocket ticket issuance and topic authorization
   - name: Queue
     description: Recitation queue within a session
   - name: Chat
@@ -638,9 +640,12 @@ paths:
           $ref: '#/components/responses/Forbidden'
     post:
       operationId: createCircleSession
-      description: Create a new session (teacher only)
+      description: |
+        Create a session. F-005 permits only ad-hoc sessions with `scheduled_at`
+        omitted or null; F-006 owns scheduled and recurring session creation.
+        Teachers and supervisors may create F-005 ad-hoc sessions.
       tags: [Sessions]
-      summary: Create a new session (teacher only)
+      summary: Create an ad-hoc session (teacher or supervisor)
       requestBody:
         required: true
         content:
@@ -660,15 +665,23 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
   /sessions/{sessionId}/start:
     parameters:
       - $ref: '#/components/parameters/SessionId'
     post:
       operationId: startSession
-      description: Start a session, ensure its media room, and return a participant-specific media connection (teacher only)
+      description: Start a session, ensure its media room, and return a participant-specific media connection (teacher or supervisor)
       tags: [Sessions]
-      summary: Start a session and return the teacher's media connection
+      summary: Start a session and return the caller's media connection
       responses:
         '200':
           description: Session started, or the already-active session returned idempotently with a newly issued caller-specific media connection
@@ -699,6 +712,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
   /sessions/{sessionId}/join:
     parameters:
@@ -740,15 +757,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
   /sessions/{sessionId}/end:
     parameters:
       - $ref: '#/components/parameters/SessionId'
     post:
       operationId: endSession
-      description: End a session (teacher only)
+      description: End a session (teacher or supervisor); automatic duration and idle endings are system-attributed.
       tags: [Sessions]
-      summary: End a session (teacher only)
+      summary: End a session (teacher or supervisor)
       responses:
         '200':
           description: Session ended
@@ -762,6 +783,188 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /sessions/{sessionId}/lock:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      operationId: setSessionLock
+      description: Lock or unlock a session. A lock blocks new joins but permits eligible participants who joined before the lock to reconnect.
+      tags: [Sessions]
+      summary: Lock or unlock a session (teacher or supervisor)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionLockRequest'
+      responses:
+        '200':
+          description: Updated session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /sessions/{sessionId}/participants:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      operationId: listSessionParticipants
+      description: Return the current presence and hand snapshot to an eligible joined participant.
+      tags: [Sessions]
+      summary: List current session participants
+      responses:
+        '200':
+          description: Current participant presence snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionParticipantsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /sessions/{sessionId}/participants/mute-all:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      operationId: muteAllSessionParticipants
+      description: Mute active audio publishers without changing student turn entitlement (teacher or supervisor).
+      tags: [Sessions]
+      summary: Mute all active publishers
+      responses:
+        '204':
+          description: Active publishers muted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /sessions/{sessionId}/participants/{userId}/mute:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: muteSessionParticipant
+      description: Mute an active audio publisher without changing their underlying publish entitlement.
+      tags: [Sessions]
+      summary: Mute a participant
+      responses:
+        '204':
+          description: Participant muted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /sessions/{sessionId}/participants/{userId}/unmute:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: unmuteSessionParticipant
+      description: Restore an existing audio-publish entitlement; never grant a student publishing permission.
+      tags: [Sessions]
+      summary: Unmute an existing publisher
+      responses:
+        '204':
+          description: Existing publisher unmuted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /sessions/{sessionId}/participants/{userId}/remove:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: removeSessionParticipant
+      description: Disconnect and durably remove a participant; removed participants cannot rejoin or reconnect.
+      tags: [Sessions]
+      summary: Remove a participant
+      responses:
+        '204':
+          description: Participant removed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
   # ── Queue ─────────────────────────────────────────────────
   /sessions/{sessionId}/queue:
@@ -1439,25 +1642,29 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  # ── WebSocket token ───────────────────────────────────────
-  /sessions/{sessionId}/ws-token:
-    parameters:
-      - $ref: '#/components/parameters/SessionId'
+  # ── Realtime ticket ───────────────────────────────────────
+  /realtime/tickets:
     post:
-      operationId: getSessionWebSocketToken
-      tags: [Sessions]
-      summary: Issue a short-lived WebSocket connection token
+      operationId: createRealtimeTicket
+      tags: [Realtime]
+      summary: Issue a short-lived realtime connection ticket
       description: |
-        Issues a short-lived token (valid for 60 seconds) used to authenticate
+        Issues a short-lived ticket (valid for 60 seconds) used to authenticate
         the persistent WebSocket connection. The client connects to
-        `wss://api.halaqaty.app/ws?token=<ws_token>` immediately after
-        receiving this token.
+        `wss://api.halaqaty.app/ws?token=<ticket>` immediately after receiving it.
 
-        The WS token encodes the user ID and their circle memberships so the
-        server can register the client into the correct rooms on upgrade.
+        The ticket authorizes only the caller's current eligible circle topics.
+        Session topics are added only after an authorized session join. The server
+        revalidates authorization when the connection and topic subscriptions are
+        established. The ticket does not grant media-room access.
       responses:
         '200':
-          description: Short-lived WebSocket token
+          description: Short-lived realtime ticket; clients and intermediaries must not cache it.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
           content:
             application/json:
               schema:
@@ -1466,17 +1673,50 @@ paths:
                 properties:
                   token:
                     type: string
-                    description: Opaque WS auth token (valid for 60 seconds)
+                    description: Opaque realtime connection ticket (valid for 60 seconds)
                   expires_at:
                     type: string
                     format: date-time
                     description: UTC expiry time of the token
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /webhooks/livekit:
+    post:
+      operationId: receiveLiveKitWebhook
+      tags: [Sessions]
+      summary: Receive a signed LiveKit webhook
+      description: Verify the provider signature inside the LiveKit adapter and process valid duplicate deliveries idempotently.
+      security: []
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+          description: LiveKit webhook signature header; never a Firebase bearer token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Provider payload is verified and translated inside the LiveKit adapter; provider fields do not escape it.
+      responses:
+        '204':
+          description: Signed webhook accepted idempotently
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
 # ─────────────────────────────────────────────────────────────
 # Components
@@ -1543,6 +1783,18 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     TooManyRequests:
       description: Request rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Validation:
+      description: Request failed semantic validation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+    InternalServerError:
+      description: Unexpected server failure
       content:
         application/json:
           schema:
@@ -1850,11 +2102,19 @@ components:
         scheduled_at:
           type: string
           format: date-time
-          description: Optional — if null, session is ad-hoc
+          description: Optional. F-005 requires null/omitted; F-006 owns scheduled and recurring sessions.
+
+    SessionLockRequest:
+      type: object
+      required: [locked]
+      properties:
+        locked:
+          type: boolean
+          description: True blocks new joins; eligible participants who joined before the lock may reconnect.
 
     Session:
       type: object
-      required: [id, circle_id, status, media_mode, created_by, started_at, ended_at, participant_count]
+      required: [id, circle_id, status, media_mode, created_by, actual_start, actual_end, participant_count, is_locked]
       properties:
         id:
           type: string
@@ -1872,16 +2132,26 @@ components:
         created_by:
           type: string
           format: uuid
-        started_at:
+        actual_start:
           type: string
           format: date-time
           nullable: true
-        ended_at:
+        actual_end:
           type: string
           format: date-time
           nullable: true
+        end_reason:
+          type: string
+          enum: [manual, duration_limit, idle_timeout]
+          nullable: true
+          description: Null until the session ends; automatic endings have no human attribution.
         participant_count:
           type: integer
+          minimum: 0
+          maximum: 50
+        is_locked:
+          type: boolean
+          description: Whether new joins are blocked.
 
     SessionStartResponse:
       type: object
@@ -1900,6 +2170,34 @@ components:
           $ref: '#/components/schemas/Session'
         media_connection:
           $ref: '#/components/schemas/MediaConnection'
+
+    SessionParticipant:
+      type: object
+      required: [user_id, display_name, role, is_currently_present, hand_raised_at]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        role:
+          type: string
+          enum: [teacher, supervisor, student]
+        is_currently_present:
+          type: boolean
+        hand_raised_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    SessionParticipantsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionParticipant'
 
     MediaConnection:
       type: object

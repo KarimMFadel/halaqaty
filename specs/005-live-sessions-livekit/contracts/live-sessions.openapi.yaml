@@ -1,0 +1,336 @@
+openapi: 3.0.3
+info:
+  title: Halaqaty Live Sessions Feature Contract
+  version: 0.1.0
+  description: F-005 audio-only ad-hoc session lifecycle, moderation, presence, and realtime tickets.
+  contact: { name: Halaqaty, url: https://halaqaty.app }
+servers:
+  - url: https://api.halaqaty.app/api/v1
+security:
+  - BearerAuth: []
+    SessionId: []
+tags:
+  - name: Sessions
+  - name: Realtime
+paths:
+  /circles/{circleId}/sessions:
+    get:
+      tags: [Sessions]
+      operationId: listCircleSessions
+      summary: List sessions for a circle
+      description: Lists circle sessions for the session-card discovery flow; scheduling and attendance policy remain owned by F-006.
+      parameters: [{ $ref: '#/components/parameters/CircleId' }]
+      responses:
+        '200': { $ref: '#/components/responses/SessionsResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Sessions]
+      operationId: createAdHocSession
+      summary: Create an ad-hoc session (teacher or supervisor)
+      description: Creates a scheduled-state session with no scheduled timestamp; F-006 owns scheduled sessions.
+      parameters: [{ $ref: '#/components/parameters/CircleId' }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAdHocSessionRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/SessionResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /sessions/{sessionId}/start:
+    post:
+      tags: [Sessions]
+      operationId: startSession
+      summary: Start an eligible session and issue the caller connection
+      description: Idempotently ensures one audio-only room and returns only the caller's no-store media connection.
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      responses:
+        '200': { $ref: '#/components/responses/SessionConnectionResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /sessions/{sessionId}/join:
+    post:
+      tags: [Sessions]
+      operationId: joinSession
+      summary: Join an active eligible session and issue the caller connection
+      description: Validates current membership, capacity, lock, removal, and state before issuing a private connection.
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      responses:
+        '200': { $ref: '#/components/responses/SessionConnectionResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /sessions/{sessionId}/end:
+    post:
+      tags: [Sessions]
+      operationId: endSession
+      summary: End an active session (teacher or supervisor)
+      description: Persists an ended session before idempotently disconnecting participants and closing its media room.
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      responses:
+        '200': { $ref: '#/components/responses/SessionResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /sessions/{sessionId}/lock:
+    post:
+      tags: [Sessions]
+      operationId: setSessionLock
+      summary: Lock or unlock a session (teacher or supervisor)
+      description: Blocks new joins while allowing an eligible pre-lock participant to reconnect.
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LockRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/SessionResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /sessions/{sessionId}/participants:
+    get:
+      tags: [Sessions]
+      operationId: listSessionParticipants
+      summary: Get current authorized session participant presence
+      description: Returns the authoritative presence and hand-state snapshot only to an eligible joined participant.
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      responses:
+        '200': { $ref: '#/components/responses/ParticipantsResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /sessions/{sessionId}/participants/mute-all:
+    post:
+      tags: [Sessions]
+      operationId: muteAllSessionParticipants
+      summary: Mute active audio publishers (teacher or supervisor)
+      description: Mutes current publishers without changing a student's turn-based publishing entitlement.
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      responses:
+        '204': { description: Participants muted }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /sessions/{sessionId}/participants/{userId}/mute:
+    post:
+      tags: [Sessions]
+      operationId: muteSessionParticipant
+      description: Mutes an active audio publisher without changing their underlying publish entitlement.
+      parameters: [{ $ref: '#/components/parameters/SessionId' }, { $ref: '#/components/parameters/UserId' }]
+      responses:
+        '204': { description: Participant muted }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /sessions/{sessionId}/participants/{userId}/unmute:
+    post:
+      tags: [Sessions]
+      operationId: unmuteSessionParticipant
+      summary: Restore an existing publish entitlement; never grant student publishing
+      description: Restores audio only when the participant already has publishing entitlement.
+      parameters: [{ $ref: '#/components/parameters/SessionId' }, { $ref: '#/components/parameters/UserId' }]
+      responses:
+        '204': { description: Existing publisher unmuted }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /sessions/{sessionId}/participants/{userId}/remove:
+    post:
+      tags: [Sessions]
+      operationId: removeSessionParticipant
+      description: Disconnects and durably marks the participant as removed so future joins and reconnects fail.
+      parameters: [{ $ref: '#/components/parameters/SessionId' }, { $ref: '#/components/parameters/UserId' }]
+      responses:
+        '204': { description: Participant removed }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /realtime/tickets:
+    post:
+      tags: [Realtime]
+      operationId: createRealtimeTicket
+      summary: Issue a 60-second ticket for current eligible circle topics
+      description: Does not grant media access or session-topic access before a successful authorized join.
+      responses:
+        '200': { $ref: '#/components/responses/RealtimeTicketResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /webhooks/livekit:
+    post:
+      security: []
+      tags: [Sessions]
+      operationId: receiveLiveKitWebhook
+      summary: Receive and verify signed LiveKit lifecycle events
+      description: Rejects invalid signatures and handles valid duplicate deliveries idempotently.
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          description: LiveKit webhook signature; this endpoint does not use Firebase bearer authorization.
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '204': { description: Accepted idempotently }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    BearerAuth: { type: http, scheme: bearer, bearerFormat: Firebase JWT }
+    SessionId: { type: apiKey, in: header, name: X-Halaqaty-Session-ID }
+  parameters:
+    CircleId: { name: circleId, in: path, required: true, schema: { type: string, format: uuid } }
+    SessionId: { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+    UserId: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
+  schemas:
+    CreateAdHocSessionRequest:
+      type: object
+      properties: { notes: { type: string, maxLength: 500 } }
+    LockRequest:
+      type: object
+      required: [locked]
+      properties: { locked: { type: boolean } }
+    Session:
+      type: object
+      required: [id, circle_id, status, media_mode, actual_start, actual_end, participant_count, is_locked]
+      properties:
+        id: { type: string, format: uuid }
+        circle_id: { type: string, format: uuid }
+        status: { type: string, enum: [scheduled, active, ended] }
+        media_mode: { type: string, enum: [audio_only, audio_video] }
+        actual_start: { type: string, format: date-time, nullable: true }
+        actual_end: { type: string, format: date-time, nullable: true }
+        end_reason: { type: string, enum: [manual, duration_limit, idle_timeout], nullable: true }
+        participant_count: { type: integer, minimum: 0, maximum: 50 }
+        is_locked: { type: boolean }
+    SessionListItem:
+      allOf:
+        - $ref: '#/components/schemas/Session'
+    SessionList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/SessionListItem' }
+    MediaConnection:
+      type: object
+      required: [endpoint, credential, expires_at]
+      properties:
+        endpoint: { type: string, format: uri, pattern: '^(https|wss)://' }
+        credential: { type: string, minLength: 1 }
+        expires_at: { type: string, format: date-time }
+    SessionConnectionResponse:
+      type: object
+      required: [session, media_connection]
+      properties:
+        session: { $ref: '#/components/schemas/Session' }
+        media_connection: { $ref: '#/components/schemas/MediaConnection' }
+    SessionParticipant:
+      type: object
+      required: [user_id, display_name, role, is_currently_present, hand_raised_at]
+      properties:
+        user_id: { type: string, format: uuid }
+        display_name: { type: string }
+        role: { type: string, enum: [teacher, supervisor, student] }
+        is_currently_present: { type: boolean }
+        hand_raised_at: { type: string, format: date-time, nullable: true }
+    RealtimeTicketResponse:
+      type: object
+      required: [token, expires_at]
+      properties:
+        token: { type: string }
+        expires_at: { type: string, format: date-time }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties: { error: { type: object, required: [code, message], properties: { code: { type: string }, message: { type: string } } } }
+  responses:
+    SessionResponse:
+      description: Session state
+      content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } }
+    SessionConnectionResponse:
+      description: Caller-specific session connection; response uses Cache-Control no-store
+      headers: { Cache-Control: { schema: { type: string, enum: [no-store] } } }
+      content: { application/json: { schema: { $ref: '#/components/schemas/SessionConnectionResponse' } } }
+    ParticipantsResponse:
+      description: Current session presence snapshot
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data:
+                type: array
+                items: { $ref: '#/components/schemas/SessionParticipant' }
+    RealtimeTicketResponse:
+      description: Short-lived realtime ticket
+      headers:
+        Cache-Control:
+          schema: { type: string, enum: [no-store] }
+      content: { application/json: { schema: { $ref: '#/components/schemas/RealtimeTicketResponse' } } }
+    SessionsResponse:
+      description: Circle session-card discovery response
+      content: { application/json: { schema: { $ref: '#/components/schemas/SessionList' } } }
+    Error:
+      description: Standard error envelope
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }

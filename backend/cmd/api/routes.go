@@ -27,3 +27,21 @@ const (
 	routeCircleArchive       = "DELETE /api/v1/circles/{circleId}"
 	routeUsersSearch         = "GET /api/v1/users/search"
 )
+
+// F-005 live-session route patterns. Handler wiring arrives with T021/T034;
+// these constants are the single source for the route strings.
+const (
+	routeCircleSessionsGet        = "GET /api/v1/circles/{circleId}/sessions"
+	routeCircleSessionsCreate     = "POST /api/v1/circles/{circleId}/sessions"
+	routeSessionStart             = "POST /api/v1/sessions/{sessionId}/start"
+	routeSessionJoin              = "POST /api/v1/sessions/{sessionId}/join"
+	routeSessionEnd               = "POST /api/v1/sessions/{sessionId}/end"
+	routeSessionLock              = "POST /api/v1/sessions/{sessionId}/lock"
+	routeSessionParticipantsGet   = "GET /api/v1/sessions/{sessionId}/participants"
+	routeSessionMuteAll           = "POST /api/v1/sessions/{sessionId}/participants/mute-all"
+	routeSessionParticipantMute   = "POST /api/v1/sessions/{sessionId}/participants/{userId}/mute"
+	routeSessionParticipantUnmute = "POST /api/v1/sessions/{sessionId}/participants/{userId}/unmute"
+	routeSessionParticipantRemove = "POST /api/v1/sessions/{sessionId}/participants/{userId}/remove"
+	routeRealtimeTicketsCreate    = "POST /api/v1/realtime/tickets"
+	routeWebhookLiveKit           = "POST /api/v1/webhooks/livekit"
+)

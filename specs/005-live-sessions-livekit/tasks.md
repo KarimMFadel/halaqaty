@@ -17,14 +17,14 @@ F-005 implements audio-only ad-hoc sessions, presence, hand state, shared realti
 
 ## Phase 1: Shared Foundation (Blocks all stories)
 
-- [ ] T005 [US1] Create the complete F-005-owned `sessions` table, its lifecycle/media/lock/end-reason constraints, and `session_participant_presence` in paired `backend/migrations/000016_live_sessions.up.sql` and `backend/migrations/000016_live_sessions.down.sql`; F-003 and F-006 must extend it only through later paired migrations.
-- [ ] T006 [US1] Add fresh-schema, upgrade, rollback, rerun-safety, constraint, and 51st-participant race coverage for the complete F-005 migration in `backend/tests/integration/live_sessions_migration_test.go`.
-- [ ] T007 [US1] Define provider-neutral session entities, lifecycle errors, `SessionMediaGateway`, and `ReciterAudioControl` in `backend/internal/sessions/session_types.go` and `backend/internal/sessions/media_gateway.go`.
-- [ ] T008 [P] [US1] Add validated LiveKit endpoint/API-key/secret and audio-policy configuration without logging secrets in `backend/internal/platform/config/config.go` and `backend/internal/platform/config/config_test.go`.
-- [ ] T009 [P] [US1] Add generic realtime ticket/topic and connection state types in `backend/internal/realtime/types.go` and `backend/internal/realtime/types_test.go`.
-- [ ] T010 [US1] Add package-level session SQL and repository operations for CAS lifecycle, capacity, presence, reconnect, lock, removal, hand state, and snapshots in `backend/internal/sessions/session_queries.go` and `backend/internal/sessions/session_repository.go`.
-- [ ] T011 [US1] Add session repository transaction/idempotency tests in `backend/internal/sessions/session_repository_test.go`.
-- [ ] T012 [US1] Add centralized F-005 route patterns in `backend/cmd/api/routes.go` and route-constant coverage in `backend/cmd/api/routes_test.go`.
+- [x] T005 [US1] Create the complete F-005-owned `sessions` table, its lifecycle/media/lock/end-reason constraints, and `session_participant_presence` in paired `backend/migrations/000016_live_sessions.up.sql` and `backend/migrations/000016_live_sessions.down.sql`; F-003 and F-006 must extend it only through later paired migrations.
+- [x] T006 [US1] Add fresh-schema, upgrade, rollback, rerun-safety, constraint, and 51st-participant race coverage for the complete F-005 migration in `backend/tests/integration/live_sessions_migration_test.go`.
+- [x] T007 [US1] Define provider-neutral session entities, lifecycle errors, `SessionMediaGateway`, and `ReciterAudioControl` in `backend/internal/sessions/session_types.go` and `backend/internal/sessions/media_gateway.go`.
+- [x] T008 [P] [US1] Add validated LiveKit endpoint/API-key/secret and audio-policy configuration without logging secrets in `backend/internal/platform/config/livekit_config.go` and `backend/internal/platform/config/livekit_config_test.go` (package follows per-domain file naming).
+- [x] T009 [P] [US1] Add generic realtime ticket/topic and connection state types in `backend/internal/realtime/types.go` and `backend/internal/realtime/types_test.go`.
+- [x] T010 [US1] Add package-level session SQL and repository operations for CAS lifecycle, capacity, presence, reconnect, lock, removal, hand state, and snapshots in `backend/internal/sessions/session_queries.go` and `backend/internal/sessions/session_repository.go`.
+- [x] T011 [US1] Add session repository transaction/idempotency tests in `backend/internal/sessions/session_repository_test.go`.
+- [x] T012 [US1] Add centralized F-005 route patterns in `backend/cmd/api/routes.go` and route-constant coverage in `backend/cmd/api/routes_test.go`.
 
 **Checkpoint**: T001–T012 complete; schema, contracts, provider-neutral types, and route names are ready.
 

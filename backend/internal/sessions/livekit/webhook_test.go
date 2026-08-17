@@ -3,7 +3,6 @@ package livekit
 import (
 	"crypto/sha256"
 	"encoding/base64"
-	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -174,5 +173,5 @@ func TestVerifyWebhookErrorMessagesNeverLeakSecret(t *testing.T) {
 	if strings.Contains(err.Error(), whSecret) || strings.Contains(err.Error(), "wrong-secret") {
 		t.Fatalf("error message leaks a secret: %v", err)
 	}
-	fmt.Sprint(verifier) // sanity: formatting the verifier must not panic
+	_ = fmt.Sprint(verifier) // formatting the verifier must not panic
 }

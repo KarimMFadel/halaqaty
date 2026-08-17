@@ -132,4 +132,7 @@ var (
 	// ErrNotCircleMember means the user lacks an active membership in the
 	// session's circle; the service layer enforces it via circle_members.
 	ErrNotCircleMember = errors.New("user is not an active member of the circle")
+	// ErrModeratorRoleRequired means the user is a circle member but only
+	// teachers and supervisors may perform the operation (US1 lifecycle).
+	ErrModeratorRoleRequired = errors.New("operation requires the teacher or supervisor role")
 )

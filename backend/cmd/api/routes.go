@@ -44,4 +44,5 @@ const (
 	routeSessionParticipantRemove = "POST /api/v1/sessions/{sessionId}/participants/{userId}/remove"
 	routeRealtimeTicketsCreate    = "POST /api/v1/realtime/tickets"
 	routeWebhookLiveKit           = "POST /api/v1/webhooks/livekit"
+	routeRealtimeWebSocket        = "GET /api/v1/ws"
 )

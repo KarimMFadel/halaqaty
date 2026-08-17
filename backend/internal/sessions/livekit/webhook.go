@@ -54,6 +54,27 @@ type WebhookVerifier struct {
 	provider auth.KeyProvider
 }
 
+// HandlerVerifier adapts the LiveKit verifier to the provider-neutral session
+// handler port without leaking LiveKit event types across the adapter boundary.
+type HandlerVerifier struct{ verifier *WebhookVerifier }
+
+// NewHandlerVerifier constructs a verifier suitable for sessions.Handler.
+func NewHandlerVerifier(apiKey, apiSecret string) *HandlerVerifier {
+	return &HandlerVerifier{verifier: NewWebhookVerifier(apiKey, apiSecret)}
+}
+
+// Verify verifies and converts one provider callback.
+func (v *HandlerVerifier) Verify(r *http.Request) (sessions.MediaWebhookEvent, error) {
+	event, err := v.verifier.Verify(r)
+	if err != nil {
+		return sessions.MediaWebhookEvent{}, err
+	}
+	return sessions.MediaWebhookEvent{
+		ID: event.ID, Type: sessions.MediaWebhookEventType(event.Type),
+		RoomRef: event.RoomRef, Identity: event.Identity, Timestamp: event.Timestamp,
+	}, nil
+}
+
 // NewWebhookVerifier constructs the verifier from the LiveKit API key pair.
 func NewWebhookVerifier(apiKey, apiSecret string) *WebhookVerifier {
 	return &WebhookVerifier{provider: auth.NewSimpleKeyProvider(apiKey, apiSecret)}

@@ -111,17 +111,23 @@ func (a *Adapter) IssueConnection(_ context.Context, roomRef sessions.MediaRoomR
 // MuteParticipant mutes the active audio of one connected participant; a
 // participant without a published audio track is a no-op.
 func (a *Adapter) MuteParticipant(ctx context.Context, roomRef sessions.MediaRoomRef, userID string) error {
-	return a.muteListed(ctx, roomRef, userID)
+	return a.muteListed(ctx, roomRef, userID, true)
+}
+
+// UnmuteParticipant restores an existing participant's microphone track; it
+// never changes the participant's publish entitlement.
+func (a *Adapter) UnmuteParticipant(ctx context.Context, roomRef sessions.MediaRoomRef, userID string) error {
+	return a.muteListed(ctx, roomRef, userID, false)
 }
 
 // MuteAll mutes the active audio of every connected audio publisher.
 func (a *Adapter) MuteAll(ctx context.Context, roomRef sessions.MediaRoomRef) error {
-	return a.muteListed(ctx, roomRef, "")
+	return a.muteListed(ctx, roomRef, "", true)
 }
 
 // muteListed mutes userID's audio track, or every audio publisher's when
 // userID is empty.
-func (a *Adapter) muteListed(ctx context.Context, roomRef sessions.MediaRoomRef, userID string) error {
+func (a *Adapter) muteListed(ctx context.Context, roomRef sessions.MediaRoomRef, userID string, muted bool) error {
 	listed, err := a.rooms.ListParticipants(ctx, &lkmodel.ListParticipantsRequest{Room: string(roomRef)})
 	if err != nil {
 		return fmt.Errorf("mute audio: list participants: %w", err)
@@ -138,7 +144,7 @@ func (a *Adapter) muteListed(ctx context.Context, roomRef sessions.MediaRoomRef,
 				Room:     string(roomRef),
 				Identity: p.Identity,
 				TrackSid: track.Sid,
-				Muted:    true,
+				Muted:    muted,
 			}); err != nil {
 				return fmt.Errorf("mute audio: %w", err)
 			}

@@ -45,6 +45,16 @@ type Service struct {
 	roles   CircleRoleReader
 }
 
+type moderationStore interface {
+	SetLock(context.Context, string, bool) (Session, error)
+	EndSession(context.Context, string, EndReason) (Session, error)
+	ReconnectPresence(context.Context, string, string) (Session, error)
+	RemoveParticipant(context.Context, string, string) (Session, error)
+	SetHandRaised(context.Context, string, string) error
+	SetHandLowered(context.Context, string, string) error
+	ListSessionParticipants(context.Context, string) ([]ParticipantPresence, error)
+}
+
 // NewService constructs the session service over its persistence, media
 // gateway, and circle-role ports.
 func NewService(store Store, gateway SessionMediaGateway, roles CircleRoleReader) *Service {
@@ -167,4 +177,178 @@ func (s *Service) JoinSession(ctx context.Context, actorID, sessionID string) (S
 		return Session{}, MediaConnection{}, fmt.Errorf("join session: issue connection: %w", err)
 	}
 	return joined, conn, nil
+}
+
+func (s *Service) moderationStore() (moderationStore, error) {
+	store, ok := s.store.(moderationStore)
+	if !ok {
+		return nil, errors.New("session store does not support moderation")
+	}
+	return store, nil
+}
+
+// SetLock changes the active room lock. Only teachers and supervisors may
+// change it; replaying the current value is idempotent.
+func (s *Service) SetLock(ctx context.Context, actorID, sessionID string, locked bool) (Session, error) {
+	sess, err := s.store.GetSession(ctx, sessionID)
+	if err != nil {
+		return Session{}, err
+	}
+	if _, err := s.authorize(ctx, sess.CircleID, actorID, true); err != nil {
+		return Session{}, err
+	}
+	store, err := s.moderationStore()
+	if err != nil {
+		return Session{}, err
+	}
+	return store.SetLock(ctx, sessionID, locked)
+}
+
+// EndSession ends the durable session and closes its provider room.
+func (s *Service) EndSession(ctx context.Context, actorID, sessionID string, reason EndReason) (Session, error) {
+	sess, err := s.store.GetSession(ctx, sessionID)
+	if err != nil {
+		return Session{}, err
+	}
+	if _, err := s.authorize(ctx, sess.CircleID, actorID, true); err != nil {
+		return Session{}, err
+	}
+	store, err := s.moderationStore()
+	if err != nil {
+		return Session{}, err
+	}
+	ended, err := store.EndSession(ctx, sessionID, reason)
+	if err != nil {
+		return Session{}, err
+	}
+	if sess.MediaRoomRef != "" {
+		if err := s.gateway.CloseRoom(ctx, sess.MediaRoomRef); err != nil {
+			return Session{}, fmt.Errorf("end session: close media room: %w", err)
+		}
+	}
+	return ended, nil
+}
+
+// MuteParticipant mutes one participant without changing entitlements.
+func (s *Service) MuteParticipant(ctx context.Context, actorID, sessionID, targetID string) error {
+	sess, err := s.store.GetSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if _, err := s.authorize(ctx, sess.CircleID, actorID, true); err != nil {
+		return err
+	}
+	return s.gateway.MuteParticipant(ctx, sess.MediaRoomRef, targetID)
+}
+
+// UnmuteParticipant restores only an existing audio publisher.
+func (s *Service) UnmuteParticipant(ctx context.Context, actorID, sessionID, targetID string) error {
+	sess, err := s.store.GetSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if _, err := s.authorize(ctx, sess.CircleID, actorID, true); err != nil {
+		return err
+	}
+	return s.gateway.UnmuteParticipant(ctx, sess.MediaRoomRef, targetID)
+}
+
+// MuteAll mutes all currently published audio tracks in the room.
+func (s *Service) MuteAll(ctx context.Context, actorID, sessionID string) error {
+	sess, err := s.store.GetSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if _, err := s.authorize(ctx, sess.CircleID, actorID, true); err != nil {
+		return err
+	}
+	return s.gateway.MuteAll(ctx, sess.MediaRoomRef)
+}
+
+// RemoveParticipant durably blocks the participant and disconnects them.
+func (s *Service) RemoveParticipant(ctx context.Context, actorID, sessionID, targetID string) (Session, error) {
+	sess, err := s.store.GetSession(ctx, sessionID)
+	if err != nil {
+		return Session{}, err
+	}
+	if _, err := s.authorize(ctx, sess.CircleID, actorID, true); err != nil {
+		return Session{}, err
+	}
+	store, err := s.moderationStore()
+	if err != nil {
+		return Session{}, err
+	}
+	removed, err := store.RemoveParticipant(ctx, sessionID, targetID)
+	if err != nil {
+		return Session{}, err
+	}
+	if err := s.gateway.RemoveParticipant(ctx, sess.MediaRoomRef, targetID); err != nil {
+		return Session{}, fmt.Errorf("remove participant: disconnect media participant: %w", err)
+	}
+	return removed, nil
+}
+
+// SetHand records a participant's standalone hand state.
+func (s *Service) SetHand(ctx context.Context, actorID, sessionID string, raised bool) error {
+	sess, err := s.store.GetSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if _, err := s.authorize(ctx, sess.CircleID, actorID, false); err != nil {
+		return err
+	}
+	store, err := s.moderationStore()
+	if err != nil {
+		return err
+	}
+	if raised {
+		return store.SetHandRaised(ctx, sessionID, actorID)
+	}
+	return store.SetHandLowered(ctx, sessionID, actorID)
+}
+
+// ListParticipants returns the durable session presence snapshot after
+// verifying that the caller is an active circle member.
+func (s *Service) ListParticipants(ctx context.Context, actorID, sessionID string) ([]ParticipantPresence, error) {
+	sess, err := s.store.GetSession(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.authorize(ctx, sess.CircleID, actorID, false); err != nil {
+		return nil, err
+	}
+	store, err := s.moderationStore()
+	if err != nil {
+		return nil, err
+	}
+	return store.ListSessionParticipants(ctx, sessionID)
+}
+
+// AuthorizeSessionTopic revalidates membership and current presence before a
+// WebSocket session-topic subscription is accepted.
+func (s *Service) AuthorizeSessionTopic(ctx context.Context, actorID, sessionID string) error {
+	sess, err := s.store.GetSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if sess.Status != SessionStatusActive {
+		return ErrSessionAlreadyEnded
+	}
+	if _, err := s.authorize(ctx, sess.CircleID, actorID, false); err != nil {
+		return err
+	}
+	store, err := s.moderationStore()
+	if err != nil {
+		return err
+	}
+	participants, err := store.ListSessionParticipants(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	for _, participant := range participants {
+		if participant.UserID == actorID && participant.IsCurrentlyPresent && participant.RemovedAt == nil {
+			return nil
+		}
+	}
+	return ErrParticipantRemoved
 }

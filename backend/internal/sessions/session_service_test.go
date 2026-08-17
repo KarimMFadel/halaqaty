@@ -197,7 +197,10 @@ func (f *fakeGateway) IssueConnection(_ context.Context, roomRef MediaRoomRef, u
 }
 
 func (f *fakeGateway) MuteParticipant(_ context.Context, _ MediaRoomRef, _ string) error { return nil }
-func (f *fakeGateway) MuteAll(_ context.Context, _ MediaRoomRef) error                   { return nil }
+func (f *fakeGateway) UnmuteParticipant(_ context.Context, _ MediaRoomRef, _ string) error {
+	return nil
+}
+func (f *fakeGateway) MuteAll(_ context.Context, _ MediaRoomRef) error { return nil }
 func (f *fakeGateway) RemoveParticipant(_ context.Context, _ MediaRoomRef, _ string) error {
 	return nil
 }

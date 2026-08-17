@@ -1,5 +1,18 @@
 package rbac
 
+// circleMemberRoleQuery returns one active membership role.
+const circleMemberRoleQuery = `
+SELECT role
+FROM circle_members
+WHERE circle_id = $1::uuid AND user_id = $2::uuid
+LIMIT 1`
+
+const circleIDsForUserQuery = `
+SELECT circle_id::text
+FROM circle_members
+WHERE user_id = $1::uuid
+ORDER BY circle_id`
+
 // insertCircleQuery creates the circle row; the owner is stored in teacher_id.
 const insertCircleQuery = `
 INSERT INTO circles (name, teacher_id, invite_code, description, rules, max_capacity, is_private, gender_restriction, language, grading_policy)

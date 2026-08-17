@@ -20,6 +20,10 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
 	"github.com/KarimMFadel/halaqaty/backend/internal/profile"
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
+	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
+	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
+	"github.com/KarimMFadel/halaqaty/backend/internal/sessions/livekit"
+	lksdk "github.com/livekit/server-sdk-go/v2"
 )
 
 func main() {
@@ -84,6 +88,31 @@ func main() {
 	rbacService := rbac.NewService(rbacRepo, auditLogger)
 	rbacHandler := rbac.NewHandler(rbacService)
 
+	var sessionHandler *sessions.Handler
+	ticketService := realtime.NewTicketService(rbacRepo)
+	realtimeHandler := realtime.NewHandler(ticketService)
+	var sessionTopicAuthorizer realtime.SessionTopicAuthorizer
+	mediaCfg, err := config.LoadLiveKitConfig()
+	if err != nil {
+		logger.Error("failed to load LiveKit config", "error", err)
+		os.Exit(1)
+	}
+	if mediaCfg != (config.LiveKitConfig{}) {
+		policy, err := config.LoadAudioPolicy()
+		if err != nil {
+			logger.Error("failed to load LiveKit audio policy", "error", err)
+			os.Exit(1)
+		}
+		rooms := lksdk.NewRoomServiceClient(mediaCfg.Endpoint, mediaCfg.APIKey, mediaCfg.APISecret)
+		media := livekit.NewAdapter(mediaCfg, policy, rooms)
+		liveVerifier := livekit.NewHandlerVerifier(mediaCfg.APIKey, mediaCfg.APISecret)
+		liveSessionRepo := sessions.NewSessionRepository(pool)
+		liveSessionService := sessions.NewService(liveSessionRepo, media, rbacRepo)
+		sessionTopicAuthorizer = liveSessionService
+		sessionHandler = sessions.NewHandler(liveSessionService)
+		sessionHandler.SetWebhookVerifier(liveVerifier)
+	}
+
 	authMetrics := new(metrics.AuthMetrics)
 	authMW := middleware.NewAuthMiddleware(verifier, sessionService, sessionRepo)
 	authMW.SetMetrics(authMetrics)
@@ -91,16 +120,19 @@ func main() {
 	rateLimitMW := middleware.NewRateLimitMiddleware(cfg.RateLimitPerIPPerMin, cfg.RateLimitPerUserPerMin)
 
 	mwSet := MiddlewareSet{
-		Auth:           authMW,
-		Role:           roleMW,
-		RateLimit:      rateLimitMW,
-		AuthHandler:    authHandler,
-		ProfileHandler: profileHandler,
-		RBACHandler:    rbacHandler,
-		Timeout:        cfg.RequestTimeout,
-		Logger:         logger,
-		Metrics:        authMetrics,
-		MetricsToken:   cfg.MetricsToken,
+		Auth:            authMW,
+		Role:            roleMW,
+		RateLimit:       rateLimitMW,
+		AuthHandler:     authHandler,
+		ProfileHandler:  profileHandler,
+		RBACHandler:     rbacHandler,
+		SessionHandler:  sessionHandler,
+		RealtimeHandler: realtimeHandler,
+		RealtimeHub:     realtime.NewHub(ticketService, sessionTopicAuthorizer),
+		Timeout:         cfg.RequestTimeout,
+		Logger:          logger,
+		Metrics:         authMetrics,
+		MetricsToken:    cfg.MetricsToken,
 	}
 
 	// ── Router ────────────────────────────────────────────────────────────────

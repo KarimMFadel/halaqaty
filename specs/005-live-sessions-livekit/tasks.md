@@ -33,19 +33,19 @@ F-005 implements audio-only ad-hoc sessions, presence, hand state, shared realti
 **Goal**: A teacher/supervisor starts one audio-only room and a member joins with only their own least-privilege connection.
 
 - [x] T013 [P] [US1] Write lifecycle, authorization, capacity, idempotent-start, and student-publish-denial tests in `backend/internal/sessions/session_service_test.go`.
-- [ ] T014 [P] [US1] Write start/join response, no-store header, error-envelope, credential-isolation, and response-safety contract tests in `backend/tests/contract/live_sessions_start_join_contract_test.go`.
-- [ ] T015 [P] [US1] Write concurrent start/join, cross-circle denial, stale membership, full room, and backend-session revocation integration tests in `backend/tests/integration/live_sessions_start_join_test.go`.
-- [ ] T016 [P] [US1] Write Arabic/RTL room loading, student listen-only, and start/join error widget tests in `mobile/test/widget/sessions/session_room_start_join_test.dart`.
+- [x] T014 [P] [US1] Write start/join response, no-store header, error-envelope, credential-isolation, and response-safety contract tests in `backend/tests/contract/live_sessions_start_join_contract_test.go`.
+- [x] T015 [P] [US1] Write concurrent start/join, cross-circle denial, stale membership, full room, and backend-session revocation integration tests in `backend/tests/integration/live_sessions_start_join_test.go`.
+- [x] T016 [P] [US1] Write Arabic/RTL room loading, student listen-only, and start/join error widget tests in `mobile/test/widget/sessions/session_room_start_join_test.dart`.
 - [x] T017 [US1] Implement session creation/start/join policy, current-device/session/membership checks, CAS transitions, capacity, and idempotent connection issuance in `backend/internal/sessions/session_service.go`.
 - [x] T018 [US1] Implement the typed audio-only LiveKit adapter with one-hour identity-specific connections, `CanPublishVideo=false`, Quran audio settings, and no recording path in `backend/internal/sessions/livekit/adapter.go` and `backend/internal/sessions/livekit/adapter_test.go`.
 - [x] T019 [US1] Implement signed LiveKit webhook verification and neutral duplicate-safe translation in `backend/internal/sessions/livekit/webhook.go` and `backend/internal/sessions/livekit/webhook_test.go`.
-- [ ] T020 [US1] Implement F-005 REST request validation, standard error mapping, no-store responses, and audit-safe handlers in `backend/internal/sessions/handler.go` and `backend/internal/sessions/handler_test.go`.
-- [ ] T021 [US1] Wire session handlers, auth/session middleware, request limits, deadlines, and signed webhook route in `backend/cmd/api/router.go` and `backend/cmd/api/router_test.go`.
-- [ ] T022 [US1] Add session API models and authenticated Dio calls that retain `MediaConnection` only in memory in `mobile/lib/features/sessions/data/session_api_client.dart` and `mobile/lib/features/sessions/domain/session_models.dart`.
-- [ ] T023 [US1] Define provider-neutral `MediaSession` and the sole LiveKit client adapter in `mobile/lib/features/sessions/application/media_session.dart` and `mobile/lib/features/sessions/data/livekit_media_session.dart`.
-- [ ] T024 [US1] Implement Riverpod start/join state, error boundary, and credential-safe connection lifecycle in `mobile/lib/features/sessions/application/session_room_controller.dart` and `mobile/test/features/sessions/application/session_room_controller_test.dart`.
-- [ ] T025 [US1] Implement Arabic-first session-room shell, participant loading state, audio state, and start/join actions in `mobile/lib/features/sessions/presentation/session_room_screen.dart` and `mobile/lib/features/sessions/presentation/session_ui_labels.dart`.
-- [ ] T026 [US1] Run focused backend and Flutter US1 suites, fixing only US1 failures in `backend/internal/sessions/`, `backend/tests/contract/live_sessions_start_join_contract_test.go`, `backend/tests/integration/live_sessions_start_join_test.go`, and `mobile/test/widget/sessions/session_room_start_join_test.dart`.
+- [x] T020 [US1] Implement F-005 REST request validation, standard error mapping, no-store responses, and audit-safe handlers in `backend/internal/sessions/handler.go` and `backend/internal/sessions/handler_test.go`.
+- [x] T021 [US1] Wire session handlers, auth/session middleware, request limits, deadlines, and signed webhook route in `backend/cmd/api/router.go` and `backend/cmd/api/router_test.go`.
+- [x] T022 [US1] Add session API models and authenticated Dio calls that retain `MediaConnection` only in memory in `mobile/lib/features/sessions/data/session_api_client.dart` and `mobile/lib/features/sessions/domain/session_models.dart`.
+- [x] T023 [US1] Define provider-neutral `MediaSession` and the sole LiveKit client adapter in `mobile/lib/features/sessions/application/media_session.dart` and `mobile/lib/features/sessions/data/livekit_media_session.dart`.
+- [x] T024 [US1] Implement Riverpod start/join state, error boundary, and credential-safe connection lifecycle in `mobile/lib/features/sessions/application/session_room_controller.dart` and `mobile/test/features/sessions/application/session_room_controller_test.dart`.
+- [x] T025 [US1] Implement Arabic-first session-room shell, participant loading state, audio state, and start/join actions in `mobile/lib/features/sessions/presentation/session_room_screen.dart` and `mobile/lib/features/sessions/presentation/session_ui_labels.dart`.
+- [x] T026 [US1] Run focused backend and Flutter US1 suites, fixing only US1 failures in `backend/internal/sessions/`, `backend/tests/contract/live_sessions_start_join_contract_test.go`, `backend/tests/integration/live_sessions_start_join_test.go`, and `mobile/test/widget/sessions/session_room_start_join_test.dart`.
 
 **Checkpoint**: Teacher/supervisor start and member join work independently with secure audio-only connections.
 

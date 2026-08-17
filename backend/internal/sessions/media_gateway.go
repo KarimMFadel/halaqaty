@@ -28,6 +28,8 @@ type SessionMediaGateway interface {
 	IssueConnection(ctx context.Context, roomRef MediaRoomRef, userID string, grants MediaGrants) (MediaConnection, error)
 	// MuteParticipant mutes the active audio of one connected participant.
 	MuteParticipant(ctx context.Context, roomRef MediaRoomRef, userID string) error
+	// UnmuteParticipant restores an existing publisher's audio only.
+	UnmuteParticipant(ctx context.Context, roomRef MediaRoomRef, userID string) error
 	// MuteAll mutes the active audio of every connected participant.
 	MuteAll(ctx context.Context, roomRef MediaRoomRef) error
 	// RemoveParticipant disconnects one participant from the room.

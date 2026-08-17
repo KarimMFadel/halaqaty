@@ -15,15 +15,14 @@ import (
 // *Repository: scheduled→active→ended CAS, capacity 50, lock gate, and
 // idempotent duplicate joins (FR-009, FR-016).
 type fakeStore struct {
-	mu         sync.Mutex
-	sessions   map[string]*Session
-	present    map[string]map[string]bool // sessionID -> userID -> present
-	removed    map[string]map[string]bool // sessionID -> userID -> durably removed
-	nextID     int
-	createErr  error
-	startErr   error
-	joinErr    error
-	ensureFail bool
+	mu        sync.Mutex
+	sessions  map[string]*Session
+	present   map[string]map[string]bool // sessionID -> userID -> present
+	removed   map[string]map[string]bool // sessionID -> userID -> durably removed
+	nextID    int
+	createErr error
+	startErr  error
+	joinErr   error
 }
 
 func newFakeStore() *fakeStore {
@@ -131,9 +130,6 @@ func (f *fakeStore) seedActive(s Session) {
 	defer f.mu.Unlock()
 	cp := s
 	f.sessions[s.ID] = &cp
-	if s.ParticipantCount > 0 {
-		// caller seeds present maps explicitly when needed
-	}
 }
 
 // markLeft releases one present participant without a Store method.

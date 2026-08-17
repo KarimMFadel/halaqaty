@@ -85,6 +85,7 @@ func (a *Adapter) CloseRoom(ctx context.Context, roomRef sessions.MediaRoomRef) 
 // (constitution §V): audio publishers are restricted to the microphone
 // source, and listen-only participants may not publish at all.
 func (a *Adapter) IssueConnection(_ context.Context, roomRef sessions.MediaRoomRef, userID string, grants sessions.MediaGrants) (sessions.MediaConnection, error) {
+	issuedAt := time.Now().UTC().Truncate(time.Second)
 	grant := &auth.VideoGrant{RoomJoin: true, Room: string(roomRef)}
 	grant.SetCanSubscribe(true)
 	if grants.CanPublishAudio {
@@ -104,7 +105,7 @@ func (a *Adapter) IssueConnection(_ context.Context, roomRef sessions.MediaRoomR
 	return sessions.MediaConnection{
 		Endpoint:   a.cfg.Endpoint,
 		Credential: sessions.MediaCredential(token),
-		ExpiresAt:  time.Now().Add(maxCredentialLifetime),
+		ExpiresAt:  issuedAt.Add(maxCredentialLifetime),
 	}, nil
 }
 

@@ -40,7 +40,7 @@ func signedWebhookRequest(t *testing.T, apiKey, apiSecret string, body string, w
 		t.Fatalf("build request: %v", err)
 	}
 	if withAuth {
-		req.Header.Set(http.CanonicalHeaderKey("Authorization"), token)
+		req.Header.Set("Authorization", token)
 	}
 	return req
 }
@@ -101,7 +101,7 @@ func TestVerifyWebhookRejectsTamperedBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}
-	req.Header.Set(http.CanonicalHeaderKey("Authorization"), token)
+	req.Header.Set("Authorization", token)
 	if _, err := verifier.Verify(req); err == nil {
 		t.Fatal("tampered body must fail the digest check")
 	}

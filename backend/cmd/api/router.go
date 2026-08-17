@@ -133,7 +133,7 @@ func (r *Router) registerRoutes() {
 		var profileGetHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageProfileHandlerNotConfigured, http.StatusInternalServerError)
 		})
-		var profilePutHandler http.Handler = profileGetHandler
+		profilePutHandler := profileGetHandler
 		if r.mw.ProfileHandler != nil {
 			profileGetHandler = http.HandlerFunc(r.mw.ProfileHandler.GetMe)
 			profilePutHandler = http.HandlerFunc(r.mw.ProfileHandler.UpdateMe)
@@ -217,8 +217,8 @@ func (r *Router) registerRoutes() {
 		var refreshInviteHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
 		})
-		var removeMemberHandler http.Handler = refreshInviteHandler
-		var archiveCircleHandler http.Handler = refreshInviteHandler
+		removeMemberHandler := refreshInviteHandler
+		archiveCircleHandler := refreshInviteHandler
 		var updateCircleHandler http.Handler = refreshInviteHandler
 		if rbacH != nil {
 			refreshInviteHandler = http.HandlerFunc(rbacH.RefreshInviteCode)

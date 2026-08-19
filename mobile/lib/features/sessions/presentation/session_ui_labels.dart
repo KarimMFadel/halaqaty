@@ -6,6 +6,10 @@ class SessionUiLabels {
   static const audioOnly = 'جلسة صوتية فقط';
   static const connected = 'تم الاتصال. الصوت متاح.';
   static const unableToConnect = 'تعذر الاتصال';
+  static const recoverableConnectionError = 'انقطع الاتصال مؤقتًا';
+  static const terminalConnectionError = 'انتهت صلاحية الوصول إلى الجلسة';
+  static const retry = 'إعادة المحاولة';
+  static const leave = 'مغادرة';
   static const start = 'بدء الجلسة';
   static const join = 'انضمام';
   static const loadingParticipants = 'جارٍ تحميل المشاركين...';

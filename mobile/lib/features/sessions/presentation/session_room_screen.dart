@@ -34,12 +34,30 @@ class SessionRoomScreen extends ConsumerWidget {
                 : 'Loading participants...'),
           if (state.status == SessionRoomStatus.error) ...[
             Text(
-                state.errorMessage ??
-                    (rtl
-                        ? SessionUiLabels.unableToConnect
-                        : 'Unable to connect'),
+                rtl
+                    ? (state.recovery == SessionRoomRecovery.terminal
+                        ? SessionUiLabels.terminalConnectionError
+                        : SessionUiLabels.unableToConnect)
+                    : (state.recovery == SessionRoomRecovery.terminal
+                        ? 'Session access has ended'
+                        : 'Connection was interrupted'),
                 style: TextStyle(color: Theme.of(context).colorScheme.error)),
             const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                if (state.recovery == SessionRoomRecovery.retryable)
+                  OutlinedButton(
+                    onPressed: controller.retry,
+                    child: Text(rtl ? SessionUiLabels.retry : 'Retry'),
+                  ),
+                FilledButton(
+                  onPressed: controller.leave,
+                  child: Text(rtl ? SessionUiLabels.leave : 'Leave'),
+                ),
+              ],
+            ),
           ],
           if (state.status == SessionRoomStatus.connected)
             Text(

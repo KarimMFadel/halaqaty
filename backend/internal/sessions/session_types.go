@@ -136,6 +136,9 @@ var (
 	ErrSessionFull = errors.New("session is full")
 	// ErrSessionLocked means the room lock blocks this new join.
 	ErrSessionLocked = errors.New("session is locked")
+	// ErrMediaUnavailable means the provider could not issue or manage media
+	// access; lifecycle state remains recoverable and authoritative.
+	ErrMediaUnavailable = errors.New("media provider unavailable")
 	// ErrParticipantRemoved means the participant is not eligible to join,
 	// reconnect, or act: they were removed, never joined, or are not
 	// currently present.

@@ -30,7 +30,11 @@ func newTestHandler(t *testing.T) (*Handler, *fakeStore) {
 		ID: hTestSessionUUID, CircleID: hTestCircleUUID, CreatedBy: us1Teacher,
 		Status: SessionStatusScheduled, MediaMode: MediaModeAudioOnly,
 	}
-	return NewHandler(NewService(store, gw, roles)), store
+	service, err := NewServiceWithRoomKey(store, gw, roles, []byte("test-room-key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return NewHandler(service), store
 }
 
 // doAs runs one principal's request through the handler.

@@ -324,7 +324,8 @@ sequenceDiagram
 ```
 
 The diagram shows the required safety boundary, not a distributed transaction.
-Room references are deterministic and gateway operations are idempotent. A
+Room references are deterministic, opaque, and non-guessable; the adapter uses
+a backend-keyed derivation rather than a literal session ID. Gateway operations are idempotent. A
 session becomes joinable only after the room is ready and the `active` transition
 commits. If the process crashes between provider and database operations, F-005's
 sessions-owned reconciler closes orphan rooms or repairs missing rooms. Ending a
@@ -1232,7 +1233,7 @@ sequenceDiagram
 
 ### 6.3 Media Room Security (MVP LiveKit)
 
-- Each session generates a unique opaque `media_room_ref` mapped to a LiveKit room by the MVP adapter
+- Each session generates a stable opaque, non-guessable `media_room_ref` mapped to a LiveKit room by the MVP adapter
 - Room names are not publicly guessable
 - Each participant needs a JWT from Go backend to join — no anonymous access
 - Teacher's JWT includes `RoomAdmin: true` (can mute, remove)

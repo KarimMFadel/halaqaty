@@ -33,7 +33,30 @@ func (f *fakeStore) EndSession(_ context.Context, sessionID string, reason EndRe
 }
 
 func (f *fakeStore) ReconnectPresence(_ context.Context, sessionID, userID string) (Session, error) {
-	return f.JoinSession(context.Background(), sessionID, userID)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	s, ok := f.sessions[sessionID]
+	if !ok {
+		return Session{}, ErrSessionNotFound
+	}
+	if f.removed[sessionID][userID] {
+		return Session{}, ErrParticipantRemoved
+	}
+	if f.present[sessionID][userID] {
+		return *s, nil
+	}
+	if _, hadPresence := f.present[sessionID][userID]; !hadPresence && s.IsLocked {
+		return Session{}, ErrSessionLocked
+	}
+	if s.ParticipantCount >= maxParticipants {
+		return Session{}, ErrSessionFull
+	}
+	if f.present[sessionID] == nil {
+		f.present[sessionID] = map[string]bool{}
+	}
+	f.present[sessionID][userID] = true
+	s.ParticipantCount++
+	return *s, nil
 }
 
 func (f *fakeStore) RemoveParticipant(_ context.Context, sessionID, userID string) (Session, error) {
@@ -166,8 +189,8 @@ func TestModeration_LockBlocksReconnectThenAllowsIt(t *testing.T) {
 	if _, err := svc.SetLock(context.Background(), us1Teacher, started.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := svc.JoinSession(context.Background(), us1Student, started.ID); !errors.Is(err, ErrSessionLocked) {
-		t.Fatalf("locked reconnect = %v, want ErrSessionLocked", err)
+	if _, _, err := svc.JoinSession(context.Background(), us1Student, started.ID); err != nil {
+		t.Fatalf("eligible locked reconnect: %v", err)
 	}
 	if _, err := svc.SetLock(context.Background(), us1Super, started.ID, false); err != nil {
 		t.Fatal(err)

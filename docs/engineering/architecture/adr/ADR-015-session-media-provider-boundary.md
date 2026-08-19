@@ -74,6 +74,7 @@ LiveKit remains the sole MVP session-media implementation.
 - Database/session state remains authoritative for lifecycle, membership,
   presence, removal, room lock, and publish entitlement. Provider state is
   reconciled to it after partial failure or duplicate webhook delivery.
+- The concrete recovery and reconciliation policy is frozen in ADR-017.
 
 The MVP gateway contains only the typed audio operations required by F-005. It has
 no video, camera, screen-share, recording, generic capability-map, or arbitrary

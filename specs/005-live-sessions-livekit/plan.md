@@ -53,7 +53,7 @@ Deliver F-005 as an audio-only, circle-scoped live-session foundation: ad-hoc li
 2. Implement the one injected LiveKit adapter with TLS endpoint configuration, Opus ≥48 kbps, disabled noise suppression/AGC/echo cancellation where supported, `CanPublishVideo=false`, recording disabled, and one-hour maximum credential lifetime.
 3. Keep a session non-joinable until room ensure succeeds and `active` plus `media_room_ref` is persisted; close orphan rooms on failure. Persist `ended` before close and retry cleanup idempotently.
 4. Verify signed LiveKit webhooks in the adapter, translate them to neutral events, and process duplicate presence events idempotently.
-5. Build generic realtime tickets, heartbeat, topic subscriptions, authorization revalidation, per-user connection limit, message rate limit, snapshots, and a sessions-owned reconciler for provider/database crash windows.
+5. Build generic realtime tickets, heartbeat, topic subscriptions, authorization revalidation, per-user connection limit, message rate limit, snapshots, and a sessions-owned reconciler for provider/database crash windows. ADR-017 fixes the shared session advisory lock, HMAC-derived opaque room reference, 30-second/25-candidate sweep, 3-second provider attempt, and recoverable `503` provider semantics.
 
 ## Phase 3 — Backend REST API
 

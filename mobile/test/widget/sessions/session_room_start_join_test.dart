@@ -28,7 +28,8 @@ void main() {
     await tester.tap(find.text('بدء الجلسة'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('start failed'), findsOneWidget);
+    expect(find.text('تعذر الاتصال'), findsOneWidget);
+    expect(find.textContaining('start failed'), findsNothing);
   });
 }
 

@@ -21,6 +21,17 @@ FROM sessions
 WHERE id = $1::uuid
 `
 
+const listRecoveryCandidatesQuery = `
+SELECT ` + sessionColumns + `
+FROM sessions
+WHERE status = $1
+ORDER BY updated_at, id
+LIMIT $2
+`
+
+const lockSessionAdvisoryQuery = `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`
+const tryLockSessionAdvisoryQuery = `SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0))`
+
 // lockSessionByIDQuery loads one session holding its row lock so join,
 // reconnect, leave, and removal decisions serialize per session.
 const lockSessionByIDQuery = `

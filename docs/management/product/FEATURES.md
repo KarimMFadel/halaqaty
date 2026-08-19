@@ -346,7 +346,7 @@ Step 1: Session Creation
        ↓
   Flutter → POST /api/v1/sessions/{id}/start → Go Backend
        ↓
-  Go Backend calls SessionMediaGateway → LiveKit MVP adapter creates room "{session_id}"
+  Go Backend calls SessionMediaGateway → LiveKit MVP adapter creates the stable opaque room derived from the session ID
        ↓
   Go Backend returns: { media_connection: { endpoint: "wss://...", credential: "opaque", expires_at: "..." } }
 

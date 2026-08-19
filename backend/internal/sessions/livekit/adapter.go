@@ -13,6 +13,7 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
 	"github.com/livekit/protocol/auth"
 	lkmodel "github.com/livekit/protocol/livekit"
+	"github.com/livekit/psrpc"
 )
 
 // maxCredentialLifetime is the one-hour maximum lifetime of every media
@@ -75,6 +76,9 @@ func (a *Adapter) EnsureRoom(ctx context.Context, roomRef sessions.MediaRoomRef,
 // CloseRoom closes the provider room and disconnects its participants.
 func (a *Adapter) CloseRoom(ctx context.Context, roomRef sessions.MediaRoomRef) error {
 	if _, err := a.rooms.DeleteRoom(ctx, &lkmodel.DeleteRoomRequest{Room: string(roomRef)}); err != nil {
+		if code, ok := psrpc.GetErrorCode(err); ok && code == psrpc.NotFound {
+			return nil
+		}
 		return fmt.Errorf("close media room: %w", err)
 	}
 	return nil

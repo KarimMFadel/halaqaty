@@ -59,6 +59,7 @@ type Hub struct {
 type hubClient struct {
 	conn   *websocket.Conn
 	userID string
+	token  string
 	topics map[string]struct{}
 	mu     sync.Mutex
 	window time.Time
@@ -95,7 +96,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	client := &hubClient{userID: ticket.UserID, topics: map[string]struct{}{}, window: time.Now()}
+	client := &hubClient{userID: ticket.UserID, token: r.URL.Query().Get("token"), topics: map[string]struct{}{}, window: time.Now()}
 	h.mu.Lock()
 	if h.userCounts[client.userID] >= maxConnectionsPerUser {
 		h.mu.Unlock()
@@ -148,20 +149,27 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		topic, err := ParseTopic(msg.Topic)
-		if err != nil || !h.authorized(r.Context(), ticket, client.userID, topic) {
+		// Tickets are intentionally short-lived. Revalidate before every
+		// subscription so a connection that outlives its handshake ticket cannot
+		// restore a topic with stale authorization after a transport reconnect.
+		freshTicket, ticketErr := h.tickets.Validate(client.token, client.userID)
+		if err != nil || ticketErr != nil || !h.authorized(r.Context(), freshTicket, client.userID, topic) {
 			writeRealtimeError(conn, realtimeErrorUnauthorized, "topic unauthorized")
 			continue
+		}
+		var snapshot map[string]any
+		if topic.Kind() == TopicSession && h.snapshot != nil {
+			snapshot, err = h.snapshot(r.Context(), client.userID, topic.ID())
+			if err != nil {
+				writeRealtimeError(conn, realtimeErrorSessionEnded, "session snapshot unavailable")
+				continue
+			}
 		}
 		client.mu.Lock()
 		client.topics[topic.String()] = struct{}{}
 		client.mu.Unlock()
 		_ = conn.WriteJSON(map[string]any{"type": realtimeTypeSubscribed, "topic": topic.String()})
-		if topic.Kind() == TopicSession && h.snapshot != nil {
-			snapshot, err := h.snapshot(r.Context(), client.userID, topic.ID())
-			if err != nil {
-				writeRealtimeError(conn, realtimeErrorSessionEnded, "session snapshot unavailable")
-				continue
-			}
+		if snapshot != nil {
 			_ = conn.WriteJSON(snapshot)
 		}
 	}

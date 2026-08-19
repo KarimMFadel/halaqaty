@@ -2,7 +2,7 @@
 
 > All frozen decisions for the Halaqaty MVP. Binding on all implementation. To change a decision, create an ADR in [`../../engineering/architecture/adr/`](../../engineering/architecture/adr/) and update this file with an entry in the Amendment Log.
 
-**Last updated:** 2026-08-16
+**Last updated:** 2026-08-19
 
 ---
 
@@ -70,6 +70,24 @@
 | OQ-044 | Automatic session-end attribution? | **Duration-limit and idle-timeout endings record their machine-readable reason and have no human `ended_by` attribution.** | Keeps automatic lifecycle actions truthful and auditable. |
 | OQ-045 | Realtime session-topic access? | **Circle members receive circle topics; session presence and hand topics require a successful authorized join.** | Limits participant-presence disclosure to people in the room. |
 | OQ-046 | Generic ticket scope? | **One ticket authorizes all currently eligible circle topics; session-topic access is added only after an authorized join and is revalidated by the hub.** | Keeps shared transport simple while enforcing session privacy. |
+| OQ-047 | Provider outage during recovery? | **Recoverable.** Start/join returns `503` with `ERR_MEDIA_UNAVAILABLE`, no credential, and no presence/count mutation. Flutter offers Arabic Retry/Leave; it never loops REST retries automatically. | Aligns the canonical REST contract and product journey; provider outage alone must not fabricate a terminal session end. |
+| OQ-048 | Media-room identity for crash recovery? | **Stable, opaque, non-guessable derivation from the session ID using a backend-only HMAC key.** The literal session ID is never used as a room name or public field. | ADR-015 and architecture require deterministic recovery while media-room names remain unguessable. |
+| OQ-049 | Reconciliation concurrency boundary? | **One session-scoped PostgreSQL advisory lock covers start, join/reconnect through credential issuance, end, and reconciliation.** Background reconciliation uses a try-lock and skips busy sessions. | Prevents a room close/ensure race from leaving an active session pointing at a closed room or ghost presence consuming capacity. |
+| OQ-050 | Reconciliation persistence and cadence? | **No recovery table or retry columns in MVP.** Sweep at startup and every 30 seconds; process at most 25 candidates per lifecycle state, with one 3-second provider attempt per candidate; failures retry on the next sweep. | Existing lifecycle, timestamps, and room reference are sufficient at MVP scale; bounded repeated idempotent work is simpler than an outbox. |
+| OQ-051 | End ordering and provider-close failure? | **Persist `ended` first and return the authoritative ended session.** Provider close is idempotent background cleanup; a close failure is redacted telemetry, not a failed end response. | Keeps lifecycle truth durable and makes retries safe under provider outages; allowed end reasons remain unchanged. |
+| OQ-052 | Client reconnect policy? | **WebSocket retries use 1s, 2s, and 4s backoff, then stop automatic retries and show “Tap to rejoin.”** Near-expiry means two minutes before expiry; authenticated start/join issues a fresh connection. | Provides bounded recovery without infinite loading while preserving the existing credential boundary. |
+
+### Recovery clarification record — 2026-08-19
+
+These decisions were frozen after a Spec-Kit consistency review of the F-005
+specification, plan, research, data model, feature-local and canonical REST/
+WebSocket contracts, ADR-015/016, the architecture reference, and the product
+journey. The review found four conflicts: provider outage was described as both
+terminal and retryable; the implementation generated random room references
+despite deterministic reconciliation; end cleanup could turn a committed end
+into an error; and the reconnect test did not reach the durable reconnect path.
+The decisions above resolve those conflicts without adding a recovery table,
+provider registry, job framework, or new lifecycle end reason.
 
 ---
 

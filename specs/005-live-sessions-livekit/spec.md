@@ -59,7 +59,7 @@ A participant sees understandable connection and error states and can recover fr
 
 1. **Given** a recoverable network interruption and a usable media credential, **When** connectivity returns, **Then** the client reconnects and reconciles authoritative session, participant, and hand state.
 2. **Given** a credential near expiry or expired, **When** recovery is needed, **Then** the client performs an authenticated start/join refresh rather than reusing the old credential.
-3. **Given** removal, an ended session, revoked identity, or provider unavailability, **When** recovery is attempted, **Then** the client stops retrying when the failure is terminal and presents a clear Arabic-first error state.
+3. **Given** removal, an ended session, or revoked identity, **When** recovery is attempted, **Then** the client stops retrying and presents a clear Arabic-first terminal error. **Given** provider unavailability, **Then** start/join returns `503 ERR_MEDIA_UNAVAILABLE` without a credential or presence mutation and the client presents bounded Retry/Leave actions.
 
 ## Edge Cases
 
@@ -67,7 +67,7 @@ A participant sees understandable connection and error states and can recover fr
 - Scheduled, ended, full, missing, archived-circle, unauthorized, or stale-membership requests never issue a media connection; a locked room permits only an eligible pre-lock participant to reconnect.
 - An ad-hoc session appears in circle session-card discovery while `scheduled` or `active`; only `active` sessions can be joined, and starting is an explicit teacher/supervisor action.
 - Duplicate start, join, end, webhook, reconnect, and hand-state deliveries converge to one durable result.
-- A provider timeout or partial create/close failure leaves the session non-joinable until reconciliation reaches a safe state; orphaned rooms are closed.
+- A provider timeout or partial create/close failure leaves the session non-joinable until reconciliation reaches a safe state; orphaned rooms are closed using the stable opaque room reference and the shared session lock.
 - A session ends at four hours, or after thirty minutes empty, and preserves history without retaining credentials or recording media.
 - Video publishing, screen sharing, recording, cross-circle joins, credential reuse, and student audio publishing outside a future F-003 reciter turn are rejected.
 
@@ -91,8 +91,8 @@ A participant sees understandable connection and error states and can recover fr
 - **FR-014**: Teachers and supervisors MUST have the same F-005 moderation rights: start/end, mute all, mute or unmute an existing audio publisher, remove a participant, and lock or unlock a room. Unmute MUST restore only an existing publish entitlement and MUST NOT grant a student publishing permission.
 - **FR-015**: An ended session MUST prevent new joins, disconnect participants, clear only approved transient presence/hand state, preserve durable history, and be persisted as ended before its room is closed. It MUST record `manual`, `duration_limit`, or `idle_timeout` as the end reason; automatic endings have no human `ended_by` attribution.
 - **FR-016**: Start, join, end, moderation, lock, presence/webhook processing, and hand commands MUST be safe under retries and duplicate delivery.
-- **FR-017**: A failed media-provider operation MUST return a non-success response and MUST NOT return a partial or null media connection.
-- **FR-018**: The system MUST reconcile database-to-provider create, close, permission, presence, duplicate-webhook, and process-crash windows without making a room joinable prematurely.
+- **FR-017**: A failed foreground media-provider operation MUST return `503 ERR_MEDIA_UNAVAILABLE`, MUST NOT return a partial or null media connection, and MUST NOT mutate presence or participant count.
+- **FR-018**: The system MUST reconcile database-to-provider create, close, permission, presence, duplicate-webhook, and process-crash windows using a stable opaque room reference, a shared session lock, startup/periodic bounded sweeps, and idempotent provider operations without making a room joinable prematurely.
 - **FR-019**: The backend MUST use a typed, audio-only sessions-owned media gateway and reciter-audio-control boundary; only `backend/internal/sessions/livekit/` may import LiveKit SDK/JWT/room/webhook types.
 - **FR-020**: The Flutter session state and UI MUST consume a provider-neutral `MediaSession`; only `mobile/lib/features/sessions/data/livekit_media_session.dart` may import `livekit_client`.
 - **FR-021**: The system MUST directly construct and inject the single LiveKit adapter and MUST NOT introduce provider selection, registries, flags, identifiers, multiple adapters, or generic capability maps.
@@ -101,6 +101,7 @@ A participant sees understandable connection and error states and can recover fr
 - **FR-024**: Public session data MUST include `media_mode`, with `audio_only` required for F-005 and `audio_video` reserved for a separately approved future feature.
 - **FR-025**: Sessions MUST use `actual_start` and `actual_end`; a dedicated `session_participant_presence` model MUST persist live presence and standalone hand state. F-006 owns the separate `session_attendance` attendance classification and override model.
 - **FR-026**: A room lock MUST prevent new joins while allowing a current eligible participant who joined before the lock to reconnect, provided they were not removed and the session remains active.
+- **FR-027**: The server MUST select join versus reconnect from durable presence; a provider failure before admission MUST leave presence and participant count unchanged. Once an end transition commits, the ended session response succeeds and provider close is retried asynchronously.
 
 ### Key Entities
 

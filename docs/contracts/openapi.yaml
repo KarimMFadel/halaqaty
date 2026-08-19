@@ -707,7 +707,7 @@ paths:
         '409':
           description: Session cannot be started from its current state, such as an ended session. Repeating start for an active session returns 200.
         '503':
-          description: Session media provider is temporarily unavailable
+          description: Session media provider is temporarily unavailable; return error code ERR_MEDIA_UNAVAILABLE without a credential or presence mutation
           content:
             application/json:
               schema:
@@ -752,7 +752,7 @@ paths:
         '409':
           description: Session is not active
         '503':
-          description: Session media provider is temporarily unavailable
+          description: Session media provider is temporarily unavailable; return error code ERR_MEDIA_UNAVAILABLE without a credential or presence mutation
           content:
             application/json:
               schema:
@@ -767,7 +767,7 @@ paths:
       - $ref: '#/components/parameters/SessionId'
     post:
       operationId: endSession
-      description: End a session (teacher or supervisor); automatic duration and idle endings are system-attributed.
+      description: End a session (teacher or supervisor); automatic duration and idle endings are system-attributed. Persist ended before provider close; committed end responses succeed while cleanup retries asynchronously.
       tags: [Sessions]
       summary: End a session (teacher or supervisor)
       responses:

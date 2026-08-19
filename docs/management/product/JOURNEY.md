@@ -310,8 +310,8 @@ Cross-Cutting: Offline Behavior
 2. Tap **"End Session"**.
 3. **System:**
    - `POST /api/v1/sessions/:id/end`
-   - Closes the session media room through the configured adapter (LiveKit in MVP; all participants disconnected)
-   - Session status → `ended`
+   - Persists session status → `ended` first, then closes the session media room through the configured adapter (LiveKit in MVP; all participants disconnected)
+   - A provider-close failure does not undo the committed end; background reconciliation retries it
    - All joined participants receive the metadata-only `session.ended` event with `end_reason`; general push delivery belongs to F-008.
 4. Teacher navigates to Session Summary screen (T-18).
 5. Students return to Circle view.
@@ -385,8 +385,8 @@ Cross-Cutting: Offline Behavior
 | Scenario | User-facing response |
 |---|---|
 | Firebase token expired (silent refresh fails) | Soft logout → login screen with "Your session expired, please sign in again." |
-| Session media service unreachable (LiveKit in MVP) | "Could not connect to the session. Check your network." + Retry button. No spinner loop. |
-| WebSocket disconnected mid-session | Reconnection attempt (3x backoff). Banner: "Reconnecting…" → "Reconnected." → if final failure: "Connection lost. Tap to rejoin." |
+| Session media service unreachable (LiveKit in MVP) | HTTP `503 ERR_MEDIA_UNAVAILABLE`; "Could not connect to the session. Check your network." + Retry and Leave buttons. No spinner loop or automatic REST retry. |
+| WebSocket disconnected mid-session | Reconnection attempts at 1s, 2s, and 4s. Banner: "Reconnecting…" → "Reconnected." → after final failure: "Connection lost. Tap to rejoin." |
 | API 500 / unexpected server error | Generic error toast: "Something went wrong. Please try again." Do not expose error details. |
 | API 4xx validation error | Inline field error where possible; toast for non-form contexts. |
 | Invite code expired | "This invite link has expired. Ask your teacher to share a new one." |

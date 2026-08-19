@@ -47,6 +47,13 @@ func (r *Repository) withTx(ctx context.Context, fn func(q querier) error) error
 	return nil
 }
 
+func lockSessionAdvisory(ctx context.Context, q querier, sessionID string) error {
+	if _, err := q.Exec(ctx, lockSessionAdvisoryQuery, sessionID); err != nil {
+		return fmt.Errorf("lock session advisory key: %w", err)
+	}
+	return nil
+}
+
 // scanSession scans the canonical session projection; pgx.ErrNoRows is
 // returned unwrapped so callers can map it to the domain error that matches
 // their operation.
@@ -197,14 +204,89 @@ func (r *Repository) CreateAdHocSession(ctx context.Context, circleID, createdBy
 // opaque media room reference (data-model invariant 2). A zero-row update is
 // mapped to the domain error matching the current state.
 func (r *Repository) StartSession(ctx context.Context, sessionID string, roomRef MediaRoomRef) (Session, error) {
-	started, err := scanSession(r.pool.QueryRow(ctx, startSessionQuery, sessionID, string(roomRef)))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Session{}, sessionStateError(ctx, r.pool, sessionID, "start session")
-	}
+	var started Session
+	err := r.withTx(ctx, func(q querier) error {
+		if err := lockSessionAdvisory(ctx, q, sessionID); err != nil {
+			return err
+		}
+		var err error
+		started, err = scanSession(q.QueryRow(ctx, startSessionQuery, sessionID, string(roomRef)))
+		if errors.Is(err, pgx.ErrNoRows) {
+			return sessionStateError(ctx, q, sessionID, "start session")
+		}
+		if err != nil {
+			return fmt.Errorf("start session: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return Session{}, fmt.Errorf("start session: %w", err)
+		return Session{}, err
 	}
 	return started, nil
+}
+
+// StartSessionWithConnection serializes room ensure, activation, credential
+// issuance, and starter admission under the session advisory lock. Provider
+// failures roll back every durable mutation; reconciliation handles any
+// deterministic provider orphan left by a rolled-back transaction.
+func (r *Repository) StartSessionWithConnection(ctx context.Context, sessionID, userID string, roomRef MediaRoomRef, grants MediaGrants, ensure func(context.Context, MediaRoomRef, MediaMode) error, issue func(context.Context, MediaRoomRef, MediaGrants) (MediaConnection, error)) (Session, MediaConnection, error) {
+	var started Session
+	var connection MediaConnection
+	err := r.withTx(ctx, func(q querier) error {
+		if err := lockSessionAdvisory(ctx, q, sessionID); err != nil {
+			return err
+		}
+		sess, err := scanSession(q.QueryRow(ctx, lockSessionByIDQuery, sessionID))
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrSessionNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("start session with connection: lock session: %w", err)
+		}
+		switch sess.Status {
+		case SessionStatusScheduled:
+			if err := ensure(ctx, roomRef, sess.MediaMode); err != nil {
+				return fmt.Errorf("start session with connection: %w", err)
+			}
+			started, err = scanSession(q.QueryRow(ctx, startSessionQuery, sessionID, string(roomRef)))
+			if err != nil {
+				return fmt.Errorf("start session with connection: activate session: %w", err)
+			}
+		case SessionStatusActive:
+			if sess.MediaRoomRef == "" {
+				return fmt.Errorf("start session with connection: active session has no media room reference")
+			}
+			started = sess
+		default:
+			return ErrSessionAlreadyEnded
+		}
+		facts, err := loadPresenceEligibility(ctx, q, sessionID, userID)
+		if err != nil {
+			return fmt.Errorf("start session with connection: load presence: %w", err)
+		}
+		if !facts.currentlyPresent() {
+			if facts.found && !facts.removed {
+				if started.ParticipantCount >= maxParticipants {
+					return ErrSessionFull
+				}
+			} else if err := validateAdmission(started); err != nil {
+				return err
+			}
+		}
+		connection, err = issue(ctx, started.MediaRoomRef, grants)
+		if err != nil {
+			return fmt.Errorf("start session with connection: %w", err)
+		}
+		if facts.currentlyPresent() {
+			return nil
+		}
+		started, err = admitIfCapacity(ctx, q, started, userID, facts)
+		return err
+	})
+	if err != nil {
+		return Session{}, MediaConnection{}, err
+	}
+	return started, connection, nil
 }
 
 // EndSession applies the active→ended compare-and-set with its durable end
@@ -214,6 +296,9 @@ func (r *Repository) StartSession(ctx context.Context, sessionID string, roomRef
 func (r *Repository) EndSession(ctx context.Context, sessionID string, reason EndReason) (Session, error) {
 	var ended Session
 	err := r.withTx(ctx, func(q querier) error {
+		if err := lockSessionAdvisory(ctx, q, sessionID); err != nil {
+			return err
+		}
 		s, err := scanSession(q.QueryRow(ctx, endSessionQuery, sessionID, string(reason)))
 		if errors.Is(err, pgx.ErrNoRows) {
 			return sessionStateError(ctx, q, sessionID, "end session")
@@ -257,6 +342,9 @@ func (r *Repository) SetLock(ctx context.Context, sessionID string, locked bool)
 func (r *Repository) JoinSession(ctx context.Context, sessionID, userID string) (Session, error) {
 	var joined Session
 	err := r.withTx(ctx, func(q querier) error {
+		if err := lockSessionAdvisory(ctx, q, sessionID); err != nil {
+			return err
+		}
 		sess, err := scanSession(q.QueryRow(ctx, lockSessionByIDQuery, sessionID))
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrSessionNotFound
@@ -289,6 +377,57 @@ func (r *Repository) JoinSession(ctx context.Context, sessionID, userID string) 
 	return joined, nil
 }
 
+// JoinSessionWithConnection performs admission and provider credential
+// issuance under one transaction-scoped session lock. The callback runs before
+// any presence/count mutation; a provider failure therefore rolls back the
+// transaction and cannot leave durable presence behind.
+func (r *Repository) JoinSessionWithConnection(ctx context.Context, sessionID, userID string, grants MediaGrants, issue func(context.Context, MediaRoomRef, MediaGrants) (MediaConnection, error)) (Session, MediaConnection, error) {
+	var joined Session
+	var connection MediaConnection
+	err := r.withTx(ctx, func(q querier) error {
+		if err := lockSessionAdvisory(ctx, q, sessionID); err != nil {
+			return err
+		}
+		sess, err := scanSession(q.QueryRow(ctx, lockSessionByIDQuery, sessionID))
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrSessionNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("join session with connection: lock session: %w", err)
+		}
+		if err := validateActive(sess); err != nil {
+			return err
+		}
+		facts, err := loadPresenceEligibility(ctx, q, sessionID, userID)
+		if err != nil {
+			return fmt.Errorf("join session with connection: load presence: %w", err)
+		}
+		if !facts.currentlyPresent() {
+			if facts.found && !facts.removed {
+				if sess.ParticipantCount >= maxParticipants {
+					return ErrSessionFull
+				}
+			} else if err := validateAdmission(sess); err != nil {
+				return err
+			}
+		}
+		connection, err = issue(ctx, sess.MediaRoomRef, grants)
+		if err != nil {
+			return fmt.Errorf("join session with connection: issue connection: %w", err)
+		}
+		if facts.currentlyPresent() {
+			joined = sess
+			return nil
+		}
+		joined, err = admitIfCapacity(ctx, q, sess, userID, facts)
+		return err
+	})
+	if err != nil {
+		return Session{}, MediaConnection{}, err
+	}
+	return joined, connection, nil
+}
+
 // ReconnectPresence restores a previously joined participant to currently
 // present. A reconnect for a currently-present participant is an idempotent
 // no-op even at capacity (FR-016). Unlike a join, a room lock still permits
@@ -298,6 +437,9 @@ func (r *Repository) JoinSession(ctx context.Context, sessionID, userID string) 
 func (r *Repository) ReconnectPresence(ctx context.Context, sessionID, userID string) (Session, error) {
 	var reconnected Session
 	err := r.withTx(ctx, func(q querier) error {
+		if err := lockSessionAdvisory(ctx, q, sessionID); err != nil {
+			return err
+		}
 		sess, err := scanSession(q.QueryRow(ctx, lockSessionByIDQuery, sessionID))
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrSessionNotFound
@@ -474,4 +616,46 @@ func (r *Repository) ListSessionParticipants(ctx context.Context, sessionID stri
 		return nil, fmt.Errorf("iterate session participants: %w", err)
 	}
 	return participants, nil
+}
+
+// ListRecoveryCandidates returns a bounded, deterministic page of sessions in
+// one lifecycle state. It intentionally returns only durable session data;
+// recovery attempt state is not persisted in MVP.
+func (r *Repository) ListRecoveryCandidates(ctx context.Context, status SessionStatus, limit int) ([]Session, error) {
+	if limit <= 0 {
+		return []Session{}, nil
+	}
+	rows, err := r.pool.Query(ctx, listRecoveryCandidatesQuery, string(status), limit)
+	if err != nil {
+		return nil, fmt.Errorf("list recovery candidates: %w", err)
+	}
+	defer rows.Close()
+	candidates := make([]Session, 0, limit)
+	for rows.Next() {
+		candidate, err := scanSession(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan recovery candidate: %w", err)
+		}
+		candidates = append(candidates, candidate)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate recovery candidates: %w", err)
+	}
+	return candidates, nil
+}
+
+// TrySessionLock executes fn while holding the session's transaction-scoped
+// advisory lock. Busy sessions are skipped without blocking the reconciler.
+func (r *Repository) TrySessionLock(ctx context.Context, sessionID string, fn func(context.Context) error) (bool, error) {
+	locked := false
+	err := r.withTx(ctx, func(q querier) error {
+		if err := q.QueryRow(ctx, tryLockSessionAdvisoryQuery, sessionID).Scan(&locked); err != nil {
+			return fmt.Errorf("try lock session advisory key: %w", err)
+		}
+		if !locked {
+			return nil
+		}
+		return fn(ctx)
+	})
+	return locked, err
 }

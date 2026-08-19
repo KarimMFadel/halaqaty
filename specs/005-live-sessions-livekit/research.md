@@ -38,3 +38,15 @@
 
 - **Decision**: Four-hour and idle timeout endings persist `duration_limit` or `idle_timeout` with no human attribution.
 - **Rationale**: Audit records must distinguish automatic lifecycle action from a moderator decision.
+
+## Decision 8: Recovery and reconciliation clarification (2026-08-19)
+
+- **Decision**: Use ADR-017's stable HMAC-derived room reference, shared
+  session advisory lock, bounded startup/30-second reconciler, recoverable
+  `503 ERR_MEDIA_UNAVAILABLE`, and end-before-close cleanup semantics.
+- **Rationale**: Spec-Kit review found and resolved conflicts between the F-005
+  specification, product journey, canonical contracts, ADR-015, and the current
+  implementation. The decision preserves PostgreSQL authority without adding
+  a recovery table or provider-selection machinery.
+- **Rejected**: Literal session-ID room names, random room names per retry,
+  infinite REST retries, provider-outage auto-ending, and close-before-end.

@@ -468,4 +468,4 @@ Sent when the server cannot process a client command.
 | `chat.message` | At-least-once | Client deduplicates by `message_id` |
 | `queue.your_turn` | At-least-once + FCM backup | Client shows notification once per `queue_entry_id` |
 
-> **Source of truth:** PostgreSQL is always the source of truth. On reconnection, clients re-fetch state via REST (`GET /api/v1/sessions/{id}/queue`) rather than relying solely on WebSocket events.
+> **Source of truth:** PostgreSQL is always the source of truth. On F-005 reconnection, clients obtain a fresh realtime ticket and re-fetch the authorized session participant snapshot; F-003 queue clients later re-fetch their queue operation rather than relying solely on WebSocket events.

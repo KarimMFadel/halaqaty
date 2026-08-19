@@ -24,4 +24,4 @@
 - `cmd.raise_hand` and `cmd.lower_hand` carry `session_id`; any active participant may issue them.
 - Events are at-least-once. Clients deduplicate by event ID when supplied, otherwise by `session_id`, type, affected user, and monotonic state version.
 - The client sends `ping` every 30 seconds; three missed pongs make the connection dead.
-- On reconnect, the client obtains a new ticket if required and retrieves the REST participant snapshot. Media reconnect uses the current connection only while it remains usable; otherwise it repeats authenticated start/join.
+- On reconnect, the client obtains a new ticket if required and retrieves the F-005 participant snapshot. Media reconnect uses the current connection only while it remains usable; otherwise it repeats authenticated start/join. WebSocket transport retries at 1s, 2s, and 4s, then stops automatic retries and offers “Tap to rejoin.”

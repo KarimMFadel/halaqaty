@@ -332,6 +332,8 @@ func sessionHTTPError(err error) (string, int) {
 		return httpconst.ErrorCodeConflict, http.StatusConflict
 	case errors.Is(err, ErrNotCircleMember), errors.Is(err, ErrModeratorRoleRequired), errors.Is(err, ErrParticipantRemoved):
 		return httpconst.ErrorCodeForbidden, http.StatusForbidden
+	case errors.Is(err, ErrMediaUnavailable):
+		return httpconst.ErrorCodeMediaUnavailable, http.StatusServiceUnavailable
 	default:
 		return httpconst.ErrorCodeInternalServerError, http.StatusInternalServerError
 	}

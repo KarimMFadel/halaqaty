@@ -12,20 +12,22 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/config"
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
 	lkmodel "github.com/livekit/protocol/livekit"
+	"github.com/livekit/psrpc"
 )
 
 // ---- test doubles -----------------------------------------------------------
 
 // fakeRoomClient records RoomService traffic without a LiveKit server.
 type fakeRoomClient struct {
-	created  []*lkmodel.CreateRoomRequest
-	deleted  []*lkmodel.DeleteRoomRequest
-	removed  []*lkmodel.RoomParticipantIdentity
-	muted    []*lkmodel.MuteRoomTrackRequest
-	listed   int
-	partics  []*lkmodel.ParticipantInfo
-	listErr  error
-	createE2 error
+	created   []*lkmodel.CreateRoomRequest
+	deleted   []*lkmodel.DeleteRoomRequest
+	removed   []*lkmodel.RoomParticipantIdentity
+	muted     []*lkmodel.MuteRoomTrackRequest
+	listed    int
+	partics   []*lkmodel.ParticipantInfo
+	listErr   error
+	createE2  error
+	deleteErr error
 }
 
 func (f *fakeRoomClient) CreateRoom(_ context.Context, req *lkmodel.CreateRoomRequest) (*lkmodel.Room, error) {
@@ -38,6 +40,9 @@ func (f *fakeRoomClient) CreateRoom(_ context.Context, req *lkmodel.CreateRoomRe
 
 func (f *fakeRoomClient) DeleteRoom(_ context.Context, req *lkmodel.DeleteRoomRequest) (*lkmodel.DeleteRoomResponse, error) {
 	f.deleted = append(f.deleted, req)
+	if f.deleteErr != nil {
+		return nil, f.deleteErr
+	}
 	return &lkmodel.DeleteRoomResponse{}, nil
 }
 
@@ -229,6 +234,14 @@ func TestCloseRoomDeletesProviderRoom(t *testing.T) {
 	}
 	if len(rooms.deleted) != 1 || rooms.deleted[0].Room != "room-ref-7" {
 		t.Fatalf("CloseRoom must delete the provider room, got %+v", rooms.deleted)
+	}
+}
+
+func TestCloseRoomTreatsMissingRoomAsSuccess(t *testing.T) {
+	rooms := &fakeRoomClient{deleteErr: psrpc.NewErrorf(psrpc.NotFound, "room not found")}
+	adapter, _ := newTestAdapter(rooms)
+	if err := adapter.CloseRoom(context.Background(), "already-gone"); err != nil {
+		t.Fatalf("CloseRoom missing room: %v", err)
 	}
 }
 

@@ -90,6 +90,7 @@ func main() {
 
 	var sessionHandler *sessions.Handler
 	var liveSessionService *sessions.Service
+	var sessionReconciler *sessions.Reconciler
 	ticketService := realtime.NewTicketService(rbacRepo)
 	realtimeHandler := realtime.NewHandler(ticketService)
 	var sessionTopicAuthorizer realtime.SessionTopicAuthorizer
@@ -99,6 +100,11 @@ func main() {
 		os.Exit(1)
 	}
 	if mediaCfg != (config.LiveKitConfig{}) {
+		roomKey, err := config.LoadSessionRoomKey()
+		if err != nil {
+			logger.Error("failed to load session room key", "error", err)
+			os.Exit(1)
+		}
 		policy, err := config.LoadAudioPolicy()
 		if err != nil {
 			logger.Error("failed to load LiveKit audio policy", "error", err)
@@ -108,7 +114,16 @@ func main() {
 		media := livekit.NewAdapter(mediaCfg, policy, rooms)
 		liveVerifier := livekit.NewHandlerVerifier(mediaCfg.APIKey, mediaCfg.APISecret)
 		liveSessionRepo := sessions.NewSessionRepository(pool)
-		liveSessionService = sessions.NewService(liveSessionRepo, media, rbacRepo)
+		liveSessionService, err = sessions.NewServiceWithRoomKey(liveSessionRepo, media, rbacRepo, roomKey)
+		if err != nil {
+			logger.Error("failed to initialize live session service", "error", err)
+			os.Exit(1)
+		}
+		sessionReconciler, err = sessions.NewReconciler(liveSessionRepo, media, roomKey)
+		if err != nil {
+			logger.Error("failed to initialize session reconciler", "error", err)
+			os.Exit(1)
+		}
 		sessionTopicAuthorizer = liveSessionService
 		sessionHandler = sessions.NewHandler(liveSessionService)
 		sessionHandler.SetWebhookVerifier(liveVerifier)
@@ -156,6 +171,15 @@ func main() {
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
+	reconcilerCtx, stopReconciler := context.WithCancel(context.Background())
+	defer stopReconciler()
+	if sessionReconciler != nil {
+		go func() {
+			if err := sessionReconciler.Run(reconcilerCtx); err != nil && !errors.Is(err, context.Canceled) {
+				logger.Error("session reconciliation stopped", "error", err)
+			}
+		}()
+	}
 
 	go func() {
 		logger.Info("server starting", "addr", srv.Addr)
@@ -167,6 +191,7 @@ func main() {
 
 	<-quit
 	logger.Info("shutting down...")
+	stopReconciler()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()

@@ -81,28 +81,42 @@ F-005 implements audio-only ad-hoc sessions, presence, hand state, shared realti
 
 **Goal**: Participants recover safely from transient loss and receive clear terminal outcomes.
 
-- [ ] T039 [P] [US3] Write backend reconnect/expiry/terminal-state/reconciler unit tests in `backend/internal/sessions/session_recovery_service_test.go` and `backend/internal/realtime/hub_reconnect_test.go`.
-- [ ] T040 [P] [US3] Write reconnect ticket/topic, terminal authorization, duplicate-presence, and provider-timeout contract tests in `backend/tests/contract/live_sessions_reconnect_contract_test.go`.
-- [ ] T041 [P] [US3] Write provider create/close crash-window, orphan cleanup, retry, and reconnect integration tests in `backend/tests/integration/live_sessions_recovery_test.go`.
-- [ ] T042 [P] [US3] Write Flutter recoverable/terminal reconnect, credential refresh, removal, end, lock, and Arabic error widget tests in `mobile/test/widget/sessions/session_room_reconnect_test.dart`.
-- [ ] T043 [US3] Implement bounded session reconciliation, provider create/close retry, orphan cleanup, and durable recovery-state queries in `backend/internal/sessions/reconciler.go` and `backend/internal/sessions/reconciler_test.go`.
-- [ ] T044 [US3] Extend realtime reconnect subscription restoration and snapshot rehydration in `backend/internal/realtime/hub.go` and `backend/internal/realtime/hub_reconnect_test.go`.
-- [ ] T045 [US3] Implement media reconnect/credential-refresh policy with explicit recoverable versus terminal states in `mobile/lib/features/sessions/application/session_room_controller.dart` and `mobile/lib/features/sessions/application/media_session.dart`.
-- [ ] T046 [US3] Add Arabic-first recover/retry/leave terminal UI states in `mobile/lib/features/sessions/presentation/session_room_screen.dart` and `mobile/lib/features/sessions/presentation/session_ui_labels.dart`.
-- [ ] T047 [US3] Run focused US3 backend/mobile suites, including one LiveKit adapter failure path and one expired-credential refresh path, in `backend/tests/integration/live_sessions_recovery_test.go` and `mobile/test/widget/sessions/session_room_reconnect_test.dart`.
+- [X] T039 [P] [US3] Write backend tests for server-selected join versus eligible pre-lock reconnect, fresh-ticket snapshot rehydration, expiry refresh, terminal authorization, and the ADR-017 reconciler seam in `backend/internal/sessions/session_recovery_service_test.go` and `backend/internal/realtime/hub_reconnect_test.go`.
+- [X] T040 [P] [US3] Write reconnect ticket/topic, terminal authorization, duplicate-presence, `503 ERR_MEDIA_UNAVAILABLE`, and no-presence-mutation contract tests in `backend/tests/contract/live_sessions_reconnect_contract_test.go`.
+- [X] T041 [P] [US3] Write provider create/close crash-window, stable-room orphan cleanup, advisory-lock race, bounded retry, missing-room idempotency, and reconnect integration tests in `backend/tests/integration/live_sessions_recovery_test.go`.
+- [X] T042 [P] [US3] Write Flutter recoverable/terminal reconnect, credential refresh, removal, end, lock, and Arabic error widget tests in `mobile/test/widget/sessions/session_room_reconnect_test.dart`.
+- [ ] T043 [US3] Implement ADR-017 reconciliation: HMAC-derived stable room references, shared session advisory locking, startup/30-second bounded sweeps (25 candidates per state), one 3-second provider attempt per candidate, scheduled/active/ended candidate queries, orphan cleanup, and no new recovery persistence in `backend/internal/sessions/reconciler.go` and `backend/internal/sessions/reconciler_test.go`.
+- [X] T044 [US3] Extend server-selected reconnect authorization, fresh-ticket subscription restoration, and authoritative snapshot rehydration in `backend/internal/realtime/hub.go` and `backend/internal/realtime/hub_reconnect_test.go`.
+- [X] T045 [US3] Implement media reconnect/credential-refresh policy with explicit recoverable versus terminal states in `mobile/lib/features/sessions/application/session_room_controller.dart` and `mobile/lib/features/sessions/application/media_session.dart`.
+- [X] T046 [US3] Add Arabic-first recover/retry/leave terminal UI states in `mobile/lib/features/sessions/presentation/session_room_screen.dart` and `mobile/lib/features/sessions/presentation/session_ui_labels.dart`.
+- [ ] T047 [US3] Run focused US3 backend/mobile suites, including `503 ERR_MEDIA_UNAVAILABLE` with no credential/presence mutation, one LiveKit adapter failure path, one expired-credential refresh path, and bounded Arabic Retry/Leave terminal flows, in `backend/tests/integration/live_sessions_recovery_test.go` and `mobile/test/widget/sessions/session_room_reconnect_test.dart`.
 
 **Checkpoint**: Recovery converges to authoritative state without duplicate presence or an infinite reconnect loop.
 
+### Phase 4 clarification gate — 2026-08-19
+
+ADR-017 and MVP decisions OQ-047–OQ-052 freeze provider outage as recoverable
+`503`, stable non-guessable room references, shared lifecycle locking, bounded
+30-second reconciliation, end-before-close cleanup, and server-selected
+reconnect. T039 must be rewritten to exercise the real durable reconnect path;
+the prior test-only fake that defined `ReconnectPresence` but called
+`JoinSession` is not completion evidence.
+
+T043 review evidence (2026-08-19): the reconciler seam and focused tests are
+present, but the task remains open until production wiring, post-lock rereads,
+provider-failure/no-presence mutation, and stable room-key configuration are
+closed.
+
 ## Phase 5: Cross-Cutting Verification and Review
 
-- [ ] T048 [P] [US1] Add dependency-boundary tests proving LiveKit imports/types and `livekit_*` fields are confined to `backend/internal/sessions/livekit/` and `mobile/lib/features/sessions/data/livekit_media_session.dart` in `backend/tests/contract/livekit_boundary_contract_test.go` and `mobile/test/features/sessions/livekit_boundary_test.dart`.
-- [ ] T049 [P] [US2] Add rate-limit, request-timeout, observability, and audit-redaction coverage in `backend/tests/integration/live_sessions_observability_test.go` and `backend/tests/integration/live_sessions_rate_limit_test.go`.
+- [X] T048 [P] [US1] Add dependency-boundary tests proving LiveKit imports/types and `livekit_*` fields are confined to `backend/internal/sessions/livekit/` and `mobile/lib/features/sessions/data/livekit_media_session.dart` in `backend/tests/contract/livekit_boundary_contract_test.go` and `mobile/test/features/sessions/livekit_boundary_test.dart`.
+- [X] T049 [P] [US2] Add rate-limit, request-timeout, observability, and audit-redaction coverage in `backend/tests/integration/live_sessions_observability_test.go` and `backend/tests/integration/live_sessions_rate_limit_test.go`.
 - [ ] T050 [US1] Apply the clean-code and test-guard checklists manually to all changed production and test paths; record any fixes in `specs/005-live-sessions-livekit/tasks.md`.
-- [ ] T051 [US1] Run contract lint and backend verification: `make api-lint` and `go test -short ./...` from `backend/`; record current outputs in `specs/005-live-sessions-livekit/validation-report.md`.
+- [X] T051 [US1] Run contract lint and backend verification: `make api-lint` and `go test -short ./...` from `backend/`; record current outputs in `specs/005-live-sessions-livekit/validation-report.md`.
 - [ ] T052 [US1] Run Flutter verification using the approved Docker workflow: `flutter test test`, `flutter test integration_test/`, `flutter analyze`, and `dart format --set-exit-if-changed .` from `mobile/`; record current outputs in `specs/005-live-sessions-livekit/validation-report.md`.
 - [ ] T053 [US1] Run repository lint and secret scans with `make lint` and `make secrets`; record current outputs in `specs/005-live-sessions-livekit/validation-report.md`.
 - [ ] T054 [US1] Submit the coherent F-005 diff, acceptance mapping, validation report, and ADR-015/ADR-016 constraints for Tech Lead review; obtain Karim’s mandatory manual review for auth, RBAC, media credentials, and webhook handling.
-- [ ] T055 [US1] Add contract coverage for circle session discovery, complete `400/401/403/404/409/422/429/500` error mappings, `Cache-Control: no-store` on media and realtime tickets, and standard error-envelope responses in `backend/tests/contract/live_sessions_contract_completeness_test.go`.
+- [ ] T055 [US1] Add contract coverage for circle session discovery, complete `400/401/403/404/409/422/429/500/503` error mappings, `ERR_MEDIA_UNAVAILABLE`, `Cache-Control: no-store` on media and realtime tickets, and standard error-envelope responses in `backend/tests/contract/live_sessions_contract_completeness_test.go`.
 - [ ] T056 [US1] Add signed LiveKit webhook contract/integration coverage for required signature headers, JSON body validation, invalid-signature rejection, duplicate delivery, rate limits, and credential-safe audit output in `backend/tests/contract/livekit_webhook_contract_test.go` and `backend/tests/integration/livekit_webhook_integration_test.go`.
 - [ ] T057 [US1] Add session-discovery API/mobile coverage proving the session-card list reuses the canonical circle sessions operation without introducing F-006 scheduling or attendance behavior in `backend/tests/contract/live_sessions_discovery_contract_test.go` and `mobile/test/widget/sessions/session_discovery_test.dart`.
 - [ ] T059 [US1] Reuse the canonical `GET /circles/{circleId}/sessions` operation for session-card discovery, wiring the existing backend list flow and Flutter session-card data source without adding scheduling or attendance behavior in `backend/internal/sessions/handler.go`, `backend/cmd/api/router.go`, and `mobile/lib/features/sessions/data/session_api_client.dart`.

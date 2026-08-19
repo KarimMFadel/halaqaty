@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
-	"github.com/google/uuid"
 )
 
 // Per-circle roles as stored in circle_members (F-002). Only teachers and
@@ -27,6 +26,9 @@ type Store interface {
 	// StartSession applies the scheduled→active compare-and-set and persists
 	// the opaque media room reference.
 	StartSession(ctx context.Context, sessionID string, roomRef MediaRoomRef) (Session, error)
+	// StartSessionWithConnection serializes room ensure, activation, credential
+	// issuance, and starter admission under the session lock.
+	StartSessionWithConnection(ctx context.Context, sessionID, userID string, roomRef MediaRoomRef, grants MediaGrants, ensure func(context.Context, MediaRoomRef, MediaMode) error, issue func(context.Context, MediaRoomRef, MediaGrants) (MediaConnection, error)) (Session, MediaConnection, error)
 	// JoinSession admits a participant under state, lock, and capacity gates.
 	JoinSession(ctx context.Context, sessionID, userID string) (Session, error)
 	// GetSession loads one session by identifier.
@@ -46,6 +48,7 @@ type Service struct {
 	store   Store
 	gateway SessionMediaGateway
 	roles   CircleRoleReader
+	roomKey []byte
 }
 
 type moderationStore interface {
@@ -58,10 +61,24 @@ type moderationStore interface {
 	ListSessionParticipants(context.Context, string) ([]ParticipantPresence, error)
 }
 
+type connectionAdmissionStore interface {
+	JoinSessionWithConnection(context.Context, string, string, MediaGrants, func(context.Context, MediaRoomRef, MediaGrants) (MediaConnection, error)) (Session, MediaConnection, error)
+}
+
 // NewService constructs the session service over its persistence, media
 // gateway, and circle-role ports.
 func NewService(store Store, gateway SessionMediaGateway, roles CircleRoleReader) *Service {
 	return &Service{store: store, gateway: gateway, roles: roles}
+}
+
+// NewServiceWithRoomKey constructs a service with the backend-only HMAC key
+// used to derive stable provider room references. NewService remains available
+// for existing callers that have not enabled the recovery configuration yet.
+func NewServiceWithRoomKey(store Store, gateway SessionMediaGateway, roles CircleRoleReader, roomKey []byte) (*Service, error) {
+	if len(roomKey) == 0 {
+		return nil, errors.New("session room key is required")
+	}
+	return &Service{store: store, gateway: gateway, roles: roles, roomKey: append([]byte(nil), roomKey...)}, nil
 }
 
 // moderatorRole reports whether the role may perform moderator lifecycle
@@ -103,7 +120,8 @@ func (s *Service) CreateAdHocSession(ctx context.Context, actorID, circleID stri
 // moderator their publish-capable connection. It is idempotent: restarting an
 // already-active session reuses the persisted room and issues a fresh
 // identity-specific connection; concurrent starters converge on exactly one
-// room, and orphan rooms lost to a start race are closed.
+// room. ADR-017 reconciliation cleans any deterministic orphan left by a
+// rolled-back provider operation.
 func (s *Service) StartSession(ctx context.Context, actorID, sessionID string) (Session, MediaConnection, error) {
 	sess, err := s.store.GetSession(ctx, sessionID)
 	if err != nil {
@@ -115,48 +133,33 @@ func (s *Service) StartSession(ctx context.Context, actorID, sessionID string) (
 
 	roomRef := sess.MediaRoomRef
 	if sess.Status == SessionStatusScheduled {
-		candidate := MediaRoomRef(uuid.NewString())
-		if err := s.gateway.EnsureRoom(ctx, candidate, sess.MediaMode); err != nil {
-			return Session{}, MediaConnection{}, fmt.Errorf("ensure media room: %w", err)
+		if len(s.roomKey) == 0 {
+			return Session{}, MediaConnection{}, errors.New("session room key is required")
 		}
-		started, err := s.store.StartSession(ctx, sessionID, candidate)
-		switch {
-		case err == nil:
-			sess, roomRef = started, candidate
-		case errors.Is(err, ErrSessionAlreadyActive):
-			// Lost the start race: close the orphan room and converge on the
-			// persisted one.
-			if err := s.gateway.CloseRoom(ctx, candidate); err != nil {
-				return Session{}, MediaConnection{}, fmt.Errorf("close orphan media room: %w", err)
-			}
-			current, err := s.store.GetSession(ctx, sessionID)
-			if err != nil {
-				return Session{}, MediaConnection{}, err
-			}
-			if current.Status != SessionStatusActive || current.MediaRoomRef == "" {
-				return Session{}, MediaConnection{}, fmt.Errorf("start session: %w", err)
-			}
-			sess, roomRef = current, current.MediaRoomRef
-		default:
-			// Terminal state or infrastructure failure: the candidate room is
-			// an orphan here too.
-			_ = s.gateway.CloseRoom(ctx, candidate)
-			return Session{}, MediaConnection{}, err
+		candidate, err := StableMediaRoomRef(sessionID, s.roomKey)
+		if err != nil {
+			return Session{}, MediaConnection{}, fmt.Errorf("derive media room reference: %w", err)
 		}
+		roomRef = candidate
 	} else if sess.Status != SessionStatusActive {
 		return Session{}, MediaConnection{}, ErrSessionAlreadyEnded
 	}
-
-	// Admit the starter as a present participant; idempotent on restart.
-	joined, err := s.store.JoinSession(ctx, sessionID, actorID)
+	started, conn, err := s.store.StartSessionWithConnection(ctx, sessionID, actorID, roomRef, MediaGrants{CanPublishAudio: true}, func(ensureCtx context.Context, candidate MediaRoomRef, mode MediaMode) error {
+		if err := s.gateway.EnsureRoom(ensureCtx, candidate, mode); err != nil {
+			return fmt.Errorf("ensure media room: %w: %v", ErrMediaUnavailable, err)
+		}
+		return nil
+	}, func(issueCtx context.Context, persistedRoomRef MediaRoomRef, grants MediaGrants) (MediaConnection, error) {
+		connection, err := s.gateway.IssueConnection(issueCtx, persistedRoomRef, actorID, grants)
+		if err != nil {
+			return MediaConnection{}, fmt.Errorf("issue connection: %w: %v", ErrMediaUnavailable, err)
+		}
+		return connection, nil
+	})
 	if err != nil {
-		return Session{}, MediaConnection{}, fmt.Errorf("start session: admit starter: %w", err)
+		return Session{}, MediaConnection{}, fmt.Errorf("start session: %w", err)
 	}
-	conn, err := s.gateway.IssueConnection(ctx, roomRef, actorID, MediaGrants{CanPublishAudio: true})
-	if err != nil {
-		return Session{}, MediaConnection{}, fmt.Errorf("start session: issue connection: %w", err)
-	}
-	return joined, conn, nil
+	return started, conn, nil
 }
 
 // JoinSession admits any active circle member to an active session and issues
@@ -171,13 +174,38 @@ func (s *Service) JoinSession(ctx context.Context, actorID, sessionID string) (S
 	if err != nil {
 		return Session{}, MediaConnection{}, err
 	}
+	if admission, ok := s.store.(connectionAdmissionStore); ok {
+		return admission.JoinSessionWithConnection(ctx, sessionID, actorID, MediaGrants{CanPublishAudio: moderatorRole(role)}, func(issueCtx context.Context, roomRef MediaRoomRef, grants MediaGrants) (MediaConnection, error) {
+			conn, err := s.gateway.IssueConnection(issueCtx, roomRef, actorID, grants)
+			if err != nil {
+				return MediaConnection{}, fmt.Errorf("%w: %v", ErrMediaUnavailable, err)
+			}
+			return conn, nil
+		})
+	}
 	joined, err := s.store.JoinSession(ctx, sessionID, actorID)
+	if errors.Is(err, ErrSessionLocked) {
+		reconnectStore, ok := s.store.(interface {
+			ReconnectPresence(context.Context, string, string) (Session, error)
+		})
+		if !ok {
+			return Session{}, MediaConnection{}, err
+		}
+		// Durable presence decides whether this is a first join or an eligible
+		// pre-lock reconnect; clients never select the path.
+		joined, err = reconnectStore.ReconnectPresence(ctx, sessionID, actorID)
+	}
 	if err != nil {
 		return Session{}, MediaConnection{}, err
 	}
 	conn, err := s.gateway.IssueConnection(ctx, joined.MediaRoomRef, actorID, MediaGrants{CanPublishAudio: moderatorRole(role)})
 	if err != nil {
-		return Session{}, MediaConnection{}, fmt.Errorf("join session: issue connection: %w", err)
+		if leaver, ok := s.store.(interface {
+			LeaveSession(context.Context, string, string) (Session, error)
+		}); ok {
+			_, _ = leaver.LeaveSession(ctx, sessionID, actorID)
+		}
+		return Session{}, MediaConnection{}, fmt.Errorf("join session: issue connection: %w: %v", ErrMediaUnavailable, err)
 	}
 	return joined, conn, nil
 }
@@ -225,9 +253,9 @@ func (s *Service) EndSession(ctx context.Context, actorID, sessionID string, rea
 		return Session{}, err
 	}
 	if sess.MediaRoomRef != "" {
-		if err := s.gateway.CloseRoom(ctx, sess.MediaRoomRef); err != nil {
-			return Session{}, fmt.Errorf("end session: close media room: %w", err)
-		}
+		// The ended transition is authoritative. Cleanup is idempotently retried
+		// by the reconciler, so a provider close failure must not undo success.
+		_ = s.gateway.CloseRoom(ctx, sess.MediaRoomRef)
 	}
 	return ended, nil
 }

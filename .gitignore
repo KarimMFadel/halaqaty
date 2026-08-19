@@ -16,6 +16,9 @@ lib/generated_plugin_registrant.dart
 
 # Go
 .gocache/
+backend/.codex-go-cache*
+.go-cache-*
+
 # Binaries
 *.exe
 *.exe~

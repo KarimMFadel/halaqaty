@@ -50,7 +50,7 @@ paths:
       tags: [Sessions]
       operationId: startSession
       summary: Start an eligible session and issue the caller connection
-      description: Idempotently ensures one audio-only room and returns only the caller's no-store media connection.
+      description: Idempotently ensures one audio-only room and returns only the caller's no-store media connection. Provider unavailability returns 503 ERR_MEDIA_UNAVAILABLE without a credential or presence mutation.
       parameters: [{ $ref: '#/components/parameters/SessionId' }]
       responses:
         '200': { $ref: '#/components/responses/SessionConnectionResponse' }
@@ -61,13 +61,14 @@ paths:
         '409': { $ref: '#/components/responses/Error' }
         '422': { $ref: '#/components/responses/Error' }
         '429': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
   /sessions/{sessionId}/join:
     post:
       tags: [Sessions]
       operationId: joinSession
       summary: Join an active eligible session and issue the caller connection
-      description: Validates current membership, capacity, lock, removal, and state before issuing a private connection.
+      description: Validates current membership, capacity, lock, removal, and durable join-versus-reconnect state before issuing a private connection. Provider unavailability returns 503 ERR_MEDIA_UNAVAILABLE without a credential or presence mutation.
       parameters: [{ $ref: '#/components/parameters/SessionId' }]
       responses:
         '200': { $ref: '#/components/responses/SessionConnectionResponse' }
@@ -78,13 +79,14 @@ paths:
         '409': { $ref: '#/components/responses/Error' }
         '422': { $ref: '#/components/responses/Error' }
         '429': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
   /sessions/{sessionId}/end:
     post:
       tags: [Sessions]
       operationId: endSession
       summary: End an active session (teacher or supervisor)
-      description: Persists an ended session before idempotently disconnecting participants and closing its media room.
+      description: Persists an ended session before idempotently disconnecting participants and closing its media room. The committed ended response succeeds even when provider close is deferred to reconciliation.
       parameters: [{ $ref: '#/components/parameters/SessionId' }]
       responses:
         '200': { $ref: '#/components/responses/SessionResponse' }

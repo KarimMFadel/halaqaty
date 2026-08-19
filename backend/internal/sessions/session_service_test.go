@@ -78,6 +78,43 @@ func (f *fakeStore) StartSession(_ context.Context, sessionID string, roomRef Me
 	return *s, nil
 }
 
+func (f *fakeStore) StartSessionWithConnection(ctx context.Context, sessionID, userID string, roomRef MediaRoomRef, grants MediaGrants, ensure func(context.Context, MediaRoomRef, MediaMode) error, issue func(context.Context, MediaRoomRef, MediaGrants) (MediaConnection, error)) (Session, MediaConnection, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	s, ok := f.sessions[sessionID]
+	if !ok {
+		return Session{}, MediaConnection{}, ErrSessionNotFound
+	}
+	if s.Status == SessionStatusEnded {
+		return Session{}, MediaConnection{}, ErrSessionAlreadyEnded
+	}
+	started := *s
+	if started.Status == SessionStatusScheduled {
+		if err := ensure(ctx, roomRef, started.MediaMode); err != nil {
+			return Session{}, MediaConnection{}, err
+		}
+		started.Status = SessionStatusActive
+		started.MediaRoomRef = roomRef
+		now := time.Now()
+		started.ActualStart = &now
+		started.UpdatedAt = now
+	}
+	conn, err := issue(ctx, started.MediaRoomRef, grants)
+	if err != nil {
+		return Session{}, MediaConnection{}, err
+	}
+	*s = started
+	if f.present[sessionID] == nil {
+		f.present[sessionID] = map[string]bool{}
+	}
+	if !f.present[sessionID][userID] {
+		f.present[sessionID][userID] = true
+		s.ParticipantCount++
+	}
+	return *s, conn, nil
+}
+
 func (f *fakeStore) JoinSession(_ context.Context, sessionID, userID string) (Session, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -156,6 +193,8 @@ type fakeGateway struct {
 	unmuted     []string
 	muteAll     int
 	removed     []string
+	ensureStart chan struct{}
+	ensureWait  chan struct{}
 }
 
 type issuedCall struct {
@@ -165,6 +204,10 @@ type issuedCall struct {
 }
 
 func (f *fakeGateway) EnsureRoom(_ context.Context, roomRef MediaRoomRef, _ MediaMode) error {
+	if f.ensureStart != nil {
+		f.ensureStart <- struct{}{}
+		<-f.ensureWait
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.ensureCount++
@@ -240,7 +283,8 @@ func newUS1Service() (*Service, *fakeStore, *fakeGateway, *fakeRoles) {
 	store := newFakeStore()
 	gw := &fakeGateway{}
 	roles := &fakeRoles{roles: map[string]map[string]string{}}
-	return NewService(store, gw, roles), store, gw, roles
+	service, _ := NewServiceWithRoomKey(store, gw, roles, []byte("test-room-key"))
+	return service, store, gw, roles
 }
 
 const (
@@ -386,6 +430,66 @@ func TestStartSessionEnsureRoomFailureLeavesScheduled(t *testing.T) {
 	}
 	if len(gw.issued) != 0 {
 		t.Fatalf("no connection may be issued after ensure failure, got %d", len(gw.issued))
+	}
+}
+
+func TestStartSessionIssueFailureDoesNotAdmitStarter(t *testing.T) {
+	svc, store, gw, roles := newUS1Service()
+	seedUS1Roles(roles)
+	created, err := svc.CreateAdHocSession(context.Background(), us1Teacher, us1CircleID)
+	if err != nil {
+		t.Fatalf("CreateAdHocSession: %v", err)
+	}
+	gw.issueErr = errors.New("provider unavailable")
+	if _, _, err := svc.StartSession(context.Background(), us1Teacher, created.ID); err == nil {
+		t.Fatal("StartSession must fail when the provider cannot issue a credential")
+	}
+	after, err := store.GetSession(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if after.Status != SessionStatusScheduled || after.MediaRoomRef != "" || after.ParticipantCount != 0 {
+		t.Fatalf("provider failure mutated session: status=%q room=%q count=%d", after.Status, after.MediaRoomRef, after.ParticipantCount)
+	}
+	if store.present[created.ID][us1Teacher] {
+		t.Fatal("provider failure admitted the starter")
+	}
+}
+
+func TestStartSessionHoldsLockAcrossRoomEnsureAndStarterAdmission(t *testing.T) {
+	svc, _, gw, roles := newUS1Service()
+	seedUS1Roles(roles)
+	created, err := svc.CreateAdHocSession(context.Background(), us1Teacher, us1CircleID)
+	if err != nil {
+		t.Fatalf("CreateAdHocSession: %v", err)
+	}
+	gw.ensureStart = make(chan struct{}, 1)
+	gw.ensureWait = make(chan struct{})
+
+	startDone := make(chan error, 1)
+	go func() {
+		_, _, err := svc.StartSession(context.Background(), us1Teacher, created.ID)
+		startDone <- err
+	}()
+	<-gw.ensureStart
+
+	joinDone := make(chan error, 1)
+	go func() {
+		_, _, err := svc.JoinSession(context.Background(), us1Student, created.ID)
+		joinDone <- err
+	}()
+	select {
+	case err := <-joinDone:
+		t.Fatalf("join completed while start was ensuring its room: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(gw.ensureWait)
+	if err := <-startDone; err != nil {
+		t.Fatalf("StartSession: %v", err)
+	}
+	if err := <-joinDone; err != nil {
+		t.Fatalf("JoinSession: %v", err)
 	}
 }
 

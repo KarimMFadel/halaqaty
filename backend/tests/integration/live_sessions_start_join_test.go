@@ -21,11 +21,17 @@ import (
 // integGateway is a fake SessionMediaGateway that records calls and returns
 // deterministic connections for integration tests.
 type integGateway struct {
-	mu     sync.Mutex
-	issued int
+	mu          sync.Mutex
+	issued      int
+	ensureStart chan struct{}
+	ensureWait  chan struct{}
 }
 
 func (g *integGateway) EnsureRoom(_ context.Context, _ sessions.MediaRoomRef, _ sessions.MediaMode) error {
+	if g.ensureStart != nil {
+		g.ensureStart <- struct{}{}
+		<-g.ensureWait
+	}
 	return nil
 }
 func (g *integGateway) CloseRoom(_ context.Context, _ sessions.MediaRoomRef) error { return nil }
@@ -161,7 +167,10 @@ func setupSessionIntegEnv(t *testing.T) *sessionIntegEnv {
 	repo := sessions.NewSessionRepository(pool)
 	gw := &integGateway{}
 	roles := &integRoles{pool: pool}
-	svc := sessions.NewService(repo, gw, roles)
+	svc, err := sessions.NewServiceWithRoomKey(repo, gw, roles, []byte("integration-room-key"))
+	if err != nil {
+		t.Fatalf("create session service: %v", err)
+	}
 
 	return &sessionIntegEnv{
 		pool:     pool,
@@ -349,6 +358,50 @@ func TestStartJoinIntegration_ConcurrentStartConvergesToOneRoom(t *testing.T) {
 	}
 	if persisted.MediaRoomRef != persistedRef {
 		t.Fatalf("persisted ref %q != converged ref %q", persisted.MediaRoomRef, persistedRef)
+	}
+}
+
+func TestStartJoinIntegration_StartLockCoversRoomEnsureAndAdmission(t *testing.T) {
+	env := setupSessionIntegEnv(t)
+	ctx := context.Background()
+	created, err := env.svc.CreateAdHocSession(ctx, env.userIDs["teacher"], env.circleID)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	env.gw.ensureStart = make(chan struct{}, 1)
+	env.gw.ensureWait = make(chan struct{})
+
+	startDone := make(chan error, 1)
+	go func() {
+		_, _, err := env.svc.StartSession(ctx, env.userIDs["teacher"], created.ID)
+		startDone <- err
+	}()
+	<-env.gw.ensureStart
+
+	joinDone := make(chan error, 1)
+	go func() {
+		_, _, err := env.svc.JoinSession(ctx, env.userIDs["student"], created.ID)
+		joinDone <- err
+	}()
+	select {
+	case err := <-joinDone:
+		t.Fatalf("join completed while start was ensuring its room: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(env.gw.ensureWait)
+	if err := <-startDone; err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if err := <-joinDone; err != nil {
+		t.Fatalf("join: %v", err)
+	}
+	stored, err := env.repo.GetSession(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("load session: %v", err)
+	}
+	if stored.Status != sessions.SessionStatusActive || stored.ParticipantCount != 2 {
+		t.Fatalf("stored session after serialized start/join = status %q count %d, want active and 2", stored.Status, stored.ParticipantCount)
 	}
 }
 

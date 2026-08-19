@@ -66,6 +66,43 @@ func (s *sessionStoreStub) StartSession(_ context.Context, sessionID string, roo
 	return *sess, nil
 }
 
+func (s *sessionStoreStub) StartSessionWithConnection(ctx context.Context, sessionID, userID string, roomRef sessions.MediaRoomRef, grants sessions.MediaGrants, ensure func(context.Context, sessions.MediaRoomRef, sessions.MediaMode) error, issue func(context.Context, sessions.MediaRoomRef, sessions.MediaGrants) (sessions.MediaConnection, error)) (sessions.Session, sessions.MediaConnection, error) {
+	sess, ok := s.sessions[sessionID]
+	if !ok {
+		return sessions.Session{}, sessions.MediaConnection{}, sessions.ErrSessionNotFound
+	}
+	if sess.Status == sessions.SessionStatusEnded {
+		return sessions.Session{}, sessions.MediaConnection{}, sessions.ErrSessionAlreadyEnded
+	}
+	started := *sess
+	if started.Status == sessions.SessionStatusScheduled {
+		if err := ensure(ctx, roomRef, started.MediaMode); err != nil {
+			return sessions.Session{}, sessions.MediaConnection{}, err
+		}
+		started.Status = sessions.SessionStatusActive
+		started.MediaRoomRef = roomRef
+		now := time.Now()
+		started.ActualStart = &now
+		started.UpdatedAt = now
+	}
+	connection, err := issue(ctx, started.MediaRoomRef, grants)
+	if err != nil {
+		return sessions.Session{}, sessions.MediaConnection{}, err
+	}
+	before := *sess
+	wasPresent := s.present[sessionID] != nil && s.present[sessionID][userID]
+	*sess = started
+	joined, err := s.JoinSession(ctx, sessionID, userID)
+	if err != nil {
+		*sess = before
+		if s.present[sessionID] != nil {
+			s.present[sessionID][userID] = wasPresent
+		}
+		return sessions.Session{}, sessions.MediaConnection{}, err
+	}
+	return joined, connection, nil
+}
+
 func (s *sessionStoreStub) JoinSession(_ context.Context, sessionID, userID string) (sessions.Session, error) {
 	sess, ok := s.sessions[sessionID]
 	if !ok {
@@ -101,6 +138,20 @@ func (s *sessionStoreStub) GetSession(_ context.Context, sessionID string) (sess
 	sess, ok := s.sessions[sessionID]
 	if !ok {
 		return sessions.Session{}, sessions.ErrSessionNotFound
+	}
+	return *sess, nil
+}
+
+func (s *sessionStoreStub) LeaveSession(_ context.Context, sessionID, userID string) (sessions.Session, error) {
+	sess, ok := s.sessions[sessionID]
+	if !ok {
+		return sessions.Session{}, sessions.ErrSessionNotFound
+	}
+	if s.present[sessionID] != nil && s.present[sessionID][userID] {
+		s.present[sessionID][userID] = false
+		if sess.ParticipantCount > 0 {
+			sess.ParticipantCount--
+		}
 	}
 	return *sess, nil
 }
@@ -277,7 +328,15 @@ func newSessionFixture() (*sessionStoreStub, *sessionGatewayStub, *sessionRoleSt
 	roles := &sessionRoleStub{roles: map[string]map[string]string{
 		scCircleID: {scTeacher: "teacher", scSuper: "supervisor", scStudent: "student"},
 	}}
-	return store, gw, roles, sessions.NewService(store, gw, roles)
+	return store, gw, roles, newLiveSessionContractService(store, gw, roles)
+}
+
+func newLiveSessionContractService(store sessions.Store, gateway sessions.SessionMediaGateway, roles sessions.CircleRoleReader) *sessions.Service {
+	service, err := sessions.NewServiceWithRoomKey(store, gateway, roles, []byte("contract-room-key"))
+	if err != nil {
+		panic(err)
+	}
+	return service
 }
 
 func buildSessionRoute(store *sessionStoreStub, gw *sessionGatewayStub, roles *sessionRoleStub, svc *sessions.Service) http.Handler {

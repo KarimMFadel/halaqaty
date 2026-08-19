@@ -8,6 +8,9 @@ import 'package:halaqaty_mobile/features/sessions/data/session_api_client.dart';
 
 enum SessionRoomStatus { idle, loading, connected, error, ended }
 
+/// Recovery affordance exposed to the room UI after a failed connection.
+enum SessionRoomRecovery { none, retryable, terminal }
+
 class SessionRoomState {
   const SessionRoomState(
       {this.status = SessionRoomStatus.idle,
@@ -16,7 +19,8 @@ class SessionRoomState {
       this.participants = const [],
       this.isLocked = false,
       this.isModerator = false,
-      this.actionErrorMessage});
+      this.actionErrorMessage,
+      this.recovery = SessionRoomRecovery.none});
   final SessionRoomStatus status;
   final SessionConnection? connection;
   final String? errorMessage;
@@ -24,6 +28,7 @@ class SessionRoomState {
   final bool isLocked;
   final bool isModerator;
   final String? actionErrorMessage;
+  final SessionRoomRecovery recovery;
 
   SessionRoomState copyWith(
           {SessionRoomStatus? status,
@@ -34,7 +39,8 @@ class SessionRoomState {
           bool? isLocked,
           bool? isModerator,
           String? actionErrorMessage,
-          bool clearActionError = false}) =>
+          bool clearActionError = false,
+          SessionRoomRecovery? recovery}) =>
       SessionRoomState(
         status: status ?? this.status,
         connection: connection ?? this.connection,
@@ -45,6 +51,7 @@ class SessionRoomState {
         actionErrorMessage: clearActionError
             ? null
             : (actionErrorMessage ?? this.actionErrorMessage),
+        recovery: recovery ?? this.recovery,
       );
 }
 
@@ -64,8 +71,34 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
   Future<void> start(String sessionId) => _connect(sessionId, true);
   Future<void> join(String sessionId) => _connect(sessionId, false);
 
+  /// Re-authorizes the current participant and obtains a fresh media ticket.
+  /// The server still selects join versus eligible reconnect from durable state.
+  Future<void> retry() async {
+    final liveSessionId = _liveSessionId;
+    if (liveSessionId == null ||
+        state.recovery == SessionRoomRecovery.terminal) {
+      return;
+    }
+    await _connect(liveSessionId, false);
+  }
+
+  /// Leaves the room without attempting another REST retry.
+  Future<void> leave() async {
+    await _mediaSession.disconnect();
+    await _subscription?.cancel();
+    _subscription = null;
+    _liveSessionId = null;
+    state = state.copyWith(
+        status: SessionRoomStatus.idle,
+        clearError: true,
+        recovery: SessionRoomRecovery.none);
+  }
+
   Future<void> _connect(String liveSessionId, bool start) async {
-    state = state.copyWith(status: SessionRoomStatus.loading, clearError: true);
+    state = state.copyWith(
+        status: SessionRoomStatus.loading,
+        clearError: true,
+        recovery: SessionRoomRecovery.none);
     try {
       final credentials = await _credentials();
       final connection = start
@@ -91,16 +124,33 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
           participants: participants,
           isLocked: connection.session.isLocked,
           isModerator: state.isModerator || connection.isModerator,
+          recovery: SessionRoomRecovery.none,
           clearActionError: true);
-      await _subscription?.cancel();
+      unawaited(_subscription?.cancel());
       _subscription = _realtime
           .sessionEvents(liveSessionId,
               token: credentials.token, backendSessionId: credentials.sessionId)
           .listen(_applyEvent);
     } catch (error) {
       state = state.copyWith(
-          status: SessionRoomStatus.error, errorMessage: error.toString());
+          status: SessionRoomStatus.error,
+          errorMessage: error.toString(),
+          recovery: _isTerminal(error)
+              ? SessionRoomRecovery.terminal
+              : SessionRoomRecovery.retryable);
     }
+  }
+
+  static bool _isTerminal(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('ended') ||
+        message.contains('removed') ||
+        message.contains('revoked') ||
+        message.contains('unauthorized') ||
+        message.contains('forbidden') ||
+        message.contains('401') ||
+        message.contains('403') ||
+        message.contains('404');
   }
 
   /// Hand commands are WS-only per `ws_events.md` (`cmd.raise_hand`).
@@ -230,7 +280,9 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
         state = state.copyWith(isLocked: event.locked);
       case SessionEndedEvent():
         if (_skipDuplicate('ended:${event.endReason ?? ''}')) return;
-        state = state.copyWith(status: SessionRoomStatus.ended);
+        state = state.copyWith(
+            status: SessionRoomStatus.ended,
+            recovery: SessionRoomRecovery.terminal);
     }
   }
 

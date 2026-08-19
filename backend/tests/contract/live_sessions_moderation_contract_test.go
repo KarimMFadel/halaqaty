@@ -256,7 +256,7 @@ func newModerationFixture() (*modStoreStub, *modGatewayStub, *sessions.Service, 
 		scCircleID:    {scTeacher: "teacher", scSuper: "supervisor", scStudent: "student", scStudent2: "student"},
 		scOtherCircle: {scOtherTeacher: "teacher"},
 	}}
-	svc := sessions.NewService(store, gw, roles)
+	svc := newLiveSessionContractService(store, gw, roles)
 	return store, gw, svc, sessions.NewHandler(svc)
 }
 
@@ -674,7 +674,8 @@ func TestModerationWebSocketResponseSafetyContract(t *testing.T) {
 	defer removedConn.Close()
 	writeWS(t, removedConn, map[string]any{"action": "subscribe", "topic": sessionTopic})
 	msg := readWS(t, removedConn)
-	if errorMsg, _ := msg["error"].(string); errorMsg == "" {
+	payload, _ := msg["payload"].(map[string]any)
+	if msg["type"] != "error" || payload["code"] != "UNAUTHORIZED" {
 		t.Errorf("removed participant must be denied, got %v", msg)
 	}
 	assertNoProviderLeak(t, "ws denial", fmt.Sprint(msg))

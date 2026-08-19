@@ -81,6 +81,34 @@ See [ARCHITECTURE.md](../../engineering/architecture/ARCHITECTURE.md) for the co
 
 ## 8. Timeline — 12-Month Plan
 
+### Capacity Plan (Solo Developer)
+
+**Hours per week:** ~40h (primary responsibility)  
+**Velocity assumption:** 1.5 features per month (F-001 baseline, accounts for spike work and pilot feedback cycles)  
+**Release burn policy:** If month-end review shows <80% of sprint scope complete, defer non-P0 features to next month immediately.
+
+| Component | Weekly Hours | Notes |
+|-----------|--------------|-------|
+| Feature implementation (code) | 20h | Backend + mobile + contract tests |
+| Reviews, debugging, refactoring | 8h | Tech Lead review, bug fixes, performance tuning |
+| Planning, documentation, comms | 8h | Spec-Kit, playbook updates, stakeholder sync |
+| Slack / unplanned | 4h | Buffer for unexpected issues |
+
+**Contingency triggers:**
+- If burndown is <70% by month 15th → escalate to PM; plan deferral for non-blocking features.
+- If a critical production issue emerges during pilot → pause feature work for up to 1 week.
+
+### Milestone Deferral Criteria
+
+| Milestone | Defer If | Decision Owner | Decision Date |
+|-----------|----------|-----------------|---------------|
+| M1 (Month 3) | Any P0 feature fails UAT | Karim + PM | Day before expected ship |
+| M2 (Month 6) | MAT < 5 pilot teachers OR error rate > 2% | Karim + PM | End of Month 5 |
+| M3 (Month 9) | WAU/MAU < 30% OR paywall not approved | Karim + PM | End of Month 8 |
+| M4 (Month 12) | MAT < 150 OR churn > 20% | CEO + PM | End of Month 11 |
+
+If any milestone is deferred, the subsequent timeline compresses by 50% (e.g., M1 → M1+1, M2 → M3, M3 → M4) or goals are renegotiated with stakeholders.
+
 ### Month 1–2: Foundation
 - [ ] Finalize all planning documents (this phase)
 - [ ] Set up development environment: Go backend scaffold, Flutter project scaffold

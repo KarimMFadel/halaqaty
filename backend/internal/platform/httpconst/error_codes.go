@@ -29,6 +29,7 @@ const (
 	ErrorCodeNotFound = "ERR_NOT_FOUND"
 	// ErrorCodeInternalServerError is returned when an unexpected server error occurs.
 	ErrorCodeInternalServerError = "ERR_INTERNAL_SERVER_ERROR"
+	ErrorCodeMediaUnavailable    = "ERR_MEDIA_UNAVAILABLE"
 )
 
 // ValidationField names are used in the error envelope field map.

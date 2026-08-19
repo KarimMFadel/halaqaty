@@ -17,6 +17,42 @@ type querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
+// RoleInCircle returns the active membership role, or an empty string when
+// the user is not a member. It implements the sessions authorization port.
+func (r *Repository) RoleInCircle(ctx context.Context, circleID, userID string) (string, error) {
+	var role string
+	err := r.q.QueryRow(ctx, circleMemberRoleQuery, circleID, userID).Scan(&role)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read circle role: %w", err)
+	}
+	return role, nil
+}
+
+// ListCircleIDs returns the caller's active circle memberships for realtime
+// topic authorization.
+func (r *Repository) ListCircleIDs(ctx context.Context, userID string) ([]string, error) {
+	rows, err := r.q.Query(ctx, circleIDsForUserQuery, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list user circles: %w", err)
+	}
+	defer rows.Close()
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan user circle: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate user circles: %w", err)
+	}
+	return ids, nil
+}
+
 // FindCircleByInviteCode returns the circle associated with an invite code.
 func (r *Repository) FindCircleByInviteCode(ctx context.Context, inviteCode string) (Circle, error) {
 	var circle Circle

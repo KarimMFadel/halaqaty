@@ -1,11 +1,34 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"strconv"
 	"time"
 )
+
+// LoadSessionRoomKey reads the backend-only HMAC key used to derive stable
+// opaque media room references. The value is base64-encoded so deployments do
+// not need to rely on shell-safe handling of arbitrary key bytes.
+func LoadSessionRoomKey() ([]byte, error) {
+	return loadSessionRoomKey(os.Getenv)
+}
+
+func loadSessionRoomKey(getenv func(string) string) ([]byte, error) {
+	raw := getenv("SESSION_MEDIA_ROOM_HMAC_KEY")
+	if raw == "" {
+		return nil, fmt.Errorf("SESSION_MEDIA_ROOM_HMAC_KEY is required when live sessions are configured")
+	}
+	key, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, fmt.Errorf("SESSION_MEDIA_ROOM_HMAC_KEY must be base64: %w", err)
+	}
+	if len(key) < 32 {
+		return nil, fmt.Errorf("SESSION_MEDIA_ROOM_HMAC_KEY must decode to at least 32 bytes")
+	}
+	return key, nil
+}
 
 // AuthConfig centralizes auth/session/rate-limit/timeout settings.
 type AuthConfig struct {

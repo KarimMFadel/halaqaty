@@ -15,6 +15,10 @@ lib/generated_plugin_registrant.dart
 *.dart_snapshot
 
 # Go
+.gocache/
+backend/.codex-go-cache*
+.go-cache-*
+
 # Binaries
 *.exe
 *.exe~
@@ -92,3 +96,6 @@ node_modules/
 tmp/
 temp/
 *.tmp
+
+# Superpowers SDD workspace (git-ignored scratch)
+.superpowers/

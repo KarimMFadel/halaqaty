@@ -2,7 +2,7 @@
 
 > All frozen decisions for the Halaqaty MVP. Binding on all implementation. To change a decision, create an ADR in [`../../engineering/architecture/adr/`](../../engineering/architecture/adr/) and update this file with an entry in the Amendment Log.
 
-**Last updated:** 2026-08-07
+**Last updated:** 2026-08-19
 
 ---
 
@@ -60,6 +60,34 @@
 | OQ-017 | Recording visibility? | **Deferred.** Recording disabled until privacy framework is formally approved and merged. | See Privacy section in `../../engineering/architecture/ARCHITECTURE.md`. This is non-negotiable. |
 | PRD-5 | Video feature flag rollout model? | **Per-tier once enabled.** Free: no video. Pro/Institution: video only if both the global master flag AND the tier flag are true. | Aligns with monetization; prevents accidental activation via a single-flag change. |
 | PRD-6 | Recording consent and retention model? | **Explicit participant consent screen before every session.** Consent stored per-session in DB. Teacher must acknowledge liability. Default retention: 7 days. | Protects minors who may be in circles; GDPR-aligned. |
+| OQ-037 | F-005 room moderation roles? | **Teachers and supervisors have identical F-005 moderation rights:** start/end, lock/unlock, mute-all, mute/unmute an existing audio publisher, and remove. | Supervisors support teachers in running a circle. This does not grant students publishing permission. |
+| OQ-038 | Individual unmute and student publishing? | **Individual unmute is supported only for a participant who already has audio-publish entitlement.** It never grants a student publish permission; F-003 remains the sole owner of turn-based student publishing and must revalidate this rule. | Preserves teacher/supervisor moderation without weakening turn-based student audio safety. |
+| OQ-039 | Shared realtime authorization model? | **Use one generic authenticated realtime ticket endpoint, `POST /api/v1/realtime/tickets`, for authorized circle and session topic subscriptions.** It replaces the session-only ticket model; the WebSocket hub revalidates authorization. | F-005 supplies common transport while F-004 can reuse it for circle chat without an active live session. |
+| OQ-040 | Live presence versus attendance persistence? | **F-005 uses `actual_start` / `actual_end` and a dedicated `session_participant_presence` model for durable live presence and hand state.** F-006 owns the separate `session_attendance` policy, classification, and overrides. | Keeps authoritative realtime facts distinct from future attendance policy and avoids coupling F-005 to F-006. |
+| OQ-041 | F-005 session creation scope? | **F-005 creates ad-hoc sessions only; F-006 owns scheduled-session creation.** | Prevents scheduling scope from entering the live-session foundation. |
+| OQ-042 | Lock behavior during reconnect? | **Lock blocks new joins but permits an eligible participant who joined before the lock to reconnect, unless removed or the session ended.** | Preserves graceful mobile recovery without admitting new attendees. |
+| OQ-043 | Hand-raise eligibility? | **Every active session participant may raise or lower a hand.** | Supports practical room coordination without creating queue behavior. |
+| OQ-044 | Automatic session-end attribution? | **Duration-limit and idle-timeout endings record their machine-readable reason and have no human `ended_by` attribution.** | Keeps automatic lifecycle actions truthful and auditable. |
+| OQ-045 | Realtime session-topic access? | **Circle members receive circle topics; session presence and hand topics require a successful authorized join.** | Limits participant-presence disclosure to people in the room. |
+| OQ-046 | Generic ticket scope? | **One ticket authorizes all currently eligible circle topics; session-topic access is added only after an authorized join and is revalidated by the hub.** | Keeps shared transport simple while enforcing session privacy. |
+| OQ-047 | Provider outage during recovery? | **Recoverable.** Start/join returns `503` with `ERR_MEDIA_UNAVAILABLE`, no credential, and no presence/count mutation. Flutter offers Arabic Retry/Leave; it never loops REST retries automatically. | Aligns the canonical REST contract and product journey; provider outage alone must not fabricate a terminal session end. |
+| OQ-048 | Media-room identity for crash recovery? | **Stable, opaque, non-guessable derivation from the session ID using a backend-only HMAC key.** The literal session ID is never used as a room name or public field. | ADR-015 and architecture require deterministic recovery while media-room names remain unguessable. |
+| OQ-049 | Reconciliation concurrency boundary? | **One session-scoped PostgreSQL advisory lock covers start, join/reconnect through credential issuance, end, and reconciliation.** Background reconciliation uses a try-lock and skips busy sessions. | Prevents a room close/ensure race from leaving an active session pointing at a closed room or ghost presence consuming capacity. |
+| OQ-050 | Reconciliation persistence and cadence? | **No recovery table or retry columns in MVP.** Sweep at startup and every 30 seconds; process at most 25 candidates per lifecycle state, with one 3-second provider attempt per candidate; failures retry on the next sweep. | Existing lifecycle, timestamps, and room reference are sufficient at MVP scale; bounded repeated idempotent work is simpler than an outbox. |
+| OQ-051 | End ordering and provider-close failure? | **Persist `ended` first and return the authoritative ended session.** Provider close is idempotent background cleanup; a close failure is redacted telemetry, not a failed end response. | Keeps lifecycle truth durable and makes retries safe under provider outages; allowed end reasons remain unchanged. |
+| OQ-052 | Client reconnect policy? | **WebSocket retries use 1s, 2s, and 4s backoff, then stop automatic retries and show “Tap to rejoin.”** Near-expiry means two minutes before expiry; authenticated start/join issues a fresh connection. | Provides bounded recovery without infinite loading while preserving the existing credential boundary. |
+
+### Recovery clarification record — 2026-08-19
+
+These decisions were frozen after a Spec-Kit consistency review of the F-005
+specification, plan, research, data model, feature-local and canonical REST/
+WebSocket contracts, ADR-015/016, the architecture reference, and the product
+journey. The review found four conflicts: provider outage was described as both
+terminal and retryable; the implementation generated random room references
+despite deterministic reconciliation; end cleanup could turn a committed end
+into an error; and the reconnect test did not reach the durable reconnect path.
+The decisions above resolve those conflicts without adding a recovery table,
+provider registry, job framework, or new lifecycle end reason.
 
 ---
 
@@ -126,5 +154,9 @@
 | 2026-07-31 | OQ-035, OQ-036 | Underspecified | Firebase/client identity boundary; backend per-device session lifecycle; teacher-owned circle role lifecycle | Removes contradictory backend password/token APIs and prevents self-assigned privileges. | ADR-009 |
 | 2026-07-31 | OQ-036 | Single creator-teacher; teacher-only supervisor management | Multiple teachers, optional backup supervisor, delegated manager role changes, self-change and final-teacher safeguards | Supports the approved circle-management workflow while preserving per-circle authorization safety. | ADR-010 |
 | 2026-08-07 | OQ-006 / F-002 | Circle deletion may permanently remove data | Circle retirement is archive-only; history is retained and hard deletion is prohibited | Prevents accidental loss of circle history and aligns REST DELETE with soft-state retirement. | ADR-011 |
+| 2026-08-15 | OQ-037, OQ-038 | Underspecified F-005 moderator and individual-unmute behavior | Teachers and supervisors share moderation; unmute only restores an existing publisher and never grants student publishing | Protects the F-003 turn-based publishing boundary while enabling supervisor support. | ADR-016 |
+| 2026-08-15 | OQ-039 | Session-scoped WebSocket ticket | Generic authenticated realtime tickets authorize circle and session topics | Lets F-004 reuse the common transport without a live-session dependency. | ADR-016 |
+| 2026-08-15 | OQ-040 | `session_attendance` conflated live presence with attendance policy | Dedicated F-005 participant-presence model; F-006 owns attendance policy | Separates realtime facts from future attendance classification and overrides. | ADR-016 |
+| 2026-08-16 | OQ-041–OQ-046 | Open F-005 scope, lock, hand, automatic-end, and realtime-topic questions | Ad-hoc-only F-005, pre-lock reconnect, all-participant hand raise, truthful automatic end, and joined-participant session topics | Resolves F-005 behavior while preserving F-004/F-006 boundaries and session privacy. | ADR-016 |
 
 *Any change requires: (1) a new or updated ADR in `../../engineering/architecture/adr/`, (2) an entry in the Amendment Log above, (3) approval from Karim.*

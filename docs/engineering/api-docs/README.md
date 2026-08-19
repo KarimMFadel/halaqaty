@@ -176,7 +176,7 @@ Standard HTTP semantics: `400` bad input · `401` unauthenticated · `403` forbi
 | `POST` | `/sessions/{sessionId}/start` | Bearer (teacher) | Start a session — ensures its media room and returns the teacher's `MediaConnection` |
 | `POST` | `/sessions/{sessionId}/join` | Bearer (member) | Join an active session — returns the caller's `MediaConnection` |
 | `POST` | `/sessions/{sessionId}/end` | Bearer (teacher) | End a session |
-| `POST` | `/sessions/{sessionId}/ws-token` | Bearer + Session ID | Issue a short-lived (60 s) WebSocket connection token |
+| `POST` | `/realtime/tickets` | Bearer + Session ID | Issue a short-lived (60 s) ticket for authorized circle and session topics |
 
 ### Queue
 
@@ -234,4 +234,47 @@ Standard HTTP semantics: `400` bad input · `401` unauthenticated · `403` forbi
 ---
 
 *See [`docs/contracts/openapi.yaml`](../../contracts/openapi.yaml) for full request/response schemas, query parameters, and validation rules.*
+
+---
+
+## Pagination Strategy
+
+**Canonical pagination for all list endpoints:**
+
+### Request Parameters
+
+```
+GET /api/v1/circles/{circleId}/messages?cursor=<opaque-cursor>&limit=50&sort=sent_at:desc
+```
+
+| Parameter | Type | Required | Default | Notes |
+|-----------|------|----------|---------|-------|
+| `cursor` | string | No | (first page) | Opaque pagination cursor from previous response; absent for first page |
+| `limit` | integer | No | 50 | Max results per page; capped at 100 |
+| `sort` | string | No | created_at:desc | Format: `<field>:<asc\|desc>` |
+
+### Response Format
+
+```json
+{
+  "items": [ ... ],
+  "cursor": "opaque-next-cursor-or-null",
+  "has_more": true,
+  "total_count": 523
+}
+```
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `items` | array | Current page results |
+| `cursor` | string | Use in next request; null if no more pages |
+| `has_more` | boolean | Convenience flag (equivalent to `cursor != null`) |
+| `total_count` | integer | Total items available (may be approximate for large datasets) |
+
+### Implementation Notes
+
+- Cursors are **opaque** (base64-encoded `{id, sort_value}` tuple)
+- No offset-based pagination (inefficient at scale)
+- Sort must use an indexed column for performance
+- Cursor always sorts in the same order as the data (no client-side re-sorting)
 

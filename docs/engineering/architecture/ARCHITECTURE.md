@@ -96,14 +96,14 @@ sequenceDiagram
     participant WS as WebSocket Hub
     participant DB as PostgreSQL
 
-    C->>API: POST /sessions/{id}/ws-token
-    API->>DB: verify session membership
-    DB-->>API: membership confirmed
+    C->>API: POST /realtime/tickets
+    API->>DB: verify current device session and eligible circle topics
+    DB-->>API: authorized circle topics
     API-->>C: { token, expires_at } (60s TTL)
 
     C->>WS: WSS wss://api.halaqaty.app/ws?token=<ws_token>
-    WS->>DB: validate token, load circle memberships
-    DB-->>WS: user circles
+    WS->>DB: validate ticket and revalidate subscriptions
+    DB-->>WS: circle topics; session topics after authorized join
     WS-->>C: connection upgraded ✓
     Note over WS: client registered in Hub rooms<br/>(circle IDs, session IDs)
 
@@ -150,7 +150,7 @@ sequenceDiagram
         end
 
         rect rgb(255,245,230)
-            Note over T,O: Student raises hand (WS command — no REST round-trip)
+            Note over T,O: Participant raises hand (WS command — no REST round-trip)
             S->>Hub: cmd.raise_hand { session_id }
             Hub->>DB: log raise_hand event
             Hub-->>T: session.hand_raised { student_id, student_name }
@@ -181,10 +181,10 @@ sequenceDiagram
 | `queue.round_started` | New recitation round started |
 | `queue.grade_submitted` | Grade recorded for a completed turn (teacher/supervisor only) |
 | `session.started` | Session went live; contains session metadata only (credentials come from authorized start/join REST responses) |
-| `session.ended` | Session ended by teacher |
+| `session.ended` | Session ended by teacher or supervisor, or automatically by duration/idle policy |
 | `session.participant_joined` | A participant joined the session |
 | `session.participant_left` | A participant left the session |
-| `session.hand_raised` | A student raised their hand |
+| `session.hand_raised` | A participant raised their hand |
 | `chat.message` | New circle message delivered |
 | `chat.message_read` | Recipient read a message (sent to sender) |
 | `chat.typing` | Typing indicator |
@@ -194,8 +194,8 @@ sequenceDiagram
 
 | Type | Description |
 |------|-------------|
-| `cmd.raise_hand` | Student raises hand in session |
-| `cmd.lower_hand` | Student lowers hand in session |
+| `cmd.raise_hand` | Participant raises hand in session |
+| `cmd.lower_hand` | Participant lowers hand in session |
 | `ping` | Heartbeat (every 30 s) |
 
 > **Source of truth for all event schemas and payloads:** [`docs/contracts/ws_events.md`](../../contracts/ws_events.md)
@@ -324,7 +324,8 @@ sequenceDiagram
 ```
 
 The diagram shows the required safety boundary, not a distributed transaction.
-Room references are deterministic and gateway operations are idempotent. A
+Room references are deterministic, opaque, and non-guessable; the adapter uses
+a backend-keyed derivation rather than a literal session ID. Gateway operations are idempotent. A
 session becomes joinable only after the room is ready and the `active` transition
 commits. If the process crashes between provider and database operations, F-005's
 sessions-owned reconciler closes orphan rooms or repairs missing rooms. Ending a
@@ -577,11 +578,11 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     direction LR
-    [*] --> scheduled : POST /circles/{id}/sessions\n(teacher only)
+    [*] --> scheduled : POST /circles/{id}/sessions\n(teacher or supervisor; ad-hoc F-005 only)
 
-    scheduled --> active : POST /sessions/{id}/start\n(teacher only)\nMedia room ready via adapter\nWS → session.started broadcast
+    scheduled --> active : POST /sessions/{id}/start\n(teacher or supervisor)\nMedia room ready via adapter\nWS → session.started broadcast
 
-    active --> ended : POST /sessions/{id}/end\n(teacher only)\nMedia room closed via adapter\nWS → session.ended broadcast
+    active --> ended : POST /sessions/{id}/end\n(teacher or supervisor, or automatic timeout)\nMedia room closed via adapter\nWS → session.ended broadcast
 
     ended --> [*]
 
@@ -640,19 +641,25 @@ erDiagram
         timestamptz scheduled_at
         timestamptz actual_start
         timestamptz actual_end
+        varchar end_reason
         varchar status
         varchar media_mode
         varchar media_room_ref UK
+        boolean is_locked
         int participant_count
         timestamptz created_at
     }
-    session_attendance {
+    session_participant_presence {
         uuid id PK
         uuid session_id FK
         uuid user_id FK
-        timestamptz joined_at
-        timestamptz left_at
-        varchar status
+        timestamptz first_joined_at
+        timestamptz last_joined_at
+        timestamptz last_left_at
+        int reconnect_count
+        boolean is_currently_present
+        timestamptz removed_at
+        timestamptz hand_raised_at
     }
     recitation_queue {
         uuid id PK
@@ -752,7 +759,7 @@ erDiagram
     circles ||--o{ sessions : "hosts"
     circles ||--o{ messages : "has messages"
     circles ||--o{ schedules : "has schedules"
-    sessions ||--o{ session_attendance : "tracks"
+    sessions ||--o{ session_participant_presence : "tracks live presence"
     sessions ||--o{ recitation_queue : "has rounds"
     recitation_queue ||--o{ recitation_queue_entries : "has entries"
     users ||--o{ recitation_queue_entries : "is student"
@@ -836,6 +843,13 @@ erDiagram
 | UNIQUE | (circle_id, user_id) | | One membership per user per circle |
 
 #### `sessions`
+
+F-005 owns the complete base `sessions` table and its lifecycle/media invariants.
+The F-005 migration creates the circle/creator keys, `scheduled_at` boundary,
+`scheduled → active → ended` status, `actual_start`/`actual_end`, audio-only
+`media_mode`, unique opaque `media_room_ref`, `is_locked`, `end_reason`,
+`participant_count`, and audit timestamps. F-003 and F-006 extend this table
+only through later paired migrations for queue and attendance concerns.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | UUID | PK | |
@@ -844,24 +858,34 @@ erDiagram
 | scheduled_at | TIMESTAMPTZ | | Planned start time; NULL for ad-hoc sessions |
 | actual_start | TIMESTAMPTZ | | When teacher actually started |
 | actual_end | TIMESTAMPTZ | | When session actually ended |
+| end_reason | VARCHAR(20) | CHECK IN ('manual','duration_limit','idle_timeout') NULL | Why the session ended; NULL until ended |
 | status | VARCHAR(20) | CHECK IN ('scheduled','active','ended') | |
 | media_mode | VARCHAR(20) | CHECK IN ('audio_only','audio_video'), DEFAULT 'audio_only' | Session media policy (MVP always audio_only) |
 | media_room_ref | VARCHAR(200) | UNIQUE | Opaque media-adapter room reference; LiveKit-backed in MVP |
+| is_locked | BOOLEAN | NOT NULL DEFAULT false | Prevents new joins while true |
 | created_by | UUID | FK → users.id NOT NULL | Teacher who created the session |
 | participant_count | INTEGER | DEFAULT 0 | Running count updated on join/leave |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
 
-#### `session_attendance`
+#### `session_participant_presence`
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | UUID | PK | |
 | session_id | UUID | FK → sessions.id NOT NULL | |
 | user_id | UUID | FK → users.id NOT NULL | |
-| joined_at | TIMESTAMPTZ | | When student joined LiveKit room |
-| left_at | TIMESTAMPTZ | | When student left |
-| status | VARCHAR(20) | CHECK IN ('present','absent','late','excused') | |
-| overridden_by | UUID | FK → users.id | Teacher who manually overrode |
+| first_joined_at | TIMESTAMPTZ | NULL | First observed authorized room join |
+| last_joined_at | TIMESTAMPTZ | NULL | Most recent authorized room join or reconnect |
+| last_left_at | TIMESTAMPTZ | NULL | Most recent room leave |
+| reconnect_count | INTEGER | NOT NULL DEFAULT 0 | Reconnects after the first join |
+| is_currently_present | BOOLEAN | NOT NULL DEFAULT false | Authoritative current-presence state |
+| removed_at | TIMESTAMPTZ | NULL | Set when moderation removes the participant |
+| hand_raised_at | TIMESTAMPTZ | NULL | Current standalone hand state; NULL when lowered |
 | UNIQUE | (session_id, user_id) | | |
+
+#### `session_attendance` (F-006)
+
+F-006 owns attendance classification and manual overrides. It derives its policy
+from F-005 participant-presence facts and must not alter them.
 
 #### `recitation_queue`
 | Column | Type | Constraints | Description |
@@ -1060,16 +1084,20 @@ token remains valid.
 | Method | Path | Status | Description |
 |--------|------|--------|-------------|
 | GET | `/circles/{id}/sessions` | ✅ | List sessions for a circle |
-| POST | `/circles/{id}/sessions` | ✅ | Create a session (teacher only) |
-| POST | `/sessions/{id}/start` | ✅ | Teacher starts session and receives their participant-specific media connection |
+| POST | `/circles/{id}/sessions` | ✅ | Create an ad-hoc F-005 session (teacher or supervisor) |
+| POST | `/sessions/{id}/start` | ✅ | Teacher or supervisor starts session and receives their participant-specific media connection |
 | POST | `/sessions/{id}/join` | ✅ | Join an active session and receive the caller's media connection (members only) |
-| POST | `/sessions/{id}/end` | ✅ | Teacher ends session |
-| POST | `/sessions/{id}/ws-token` | ✅ | Issue short-lived WebSocket connection token |
+| POST | `/sessions/{id}/end` | ✅ | Teacher or supervisor ends session; duration/idle endings are system-attributed |
 | GET | `/sessions/{id}` | 🔲 | Get session details |
 | POST | `/sessions/{id}/participants/{userId}/mute` | 🔲 | Mute a participant |
 | POST | `/sessions/{id}/participants/{userId}/unmute` | 🔲 | Unmute a participant |
 | POST | `/sessions/{id}/participants/{userId}/remove` | 🔲 | Remove participant from session |
 | POST | `/sessions/{id}/lock` | 🔲 | Lock session (no new joiners) |
+
+### `/realtime`
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| POST | `/realtime/tickets` | 🔲 | Issue a short-lived authenticated ticket for authorized circle and session topics |
 
 ### `/sessions/{id}/attendance`
 | Method | Path | Status | Description |
@@ -1169,7 +1197,7 @@ All rows below require `Authorization: Bearer <firebase-jwt>` and `X-Halaqaty-Se
 | Create circle | authenticated user | `401` invalid credentials, `400` invalid role assignment input |
 | Join by invite | authenticated user | `401` invalid credentials, `404` invalid invite, `409` already member |
 | Update circle settings, archive circle, remove member | teacher | `401` invalid credentials, `403` non-teacher, `404` missing circle/member |
-| Create/start/end session, create schedules | teacher | `401` invalid credentials, `403` non-teacher, `404` missing circle/session |
+| Create/start/end session, create schedules | teacher or supervisor for F-005 ad-hoc lifecycle; teacher for scheduling | `401` invalid credentials, `403` unauthorized role, `404` missing circle/session |
 | Join live session, list members, read queue/chat | active member | `401` invalid credentials, `403` non-member, `404` missing resource |
 | Grade recitation | teacher or supervisor | `401` invalid credentials, `403` student/non-member, `404` missing queue entry |
 | Change another member role | teacher or supervisor | `401` invalid credentials, `403` self-change/final-teacher/student/non-member/cross-circle, `404` missing member |
@@ -1205,7 +1233,7 @@ sequenceDiagram
 
 ### 6.3 Media Room Security (MVP LiveKit)
 
-- Each session generates a unique opaque `media_room_ref` mapped to a LiveKit room by the MVP adapter
+- Each session generates a stable opaque, non-guessable `media_room_ref` mapped to a LiveKit room by the MVP adapter
 - Room names are not publicly guessable
 - Each participant needs a JWT from Go backend to join — no anonymous access
 - Teacher's JWT includes `RoomAdmin: true` (can mute, remove)
@@ -1213,12 +1241,52 @@ sequenceDiagram
 - Backend grants `CanPublish: true` only for the active reciter turn, then revokes after the turn (audio-only in MVP)
 - Room is deleted from LiveKit server when session ends
 
-### 6.4 Rate Limiting
+### Rate Limiting
 
 - REST API: rate limited by IP and by user ID
 - WebSocket: connections limited per user (max 3 active connections per user)
 - Message sending: max 30 messages per minute per user per circle
 - File uploads: max 10 uploads per hour per user
+
+### 6.4.1 Database Indexing Strategy
+
+**Canonical indexing policy:**
+
+1. **Foreign key indexes (not automatic):** Create indexes on FK columns when they’re used in joins/filters or to avoid FK-related lock contention (PostgreSQL does not add these indexes for you).
+2. **Search & filtering:** Columns in WHERE clauses must be indexed (e.g., `circle_id`, `user_id`, `session_id`, `surah_id`).
+3. **Sorting:** Columns in ORDER BY clauses should have indexes (e.g., `created_at`, `sent_at`).
+4. **Partial indexes:** Use for soft-deletes and status filters (e.g., WHERE `deleted_at IS NULL`).
+
+**Index naming convention:**
+```
+idx_<table>_<column>                    -- simple
+idx_<table>_<col1>_<col2>               -- composite
+idx_<table>_<col>_partial_<condition>   -- partial (e.g., idx_messages_circle_id_partial_not_deleted)
+```
+
+**Index review checklist (before merge):**
+- [ ] Query uses indexed columns in WHERE/JOIN/ORDER BY
+- [ ] Composite indexes follow query predicate order
+- [ ] Partial indexes used for soft-deletes and status filters
+- [ ] No redundant indexes (e.g., don't index both `col` and `(col, col2)` unless both are used)
+- [ ] Index size estimated (large indexes slow writes)
+
+**Periodic audit:** Run `EXPLAIN ANALYZE` on top 10 queries monthly and recommend new indexes.
+
+### 6.4.2 Column Versioning (`updated_at` Coverage)
+
+**Policy:** All tables containing user-modifiable data should have an `updated_at TIMESTAMPTZ DEFAULT NOW()` column.
+
+**Current coverage:**
+- ✅ users, circles, circle_members, circle_invites, schedules, sessions, messages, memorization_progress
+- ⚠️ **Audit required:** recitation_queue, recitation_queue_entries, session_attendance, device_tokens, message_reads
+
+**Tables that should NOT have `updated_at`:**
+- Reference data (quran_surahs, quran_divisions) — immutable
+- Audit logs (session_participant_presence) — append-only
+- Event logs — append-only
+
+**Migration plan:** Create migration to add `updated_at` to missing tables; update repository methods to set `updated_at = NOW()` on all UPDATEs.
 
 ### 6.5 Input Validation
 

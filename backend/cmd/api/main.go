@@ -20,6 +20,10 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
 	"github.com/KarimMFadel/halaqaty/backend/internal/profile"
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
+	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
+	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
+	"github.com/KarimMFadel/halaqaty/backend/internal/sessions/livekit"
+	lksdk "github.com/livekit/server-sdk-go/v2"
 )
 
 func main() {
@@ -84,23 +88,73 @@ func main() {
 	rbacService := rbac.NewService(rbacRepo, auditLogger)
 	rbacHandler := rbac.NewHandler(rbacService)
 
+	var sessionHandler *sessions.Handler
+	var liveSessionService *sessions.Service
+	var sessionReconciler *sessions.Reconciler
+	ticketService := realtime.NewTicketService(rbacRepo)
+	realtimeHandler := realtime.NewHandler(ticketService)
+	var sessionTopicAuthorizer realtime.SessionTopicAuthorizer
+	mediaCfg, err := config.LoadLiveKitConfig()
+	if err != nil {
+		logger.Error("failed to load LiveKit config", "error", err)
+		os.Exit(1)
+	}
+	if mediaCfg != (config.LiveKitConfig{}) {
+		roomKey, err := config.LoadSessionRoomKey()
+		if err != nil {
+			logger.Error("failed to load session room key", "error", err)
+			os.Exit(1)
+		}
+		policy, err := config.LoadAudioPolicy()
+		if err != nil {
+			logger.Error("failed to load LiveKit audio policy", "error", err)
+			os.Exit(1)
+		}
+		rooms := lksdk.NewRoomServiceClient(mediaCfg.Endpoint, mediaCfg.APIKey, mediaCfg.APISecret)
+		media := livekit.NewAdapter(mediaCfg, policy, rooms)
+		liveVerifier := livekit.NewHandlerVerifier(mediaCfg.APIKey, mediaCfg.APISecret)
+		liveSessionRepo := sessions.NewSessionRepository(pool)
+		liveSessionService, err = sessions.NewServiceWithRoomKey(liveSessionRepo, media, rbacRepo, roomKey)
+		if err != nil {
+			logger.Error("failed to initialize live session service", "error", err)
+			os.Exit(1)
+		}
+		sessionReconciler, err = sessions.NewReconciler(liveSessionRepo, media, roomKey)
+		if err != nil {
+			logger.Error("failed to initialize session reconciler", "error", err)
+			os.Exit(1)
+		}
+		sessionTopicAuthorizer = liveSessionService
+		sessionHandler = sessions.NewHandler(liveSessionService)
+		sessionHandler.SetWebhookVerifier(liveVerifier)
+	}
+
 	authMetrics := new(metrics.AuthMetrics)
 	authMW := middleware.NewAuthMiddleware(verifier, sessionService, sessionRepo)
 	authMW.SetMetrics(authMetrics)
 	roleMW := middleware.NewRoleMiddleware(sessionRepo)
 	rateLimitMW := middleware.NewRateLimitMiddleware(cfg.RateLimitPerIPPerMin, cfg.RateLimitPerUserPerMin)
 
+	realtimeHub := realtime.NewHub(ticketService, sessionTopicAuthorizer)
+	if liveSessionService != nil {
+		realtimeHub.SetSessionSnapshotProvider(liveSessionService.RealtimeSnapshot)
+		realtimeHub.SetSessionCommandHandler(liveSessionService.HandleRealtimeCommand)
+	}
+
 	mwSet := MiddlewareSet{
-		Auth:           authMW,
-		Role:           roleMW,
-		RateLimit:      rateLimitMW,
-		AuthHandler:    authHandler,
-		ProfileHandler: profileHandler,
-		RBACHandler:    rbacHandler,
-		Timeout:        cfg.RequestTimeout,
-		Logger:         logger,
-		Metrics:        authMetrics,
-		MetricsToken:   cfg.MetricsToken,
+		Auth:            authMW,
+		Role:            roleMW,
+		RateLimit:       rateLimitMW,
+		AuthHandler:     authHandler,
+		ProfileHandler:  profileHandler,
+		RBACHandler:     rbacHandler,
+		SessionHandler:  sessionHandler,
+		RealtimeHandler: realtimeHandler,
+		RealtimeHub:     realtimeHub,
+		Timeout:         cfg.RequestTimeout,
+		Logger:          logger,
+		Metrics:         authMetrics,
+		MetricsToken:    cfg.MetricsToken,
 	}
 
 	// ── Router ────────────────────────────────────────────────────────────────
@@ -117,6 +171,15 @@ func main() {
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
+	reconcilerCtx, stopReconciler := context.WithCancel(context.Background())
+	defer stopReconciler()
+	if sessionReconciler != nil {
+		go func() {
+			if err := sessionReconciler.Run(reconcilerCtx); err != nil && !errors.Is(err, context.Canceled) {
+				logger.Error("session reconciliation stopped", "error", err)
+			}
+		}()
+	}
 
 	go func() {
 		logger.Info("server starting", "addr", srv.Addr)
@@ -128,6 +191,7 @@ func main() {
 
 	<-quit
 	logger.Info("shutting down...")
+	stopReconciler()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()

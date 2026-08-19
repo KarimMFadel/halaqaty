@@ -288,6 +288,11 @@ Full-featured messaging within circles, replacing WhatsApp/Telegram group chats 
 - [ ] WebSocket delivery when app is open; FCM push when app is in background
 - [ ] Offline mode: messages queued locally and sent when connection restored
 
+> **F-005 transport dependency:** F-005 establishes the shared authenticated
+> realtime ticket and topic-authorization transport. F-004 reuses it for
+> circle-scoped chat topics and does not require a live session; F-005 does not
+> implement chat messages, storage, events, attachments, or UI.
+
 
 
 
@@ -304,10 +309,10 @@ Audio-only sessions powered by LiveKit (open-source, self-hosted WebRTC SFU). Ha
 
 #### User Stories
 
-- As a teacher, I can start a live session from the circle page with one tap
-- As a student, I can join a session from a push notification or calendar reminder
-- As a teacher, I can mute participants and restore audio only when their existing role/turn entitlement permits publishing
-- As a teacher, I can lock the room to prevent new joiners mid-session
+- As a teacher or supervisor, I can start and end an ad-hoc live session from the circle page
+- As an active circle member, I can join an active session from its session card
+- As a teacher or supervisor, I can mute participants and restore audio only when their existing role/turn entitlement permits publishing
+- As a teacher or supervisor, I can lock the room to prevent new joiners mid-session while allowing eligible pre-lock reconnects
 - As a participant, I can raise my hand to signal the teacher
 - As a teacher, I can trust that live-session audio is not recorded in MVP
 
@@ -341,7 +346,7 @@ Step 1: Session Creation
        ↓
   Flutter → POST /api/v1/sessions/{id}/start → Go Backend
        ↓
-  Go Backend calls SessionMediaGateway → LiveKit MVP adapter creates room "{session_id}"
+  Go Backend calls SessionMediaGateway → LiveKit MVP adapter creates the stable opaque room derived from the session ID
        ↓
   Go Backend returns: { media_connection: { endpoint: "wss://...", credential: "opaque", expires_at: "..." } }
 
@@ -389,14 +394,18 @@ Step 5: Media Routing
 - [ ] Token generation exclusively on Go backend (never client-side)
 - [ ] Audio-only in MVP (no video toggle in app)
 - [ ] Maximum session duration is 4 hours; idle room timeout is 30 minutes after the final participant leaves
-- [ ] Teacher controls: mute all, mute individual, remove participant, lock room (no new joiners)
-- [ ] Hand raise: students tap 🤚 → appears in teacher's UI as standalone F-005 session state; F-003 may consume it later without changing F-005 ownership
+- [ ] Teacher and supervisor controls: start/end, mute all, mute/unmute an existing audio publisher, remove participant, lock/unlock room (no new joiners); unmute never grants student publishing
+- [ ] Hand raise: any active participant taps 🤚 → appears in moderator UI as standalone F-005 session state; F-003 may consume it later without changing F-005 ownership
 - [ ] Screen sharing is deferred to post-MVP (same feature-flag family as video)
 - [ ] Session recording is disabled in MVP and deferred until a privacy consent/retention framework is approved
 - [ ] Audio: Opus 48kbps+, noise suppression OFF, auto-gain OFF
 - [ ] Maximum 50 participants (scalable with server resources)
 - [ ] Graceful reconnection on network drop (LiveKit SDK handles this)
 - [ ] `session.started` contains notification metadata only; each teacher/student receives their own `MediaConnection` exclusively through authorized start/join REST
+
+> **F-006 attendance dependency:** F-005 persists live presence and standalone
+> hand state in `session_participant_presence`; it does not classify attendance.
+> F-006 owns `session_attendance`, attendance policy, and manual overrides.
 
 
 
@@ -424,7 +433,7 @@ Recurring weekly schedule management with smart reminders and integrated attenda
 - [ ] Weekly recurring schedule per circle: day(s) of week, start time, end time, timezone
 - [ ] A circle can have multiple schedule entries (e.g., Sun + Wed)
 - [ ] Push notifications: configurable reminder intervals (1hr, 30min, 15min, 5min before session)
-- [ ] Auto-attendance: when student joins LiveKit session → marked Present
+- [ ] Attendance policy consumes F-005 `session_participant_presence` facts; it classifies attendance rather than treating a join as an automatic final status
 - [ ] Manual override: teacher can mark Present / Absent / Excused for any student
 - [ ] Unified calendar: students in multiple circles see all sessions in one color-coded calendar view
 - [ ] Conflict detection: alert if two circles have overlapping scheduled times

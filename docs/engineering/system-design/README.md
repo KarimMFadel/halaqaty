@@ -149,10 +149,10 @@ Codified in [`docs/contracts/ws_events.md`](../../contracts/ws_events.md) §Conn
 ```
 Client                       Go Backend
   │                              │
-  ├─ POST /sessions/{sessionId}/ws-token ►│  (requires Firebase bearer + session ID)
+  ├─ POST /realtime/tickets ─────────────►│  (requires Firebase bearer + session ID)
   │◄─ { "token": "...", "expires_at": "..." } ─│  (token valid for 60 seconds)
   │                              │
-  ├─ wss://api.halaqaty.app/ws?token=<ws_token> ─────────►│
+  ├─ wss://api.halaqaty.app/ws?token=<ticket> ───────────►│
   │◄─ HTTP 101 Switching Protocols ──────────────────────│
   │                              │
   │  [every 30 seconds]          │
@@ -167,7 +167,7 @@ Client                       Go Backend
 
 Codified rules per `ws_events.md`:
 
-- WS token lifetime: **60 seconds** (`POST /sessions/{sessionId}/ws-token`).
+- Realtime ticket lifetime: **60 seconds** (`POST /realtime/tickets`); it authorizes only current eligible circle and session topics, which the hub revalidates.
 - Heartbeat: client sends `ping` every **30 seconds**; server replies `pong` with `server_time`.
 - **Dead-connection detection:** 3 missed `pong` responses ⇒ client reconnects.
 - **Reconnection source of truth:** PostgreSQL is always the source of truth. On reconnection, clients re-fetch state via REST (`GET /api/v1/sessions/{id}/queue`, etc.) rather than relying on buffered WebSocket events.

@@ -13,20 +13,25 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
 	"github.com/KarimMFadel/halaqaty/backend/internal/profile"
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
+	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
+	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
 )
 
 // MiddlewareSet defines all cross-cutting middleware dependencies.
 type MiddlewareSet struct {
-	Auth           *middleware.AuthMiddleware
-	Role           *middleware.RoleMiddleware
-	RateLimit      *middleware.RateLimitMiddleware
-	AuthHandler    *auth.Handler
-	ProfileHandler *profile.Handler
-	RBACHandler    *rbac.Handler
-	Timeout        time.Duration
-	Logger         *slog.Logger
-	Metrics        *metrics.AuthMetrics
-	MetricsToken   string
+	Auth            *middleware.AuthMiddleware
+	Role            *middleware.RoleMiddleware
+	RateLimit       *middleware.RateLimitMiddleware
+	AuthHandler     *auth.Handler
+	ProfileHandler  *profile.Handler
+	RBACHandler     *rbac.Handler
+	SessionHandler  *sessions.Handler
+	RealtimeHandler *realtime.Handler
+	RealtimeHub     *realtime.Hub
+	Timeout         time.Duration
+	Logger          *slog.Logger
+	Metrics         *metrics.AuthMetrics
+	MetricsToken    string
 }
 
 // Router wires API routes and middleware in one place.
@@ -128,7 +133,7 @@ func (r *Router) registerRoutes() {
 		var profileGetHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageProfileHandlerNotConfigured, http.StatusInternalServerError)
 		})
-		var profilePutHandler http.Handler = profileGetHandler
+		profilePutHandler := profileGetHandler
 		if r.mw.ProfileHandler != nil {
 			profileGetHandler = http.HandlerFunc(r.mw.ProfileHandler.GetMe)
 			profilePutHandler = http.HandlerFunc(r.mw.ProfileHandler.UpdateMe)
@@ -207,24 +212,53 @@ func (r *Router) registerRoutes() {
 		// Auth runs first so the principal exists when the role guard reads it.
 		r.mux.Handle(
 			routeCircleAssignRole,
-			r.requireWithUserLimit(r.mw.Role.RequireAny("supervisor", "teacher")(assignRoleHandler)),
+			r.requireWithUserLimit(r.mw.Role.RequireAny(rbac.RoleSupervisor, rbac.RoleTeacher)(assignRoleHandler)),
 		)
 		var refreshInviteHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
 		})
-		var removeMemberHandler http.Handler = refreshInviteHandler
-		var archiveCircleHandler http.Handler = refreshInviteHandler
-		var updateCircleHandler http.Handler = refreshInviteHandler
+		removeMemberHandler := refreshInviteHandler
+		archiveCircleHandler := refreshInviteHandler
+		updateCircleHandler := refreshInviteHandler
 		if rbacH != nil {
 			refreshInviteHandler = http.HandlerFunc(rbacH.RefreshInviteCode)
 			removeMemberHandler = http.HandlerFunc(rbacH.RemoveMember)
 			archiveCircleHandler = http.HandlerFunc(rbacH.ArchiveCircle)
 			updateCircleHandler = http.HandlerFunc(rbacH.UpdateCircle)
 		}
-		r.mux.Handle(routeCircleRefreshInvite, r.requireWithUserLimit(r.mw.Role.RequireAny("teacher")(refreshInviteHandler)))
-		r.mux.Handle(routeCircleRemoveMember, r.requireWithUserLimit(r.mw.Role.RequireAny("teacher")(removeMemberHandler)))
-		r.mux.Handle(routeCircleArchive, r.requireWithUserLimit(r.mw.Role.RequireAny("teacher")(archiveCircleHandler)))
-		r.mux.Handle(routeCircleUpdate, r.requireWithUserLimit(r.mw.Role.RequireAny("teacher")(updateCircleHandler)))
+		r.mux.Handle(routeCircleRefreshInvite, r.requireWithUserLimit(r.mw.Role.RequireAny(rbac.RoleTeacher)(refreshInviteHandler)))
+		r.mux.Handle(routeCircleRemoveMember, r.requireWithUserLimit(r.mw.Role.RequireAny(rbac.RoleTeacher)(removeMemberHandler)))
+		r.mux.Handle(routeCircleArchive, r.requireWithUserLimit(r.mw.Role.RequireAny(rbac.RoleTeacher)(archiveCircleHandler)))
+		r.mux.Handle(routeCircleUpdate, r.requireWithUserLimit(r.mw.Role.RequireAny(rbac.RoleTeacher)(updateCircleHandler)))
+	}
+
+	if r.mw.Auth != nil {
+		var sessionHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
+		})
+		if r.mw.SessionHandler != nil {
+			sessionHandler = r.mw.SessionHandler
+		}
+		r.mux.Handle(routeCircleSessionsCreate, r.requireWithUserLimit(sessionHandler))
+		r.mux.Handle(routeCircleSessionsGet, r.requireWithUserLimit(sessionHandler))
+		r.mux.Handle(routeSessionStart, r.requireWithUserLimit(sessionHandler))
+		r.mux.Handle(routeSessionJoin, r.requireWithUserLimit(sessionHandler))
+		r.mux.Handle(routeSessionEnd, r.requireWithUserLimit(sessionHandler))
+		r.mux.Handle(routeSessionLock, r.requireWithUserLimit(sessionHandler))
+		r.mux.Handle(routeSessionParticipantsGet, r.requireWithUserLimit(sessionHandler))
+		r.mux.Handle(routeSessionMuteAll, r.requireWithUserLimit(sessionHandler))
+		r.mux.Handle(routeSessionParticipantMute, r.requireWithUserLimit(sessionHandler))
+		r.mux.Handle(routeSessionParticipantUnmute, r.requireWithUserLimit(sessionHandler))
+		r.mux.Handle(routeSessionParticipantRemove, r.requireWithUserLimit(sessionHandler))
+		if r.mw.RealtimeHandler != nil {
+			r.mux.Handle(routeRealtimeTicketsCreate, r.requireWithUserLimit(http.HandlerFunc(r.mw.RealtimeHandler.CreateTicket)))
+		}
+	}
+	if r.mw.SessionHandler != nil {
+		r.mux.Handle(routeWebhookLiveKit, r.mw.SessionHandler)
+	}
+	if r.mw.RealtimeHub != nil {
+		r.mux.Handle(routeRealtimeWebSocket, r.mw.RealtimeHub)
 	}
 }
 

@@ -11,7 +11,17 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
+	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
 )
+
+func TestRouter_F005ProtectedRoutesRequireAuth(t *testing.T) {
+	router := NewRouter(MiddlewareSet{Auth: middlewareForRouteTest(), SessionHandler: sessions.NewHandler(nil)})
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/sessions/00000000-0000-0000-0000-000000000001/start", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("F-005 route status = %d, want 401 from auth middleware", rec.Code)
+	}
+}
 
 func TestRouter_RegistersVersionedAuthRoutes(t *testing.T) {
 	authMiddleware := middlewareForRouteTest()

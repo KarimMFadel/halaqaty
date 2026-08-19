@@ -6,9 +6,11 @@ Real-time communication in Halaqaty uses a persistent WebSocket connection per a
 
 ### Handshake
 
-1. Client fetches a short-lived WS token via `POST /api/v1/sessions/{id}/ws-token` (valid for 60 seconds).
-2. Client connects: `wss://api.halaqaty.app/ws?token=<ws_token>`
-3. Server validates the token, upgrades the connection, and adds the client to its relevant rooms (circle rooms the user is a member of).
+1. Client fetches a short-lived realtime ticket via `POST /api/v1/realtime/tickets` (valid for 60 seconds).
+2. Client connects: `wss://api.halaqaty.app/ws?token=<ticket>`
+3. Server validates the ticket, revalidates the user's authorized circle topics, upgrades the connection, and adds a session topic only after a successful authorized join.
+
+The generic ticket establishes shared transport only. It never authorizes a media-room join; the caller must still use the authenticated session start/join REST operation to obtain their own media connection. Circle chat may reuse circle topics without an active session.
 
 ### Heartbeat
 
@@ -40,8 +42,8 @@ graph LR
     end
 
     subgraph SC["Server → Client (push)"]
-        direction TB
-        BCAST["📢 Broadcast\nto authorized topic subscribers\n─────────────────\nqueue.state\nqueue.entry_updated\nqueue.round_started\nqueue.reordered\nqueue.grade_submitted\nsession.started · session.ended\nsession.participant_joined\nsession.participant_left\nsession.hand_raised\nchat.message · chat.typing\nerror"]
+    direction TB
+        BCAST["📢 Broadcast\nto authorized topic subscribers\n─────────────────\nqueue.* (F-003)\nsession.started · session.snapshot · session.ended\nsession.participant_joined · session.participant_left\nsession.hand_raised · session.hand_lowered\nsession.lock_changed · session.participant_muted\nsession.participant_removed\nchat.* (F-004)\nerror"]
         TARGET["🎯 Targeted\nto one client only\n─────────────────\nqueue.your_turn\nqueue.next_soon\nchat.message_read"]
     end
 
@@ -235,15 +237,35 @@ session state, lock, removal, and capacity checks.
 
 ### `session.ended` (Server → Client)
 
-Broadcast to all session participants when the teacher ends the session.
+Broadcast to all session participants when a moderator or an automatic lifecycle limit ends the session.
 
 ```json
 {
   "type": "session.ended",
   "payload": {
     "session_id": "uuid",
-    "ended_by": "uuid",
+    "ended_by": null,
+    "end_reason": "duration_limit",
     "duration_seconds": 3600
+  }
+}
+```
+
+---
+
+### `session.snapshot` (Server → Client)
+
+Sent to a successfully joined participant after join or reconnect. It contains
+authoritative session and current-presence/hand state only; it never contains a
+media credential or provider room reference.
+
+```json
+{
+  "type": "session.snapshot",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "payload": {
+    "session": { "id": "uuid", "status": "active", "is_locked": false },
+    "participants": []
   }
 }
 ```
@@ -289,9 +311,41 @@ Broadcast to all session participants.
   "type": "session.hand_raised",
   "payload": {
     "session_id": "uuid",
-    "student_id": "uuid",
-    "student_name": "Omar Abdullah"
+    "participant_id": "uuid",
+    "participant_name": "Omar Abdullah"
   }
+}
+```
+
+### `session.hand_lowered` (Server → Client)
+
+```json
+{
+  "type": "session.hand_lowered",
+  "payload": {
+    "session_id": "uuid",
+    "participant_id": "uuid",
+    "participant_name": "Omar Abdullah",
+    "hand_raised_at": null
+  }
+}
+```
+
+### `session.lock_changed` (Server → Client)
+
+```json
+{
+  "type": "session.lock_changed",
+  "payload": { "session_id": "uuid", "locked": true, "changed_by": "uuid" }
+}
+```
+
+### `session.participant_muted` / `session.participant_removed` (Server → Client)
+
+```json
+{
+  "type": "session.participant_muted",
+  "payload": { "session_id": "uuid", "user_id": "uuid", "changed_by": "uuid" }
 }
 ```
 
@@ -358,7 +412,7 @@ Sent to the message sender when the recipient reads a message.
 
 ## Client → Server Commands
 
-Clients can send commands over the WebSocket as an alternative to REST for low-latency actions.
+Clients can send hand commands over the WebSocket as an alternative to REST for low-latency actions. Any active session participant may send them.
 
 ### `cmd.raise_hand`
 
@@ -410,8 +464,8 @@ Sent when the server cannot process a client command.
 | Event | Delivery | Deduplication |
 |-------|----------|---------------|
 | `queue.*` | At-least-once (broadcast to all in room) | Client ignores duplicate `queue_entry_id` + `new_status` pairs |
-| `session.*` | At-least-once | Client ignores duplicate `session_id` + `type` pairs within 5s |
+| `session.*` | At-least-once | Client deduplicates by event ID when supplied, otherwise by `session_id`, type, affected user, and monotonic state version |
 | `chat.message` | At-least-once | Client deduplicates by `message_id` |
 | `queue.your_turn` | At-least-once + FCM backup | Client shows notification once per `queue_entry_id` |
 
-> **Source of truth:** PostgreSQL is always the source of truth. On reconnection, clients re-fetch state via REST (`GET /api/v1/sessions/{id}/queue`) rather than relying solely on WebSocket events.
+> **Source of truth:** PostgreSQL is always the source of truth. On F-005 reconnection, clients obtain a fresh realtime ticket and re-fetch the authorized session participant snapshot; F-003 queue clients later re-fetch their queue operation rather than relying solely on WebSocket events.

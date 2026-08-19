@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/auth/data/auth_api_client.dart';
 import 'package:halaqaty_mobile/features/sessions/domain/session_models.dart';
+import 'package:halaqaty_mobile/features/sessions/data/session_protocol_constants.dart';
 
 export 'package:halaqaty_mobile/features/sessions/domain/session_models.dart';
 
@@ -14,7 +15,7 @@ class SessionApiClient {
       required String sessionId,
       required String circleId}) async {
     final response = await _dio.post<Map<String, dynamic>>(
-        '/circles/$circleId/sessions',
+        '${SessionApiPaths.circles}/$circleId/sessions',
         options: Options(headers: _headers(token, sessionId)));
     return SessionModel.fromJson(response.data!);
   }
@@ -33,7 +34,7 @@ class SessionApiClient {
   Future<SessionConnection> _connect(String token, String sessionId,
       String liveSessionId, String action) async {
     final response = await _dio.post<Map<String, dynamic>>(
-        '/sessions/$liveSessionId/$action',
+        '${SessionApiPaths.sessions}/$liveSessionId/$action',
         options: Options(headers: _headers(token, sessionId)));
     return SessionConnection.fromJson(response.data!);
   }
@@ -43,9 +44,9 @@ class SessionApiClient {
       required String sessionId,
       required String circleId}) async {
     final response = await _dio.get<Map<String, dynamic>>(
-        '/circles/$circleId/sessions',
+        '${SessionApiPaths.circles}/$circleId/sessions',
         options: Options(headers: _headers(token, sessionId)));
-    return (response.data?['data'] as List<dynamic>? ?? const [])
+    return (response.data?[SessionJsonKeys.data] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
         .map(SessionModel.fromJson)
         .toList(growable: false);
@@ -57,9 +58,9 @@ class SessionApiClient {
       required String sessionId,
       required String liveSessionId}) async {
     final response = await _dio.get<Map<String, dynamic>>(
-        '/sessions/$liveSessionId/participants',
+        '${SessionApiPaths.sessions}/$liveSessionId/participants',
         options: Options(headers: _headers(token, sessionId)));
-    return (response.data?['data'] as List<dynamic>? ?? const [])
+    return (response.data?[SessionJsonKeys.data] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
         .map(SessionParticipant.fromJson)
         .toList(growable: false);
@@ -71,8 +72,8 @@ class SessionApiClient {
       required String liveSessionId,
       required bool locked}) async {
     final response = await _dio.post<Map<String, dynamic>>(
-        '/sessions/$liveSessionId/lock',
-        data: {'locked': locked},
+        '${SessionApiPaths.sessions}/$liveSessionId/lock',
+        data: {SessionJsonKeys.locked: locked},
         options: Options(headers: _headers(token, sessionId)));
     return SessionModel.fromJson(response.data!);
   }
@@ -82,7 +83,7 @@ class SessionApiClient {
       required String sessionId,
       required String liveSessionId}) async {
     final response = await _dio.post<Map<String, dynamic>>(
-        '/sessions/$liveSessionId/end',
+        '${SessionApiPaths.sessions}/$liveSessionId/end',
         options: Options(headers: _headers(token, sessionId)));
     return SessionModel.fromJson(response.data!);
   }
@@ -92,15 +93,19 @@ class SessionApiClient {
           required String sessionId,
           required String liveSessionId}) =>
       _postWithoutContent(
-          '/sessions/$liveSessionId/participants/mute-all', token, sessionId);
+          '${SessionApiPaths.sessions}/$liveSessionId/participants/mute-all',
+          token,
+          sessionId);
 
   Future<void> muteParticipant(
           {required String token,
           required String sessionId,
           required String liveSessionId,
           required String userId}) =>
-      _postWithoutContent('/sessions/$liveSessionId/participants/$userId/mute',
-          token, sessionId);
+      _postWithoutContent(
+          '${SessionApiPaths.sessions}/$liveSessionId/participants/$userId/mute',
+          token,
+          sessionId);
 
   Future<void> unmuteParticipant(
           {required String token,
@@ -108,7 +113,7 @@ class SessionApiClient {
           required String liveSessionId,
           required String userId}) =>
       _postWithoutContent(
-          '/sessions/$liveSessionId/participants/$userId/unmute',
+          '${SessionApiPaths.sessions}/$liveSessionId/participants/$userId/unmute',
           token,
           sessionId);
 
@@ -118,7 +123,7 @@ class SessionApiClient {
           required String liveSessionId,
           required String userId}) =>
       _postWithoutContent(
-          '/sessions/$liveSessionId/participants/$userId/remove',
+          '${SessionApiPaths.sessions}/$liveSessionId/participants/$userId/remove',
           token,
           sessionId);
 
@@ -133,8 +138,10 @@ class SessionApiClient {
 }
 
 /// Shared auth headers for session-scoped REST calls.
-Map<String, String> sessionRequestHeaders(String token, String sessionId) =>
-    {'Authorization': 'Bearer $token', 'X-Halaqaty-Session-ID': sessionId};
+Map<String, String> sessionRequestHeaders(String token, String sessionId) => {
+      '${SessionHeaders.authorization}': 'Bearer $token',
+      SessionHeaders.sessionId: sessionId
+    };
 
 final sessionApiClientProvider = Provider<SessionApiClient>(
     (ref) => SessionApiClient(ref.watch(dioProvider)));

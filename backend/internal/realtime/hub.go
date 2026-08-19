@@ -13,8 +13,17 @@ import (
 )
 
 const (
-	maxConnectionsPerUser = 3
-	maxMessagesPerMinute  = 30
+	maxConnectionsPerUser     = 3
+	maxMessagesPerMinute      = 30
+	realtimeActionSubscribe   = "subscribe"
+	realtimeTypePing          = "ping"
+	realtimeTypePong          = "pong"
+	realtimeTypeError         = "error"
+	realtimeTypeSubscribed    = "subscribed"
+	realtimeErrorRateLimit    = "RATE_LIMITED"
+	realtimeErrorInvalid      = "INVALID_PAYLOAD"
+	realtimeErrorUnauthorized = "UNAUTHORIZED"
+	realtimeErrorSessionEnded = "SESSION_ENDED"
 )
 
 // SessionTopicAuthorizer checks whether a user may subscribe to a live
@@ -112,7 +121,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !client.allowMessage() {
-			writeRealtimeError(conn, "RATE_LIMITED", "rate limit exceeded")
+			writeRealtimeError(conn, realtimeErrorRateLimit, "rate limit exceeded")
 			continue
 		}
 		var msg struct {
@@ -122,35 +131,35 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Payload map[string]any `json:"payload"`
 		}
 		if err := json.Unmarshal(raw, &msg); err != nil {
-			writeRealtimeError(conn, "INVALID_PAYLOAD", "invalid message")
+			writeRealtimeError(conn, realtimeErrorInvalid, "invalid message")
 			continue
 		}
-		if msg.Action == "ping" || msg.Type == "ping" {
+		if msg.Action == realtimeTypePing || msg.Type == realtimeTypePing {
 			_ = conn.SetReadDeadline(time.Now().Add(90 * time.Second))
-			_ = conn.WriteJSON(map[string]any{"type": "pong", "server_time": time.Now().UTC().Format(time.RFC3339)})
+			_ = conn.WriteJSON(map[string]any{"type": realtimeTypePong, "server_time": time.Now().UTC().Format(time.RFC3339)})
 			continue
 		}
 		if strings.HasPrefix(msg.Type, "cmd.") {
 			h.handleCommand(r.Context(), client, msg.Type, msg.Payload)
 			continue
 		}
-		if msg.Action != "subscribe" {
-			writeRealtimeError(conn, "INVALID_PAYLOAD", "unsupported realtime message")
+		if msg.Action != realtimeActionSubscribe {
+			writeRealtimeError(conn, realtimeErrorInvalid, "unsupported realtime message")
 			continue
 		}
 		topic, err := ParseTopic(msg.Topic)
 		if err != nil || !h.authorized(r.Context(), ticket, client.userID, topic) {
-			writeRealtimeError(conn, "UNAUTHORIZED", "topic unauthorized")
+			writeRealtimeError(conn, realtimeErrorUnauthorized, "topic unauthorized")
 			continue
 		}
 		client.mu.Lock()
 		client.topics[topic.String()] = struct{}{}
 		client.mu.Unlock()
-		_ = conn.WriteJSON(map[string]any{"type": "subscribed", "topic": topic.String()})
+		_ = conn.WriteJSON(map[string]any{"type": realtimeTypeSubscribed, "topic": topic.String()})
 		if topic.Kind() == TopicSession && h.snapshot != nil {
 			snapshot, err := h.snapshot(r.Context(), client.userID, topic.ID())
 			if err != nil {
-				writeRealtimeError(conn, "SESSION_ENDED", "session snapshot unavailable")
+				writeRealtimeError(conn, realtimeErrorSessionEnded, "session snapshot unavailable")
 				continue
 			}
 			_ = conn.WriteJSON(snapshot)
@@ -162,28 +171,28 @@ func (h *Hub) handleCommand(ctx context.Context, client *hubClient, command stri
 	sessionID, _ := payload["session_id"].(string)
 	topic, err := NewSessionTopic(sessionID)
 	if err != nil || h.command == nil {
-		writeRealtimeError(client.conn, "INVALID_PAYLOAD", "invalid session command")
+		writeRealtimeError(client.conn, realtimeErrorInvalid, "invalid session command")
 		return
 	}
 	client.mu.Lock()
 	_, subscribed := client.topics[topic.String()]
 	client.mu.Unlock()
 	if !subscribed {
-		writeRealtimeError(client.conn, "UNAUTHORIZED", "session topic is not subscribed")
+		writeRealtimeError(client.conn, realtimeErrorUnauthorized, "session topic is not subscribed")
 		return
 	}
 	eventID, event, err := h.command(ctx, client.userID, sessionID, command)
 	if err != nil {
-		writeRealtimeError(client.conn, "INVALID_PAYLOAD", "session command rejected")
+		writeRealtimeError(client.conn, realtimeErrorInvalid, "session command rejected")
 		return
 	}
 	if err := h.Broadcast(topic, eventID, event); err != nil {
-		writeRealtimeError(client.conn, "INVALID_PAYLOAD", "realtime event unavailable")
+		writeRealtimeError(client.conn, realtimeErrorInvalid, "realtime event unavailable")
 	}
 }
 
 func writeRealtimeError(conn *websocket.Conn, code, message string) {
-	_ = conn.WriteJSON(map[string]any{"type": "error", "payload": map[string]any{"code": code, "message": message}})
+	_ = conn.WriteJSON(map[string]any{"type": realtimeTypeError, "payload": map[string]any{"code": code, "message": message}})
 }
 
 func (h *Hub) authorized(ctx context.Context, ticket Ticket, userID string, topic Topic) bool {

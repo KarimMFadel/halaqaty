@@ -1,4 +1,5 @@
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
+import 'package:halaqaty_mobile/features/sessions/data/session_protocol_constants.dart';
 
 class SessionModel {
   const SessionModel(
@@ -21,15 +22,15 @@ class SessionModel {
   final DateTime? actualStart;
   final DateTime? actualEnd;
   factory SessionModel.fromJson(Map<String, dynamic> json) => SessionModel(
-        id: json['id'] as String,
-        circleId: json['circle_id'] as String,
-        status: json['status'] as String,
-        mediaMode: json['media_mode'] as String,
-        participantCount: json['participant_count'] as int? ?? 0,
-        isLocked: json['is_locked'] as bool? ?? false,
-        endReason: json['end_reason'] as String?,
-        actualStart: _date(json['actual_start']),
-        actualEnd: _date(json['actual_end']),
+        id: json[SessionJsonKeys.id] as String,
+        circleId: json[SessionJsonKeys.circleId] as String,
+        status: json[SessionJsonKeys.status] as String,
+        mediaMode: json[SessionJsonKeys.mediaMode] as String,
+        participantCount: json[SessionJsonKeys.participantCount] as int? ?? 0,
+        isLocked: json[SessionJsonKeys.isLocked] as bool? ?? false,
+        endReason: json[SessionJsonKeys.endReason] as String?,
+        actualStart: _date(json[SessionJsonKeys.actualStart]),
+        actualEnd: _date(json[SessionJsonKeys.actualEnd]),
       );
   static DateTime? _date(Object? value) =>
       value is String ? DateTime.tryParse(value) : null;
@@ -46,9 +47,9 @@ class MediaConnection {
   final DateTime expiresAt;
   factory MediaConnection.fromJson(Map<String, dynamic> json) =>
       MediaConnection(
-        endpoint: json['endpoint'] as String,
-        credential: json['credential'] as String,
-        expiresAt: DateTime.parse(json['expires_at'] as String),
+        endpoint: json[SessionJsonKeys.endpoint] as String,
+        credential: json[SessionJsonKeys.credential] as String,
+        expiresAt: DateTime.parse(json[SessionJsonKeys.expiresAt] as String),
       );
 }
 
@@ -62,10 +63,11 @@ class SessionConnection {
   final bool isModerator;
   factory SessionConnection.fromJson(Map<String, dynamic> json) =>
       SessionConnection(
-        session: SessionModel.fromJson(json['session'] as Map<String, dynamic>),
+        session: SessionModel.fromJson(
+            json[SessionJsonKeys.session] as Map<String, dynamic>),
         mediaConnection: MediaConnection.fromJson(
-            json['media_connection'] as Map<String, dynamic>),
-        isModerator: json['is_moderator'] as bool? ?? false,
+            json[SessionJsonKeys.mediaConnection] as Map<String, dynamic>),
+        isModerator: json[SessionJsonKeys.isModerator] as bool? ?? false,
       );
 }
 
@@ -88,11 +90,12 @@ class SessionParticipant {
 
   factory SessionParticipant.fromJson(Map<String, dynamic> json) =>
       SessionParticipant(
-        userId: json['user_id'] as String,
-        displayName: json['display_name'] as String,
-        role: CircleRole.values.byName(json['role'] as String),
-        isCurrentlyPresent: json['is_currently_present'] as bool? ?? false,
-        handRaisedAt: _date(json['hand_raised_at']),
+        userId: json[SessionJsonKeys.userId] as String,
+        displayName: json[SessionJsonKeys.displayName] as String,
+        role: CircleRole.values.byName(json[SessionJsonKeys.role] as String),
+        isCurrentlyPresent:
+            json[SessionJsonKeys.isCurrentlyPresent] as bool? ?? false,
+        handRaisedAt: _date(json[SessionJsonKeys.handRaisedAt]),
       );
 
   static DateTime? _date(Object? value) =>

@@ -212,7 +212,7 @@ func (r *Router) registerRoutes() {
 		// Auth runs first so the principal exists when the role guard reads it.
 		r.mux.Handle(
 			routeCircleAssignRole,
-			r.requireWithUserLimit(r.mw.Role.RequireAny("supervisor", "teacher")(assignRoleHandler)),
+			r.requireWithUserLimit(r.mw.Role.RequireAny(rbac.RoleSupervisor, rbac.RoleTeacher)(assignRoleHandler)),
 		)
 		var refreshInviteHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
@@ -226,10 +226,10 @@ func (r *Router) registerRoutes() {
 			archiveCircleHandler = http.HandlerFunc(rbacH.ArchiveCircle)
 			updateCircleHandler = http.HandlerFunc(rbacH.UpdateCircle)
 		}
-		r.mux.Handle(routeCircleRefreshInvite, r.requireWithUserLimit(r.mw.Role.RequireAny("teacher")(refreshInviteHandler)))
-		r.mux.Handle(routeCircleRemoveMember, r.requireWithUserLimit(r.mw.Role.RequireAny("teacher")(removeMemberHandler)))
-		r.mux.Handle(routeCircleArchive, r.requireWithUserLimit(r.mw.Role.RequireAny("teacher")(archiveCircleHandler)))
-		r.mux.Handle(routeCircleUpdate, r.requireWithUserLimit(r.mw.Role.RequireAny("teacher")(updateCircleHandler)))
+		r.mux.Handle(routeCircleRefreshInvite, r.requireWithUserLimit(r.mw.Role.RequireAny(rbac.RoleTeacher)(refreshInviteHandler)))
+		r.mux.Handle(routeCircleRemoveMember, r.requireWithUserLimit(r.mw.Role.RequireAny(rbac.RoleTeacher)(removeMemberHandler)))
+		r.mux.Handle(routeCircleArchive, r.requireWithUserLimit(r.mw.Role.RequireAny(rbac.RoleTeacher)(archiveCircleHandler)))
+		r.mux.Handle(routeCircleUpdate, r.requireWithUserLimit(r.mw.Role.RequireAny(rbac.RoleTeacher)(updateCircleHandler)))
 	}
 
 	if r.mw.Auth != nil {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
 	"github.com/google/uuid"
 )
 
@@ -13,9 +14,9 @@ import (
 // supervisors may start or create sessions; every active member may join
 // (ADR-010, US1).
 const (
-	roleTeacher    = "teacher"
-	roleSupervisor = "supervisor"
-	roleStudent    = "student"
+	roleTeacher    = rbac.RoleTeacher
+	roleSupervisor = rbac.RoleSupervisor
+	roleStudent    = rbac.RoleStudent
 )
 
 // Store is the consumer-defined persistence port of the session service,
@@ -357,7 +358,7 @@ func (s *Service) RealtimeSnapshot(ctx context.Context, actorID, sessionID strin
 		items = append(items, realtimeParticipant(participant))
 	}
 	return map[string]any{
-		"type": "session.snapshot", "timestamp": time.Now().UTC().Format(time.RFC3339),
+		"type": sessionEventSnapshot, "timestamp": time.Now().UTC().Format(time.RFC3339),
 		"payload": map[string]any{
 			"session": map[string]any{
 				"id": sess.ID, "status": sess.Status, "is_locked": sess.IsLocked,
@@ -370,8 +371,8 @@ func (s *Service) RealtimeSnapshot(ctx context.Context, actorID, sessionID strin
 // HandleRealtimeCommand applies a hand command after the hub has authorized
 // the session topic and returns a redacted event envelope.
 func (s *Service) HandleRealtimeCommand(ctx context.Context, actorID, sessionID, command string) (string, map[string]any, error) {
-	raised := command == "cmd.raise_hand"
-	if !raised && command != "cmd.lower_hand" {
+	raised := command == sessionCommandRaiseHand
+	if !raised && command != sessionCommandLowerHand {
 		return "", nil, errors.New("unsupported session command")
 	}
 	if err := s.SetHand(ctx, actorID, sessionID, raised); err != nil {
@@ -392,9 +393,9 @@ func (s *Service) HandleRealtimeCommand(ctx context.Context, actorID, sessionID,
 			break
 		}
 	}
-	eventType := "session.hand_lowered"
+	eventType := sessionEventHandLowered
 	if raised {
-		eventType = "session.hand_raised"
+		eventType = sessionEventHandRaised
 	}
 	handState := "lowered"
 	if handAt != nil {

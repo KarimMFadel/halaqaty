@@ -19,6 +19,14 @@ const (
 	SessionStatusEnded     SessionStatus = "ended"
 )
 
+const (
+	sessionCommandRaiseHand = "cmd.raise_hand"
+	sessionCommandLowerHand = "cmd.lower_hand"
+	sessionEventSnapshot    = "session.snapshot"
+	sessionEventHandRaised  = "session.hand_raised"
+	sessionEventHandLowered = "session.hand_lowered"
+)
+
 // EndReason is the durable attribution for a session ending. The zero value
 // means the session has not ended.
 type EndReason string
@@ -94,9 +102,9 @@ type Session struct {
 // ParticipantPresence is the durable per-participant presence and hand-state
 // record for one session (FR-010, FR-025).
 type ParticipantPresence struct {
-	SessionID          string
-	UserID             string
-	DisplayName        string
+	SessionID   string
+	UserID      string
+	DisplayName string
 	// Role is the participant's current circle role, resolved by the
 	// presence snapshot query for the public participants projection.
 	Role               string

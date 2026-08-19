@@ -297,7 +297,7 @@ func publicConnection(c MediaConnection) map[string]any {
 func publicParticipant(p ParticipantPresence) map[string]any {
 	role := p.Role
 	if role == "" {
-		role = "student"
+		role = roleStudent
 	}
 	return map[string]any{
 		"user_id": p.UserID, "display_name": p.DisplayName, "role": role,

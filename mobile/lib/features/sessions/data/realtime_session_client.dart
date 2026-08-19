@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/auth/data/auth_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/sessions/data/session_api_client.dart';
+import 'package:halaqaty_mobile/features/sessions/data/session_protocol_constants.dart';
 
 /// Provider-neutral realtime session events per `docs/contracts/ws_events.md`.
 ///
@@ -94,69 +95,74 @@ RealtimeSessionEvent? parseRealtimeSessionEvent(
     return null;
   }
   if (decoded is! Map<String, dynamic>) return null;
-  final type = decoded['type'];
-  final payload = decoded['payload'];
+  final type = decoded[SessionJsonKeys.type];
+  final payload = decoded[SessionJsonKeys.payload];
   if (type is! String || payload is! Map<String, dynamic>) return null;
-  final at = DateTime.tryParse(decoded['timestamp'] as String? ?? '');
+  final at =
+      DateTime.tryParse(decoded[SessionJsonKeys.timestamp] as String? ?? '');
 
   final String? eventSessionId = _eventSessionId(type, payload);
   if (eventSessionId == null || eventSessionId != liveSessionId) return null;
 
   switch (type) {
-    case 'session.snapshot':
-      final session = payload['session'];
+    case SessionRealtimeTypes.snapshot:
+      final session = payload[SessionJsonKeys.session];
       if (session is! Map<String, dynamic>) return null;
       return SessionSnapshotEvent(
         sessionId: eventSessionId,
-        isLocked: session['is_locked'] as bool? ?? false,
+        isLocked: session[SessionJsonKeys.isLocked] as bool? ?? false,
         participants: _participants(payload['participants']),
       );
-    case 'session.participant_joined':
+    case SessionRealtimeTypes.participantJoined:
       return ParticipantJoinedEvent(
         sessionId: eventSessionId,
-        userId: payload['user_id'] as String,
-        displayName: payload['display_name'] as String,
-        role: _role(payload['role']),
+        userId: payload[SessionJsonKeys.userId] as String,
+        displayName: payload[SessionJsonKeys.displayName] as String,
+        role: _role(payload[SessionJsonKeys.role]),
       );
-    case 'session.participant_left':
+    case SessionRealtimeTypes.participantLeft:
       return ParticipantLeftEvent(
-          sessionId: eventSessionId, userId: payload['user_id'] as String);
-    case 'session.participant_removed':
+          sessionId: eventSessionId,
+          userId: payload[SessionJsonKeys.userId] as String);
+    case SessionRealtimeTypes.participantRemoved:
       return ParticipantRemovedEvent(
-          sessionId: eventSessionId, userId: payload['user_id'] as String);
-    case 'session.hand_raised':
+          sessionId: eventSessionId,
+          userId: payload[SessionJsonKeys.userId] as String);
+    case SessionRealtimeTypes.handRaised:
       return HandRaisedEvent(
         sessionId: eventSessionId,
-        participantId: payload['participant_id'] as String,
-        participantName: payload['participant_name'] as String,
+        participantId: payload[SessionJsonKeys.participantId] as String,
+        participantName: payload[SessionJsonKeys.participantName] as String,
         at: at,
       );
-    case 'session.hand_lowered':
+    case SessionRealtimeTypes.handLowered:
       return HandLoweredEvent(
         sessionId: eventSessionId,
-        participantId: payload['participant_id'] as String,
-        participantName: payload['participant_name'] as String,
+        participantId: payload[SessionJsonKeys.participantId] as String,
+        participantName: payload[SessionJsonKeys.participantName] as String,
         at: at,
       );
-    case 'session.lock_changed':
+    case SessionRealtimeTypes.lockChanged:
       return LockChangedEvent(
           sessionId: eventSessionId,
-          locked: payload['locked'] as bool? ?? false);
-    case 'session.ended':
+          locked: payload[SessionJsonKeys.locked] as bool? ?? false);
+    case SessionRealtimeTypes.ended:
       return SessionEndedEvent(
           sessionId: eventSessionId,
-          endReason: payload['end_reason'] as String?);
+          endReason: payload[SessionJsonKeys.endReason] as String?);
     default:
       return null;
   }
 }
 
 String? _eventSessionId(String type, Map<String, dynamic> payload) {
-  if (type == 'session.snapshot') {
-    final session = payload['session'];
-    return session is Map<String, dynamic> ? session['id'] as String? : null;
+  if (type == SessionRealtimeTypes.snapshot) {
+    final session = payload[SessionJsonKeys.session];
+    return session is Map<String, dynamic>
+        ? session[SessionJsonKeys.id] as String?
+        : null;
   }
-  return payload['session_id'] as String?;
+  return payload[SessionJsonKeys.sessionId] as String?;
 }
 
 List<SessionParticipant> _participants(Object? raw) =>
@@ -182,9 +188,11 @@ Uri realtimeWebSocketUrl(String apiBaseUrl) {
 }
 
 Map<String, String> realtimeSubscribeMessage(String topic) =>
-    {'action': 'subscribe', 'topic': topic};
+    {'action': SessionRealtimeActions.subscribe, 'topic': topic};
 
-const Map<String, String> realtimePingMessage = {'type': 'ping'};
+const Map<String, String> realtimePingMessage = {
+  SessionJsonKeys.type: SessionRealtimeTypes.ping
+};
 
 /// Realtime transport boundary for the session room. The stream never errors:
 /// transport failures close the stream; reconnection is owned by US3 (T039+).
@@ -261,7 +269,8 @@ class WebSocketRealtimeSessionClient implements RealtimeSessionClient {
   }
 
   Future<String> _fetchTicket(String token, String backendSessionId) async {
-    final response = await _dio.post<Map<String, dynamic>>('/realtime/tickets',
+    final response = await _dio.post<Map<String, dynamic>>(
+        SessionApiPaths.realtimeTickets,
         options:
             Options(headers: sessionRequestHeaders(token, backendSessionId)));
     final ticket = response.data?['token'];
@@ -273,11 +282,11 @@ class WebSocketRealtimeSessionClient implements RealtimeSessionClient {
 
   @override
   Future<void> raiseHand(String liveSessionId) =>
-      _sendCommand('cmd.raise_hand', liveSessionId);
+      _sendCommand(SessionRealtimeActions.raiseHand, liveSessionId);
 
   @override
   Future<void> lowerHand(String liveSessionId) =>
-      _sendCommand('cmd.lower_hand', liveSessionId);
+      _sendCommand(SessionRealtimeActions.lowerHand, liveSessionId);
 
   Future<void> _sendCommand(String type, String liveSessionId) async {
     final socket = _socket;
@@ -285,8 +294,8 @@ class WebSocketRealtimeSessionClient implements RealtimeSessionClient {
       throw StateError('Realtime session is not connected');
     }
     socket.add(jsonEncode({
-      'type': type,
-      'payload': {'session_id': liveSessionId}
+      SessionJsonKeys.type: type,
+      SessionJsonKeys.payload: {SessionJsonKeys.sessionId: liveSessionId}
     }));
   }
 

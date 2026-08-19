@@ -219,7 +219,7 @@ func (r *Router) registerRoutes() {
 		})
 		removeMemberHandler := refreshInviteHandler
 		archiveCircleHandler := refreshInviteHandler
-		var updateCircleHandler http.Handler = refreshInviteHandler
+		updateCircleHandler := refreshInviteHandler
 		if rbacH != nil {
 			refreshInviteHandler = http.HandlerFunc(rbacH.RefreshInviteCode)
 			removeMemberHandler = http.HandlerFunc(rbacH.RemoveMember)

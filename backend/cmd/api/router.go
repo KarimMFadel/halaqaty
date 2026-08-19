@@ -240,6 +240,7 @@ func (r *Router) registerRoutes() {
 			sessionHandler = r.mw.SessionHandler
 		}
 		r.mux.Handle(routeCircleSessionsCreate, r.requireWithUserLimit(sessionHandler))
+		r.mux.Handle(routeCircleSessionsGet, r.requireWithUserLimit(sessionHandler))
 		r.mux.Handle(routeSessionStart, r.requireWithUserLimit(sessionHandler))
 		r.mux.Handle(routeSessionJoin, r.requireWithUserLimit(sessionHandler))
 		r.mux.Handle(routeSessionEnd, r.requireWithUserLimit(sessionHandler))

@@ -35,6 +35,10 @@ type Store interface {
 	GetSession(ctx context.Context, sessionID string) (Session, error)
 }
 
+type circleSessionListStore interface {
+	ListCircleSessions(context.Context, string) ([]Session, error)
+}
+
 // CircleRoleReader is the F-002 authorization port: it returns the caller's
 // role in the circle, or "" when the caller is not an active member.
 type CircleRoleReader interface {
@@ -114,6 +118,23 @@ func (s *Service) CreateAdHocSession(ctx context.Context, actorID, circleID stri
 		return Session{}, fmt.Errorf("create ad-hoc session: %w", err)
 	}
 	return created, nil
+}
+
+// ListCircleSessions returns discovery-safe scheduled and active sessions for
+// an authorized circle member. Scheduling and attendance remain outside F-005.
+func (s *Service) ListCircleSessions(ctx context.Context, actorID, circleID string) ([]Session, error) {
+	if _, err := s.authorize(ctx, circleID, actorID, false); err != nil {
+		return nil, err
+	}
+	store, ok := s.store.(circleSessionListStore)
+	if !ok {
+		return nil, errors.New("session discovery store is not configured")
+	}
+	sessions, err := store.ListCircleSessions(ctx, circleID)
+	if err != nil {
+		return nil, fmt.Errorf("list circle sessions: %w", err)
+	}
+	return sessions, nil
 }
 
 // StartSession activates a scheduled session and issues the starting

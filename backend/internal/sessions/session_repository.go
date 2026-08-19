@@ -200,6 +200,28 @@ func (r *Repository) CreateAdHocSession(ctx context.Context, circleID, createdBy
 	return created, nil
 }
 
+// ListCircleSessions returns only discovery-visible scheduled and active
+// sessions; ended history and F-006 scheduling data stay out of this flow.
+func (r *Repository) ListCircleSessions(ctx context.Context, circleID string) ([]Session, error) {
+	rows, err := r.pool.Query(ctx, listCircleSessionsQuery, circleID)
+	if err != nil {
+		return nil, fmt.Errorf("list circle sessions: %w", err)
+	}
+	defer rows.Close()
+	items := make([]Session, 0)
+	for rows.Next() {
+		item, err := scanSession(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan circle session: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate circle sessions: %w", err)
+	}
+	return items, nil
+}
+
 // StartSession applies the scheduled→active compare-and-set and persists the
 // opaque media room reference (data-model invariant 2). A zero-row update is
 // mapped to the domain error matching the current state.

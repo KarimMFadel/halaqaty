@@ -21,6 +21,13 @@ FROM sessions
 WHERE id = $1::uuid
 `
 
+const listCircleSessionsQuery = `
+SELECT ` + sessionColumns + `
+FROM sessions
+WHERE circle_id = $1::uuid AND status IN ('scheduled', 'active')
+ORDER BY created_at DESC, id DESC
+`
+
 const listRecoveryCandidatesQuery = `
 SELECT ` + sessionColumns + `
 FROM sessions

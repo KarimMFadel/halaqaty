@@ -80,6 +80,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
+	case len(parts) == 3 && parts[0] == "circles" && parts[2] == "sessions" && r.Method == http.MethodGet:
+		h.list(w, r, principal.UserID, parts[1])
 	case len(parts) == 3 && parts[0] == "circles" && parts[2] == "sessions" && r.Method == http.MethodPost:
 		h.create(w, r, principal.UserID, parts[1])
 	case len(parts) == 3 && parts[0] == "sessions" && r.Method == http.MethodPost:
@@ -109,6 +111,23 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeSessionError(w, ErrSessionNotFound)
 	}
+}
+
+func (h *Handler) list(w http.ResponseWriter, r *http.Request, actorID, circleID string) {
+	if !validUUID(circleID) {
+		phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{"circle_id": "circle_id must be a valid UUID"})
+		return
+	}
+	items, err := h.service.ListCircleSessions(r.Context(), actorID, circleID)
+	if err != nil {
+		writeSessionError(w, err)
+		return
+	}
+	data := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		data = append(data, publicSession(item))
+	}
+	phttp.WriteJSON(w, http.StatusOK, map[string]any{"data": data})
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request, actorID, circleID string) {

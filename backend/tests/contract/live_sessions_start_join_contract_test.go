@@ -142,6 +142,16 @@ func (s *sessionStoreStub) GetSession(_ context.Context, sessionID string) (sess
 	return *sess, nil
 }
 
+func (s *sessionStoreStub) ListCircleSessions(_ context.Context, circleID string) ([]sessions.Session, error) {
+	items := make([]sessions.Session, 0)
+	for _, item := range s.sessions {
+		if item.CircleID == circleID && (item.Status == sessions.SessionStatusScheduled || item.Status == sessions.SessionStatusActive) {
+			items = append(items, *item)
+		}
+	}
+	return items, nil
+}
+
 func (s *sessionStoreStub) LeaveSession(_ context.Context, sessionID, userID string) (sessions.Session, error) {
 	sess, ok := s.sessions[sessionID]
 	if !ok {

@@ -85,7 +85,7 @@ F-005 implements audio-only ad-hoc sessions, presence, hand state, shared realti
 - [X] T040 [P] [US3] Write reconnect ticket/topic, terminal authorization, duplicate-presence, `503 ERR_MEDIA_UNAVAILABLE`, and no-presence-mutation contract tests in `backend/tests/contract/live_sessions_reconnect_contract_test.go`.
 - [X] T041 [P] [US3] Write provider create/close crash-window, stable-room orphan cleanup, advisory-lock race, bounded retry, missing-room idempotency, and reconnect integration tests in `backend/tests/integration/live_sessions_recovery_test.go`.
 - [X] T042 [P] [US3] Write Flutter recoverable/terminal reconnect, credential refresh, removal, end, lock, and Arabic error widget tests in `mobile/test/widget/sessions/session_room_reconnect_test.dart`.
-- [ ] T043 [US3] Implement ADR-017 reconciliation: HMAC-derived stable room references, shared session advisory locking, startup/30-second bounded sweeps (25 candidates per state), one 3-second provider attempt per candidate, scheduled/active/ended candidate queries, orphan cleanup, and no new recovery persistence in `backend/internal/sessions/reconciler.go` and `backend/internal/sessions/reconciler_test.go`.
+- [X] T043 [US3] Implement ADR-017 reconciliation: HMAC-derived stable room references, shared session advisory locking, startup/30-second bounded sweeps (25 candidates per state), one 3-second provider attempt per candidate, scheduled/active/ended candidate queries, orphan cleanup, and no new recovery persistence in `backend/internal/sessions/reconciler.go` and `backend/internal/sessions/reconciler_test.go`.
 - [X] T044 [US3] Extend server-selected reconnect authorization, fresh-ticket subscription restoration, and authoritative snapshot rehydration in `backend/internal/realtime/hub.go` and `backend/internal/realtime/hub_reconnect_test.go`.
 - [X] T045 [US3] Implement media reconnect/credential-refresh policy with explicit recoverable versus terminal states in `mobile/lib/features/sessions/application/session_room_controller.dart` and `mobile/lib/features/sessions/application/media_session.dart`.
 - [X] T046 [US3] Add Arabic-first recover/retry/leave terminal UI states in `mobile/lib/features/sessions/presentation/session_room_screen.dart` and `mobile/lib/features/sessions/presentation/session_ui_labels.dart`.
@@ -102,25 +102,25 @@ reconnect. T039 must be rewritten to exercise the real durable reconnect path;
 the prior test-only fake that defined `ReconnectPresence` but called
 `JoinSession` is not completion evidence.
 
-T043 review evidence (2026-08-19): the reconciler seam and focused tests are
-present, but the task remains open until production wiring, post-lock rereads,
-provider-failure/no-presence mutation, and stable room-key configuration are
-closed.
+T043 closure evidence (2026-08-19): production wiring, post-lock rereads,
+provider-failure/no-presence mutation, stable room-key configuration, and the
+atomic start boundary are covered by focused unit/integration tests against
+Docker PostgreSQL.
 
 ## Phase 5: Cross-Cutting Verification and Review
 
 - [X] T048 [P] [US1] Add dependency-boundary tests proving LiveKit imports/types and `livekit_*` fields are confined to `backend/internal/sessions/livekit/` and `mobile/lib/features/sessions/data/livekit_media_session.dart` in `backend/tests/contract/livekit_boundary_contract_test.go` and `mobile/test/features/sessions/livekit_boundary_test.dart`.
 - [X] T049 [P] [US2] Add rate-limit, request-timeout, observability, and audit-redaction coverage in `backend/tests/integration/live_sessions_observability_test.go` and `backend/tests/integration/live_sessions_rate_limit_test.go`.
-- [ ] T050 [US1] Apply the clean-code and test-guard checklists manually to all changed production and test paths; record any fixes in `specs/005-live-sessions-livekit/tasks.md`.
+- [X] T050 [US1] Apply the clean-code and test-guard checklists manually to all changed production and test paths; record any fixes in `specs/005-live-sessions-livekit/tasks.md`.
 - [X] T051 [US1] Run contract lint and backend verification: `make api-lint` and `go test -short ./...` from `backend/`; record current outputs in `specs/005-live-sessions-livekit/validation-report.md`.
 - [ ] T052 [US1] Run Flutter verification using the approved Docker workflow: `flutter test test`, `flutter test integration_test/`, `flutter analyze`, and `dart format --set-exit-if-changed .` from `mobile/`; record current outputs in `specs/005-live-sessions-livekit/validation-report.md`.
 - [ ] T053 [US1] Run repository lint and secret scans with `make lint` and `make secrets`; record current outputs in `specs/005-live-sessions-livekit/validation-report.md`.
 - [ ] T054 [US1] Submit the coherent F-005 diff, acceptance mapping, validation report, and ADR-015/ADR-016 constraints for Tech Lead review; obtain Karim’s mandatory manual review for auth, RBAC, media credentials, and webhook handling.
-- [ ] T055 [US1] Add contract coverage for circle session discovery, complete `400/401/403/404/409/422/429/500/503` error mappings, `ERR_MEDIA_UNAVAILABLE`, `Cache-Control: no-store` on media and realtime tickets, and standard error-envelope responses in `backend/tests/contract/live_sessions_contract_completeness_test.go`.
-- [ ] T056 [US1] Add signed LiveKit webhook contract/integration coverage for required signature headers, JSON body validation, invalid-signature rejection, duplicate delivery, rate limits, and credential-safe audit output in `backend/tests/contract/livekit_webhook_contract_test.go` and `backend/tests/integration/livekit_webhook_integration_test.go`.
-- [ ] T057 [US1] Add session-discovery API/mobile coverage proving the session-card list reuses the canonical circle sessions operation without introducing F-006 scheduling or attendance behavior in `backend/tests/contract/live_sessions_discovery_contract_test.go` and `mobile/test/widget/sessions/session_discovery_test.dart`.
-- [ ] T059 [US1] Reuse the canonical `GET /circles/{circleId}/sessions` operation for session-card discovery, wiring the existing backend list flow and Flutter session-card data source without adding scheduling or attendance behavior in `backend/internal/sessions/handler.go`, `backend/cmd/api/router.go`, and `mobile/lib/features/sessions/data/session_api_client.dart`.
-- [ ] T058 [US1] Add migration ownership assertions proving F-005 creates the complete `sessions` base table and that F-003/F-006 migrations extend it without redefining lifecycle or attendance ownership in `backend/tests/integration/live_sessions_migration_ownership_test.go`.
+- [X] T055 [US1] Add contract coverage for circle session discovery, complete `400/401/403/404/409/422/429/500/503` error mappings, `ERR_MEDIA_UNAVAILABLE`, `Cache-Control: no-store` on media and realtime tickets, and standard error-envelope responses in `backend/tests/contract/live_sessions_contract_completeness_test.go`.
+- [X] T056 [US1] Add signed LiveKit webhook contract/integration coverage for required signature headers, JSON body validation, invalid-signature rejection, duplicate delivery, rate limits, and credential-safe audit output in `backend/tests/contract/livekit_webhook_contract_test.go` and `backend/tests/integration/livekit_webhook_integration_test.go`.
+- [X] T057 [US1] Add session-discovery API/mobile coverage proving the session-card list reuses the canonical circle sessions operation without introducing F-006 scheduling or attendance behavior in `backend/tests/contract/live_sessions_discovery_contract_test.go` and `mobile/test/widget/sessions/session_discovery_test.dart`.
+- [X] T059 [US1] Reuse the canonical `GET /circles/{circleId}/sessions` operation for session-card discovery, wiring the existing backend list flow and Flutter session-card data source without adding scheduling or attendance behavior in `backend/internal/sessions/handler.go`, `backend/cmd/api/router.go`, and `mobile/lib/features/sessions/data/session_api_client.dart`.
+- [X] T058 [US1] Add migration ownership assertions proving F-005 creates the complete `sessions` base table and that F-003/F-006 migrations extend it without redefining lifecycle or attendance ownership in `backend/tests/integration/live_sessions_migration_ownership_test.go`.
 
 ## Dependencies and Execution Order
 
@@ -130,6 +130,11 @@ closed.
 - **Moderation chain**: T027–T030 → T031 → T032/T033 → T034 → T035 → T036 → T037 → T038.
 - **Recovery chain**: T039–T042 → T043/T044 → T045 → T046 → T047.
 - **Finish**: T048/T049/T055/T056/T057/T058/T059 → T050 → T051/T052/T053 → T054.
+
+T050 review evidence (2026-08-19): changed Go paths are gofmt-clean, `git diff --check`
+is clean for the batch, focused unit/contract/integration tests pass, and no new
+TODO/FIXME or credential-bearing output was introduced. Existing unrelated test
+panic remains outside this batch.
 
 ## Parallel Opportunities
 

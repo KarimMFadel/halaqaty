@@ -51,9 +51,90 @@ class SessionApiClient {
         .toList(growable: false);
   }
 
+  /// Authoritative presence/hand snapshot (`GET /sessions/{id}/participants`).
+  Future<List<SessionParticipant>> participants(
+      {required String token,
+      required String sessionId,
+      required String liveSessionId}) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+        '/sessions/$liveSessionId/participants',
+        options: Options(headers: _headers(token, sessionId)));
+    return (response.data?['data'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(SessionParticipant.fromJson)
+        .toList(growable: false);
+  }
+
+  Future<SessionModel> setLock(
+      {required String token,
+      required String sessionId,
+      required String liveSessionId,
+      required bool locked}) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+        '/sessions/$liveSessionId/lock',
+        data: {'locked': locked},
+        options: Options(headers: _headers(token, sessionId)));
+    return SessionModel.fromJson(response.data!);
+  }
+
+  Future<SessionModel> end(
+      {required String token,
+      required String sessionId,
+      required String liveSessionId}) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+        '/sessions/$liveSessionId/end',
+        options: Options(headers: _headers(token, sessionId)));
+    return SessionModel.fromJson(response.data!);
+  }
+
+  Future<void> muteAll(
+          {required String token,
+          required String sessionId,
+          required String liveSessionId}) =>
+      _postWithoutContent(
+          '/sessions/$liveSessionId/participants/mute-all', token, sessionId);
+
+  Future<void> muteParticipant(
+          {required String token,
+          required String sessionId,
+          required String liveSessionId,
+          required String userId}) =>
+      _postWithoutContent('/sessions/$liveSessionId/participants/$userId/mute',
+          token, sessionId);
+
+  Future<void> unmuteParticipant(
+          {required String token,
+          required String sessionId,
+          required String liveSessionId,
+          required String userId}) =>
+      _postWithoutContent(
+          '/sessions/$liveSessionId/participants/$userId/unmute',
+          token,
+          sessionId);
+
+  Future<void> removeParticipant(
+          {required String token,
+          required String sessionId,
+          required String liveSessionId,
+          required String userId}) =>
+      _postWithoutContent(
+          '/sessions/$liveSessionId/participants/$userId/remove',
+          token,
+          sessionId);
+
+  Future<void> _postWithoutContent(
+      String path, String token, String sessionId) async {
+    await _dio.post<void>(path,
+        options: Options(headers: _headers(token, sessionId)));
+  }
+
   Map<String, String> _headers(String token, String sessionId) =>
-      {'Authorization': 'Bearer $token', 'X-Halaqaty-Session-ID': sessionId};
+      sessionRequestHeaders(token, sessionId);
 }
+
+/// Shared auth headers for session-scoped REST calls.
+Map<String, String> sessionRequestHeaders(String token, String sessionId) =>
+    {'Authorization': 'Bearer $token', 'X-Halaqaty-Session-ID': sessionId};
 
 final sessionApiClientProvider = Provider<SessionApiClient>(
     (ref) => SessionApiClient(ref.watch(dioProvider)));

@@ -15,6 +15,7 @@ lib/generated_plugin_registrant.dart
 *.dart_snapshot
 
 # Go
+.gocache/
 # Binaries
 *.exe
 *.exe~

@@ -89,6 +89,7 @@ func main() {
 	rbacHandler := rbac.NewHandler(rbacService)
 
 	var sessionHandler *sessions.Handler
+	var liveSessionService *sessions.Service
 	ticketService := realtime.NewTicketService(rbacRepo)
 	realtimeHandler := realtime.NewHandler(ticketService)
 	var sessionTopicAuthorizer realtime.SessionTopicAuthorizer
@@ -107,7 +108,7 @@ func main() {
 		media := livekit.NewAdapter(mediaCfg, policy, rooms)
 		liveVerifier := livekit.NewHandlerVerifier(mediaCfg.APIKey, mediaCfg.APISecret)
 		liveSessionRepo := sessions.NewSessionRepository(pool)
-		liveSessionService := sessions.NewService(liveSessionRepo, media, rbacRepo)
+		liveSessionService = sessions.NewService(liveSessionRepo, media, rbacRepo)
 		sessionTopicAuthorizer = liveSessionService
 		sessionHandler = sessions.NewHandler(liveSessionService)
 		sessionHandler.SetWebhookVerifier(liveVerifier)
@@ -119,6 +120,12 @@ func main() {
 	roleMW := middleware.NewRoleMiddleware(sessionRepo)
 	rateLimitMW := middleware.NewRateLimitMiddleware(cfg.RateLimitPerIPPerMin, cfg.RateLimitPerUserPerMin)
 
+	realtimeHub := realtime.NewHub(ticketService, sessionTopicAuthorizer)
+	if liveSessionService != nil {
+		realtimeHub.SetSessionSnapshotProvider(liveSessionService.RealtimeSnapshot)
+		realtimeHub.SetSessionCommandHandler(liveSessionService.HandleRealtimeCommand)
+	}
+
 	mwSet := MiddlewareSet{
 		Auth:            authMW,
 		Role:            roleMW,
@@ -128,7 +135,7 @@ func main() {
 		RBACHandler:     rbacHandler,
 		SessionHandler:  sessionHandler,
 		RealtimeHandler: realtimeHandler,
-		RealtimeHub:     realtime.NewHub(ticketService, sessionTopicAuthorizer),
+		RealtimeHub:     realtimeHub,
 		Timeout:         cfg.RequestTimeout,
 		Logger:          logger,
 		Metrics:         authMetrics,

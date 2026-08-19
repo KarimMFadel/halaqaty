@@ -53,18 +53,27 @@ F-005 implements audio-only ad-hoc sessions, presence, hand state, shared realti
 
 **Goal**: Teachers/supervisors safely moderate; participants see durable presence/hand state without queue behavior.
 
-- [ ] T027 [P] [US2] Write service tests for equal moderator rights, lock/pre-lock reconnect, remove, mute/unmute entitlement preservation, hand state, automatic end, and idempotency in `backend/internal/sessions/session_moderation_service_test.go`.
-- [ ] T028 [P] [US2] Write moderation/presence REST and WebSocket response-safety, RBAC-denial, and no-provider-leak contract tests in `backend/tests/contract/live_sessions_moderation_contract_test.go`.
-- [ ] T029 [P] [US2] Write duplicate webhook, remove/reconnect denial, lock race, duration/idle end, audit-redaction, and rate-limit integration tests in `backend/tests/integration/live_sessions_moderation_test.go`.
-- [ ] T030 [P] [US2] Write RTL moderator-controls, participant hand state, and denied-control widget tests in `mobile/test/widget/sessions/session_room_moderation_test.dart`.
-- [ ] T031 [US2] Extend `backend/internal/sessions/session_service.go` with lock/unlock, mute-all, mute/unmute existing publishers, remove, hand raise/lower, duration/idle end, and redacted audit events.
-- [ ] T032 [US2] Extend typed moderation operations only in `backend/internal/sessions/livekit/adapter.go` and expose no student publish-grant operation outside `ReciterAudioControl`.
-- [ ] T033 [US2] Implement generic ticket issue, heartbeat, three-connection/user limit, 30-message/minute limit, circle/session topic authorization, snapshots, and idempotent event broadcasting in `backend/internal/realtime/hub.go`, `backend/internal/realtime/ticket_service.go`, and `backend/internal/realtime/hub_test.go`.
-- [ ] T034 [US2] Extend `backend/internal/sessions/handler.go` and `backend/cmd/api/router.go` with moderation, participant snapshot, and realtime-ticket operations plus rate-limit/error mapping.
-- [ ] T035 [US2] Add realtime subscription, presence/hand models, and session moderation API calls in `mobile/lib/features/sessions/data/realtime_session_client.dart` and `mobile/lib/features/sessions/data/session_api_client.dart`.
-- [ ] T036 [US2] Extend Riverpod session state with deduplicated snapshots/events, hand commands, and role-gated moderation actions in `mobile/lib/features/sessions/application/session_room_controller.dart`.
-- [ ] T037 [US2] Extend the RTL room UI with participant list, hand state, and teacher/supervisor-only controls in `mobile/lib/features/sessions/presentation/session_room_screen.dart`.
-- [ ] T038 [US2] Run focused US2 backend/mobile tests and verify no queue/chat, video, screen-share, recording, attendance classification, or FCM behavior was introduced in `backend/internal/sessions/`, `backend/internal/realtime/`, and `mobile/lib/features/sessions/`.
+- [x] T027 [P] [US2] Write service tests for equal moderator rights, lock/pre-lock reconnect, remove, mute/unmute entitlement preservation, hand state, automatic end, and idempotency in `backend/internal/sessions/session_moderation_service_test.go`.
+- [x] T028 [P] [US2] Write moderation/presence REST and WebSocket response-safety, RBAC-denial, and no-provider-leak contract tests in `backend/tests/contract/live_sessions_moderation_contract_test.go`.
+- [x] T029 [P] [US2] Write duplicate webhook, remove/reconnect denial, lock race, duration/idle end, audit-redaction, and rate-limit integration tests in `backend/tests/integration/live_sessions_moderation_test.go`.
+- [x] T030 [P] [US2] Write RTL moderator-controls, participant hand state, and denied-control widget tests in `mobile/test/widget/sessions/session_room_moderation_test.dart`.
+- [x] T031 [US2] Extend `backend/internal/sessions/session_service.go` with lock/unlock, mute-all, mute/unmute existing publishers, remove, hand raise/lower, duration/idle end, and redacted audit events.
+- [x] T032 [US2] Extend typed moderation operations only in `backend/internal/sessions/livekit/adapter.go` and expose no student publish-grant operation outside `ReciterAudioControl`.
+- [x] T033 [US2] Implement generic ticket issue, heartbeat, three-connection/user limit, 30-message/minute limit, circle/session topic authorization, snapshots, and idempotent event broadcasting in `backend/internal/realtime/hub.go`, `backend/internal/realtime/ticket_service.go`, and `backend/internal/realtime/hub_test.go`.
+- [x] T034 [US2] Extend `backend/internal/sessions/handler.go` and `backend/cmd/api/router.go` with moderation, participant snapshot, and realtime-ticket operations plus rate-limit/error mapping.
+- [x] T035 [US2] Add realtime subscription, presence/hand models, and session moderation API calls in `mobile/lib/features/sessions/data/realtime_session_client.dart` and `mobile/lib/features/sessions/data/session_api_client.dart`.
+- [x] T036 [US2] Extend Riverpod session state with deduplicated snapshots/events, hand commands, and role-gated moderation actions in `mobile/lib/features/sessions/application/session_room_controller.dart`.
+- [x] T037 [US2] Extend the RTL room UI with participant list, hand state, and teacher/supervisor-only controls in `mobile/lib/features/sessions/presentation/session_room_screen.dart`.
+- [x] T038 [US2] Run focused US2 backend/mobile tests and verify no queue/chat, video, screen-share, recording, attendance classification, or FCM behavior was introduced in `backend/internal/sessions/`, `backend/internal/realtime/`, and `mobile/lib/features/sessions/`.
+
+### Phase 3 evidence — 2026-08-19
+
+- T028/T029: `go test -tags=contract ./tests/contract -count=1` and `go test -tags=integration ./tests/integration -count=1` passed.
+- T030/T035–T037: focused Flutter session tests passed (22 tests); full `flutter test test` passed (69 tests); `flutter analyze` and scoped Dart format passed in the approved Flutter Docker environment.
+- T031/T032/T034: `go test -short ./...` passed; moderation contract and integration suites passed.
+- T038: scope scan found no Phase 3 implementation of queue, chat, video, screen share, recording, transcription, attendance classification, or FCM behavior.
+- T027: `go test ./internal/sessions -run 'TestModeration_' -count=1` passed with equal moderator, reconnect/lock, mute entitlement, hand, removal, end, and idempotency coverage.
+- T033: `go test ./internal/realtime -run 'TestHub_' -count=1` passed with snapshot, command, heartbeat, connection/message limits, topic authorization, and deduplicated broadcast coverage; production wiring is in `backend/cmd/api/main.go`.
 
 **Checkpoint**: Room moderation, privacy-scoped realtime presence, and standalone hand raising work without F-003/F-004/F-006.
 

@@ -2155,21 +2155,25 @@ components:
 
     SessionStartResponse:
       type: object
-      required: [session, media_connection]
+      required: [session, media_connection, is_moderator]
       properties:
         session:
           $ref: '#/components/schemas/Session'
         media_connection:
           $ref: '#/components/schemas/MediaConnection'
+        is_moderator:
+          type: boolean
 
     SessionJoinResponse:
       type: object
-      required: [session, media_connection]
+      required: [session, media_connection, is_moderator]
       properties:
         session:
           $ref: '#/components/schemas/Session'
         media_connection:
           $ref: '#/components/schemas/MediaConnection'
+        is_moderator:
+          type: boolean
 
     SessionParticipant:
       type: object

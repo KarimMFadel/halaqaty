@@ -262,6 +262,7 @@ media credential or provider room reference.
 ```json
 {
   "type": "session.snapshot",
+  "timestamp": "2024-01-15T10:30:00Z",
   "payload": {
     "session": { "id": "uuid", "status": "active", "is_locked": false },
     "participants": []

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:halaqaty_mobile/features/sessions/application/media_session.dart';
 import 'package:halaqaty_mobile/features/sessions/application/session_room_controller.dart';
+import 'package:halaqaty_mobile/features/sessions/data/realtime_session_client.dart';
 import 'package:halaqaty_mobile/features/sessions/data/session_api_client.dart';
 import 'package:halaqaty_mobile/features/sessions/presentation/session_room_screen.dart';
 
@@ -39,7 +40,8 @@ Widget _app(SessionApiClient api,
           (ref) => SessionRoomController(
               api,
               () async => (token: 'token', sessionId: 'session'),
-              NoopMediaSession()),
+              NoopMediaSession(),
+              realtime: EmptyRealtimeClient()),
         ),
       ],
       child: MaterialApp(
@@ -59,6 +61,22 @@ class NoopMediaSession implements MediaSession {
   Future<void> setMicrophoneEnabled(bool enabled) async {}
 }
 
+class EmptyRealtimeClient implements RealtimeSessionClient {
+  @override
+  Stream<RealtimeSessionEvent> sessionEvents(String liveSessionId,
+          {required String token, required String backendSessionId}) =>
+      const Stream.empty();
+
+  @override
+  Future<void> raiseHand(String liveSessionId) async {}
+
+  @override
+  Future<void> lowerHand(String liveSessionId) async {}
+
+  @override
+  Future<void> dispose() async {}
+}
+
 class WidgetSessionApi extends SessionApiClient {
   WidgetSessionApi() : super(Dio());
   @override
@@ -68,6 +86,13 @@ class WidgetSessionApi extends SessionApiClient {
           required String liveSessionId}) =>
       Future<SessionConnection>.delayed(
           const Duration(milliseconds: 50), _connection);
+
+  @override
+  Future<List<SessionParticipant>> participants(
+          {required String token,
+          required String sessionId,
+          required String liveSessionId}) async =>
+      const [];
 }
 
 class FailingWidgetSessionApi extends SessionApiClient {

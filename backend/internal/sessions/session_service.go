@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -14,6 +15,7 @@ import (
 const (
 	roleTeacher    = "teacher"
 	roleSupervisor = "supervisor"
+	roleStudent    = "student"
 )
 
 // Store is the consumer-defined persistence port of the session service,
@@ -307,6 +309,17 @@ func (s *Service) SetHand(ctx context.Context, actorID, sessionID string, raised
 	return store.SetHandLowered(ctx, sessionID, actorID)
 }
 
+// IsModerator reports whether the caller's current circle role permits
+// session moderation actions.
+func (s *Service) IsModerator(ctx context.Context, actorID, sessionID string) (bool, error) {
+	sess, err := s.store.GetSession(ctx, sessionID)
+	if err != nil {
+		return false, err
+	}
+	role, err := s.authorize(ctx, sess.CircleID, actorID, false)
+	return moderatorRole(role), err
+}
+
 // ListParticipants returns the durable session presence snapshot after
 // verifying that the caller is an active circle member.
 func (s *Service) ListParticipants(ctx context.Context, actorID, sessionID string) ([]ParticipantPresence, error) {
@@ -322,6 +335,91 @@ func (s *Service) ListParticipants(ctx context.Context, actorID, sessionID strin
 		return nil, err
 	}
 	return store.ListSessionParticipants(ctx, sessionID)
+}
+
+// RealtimeSnapshot returns the provider-neutral snapshot sent after an
+// authorized session-topic subscription. It contains only public session and
+// presence state.
+func (s *Service) RealtimeSnapshot(ctx context.Context, actorID, sessionID string) (map[string]any, error) {
+	sess, err := s.store.GetSession(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.AuthorizeSessionTopic(ctx, actorID, sessionID); err != nil {
+		return nil, err
+	}
+	participants, err := s.ListParticipants(ctx, actorID, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(participants))
+	for _, participant := range participants {
+		items = append(items, realtimeParticipant(participant))
+	}
+	return map[string]any{
+		"type": "session.snapshot", "timestamp": time.Now().UTC().Format(time.RFC3339),
+		"payload": map[string]any{
+			"session": map[string]any{
+				"id": sess.ID, "status": sess.Status, "is_locked": sess.IsLocked,
+			},
+			"participants": items,
+		},
+	}, nil
+}
+
+// HandleRealtimeCommand applies a hand command after the hub has authorized
+// the session topic and returns a redacted event envelope.
+func (s *Service) HandleRealtimeCommand(ctx context.Context, actorID, sessionID, command string) (string, map[string]any, error) {
+	raised := command == "cmd.raise_hand"
+	if !raised && command != "cmd.lower_hand" {
+		return "", nil, errors.New("unsupported session command")
+	}
+	if err := s.SetHand(ctx, actorID, sessionID, raised); err != nil {
+		return "", nil, err
+	}
+	participants, err := s.ListParticipants(ctx, actorID, sessionID)
+	if err != nil {
+		return "", nil, err
+	}
+	participantName := "Member"
+	var handAt *time.Time
+	for _, participant := range participants {
+		if participant.UserID == actorID {
+			if participant.DisplayName != "" {
+				participantName = participant.DisplayName
+			}
+			handAt = participant.HandRaisedAt
+			break
+		}
+	}
+	eventType := "session.hand_lowered"
+	if raised {
+		eventType = "session.hand_raised"
+	}
+	handState := "lowered"
+	if handAt != nil {
+		handState = handAt.UTC().Format(time.RFC3339Nano)
+	}
+	eventID := fmt.Sprintf("%s:%s:%s:%s", sessionID, command, actorID, handState)
+	return eventID, map[string]any{
+		"type":      eventType,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"payload": map[string]any{
+			"session_id": sessionID, "participant_id": actorID, "participant_name": participantName,
+			"hand_raised_at": handAt,
+		},
+	}, nil
+}
+
+func realtimeParticipant(p ParticipantPresence) map[string]any {
+	role := p.Role
+	if role == "" {
+		role = roleStudent
+	}
+	return map[string]any{
+		"user_id": p.UserID, "display_name": p.DisplayName, "role": role,
+		"is_currently_present": p.IsCurrentlyPresent, "hand_raised_at": p.HandRaisedAt,
+	}
 }
 
 // AuthorizeSessionTopic revalidates membership and current presence before a

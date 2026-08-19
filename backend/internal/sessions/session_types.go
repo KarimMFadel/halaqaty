@@ -97,6 +97,9 @@ type ParticipantPresence struct {
 	SessionID          string
 	UserID             string
 	DisplayName        string
+	// Role is the participant's current circle role, resolved by the
+	// presence snapshot query for the public participants projection.
+	Role               string
 	FirstJoinedAt      *time.Time
 	LastJoinedAt       *time.Time
 	LastLeftAt         *time.Time

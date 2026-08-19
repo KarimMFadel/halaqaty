@@ -9,4 +9,19 @@ class SessionUiLabels {
   static const start = 'بدء الجلسة';
   static const join = 'انضمام';
   static const loadingParticipants = 'جارٍ تحميل المشاركين...';
+  static const participantsTitle = 'المشاركون';
+  static const roleTeacher = 'معلم';
+  static const roleSupervisor = 'مشرف';
+  static const roleStudent = 'طالب';
+  static const handRaised = 'رافع اليد';
+  static const raiseHand = 'رفع اليد';
+  static const lowerHand = 'إنزال اليد';
+  static const lockSession = 'قفل الجلسة';
+  static const unlockSession = 'إلغاء القفل';
+  static const muteAll = 'كتم الجميع';
+  static const muteParticipant = 'كتم';
+  static const removeParticipant = 'إزالة';
+  static const endSession = 'إنهاء الجلسة';
+  static const sessionEnded = 'انتهت الجلسة';
+  static const actionFailed = 'تعذر تنفيذ الإجراء';
 }

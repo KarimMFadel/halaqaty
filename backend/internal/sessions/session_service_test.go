@@ -152,6 +152,10 @@ type fakeGateway struct {
 	ensureErr   error
 	issueErr    error
 	ensureCount int
+	muted       []string
+	unmuted     []string
+	muteAll     int
+	removed     []string
 }
 
 type issuedCall struct {
@@ -192,12 +196,29 @@ func (f *fakeGateway) IssueConnection(_ context.Context, roomRef MediaRoomRef, u
 	}, nil
 }
 
-func (f *fakeGateway) MuteParticipant(_ context.Context, _ MediaRoomRef, _ string) error { return nil }
-func (f *fakeGateway) UnmuteParticipant(_ context.Context, _ MediaRoomRef, _ string) error {
+func (f *fakeGateway) MuteParticipant(_ context.Context, _ MediaRoomRef, userID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.muted = append(f.muted, userID)
 	return nil
 }
-func (f *fakeGateway) MuteAll(_ context.Context, _ MediaRoomRef) error { return nil }
-func (f *fakeGateway) RemoveParticipant(_ context.Context, _ MediaRoomRef, _ string) error {
+func (f *fakeGateway) UnmuteParticipant(_ context.Context, _ MediaRoomRef, userID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.unmuted = append(f.unmuted, userID)
+	return nil
+}
+
+func (f *fakeGateway) MuteAll(_ context.Context, _ MediaRoomRef) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.muteAll++
+	return nil
+}
+func (f *fakeGateway) RemoveParticipant(_ context.Context, _ MediaRoomRef, userID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.removed = append(f.removed, userID)
 	return nil
 }
 

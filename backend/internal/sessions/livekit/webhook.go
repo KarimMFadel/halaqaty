@@ -11,6 +11,7 @@ import (
 	"github.com/livekit/protocol/auth"
 	lkmodel "github.com/livekit/protocol/livekit"
 	"github.com/livekit/protocol/webhook"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // EventType is the provider-neutral webhook translation consumed by the
@@ -85,8 +86,14 @@ func NewWebhookVerifier(apiKey, apiSecret string) *WebhookVerifier {
 // events must carry a room reference; participant events must additionally
 // carry an identity. Unsupported events are rejected.
 func (v *WebhookVerifier) Verify(r *http.Request) (WebhookEvent, error) {
-	delivery, err := webhook.ReceiveWebhookEvent(r, v.provider)
+	// Signature failures map to the handler's 401 sentinel; payload
+	// validation failures below stay 400.
+	data, err := webhook.Receive(r, v.provider)
 	if err != nil {
+		return WebhookEvent{}, fmt.Errorf("verify media webhook: %w: %w", sessions.ErrWebhookSignature, err)
+	}
+	delivery := &lkmodel.WebhookEvent{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true, AllowPartial: true}).Unmarshal(data, delivery); err != nil {
 		return WebhookEvent{}, fmt.Errorf("verify media webhook: %w", err)
 	}
 	eventType, ok := neutralEvents[delivery.Event]

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 func (f *fakeStore) SetLock(_ context.Context, sessionID string, locked bool) (Session, error) {
@@ -23,6 +24,9 @@ func (f *fakeStore) EndSession(_ context.Context, sessionID string, reason EndRe
 	s, ok := f.sessions[sessionID]
 	if !ok {
 		return Session{}, ErrSessionNotFound
+	}
+	if s.Status == SessionStatusEnded {
+		return Session{}, ErrSessionAlreadyEnded
 	}
 	s.Status, s.EndReason = SessionStatusEnded, reason
 	return *s, nil
@@ -66,8 +70,19 @@ func (f *fakeStore) SetHandLowered(_ context.Context, sessionID, userID string) 
 	}
 	return nil
 }
-func (f *fakeStore) ListSessionParticipants(context.Context, string) ([]ParticipantPresence, error) {
-	return []ParticipantPresence{}, nil
+func (f *fakeStore) ListSessionParticipants(_ context.Context, sessionID string) ([]ParticipantPresence, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	participants := make([]ParticipantPresence, 0, len(f.present[sessionID]))
+	for userID, present := range f.present[sessionID] {
+		if present {
+			participants = append(participants, ParticipantPresence{
+				SessionID: sessionID, UserID: userID, DisplayName: "Member",
+				IsCurrentlyPresent: true,
+			})
+		}
+	}
+	return participants, nil
 }
 
 func TestModeration_AllModeratorRolesCanLockAndUnlock(t *testing.T) {
@@ -130,4 +145,133 @@ func TestModeration_EndClosesProviderRoom(t *testing.T) {
 	if len(gw.closed) != 1 || gw.closed[0] != started.MediaRoomRef {
 		t.Fatalf("closed rooms = %v", gw.closed)
 	}
+}
+
+func TestModeration_LockBlocksReconnectThenAllowsIt(t *testing.T) {
+	svc, store, _, roles := newUS1Service()
+	seedUS1Roles(roles)
+	created, err := svc.CreateAdHocSession(context.Background(), us1Teacher, us1CircleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, _, err := svc.StartSession(context.Background(), us1Teacher, created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.JoinSession(context.Background(), us1Student, started.ID); err != nil {
+		t.Fatal(err)
+	}
+	store.markLeft(started.ID, us1Student)
+
+	if _, err := svc.SetLock(context.Background(), us1Teacher, started.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.JoinSession(context.Background(), us1Student, started.ID); !errors.Is(err, ErrSessionLocked) {
+		t.Fatalf("locked reconnect = %v, want ErrSessionLocked", err)
+	}
+	if _, err := svc.SetLock(context.Background(), us1Super, started.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.JoinSession(context.Background(), us1Student, started.ID); err != nil {
+		t.Fatalf("unlocked reconnect: %v", err)
+	}
+}
+
+func TestModeration_MutePreservesParticipantEntitlement(t *testing.T) {
+	svc, _, gateway, roles := newUS1Service()
+	seedUS1Roles(roles)
+	created, _ := svc.CreateAdHocSession(context.Background(), us1Teacher, us1CircleID)
+	started, _, _ := svc.StartSession(context.Background(), us1Teacher, created.ID)
+	if _, _, err := svc.JoinSession(context.Background(), us1Student, started.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.MuteParticipant(context.Background(), us1Teacher, started.ID, us1Student); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.UnmuteParticipant(context.Background(), us1Teacher, started.ID, us1Student); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.MuteAll(context.Background(), us1Teacher, started.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	gateway.mu.Lock()
+	defer gateway.mu.Unlock()
+	if len(gateway.muted) != 1 || gateway.muted[0] != us1Student {
+		t.Fatalf("muted = %v", gateway.muted)
+	}
+	if len(gateway.unmuted) != 1 || gateway.unmuted[0] != us1Student {
+		t.Fatalf("unmuted = %v", gateway.unmuted)
+	}
+	if gateway.muteAll != 1 {
+		t.Fatalf("mute-all calls = %d", gateway.muteAll)
+	}
+}
+
+func TestModeration_HandStateAndEndAreIdempotent(t *testing.T) {
+	svc, store, _, roles := newUS1Service()
+	seedUS1Roles(roles)
+	created, _ := svc.CreateAdHocSession(context.Background(), us1Teacher, us1CircleID)
+	started, _, _ := svc.StartSession(context.Background(), us1Teacher, created.ID)
+	if _, _, err := svc.JoinSession(context.Background(), us1Student, started.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SetHand(context.Background(), us1Student, started.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SetHand(context.Background(), us1Student, started.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.EndSession(context.Background(), us1Teacher, started.ID, EndReasonDurationLimit); err != nil {
+		t.Fatal(err)
+	}
+	store.mu.Lock()
+	ended := store.sessions[started.ID].Status
+	store.mu.Unlock()
+	if ended != SessionStatusEnded {
+		t.Fatalf("status = %q, want ended", ended)
+	}
+	if _, err := svc.EndSession(context.Background(), us1Super, started.ID, EndReasonManual); !errors.Is(err, ErrSessionAlreadyEnded) {
+		t.Fatalf("second end = %v, want ErrSessionAlreadyEnded", err)
+	}
+}
+
+func TestRealtimeHandCommandEventIDIsStableAcrossDuplicateDelivery(t *testing.T) {
+	svc, store, _, roles := newUS1Service()
+	seedUS1Roles(roles)
+	created, _ := svc.CreateAdHocSession(context.Background(), us1Teacher, us1CircleID)
+	started, _, _ := svc.StartSession(context.Background(), us1Teacher, created.ID)
+	if _, _, err := svc.JoinSession(context.Background(), us1Student, started.ID); err != nil {
+		t.Fatal(err)
+	}
+	store.mu.Lock()
+	store.present[started.ID][us1Student] = true
+	store.mu.Unlock()
+	firstID, _, err := svc.HandleRealtimeCommand(context.Background(), us1Student, started.ID, "cmd.raise_hand")
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Millisecond)
+	secondID, _, err := svc.HandleRealtimeCommand(context.Background(), us1Student, started.ID, "cmd.raise_hand")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstID != secondID {
+		t.Fatalf("duplicate command IDs differ: %q != %q", firstID, secondID)
+	}
+}
+
+func TestRealtimeSnapshotIncludesEnvelopeTimestamp(t *testing.T) {
+	svc, store, _, roles := newUS1Service()
+	seedUS1Roles(roles)
+	created, _ := svc.CreateAdHocSession(context.Background(), us1Teacher, us1CircleID)
+	started, _, _ := svc.StartSession(context.Background(), us1Teacher, created.ID)
+	snapshot, err := svc.RealtimeSnapshot(context.Background(), us1Teacher, started.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if timestamp, ok := snapshot["timestamp"].(string); !ok || timestamp == "" {
+		t.Fatalf("snapshot timestamp = %v, want non-empty string", snapshot["timestamp"])
+	}
+	_ = store
 }

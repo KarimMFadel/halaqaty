@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +23,14 @@ type SessionTopicAuthorizer interface {
 	AuthorizeSessionTopic(context.Context, string, string) error
 }
 
+// SessionSnapshotProvider supplies an already-redacted snapshot after a
+// participant is authorized for a session topic.
+type SessionSnapshotProvider func(context.Context, string, string) (map[string]any, error)
+
+// SessionCommandHandler applies an authorized session command and returns its
+// deduplication ID plus an already-redacted event envelope.
+type SessionCommandHandler func(context.Context, string, string, string) (string, map[string]any, error)
+
 // Hub is the authenticated, generic WebSocket transport. Domain handlers
 // publish already-redacted events through Broadcast; the hub owns topic
 // authorization, connection limits, heartbeats, and delivery deduplication.
@@ -29,6 +38,8 @@ type Hub struct {
 	tickets  *TicketService
 	sessions SessionTopicAuthorizer
 	upgrader websocket.Upgrader
+	snapshot SessionSnapshotProvider
+	command  SessionCommandHandler
 
 	mu         sync.Mutex
 	clients    map[*hubClient]struct{}
@@ -48,6 +59,20 @@ type hubClient struct {
 // NewHub constructs a realtime WebSocket hub.
 func NewHub(tickets *TicketService, sessions SessionTopicAuthorizer) *Hub {
 	return &Hub{tickets: tickets, sessions: sessions, upgrader: websocket.Upgrader{}, clients: map[*hubClient]struct{}{}, userCounts: map[string]int{}, seenEvents: map[string]map[string]struct{}{}}
+}
+
+// SetSessionSnapshotProvider configures the sessions-owned snapshot callback.
+func (h *Hub) SetSessionSnapshotProvider(provider SessionSnapshotProvider) {
+	if h != nil {
+		h.snapshot = provider
+	}
+}
+
+// SetSessionCommandHandler configures the sessions-owned command callback.
+func (h *Hub) SetSessionCommandHandler(handler SessionCommandHandler) {
+	if h != nil {
+		h.command = handler
+	}
 }
 
 // ServeHTTP authenticates a ticket query parameter and serves one connection.
@@ -87,35 +112,78 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !client.allowMessage() {
-			_ = conn.WriteJSON(map[string]any{"error": "rate limit exceeded"})
+			writeRealtimeError(conn, "RATE_LIMITED", "rate limit exceeded")
 			continue
 		}
 		var msg struct {
-			Action string `json:"action"`
-			Topic  string `json:"topic"`
+			Action  string         `json:"action"`
+			Type    string         `json:"type"`
+			Topic   string         `json:"topic"`
+			Payload map[string]any `json:"payload"`
 		}
 		if err := json.Unmarshal(raw, &msg); err != nil {
-			_ = conn.WriteJSON(map[string]any{"error": "invalid message"})
+			writeRealtimeError(conn, "INVALID_PAYLOAD", "invalid message")
 			continue
 		}
-		if msg.Action == "ping" {
-			_ = conn.WriteJSON(map[string]any{"type": "pong"})
+		if msg.Action == "ping" || msg.Type == "ping" {
+			_ = conn.SetReadDeadline(time.Now().Add(90 * time.Second))
+			_ = conn.WriteJSON(map[string]any{"type": "pong", "server_time": time.Now().UTC().Format(time.RFC3339)})
+			continue
+		}
+		if strings.HasPrefix(msg.Type, "cmd.") {
+			h.handleCommand(r.Context(), client, msg.Type, msg.Payload)
 			continue
 		}
 		if msg.Action != "subscribe" {
-			_ = conn.WriteJSON(map[string]any{"error": "unsupported action"})
+			writeRealtimeError(conn, "INVALID_PAYLOAD", "unsupported realtime message")
 			continue
 		}
 		topic, err := ParseTopic(msg.Topic)
 		if err != nil || !h.authorized(r.Context(), ticket, client.userID, topic) {
-			_ = conn.WriteJSON(map[string]any{"error": "topic unauthorized"})
+			writeRealtimeError(conn, "UNAUTHORIZED", "topic unauthorized")
 			continue
 		}
 		client.mu.Lock()
 		client.topics[topic.String()] = struct{}{}
 		client.mu.Unlock()
 		_ = conn.WriteJSON(map[string]any{"type": "subscribed", "topic": topic.String()})
+		if topic.Kind() == TopicSession && h.snapshot != nil {
+			snapshot, err := h.snapshot(r.Context(), client.userID, topic.ID())
+			if err != nil {
+				writeRealtimeError(conn, "SESSION_ENDED", "session snapshot unavailable")
+				continue
+			}
+			_ = conn.WriteJSON(snapshot)
+		}
 	}
+}
+
+func (h *Hub) handleCommand(ctx context.Context, client *hubClient, command string, payload map[string]any) {
+	sessionID, _ := payload["session_id"].(string)
+	topic, err := NewSessionTopic(sessionID)
+	if err != nil || h.command == nil {
+		writeRealtimeError(client.conn, "INVALID_PAYLOAD", "invalid session command")
+		return
+	}
+	client.mu.Lock()
+	_, subscribed := client.topics[topic.String()]
+	client.mu.Unlock()
+	if !subscribed {
+		writeRealtimeError(client.conn, "UNAUTHORIZED", "session topic is not subscribed")
+		return
+	}
+	eventID, event, err := h.command(ctx, client.userID, sessionID, command)
+	if err != nil {
+		writeRealtimeError(client.conn, "INVALID_PAYLOAD", "session command rejected")
+		return
+	}
+	if err := h.Broadcast(topic, eventID, event); err != nil {
+		writeRealtimeError(client.conn, "INVALID_PAYLOAD", "realtime event unavailable")
+	}
+}
+
+func writeRealtimeError(conn *websocket.Conn, code, message string) {
+	_ = conn.WriteJSON(map[string]any{"type": "error", "payload": map[string]any{"code": code, "message": message}})
 }
 
 func (h *Hub) authorized(ctx context.Context, ticket Ticket, userID string, topic Topic) bool {

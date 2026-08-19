@@ -73,6 +73,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parts := strings.Split(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/"), "/"), "/")
+	// Session-scoped operations validate the path identifier once here so a
+	// malformed UUID is a 400 validation error, never a repository 500.
+	if len(parts) >= 2 && parts[0] == "sessions" && !validUUID(parts[1]) {
+		phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{"session_id": "session_id must be a valid UUID"})
+		return
+	}
 	switch {
 	case len(parts) == 3 && parts[0] == "circles" && parts[2] == "sessions" && r.Method == http.MethodPost:
 		h.create(w, r, principal.UserID, parts[1])
@@ -168,7 +174,11 @@ func (h *Handler) participants(w http.ResponseWriter, r *http.Request, actorID, 
 		writeSessionError(w, err)
 		return
 	}
-	phttp.WriteJSON(w, http.StatusOK, map[string]any{"data": participants})
+	items := make([]map[string]any, 0, len(participants))
+	for _, p := range participants {
+		items = append(items, publicParticipant(p))
+	}
+	phttp.WriteJSON(w, http.StatusOK, map[string]any{"data": items})
 }
 
 func (h *Handler) muteAll(w http.ResponseWriter, r *http.Request, actorID, sessionID string) {
@@ -228,11 +238,17 @@ func (h *Handler) lifecycle(w http.ResponseWriter, r *http.Request, actorID, ses
 		writeSessionError(w, err)
 		return
 	}
+	isModerator, err := h.service.IsModerator(r.Context(), actorID, sessionID)
+	if err != nil {
+		writeSessionError(w, err)
+		return
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
 	phttp.WriteJSON(w, http.StatusOK, map[string]any{
 		"session":          publicSession(sess),
 		"media_connection": publicConnection(conn),
+		"is_moderator":     isModerator,
 	})
 }
 
@@ -271,6 +287,21 @@ func publicConnection(c MediaConnection) map[string]any {
 	return map[string]any{
 		"endpoint": c.Endpoint, "credential": c.Credential,
 		"expires_at": c.ExpiresAt.UTC().Format(time.RFC3339),
+	}
+}
+
+// publicParticipant projects one presence row to the canonical
+// SessionParticipant schema: user_id, display_name, role,
+// is_currently_present, hand_raised_at. Internal columns (join/leave
+// timestamps, reconnect counts, removal state) never leave the service.
+func publicParticipant(p ParticipantPresence) map[string]any {
+	role := p.Role
+	if role == "" {
+		role = "student"
+	}
+	return map[string]any{
+		"user_id": p.UserID, "display_name": p.DisplayName, "role": role,
+		"is_currently_present": p.IsCurrentlyPresent, "hand_raised_at": optionalTime(p.HandRaisedAt),
 	}
 }
 

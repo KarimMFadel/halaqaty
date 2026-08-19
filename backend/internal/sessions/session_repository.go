@@ -463,7 +463,7 @@ func (r *Repository) ListSessionParticipants(ctx context.Context, sessionID stri
 	for rows.Next() {
 		var p ParticipantPresence
 		if err := rows.Scan(
-			&p.SessionID, &p.UserID, &p.DisplayName, &p.FirstJoinedAt, &p.LastJoinedAt, &p.LastLeftAt,
+			&p.SessionID, &p.UserID, &p.DisplayName, &p.Role, &p.FirstJoinedAt, &p.LastJoinedAt, &p.LastLeftAt,
 			&p.ReconnectCount, &p.IsCurrentlyPresent, &p.RemovedAt, &p.HandRaisedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan session participant: %w", err)

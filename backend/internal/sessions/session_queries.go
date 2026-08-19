@@ -125,7 +125,7 @@ WHERE session_id = $1::uuid AND user_id = $2::uuid AND removed_at IS NULL
 // raiseHandQuery records a raised hand for a currently present participant.
 const raiseHandQuery = `
 UPDATE session_participant_presence
-SET hand_raised_at = NOW()
+SET hand_raised_at = COALESCE(hand_raised_at, NOW())
 WHERE session_id = $1::uuid AND user_id = $2::uuid AND is_currently_present AND removed_at IS NULL
 `
 
@@ -138,14 +138,18 @@ WHERE session_id = $1::uuid AND user_id = $2::uuid AND is_currently_present AND 
 `
 
 // listSessionParticipantsQuery is the authoritative presence snapshot with the
-// circle member display-name fallback used across the codebase.
+// circle member display-name fallback used across the codebase and the
+// participant's current circle role for the public snapshot projection.
 const listSessionParticipantsQuery = `
 SELECT p.session_id::text, p.user_id::text,
        COALESCE(NULLIF(BTRIM(pr.display_name), ''), NULLIF(BTRIM(pr.full_name), ''), 'Member'),
+       COALESCE(cm.role, 'student'),
        p.first_joined_at, p.last_joined_at, p.last_left_at, p.reconnect_count,
        p.is_currently_present, p.removed_at, p.hand_raised_at
 FROM session_participant_presence p
+JOIN sessions s ON s.id = p.session_id
 LEFT JOIN profiles pr ON pr.user_id = p.user_id
+LEFT JOIN circle_members cm ON cm.circle_id = s.circle_id AND cm.user_id = p.user_id
 WHERE p.session_id = $1::uuid
 ORDER BY p.first_joined_at, p.user_id
 `

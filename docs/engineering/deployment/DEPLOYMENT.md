@@ -541,8 +541,8 @@ All logs must include request ID, timestamp, level, and context:
 
 **Dashboard per feature:**
 - F-001 Auth: login success %, failed login %, session lifetime distribution
-- F-003 Sessions: active sessions by circle, participant count distribution, session uptime %
-- F-005 Recitations: recitation queue depth, grading latency, video frame rate
+- F-005 Live Sessions: active sessions by circle, participant count distribution, session uptime %
+- F-003 Queue/Recitations: recitation queue depth, grading latency
 - F-007 Progress: avg Ayahs memorized/week, completion rate by tier
 
 ---

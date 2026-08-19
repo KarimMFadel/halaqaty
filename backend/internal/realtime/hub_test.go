@@ -119,7 +119,7 @@ func TestHub_UsesCanonicalErrorEnvelopeForMalformedMessages(t *testing.T) {
 	defer server.Close()
 	ticket, _ := tickets.Issue(context.Background(), "user-1")
 	conn := dialHub(t, server, ticket.Token)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	if err := conn.WriteMessage(websocket.TextMessage, []byte("{")); err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestHub_EnforcesThirtyMessagesPerMinute(t *testing.T) {
 	defer server.Close()
 	ticket, _ := tickets.Issue(context.Background(), "user-1")
 	conn := dialHub(t, server, ticket.Token)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	for i := 0; i < maxMessagesPerMinute; i++ {
 		writeHub(t, conn, map[string]any{"type": "ping"})
 		if got := readHub(t, conn); got["type"] != "pong" {
@@ -193,7 +193,7 @@ func TestHub_BroadcastDeduplicatesEventIDsPerTopic(t *testing.T) {
 	defer server.Close()
 	ticket, _ := tickets.Issue(context.Background(), "user-1")
 	conn := dialHub(t, server, ticket.Token)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	writeHub(t, conn, map[string]any{"action": "subscribe", "topic": topic.String()})
 	if got := readHub(t, conn); got["type"] != "subscribed" {
 		t.Fatalf("subscribe response = %v", got)

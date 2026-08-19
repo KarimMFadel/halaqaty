@@ -518,7 +518,7 @@ func TestSessionRepository_CapacityBoundary(t *testing.T) {
 	circle := seedRepoCircle(t, repo, teacher)
 	session := startRepoSession(t, repo, circle, teacher)
 
-	for i := range maxParticipants {
+	for i := 0; i < maxParticipants; i++ {
 		member := seedRepoUser(t, repo, fmt.Sprintf("capacity-%02d", i))
 		if _, err := repo.JoinSession(ctx, session.ID, member); err != nil {
 			t.Fatalf("join %d: %v", i, err)

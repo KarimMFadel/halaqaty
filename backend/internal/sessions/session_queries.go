@@ -95,7 +95,7 @@ WHERE session_id = $1::uuid AND user_id = $2::uuid
 // is_currently_present guard makes duplicate leaves no-ops.
 const markPresenceLeftQuery = `
 UPDATE session_participant_presence
-SET is_currently_present = FALSE, last_left_at = NOW()
+SET is_currently_present = FALSE, last_left_at = NOW(), hand_raised_at = NULL
 WHERE session_id = $1::uuid AND user_id = $2::uuid AND is_currently_present
 `
 

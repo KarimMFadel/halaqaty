@@ -28,17 +28,16 @@ The previous reviews are broadly useful, but they are **not all equally current*
 | Area | Finding | Risk |
 |------|---------|------|
 | P1 | Complete | Low |
-| P2 | 12 pending / 13 total | High |
-| P3 | 20 pending / 22 total | Medium-High |
+| P2 | 4 pending / 13 total | High |
+| P3 | 17 pending / 22 total | Medium-High |
 
 **What this means:** the tracker still shows substantial unresolved documentation/product/architecture work. The biggest risk is not the presence of the list itself, but the fact that several pending items are foundational and could affect downstream implementation assumptions.
 
 **Main risk items still visible in the file:**
-- E-06: Quran data source unspecified
-- E-08: Offline / low-bandwidth strategy missing
-- E-09: Capacity plan missing
 - E-10: PRD owner field is a model name
-- E-19 / E-22 / E-24: architecture/indexing/pagination/observability gaps
+- E-17: Sprint 3-6 skeleton goals missing
+- E-18: Error code registry missing
+- E-20: Data migration runbook missing
 
 ### 2) `docs_content_audit.md`
 

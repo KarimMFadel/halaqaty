@@ -289,7 +289,7 @@ func TestLiveSessionsMigration_ParticipantCapRace(t *testing.T) {
 	const attempts = 51
 	results := make(chan bool, attempts)
 	var wg sync.WaitGroup
-	for range attempts {
+	for i := 0; i < attempts; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

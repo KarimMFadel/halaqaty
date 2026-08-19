@@ -1251,7 +1251,7 @@ sequenceDiagram
 
 **Canonical indexing policy:**
 
-1. **Foreign key indexes (automatic):** All FK columns are indexed by default in PostgreSQL.
+1. **Foreign key indexes (not automatic):** Create indexes on FK columns when they’re used in joins/filters or to avoid FK-related lock contention (PostgreSQL does not add these indexes for you).
 2. **Search & filtering:** Columns in WHERE clauses must be indexed (e.g., `circle_id`, `user_id`, `session_id`, `surah_id`).
 3. **Sorting:** Columns in ORDER BY clauses should have indexes (e.g., `created_at`, `sent_at`).
 4. **Partial indexes:** Use for soft-deletes and status filters (e.g., WHERE `deleted_at IS NULL`).

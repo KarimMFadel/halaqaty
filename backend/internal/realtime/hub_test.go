@@ -34,7 +34,7 @@ func TestHub_SubscriptionSendsAuthorizedSessionSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	conn := dialHub(t, server, ticket.Token)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	writeHub(t, conn, map[string]any{"action": "subscribe", "topic": "session." + hubSessionID})
 	if got := readHub(t, conn); got["type"] != "subscribed" {
@@ -70,7 +70,7 @@ func TestHub_HandlesContractCommandsAndHeartbeat(t *testing.T) {
 	defer server.Close()
 	ticket, _ := tickets.Issue(context.Background(), "user-1")
 	conn := dialHub(t, server, ticket.Token)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	writeHub(t, conn, map[string]any{"action": "subscribe", "topic": "session." + hubSessionID})
 	if got := readHub(t, conn); got["type"] != "subscribed" {
 		t.Fatalf("subscribe response = %v", got)
@@ -96,7 +96,7 @@ func TestHub_UsesCanonicalErrorEnvelopeForRateLimit(t *testing.T) {
 	defer server.Close()
 	ticket, _ := tickets.Issue(context.Background(), "user-1")
 	conn := dialHub(t, server, ticket.Token)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	for i := 0; i < maxMessagesPerMinute; i++ {
 		writeHub(t, conn, map[string]any{"type": "ping"})
 		_ = readHub(t, conn)
@@ -209,7 +209,7 @@ func TestHub_BroadcastDeduplicatesEventIDsPerTopic(t *testing.T) {
 	if got := readHub(t, conn); got["type"] != "session.hand_raised" {
 		t.Fatalf("broadcast = %v", got)
 	}
-	conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatal("duplicate broadcast was delivered")
 	}

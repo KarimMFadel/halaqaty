@@ -715,7 +715,7 @@ erDiagram
         int to_ayah
         varchar type
         varchar grade
-        text notes
+        varchar notes
         date date
         timestamptz created_at
         timestamptz updated_at
@@ -1019,17 +1019,17 @@ ended session.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | UUID | PK | |
-| student_id | UUID | FK → users.id NOT NULL ON DELETE CASCADE | |
+| student_id | UUID | FK → users.id NOT NULL | No cascade; progress history survives unless explicitly erased (ADR-019) |
 | circle_id | UUID | FK → circles.id NOT NULL | |
-| session_id | UUID | FK → sessions.id | Source session |
-| queue_entry_id | UUID | FK → recitation_queue_entries.id UNIQUE | Source queue entry; UNIQUE enables idempotent re-grade upsert |
+| session_id | UUID | FK → sessions.id NOT NULL | Source session; always known — only the completion transaction inserts |
+| queue_entry_id | UUID | FK → recitation_queue_entries.id NOT NULL UNIQUE | Source queue entry; NOT NULL UNIQUE enables idempotent re-grade upsert |
 | surah_id | INTEGER | FK → quran_surahs.id NOT NULL | Normalized surah reference (replaces deprecated `surah_name`) |
-| surah_name | VARCHAR(100) | DEPRECATED | Use `surah_id`; retained until v1.1 for in-flight client compat |
+| surah_name | VARCHAR(100) | DEPRECATED | Use `surah_id`; retained until v1.1 for in-flight client compat (F-007-SPEC OQ-032) |
 | from_ayah | INTEGER | NOT NULL | Starting Ayah of the recited range |
 | to_ayah | INTEGER | NOT NULL | Ending Ayah of the recited range |
 | type | VARCHAR(30) | CHECK IN ('new_memorization','revision','old_revision','test') | Completed `test` records remain practice history but do not change Quran-map memorization/revision status |
 | grade | VARCHAR(30) | CHECK IN ('excellent','good','acceptable','needs_review','repeat') NULLABLE | NULL when `grading_required = false` on the round |
-| notes | TEXT | | Teacher notes |
+| notes | VARCHAR(500) | | Teacher notes — same bound as `recitation_queue_entries.teacher_notes` |
 | date | DATE | NOT NULL | Session date |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
 | updated_at | TIMESTAMPTZ | | Set on re-grade |

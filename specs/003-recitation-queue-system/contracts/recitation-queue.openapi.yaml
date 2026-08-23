@@ -1,8 +1,14 @@
 openapi: 3.0.3
 info:
   title: Halaqaty F-003 Recitation Queue Contract
-  version: 1.0.0
-  description: Additive `/api/v1` queue surface. Canonical source is `docs/contracts/openapi.yaml`.
+  version: 1.1.0
+  description: |
+    Additive `/api/v1` queue surface. Canonical source is `docs/contracts/openapi.yaml`;
+    this feature-local contract is the F-003 overlay regenerated 2026-08-23 from the
+    approved spec clarifications (advance/start split, automatic round activation in
+    round-number order, single-entry move, grading-optional completion, no history
+    surface, no FCM). Schema names mirror the canonical file. Pending canonical sync
+    deltas are listed in `specs/003-recitation-queue-system/plan.md` §Canonical sync.
   contact:
     name: Halaqaty
     url: https://halaqaty.app
@@ -21,7 +27,12 @@ paths:
       operationId: getSessionQueue
       tags: [Queue]
       summary: Get the authoritative current queue snapshot
-      description: Returns the PostgreSQL-authoritative, visibility-filtered current queue snapshot.
+      description: |
+        Returns the PostgreSQL-authoritative, visibility-filtered snapshot of the
+        session's latest round (a finalized round after reset/session end, read-only).
+        Grade/note fields follow `queue_grade_visibility`; the `preorder` projection is
+        manager-surface only (non-managers receive an empty array). This is the sole
+        F-003 read surface — no history-listing endpoints exist in F-003 (F-007 scope).
       responses:
         '200':
           description: Visibility-filtered queue snapshot
@@ -40,18 +51,25 @@ paths:
     post:
       operationId: createQueueRound
       tags: [Queue]
-      summary: Prepare or immediately activate a sequential round
-      description: Prepares a round for a scheduled session or creates and activates one for an active session.
+      summary: Prepare a sequential round
+      description: |
+        Prepares a round while the session is scheduled or live (teacher/supervisor
+        only). Several prepared rounds may stack with sequential round numbers.
+        Activation is automatic in round-number order — the first prepared round
+        activates when the session is live and no round is active, and each subsequent
+        prepared round activates when the previous round finalizes. There is no
+        activate-round endpoint, command, or UI. Never-activated prepared rounds become
+        permanently inert at session end.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/RoundRequest' }
+            schema: { $ref: '#/components/schemas/StartRoundRequest' }
       responses:
         '201':
-          description: Round prepared or activated
+          description: Round prepared (and activated when the activation invariant fires)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/QueueState' }
@@ -70,7 +88,11 @@ paths:
       operationId: resetSessionQueue
       tags: [Queue]
       summary: Finalize the current round and create the next round
-      description: Retains the prior round under the session finalization policy and creates the next sequential round.
+      description: |
+        Requires the session's active round on a live session. Finalizes it under the
+        session finalization policy (history retained), creates the next sequential
+        round from the request, and lets the automatic activation rule activate the
+        next prepared round in round-number order.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -80,7 +102,7 @@ paths:
             schema: { $ref: '#/components/schemas/ResetQueueRequest' }
       responses:
         '201':
-          description: Prior round finalized and new round created
+          description: Prior round finalized and next round created/activated
           content:
             application/json:
               schema: { $ref: '#/components/schemas/QueueState' }
@@ -99,7 +121,12 @@ paths:
       operationId: advanceSessionQueue
       tags: [Queue]
       summary: Select the next waiting entry without starting it
-      description: Durably selects the next waiting entry; starting recitation remains a separate transition.
+      description: |
+        Durably selects the next waiting entry; the separate start transition makes it
+        `reciting` and requests the audio grant. Advance while another entry is already
+        selected replaces that selection without creating a duplicate; advance with zero
+        waiting entries is rejected cleanly with no state mutation; advance while an
+        entry is `reciting` is rejected until the turn ends.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -126,8 +153,11 @@ paths:
     put:
       operationId: reorderSessionQueue
       tags: [Queue]
-      summary: Replace the order of all reorderable entries or pre-set candidates
-      description: Replaces the complete reorderable order under one optimistic round version.
+      summary: Replace the complete pre-set candidate order (pre-activation only)
+      description: |
+        Full-list reorder of pre-set candidates; valid only while the round is
+        `prepared` (before activation). After activation the only order mutation is the
+        single-entry move operation. Manager-surface only.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -137,7 +167,41 @@ paths:
             schema: { $ref: '#/components/schemas/ReorderQueueRequest' }
       responses:
         '200':
-          description: Queue reordered
+          description: Prepared order replaced
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueState' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /sessions/{sessionId}/queue/entries/{entryId}/move:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - $ref: '#/components/parameters/EntryId'
+    post:
+      operationId: moveQueueEntry
+      tags: [Queue]
+      summary: Move one waiting entry to an arbitrary position
+      description: |
+        Repositions exactly one `waiting` entry to an arbitrary slot in the durable
+        order of the active round; intervening entries shift. Permitted while another
+        entry is `reciting`; the `reciting` entry itself and terminal entries are
+        immovable (409). This is the only post-activation order mutation.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MoveEntryRequest' }
+      responses:
+        '200':
+          description: Entry moved and queue snapshot returned
           content:
             application/json:
               schema: { $ref: '#/components/schemas/QueueState' }
@@ -157,7 +221,14 @@ paths:
       operationId: updateQueueEntryStatus
       tags: [Queue]
       summary: Start, skip, or complete an entry using an allowed transition
-      description: Applies an allowed transition and atomically writes completed-only progress.
+      description: |
+        Applies an allowed transition and atomically writes completed-only progress.
+        `reciting` applies only to the round's currently selected waiting entry and is
+        rejected while another entry is reciting. For a grading-required round,
+        `completed` must carry the grade (note optional, ≤ 500 chars) in the same atomic
+        action; for a grading-optional round, `completed` carries neither grade nor note
+        — both may be added or changed afterwards only through the audited correction
+        path (`POST .../grade`).
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -188,14 +259,21 @@ paths:
       operationId: gradeQueueEntry
       tags: [Queue]
       summary: Correct the grade or note of a completed entry when policy permits
-      description: Updates the existing completed entry and its one progress record atomically.
+      description: |
+        The one audited correction flow (FR-013): replaces the grade and/or clears/sets
+        the note (optional note may be cleared), updates the existing completed entry
+        and its single progress record atomically, emits a redacted audit event, and
+        never creates another progress record. Boundaries follow
+        `queue_grade_correction` (`audited_any_time` default,
+        `before_round_finalization`, `immutable`). Repeated identical corrections
+        converge idempotently to one record state.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/GradeCorrectionRequest' }
+            schema: { $ref: '#/components/schemas/GradeRequest' }
       responses:
         '200':
           description: Existing entry and its single progress record updated
@@ -217,7 +295,11 @@ paths:
       operationId: optOutOfQueue
       tags: [Queue]
       summary: Request or automatically receive opt-out under session policy
-      description: Creates a pending request or an automatic approved outcome according to session policy.
+      description: |
+        Student-only. Under `approval_required`, creates one idempotent pending request
+        (managers decide it); under `auto_approve`, transitions the entry directly to
+        `opted_out` without a pending queue-entry state. Creates no penalty and no
+        progress/practice record.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -245,7 +327,11 @@ paths:
       operationId: decideQueueOptOutRequest
       tags: [Queue]
       summary: Approve or decline a pending student opt-out request
-      description: Allows a current teacher or supervisor to decide one pending request.
+      description: |
+        Any current teacher or supervisor decides one pending request. Approve
+        transitions the entry to `opted_out` (audio revoked if reciting); decline
+        terminally closes and durably logs the request while the entry remains
+        `waiting`. Requests pending when the round finalizes are non-actionable (409).
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -274,7 +360,12 @@ paths:
       operationId: updateSessionQueuePolicy
       tags: [Queue]
       summary: Change closed queue policy values prospectively
-      description: Updates closed values for subsequent actions without rewriting durable history.
+      description: |
+        Teacher/supervisor only, while the session is scheduled or active; every change
+        is audited. Workflow-policy changes apply to subsequent actions only;
+        grade/note visibility changes apply immediately and prospectively to new
+        snapshots and events — delivered history is never rewritten, and clients
+        re-fetch the current queue state on the policy-change event.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -333,12 +424,12 @@ components:
     Unauthorized: { description: Missing or invalid current credentials, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
     Forbidden: { description: Current membership or role is insufficient, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
     NotFound: { description: 'Session, round, entry, or request not found', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
-    Conflict: { description: 'Stale version, invalid state transition, duplicate command conflict, or invariant conflict', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
-    ValidationError: { description: 'Invalid Quran range, enum, order, grade, or note', content: { application/json: { schema: { $ref: '#/components/schemas/ValidationError' } } } }
+    Conflict: { description: 'Stale version, invalid state transition, no waiting entry, entry reciting/terminal, finalized/inert round, duplicate command conflict, or invariant conflict', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    ValidationError: { description: 'Invalid Quran range, enum, order, position, grade, or note', content: { application/json: { schema: { $ref: '#/components/schemas/ValidationError' } } } }
     RateLimited: { description: REST rate limit exceeded, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
     MediaUnavailable: { description: Queue truth committed or retained but reciter audio convergence is temporarily unavailable, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
   schemas:
-    RoundRequest:
+    StartRoundRequest:
       type: object
       additionalProperties: false
       required: [round_type, surah_id, from_ayah, to_ayah, grading_required]
@@ -353,6 +444,7 @@ components:
           uniqueItems: true
           maxItems: 50
           items: { type: string, format: uuid }
+          description: Optional durable pre-set order; all IDs must be active student members.
     ResetQueueRequest:
       type: object
       additionalProperties: false
@@ -378,15 +470,22 @@ components:
     ReorderQueueRequest:
       type: object
       additionalProperties: false
-      required: [order_kind, ordered_ids, expected_version]
+      required: [ordered_ids, expected_version]
       properties:
-        order_kind: { type: string, enum: [preorder_students, queue_entries] }
         ordered_ids:
           type: array
           uniqueItems: true
           maxItems: 50
           items: { type: string, format: uuid }
+          description: Complete new pre-set candidate order; must contain exactly the current candidates.
         expected_version: { type: integer, format: int64, minimum: 1 }
+    MoveEntryRequest:
+      type: object
+      additionalProperties: false
+      required: [new_position, expected_version]
+      properties:
+        new_position: { type: integer, minimum: 1, description: Target slot in the round's durable order (1..entry count). }
+        expected_version: { type: integer, format: int64, minimum: 1, description: Expected current round version. }
     EntryStatusRequest:
       type: object
       additionalProperties: false
@@ -396,14 +495,18 @@ components:
         expected_entry_version: { type: integer, format: int64, minimum: 1 }
         grade: { $ref: '#/components/schemas/Grade' }
         notes: { type: string, maxLength: 500, nullable: true }
-      description: Grade is required with completed when the round requires grading; grade/notes are invalid for reciting or skipped.
-    GradeCorrectionRequest:
+      description: |
+        Grade is required with `completed` when the round requires grading, and invalid
+        otherwise (grading-optional completion carries no grade and no note; add later
+        via the correction path). `reciting` applies only to the selected entry.
+        Grade/notes are invalid for `reciting` or `skipped`.
+    GradeRequest:
       type: object
       additionalProperties: false
       required: [expected_entry_version]
       properties:
         grade: { $ref: '#/components/schemas/Grade' }
-        notes: { type: string, maxLength: 500, nullable: true }
+        notes: { type: string, maxLength: 500, nullable: true, description: Optional note; explicit null clears an existing note. }
         expected_entry_version: { type: integer, format: int64, minimum: 1 }
       minProperties: 2
     OptOutDecisionRequest:
@@ -477,6 +580,7 @@ components:
         preorder:
           type: array
           maxItems: 50
+          description: Prepared-order projection; manager-surface only — non-managers receive an empty array.
           items: { $ref: '#/components/schemas/QueuePreorderItem' }
         entries:
           type: array

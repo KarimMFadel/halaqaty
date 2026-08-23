@@ -1,6 +1,6 @@
 # F-003 Recitation Queue WebSocket Events
 
-Canonical catalog: `docs/contracts/ws_events.md`. All events use the existing authenticated F-005 session topic and are server-to-client projections only. PostgreSQL is authoritative; clients re-fetch `GET /sessions/{id}/queue` after reconnect, an unknown event, or any version gap.
+Canonical catalog: `docs/contracts/ws_events.md`. All events use the existing authenticated F-005 session topic and are server-to-client projections only. PostgreSQL is authoritative; clients re-fetch `GET /sessions/{id}/queue` after reconnect, an unknown event, or any version gap. Regenerated 2026-08-23 from the approved spec clarifications; pending canonical sync deltas are listed in `plan.md` §Canonical sync.
 
 ## Common envelope
 
@@ -22,7 +22,7 @@ version instead.
 }
 ```
 
-Delivery is at-least-once. Clients deduplicate by `event_id`, ignore a version not newer than their snapshot, and re-fetch on a version gap. Events never contain a media credential, media endpoint, room reference, provider identifier, or URL carrying media material.
+Delivery is at-least-once (initial attempt plus 5 exponential-backoff retries, then parked for operator replay — never silently dropped). Clients deduplicate by `event_id`, ignore a version not newer than their snapshot, and re-fetch on a version gap. Events never contain a media credential, media endpoint, room reference, provider identifier, or URL carrying media material. F-003 emits no FCM payloads; F-008 may later project these durable event IDs through Firebase.
 
 ## Broadcast events
 
@@ -30,9 +30,16 @@ Delivery is at-least-once. Clients deduplicate by `event_id`, ignore a version n
 
 Full visibility-filtered queue snapshot sent after authorized subscription and
 material reconciliation. Its payload matches REST `QueueState`, except entry
-IDs use `queue_entry_id` for event-catalog clarity.
+IDs use `queue_entry_id` for event-catalog clarity. The `preorder` projection is
+included for managers only; other participants receive an empty array.
 
 ### `queue.round_started`
+
+Emitted when a prepared round activates. Activation is automatic in round-number
+order: the first prepared round activates when the session is live and no round
+is active, and each subsequent prepared round activates when the previous round
+finalizes (including the round created by reset). No manager activate action
+exists.
 
 ```json
 {
@@ -46,6 +53,7 @@ IDs use `queue_entry_id` for event-catalog clarity.
     "round_type": "revision",
     "lifecycle": "active",
     "surah_id": 3,
+    "surah_name": "Al-Imran",
     "from_ayah": 1,
     "to_ayah": 20,
     "grading_required": true,
@@ -79,6 +87,14 @@ IDs use `queue_entry_id` for event-catalog clarity.
 
 ### `queue.reordered`
 
+Broadcast after a manager changes the durable order, by either control:
+
+- `preorder_students` — full-list replace of pre-set candidates (round `prepared` only);
+- `entry_move` — one `waiting` entry repositioned in the active round (permitted while another entry recites; the `reciting` entry is never moved).
+
+`ordered_ids` is the resulting complete order (candidate student IDs for
+`preorder_students`; the full round entry order for `entry_move`).
+
 ```json
 {
   "type": "queue.reordered",
@@ -87,7 +103,7 @@ IDs use `queue_entry_id` for event-catalog clarity.
   "payload": {
     "session_id": "uuid",
     "round_id": "uuid",
-    "order_kind": "queue_entries",
+    "order_kind": "entry_move",
     "ordered_ids": ["uuid1", "uuid2"],
     "version": 3
   }
@@ -110,7 +126,10 @@ IDs use `queue_entry_id` for event-catalog clarity.
 }
 ```
 
-Selection does not change the selected entry from `waiting` to `reciting`.
+Selection does not change the selected entry from `waiting` to `reciting`. A
+replacing advance emits this event again with the new `selected_entry_id`.
+Rejected advances (zero waiting entries; an entry already `reciting`) mutate
+nothing and emit no event — the actor receives the REST conflict.
 
 ### `queue.round_finalized`
 
@@ -129,7 +148,10 @@ Selection does not change the selected entry from `waiting` to `reciting`.
 }
 ```
 
-`reason` is `reset` or `session_ended`. Finalization never means the F-005 session end waited for queue cleanup.
+`reason` is `reset` or `session_ended`. Session-end convergence finalizes the
+active round and every never-activated prepared round (permanently inert,
+retained); each emits this event with reason `session_ended`. Finalization never
+means the F-005 session end waited for queue cleanup.
 
 ### `queue.policy_changed`
 
@@ -151,6 +173,12 @@ Selection does not change the selected entry from `waiting` to `reciting`.
   }
 }
 ```
+
+Workflow-policy changes apply to subsequent actions only; grade/note
+visibility-policy changes apply immediately and prospectively to new snapshots
+and events. Delivered history is never rewritten; clients re-fetch the current
+queue state on this event (FR-009 pattern) so stale or out-of-order grade
+visibility projections self-heal.
 
 ### `queue.grade_submitted`
 
@@ -174,13 +202,13 @@ Visibility-filtered targeted/broadcast projection after completion or an allowed
 }
 ```
 
-The event omits `graded_by`; actor attribution remains in redacted audit telemetry. Notes are never logged by delivery infrastructure.
+The event omits `graded_by`; actor attribution remains in redacted audit telemetry. Notes are never logged by delivery infrastructure. For a grading-optional completion the first projection carries no grade; later grade/note additions or changes arrive through the same event after an allowed correction.
 
 ## Targeted events
 
 ### `queue.your_turn`
 
-Sent to the selected student's authorized devices after the entry becomes `reciting`. It is the stable future FCM deduplication source.
+Sent to the selected student's authorized devices after the entry becomes `reciting`. It is the stable future FCM deduplication source (F-008 projects it; F-003 sends no push).
 
 ```json
 {
@@ -193,6 +221,7 @@ Sent to the selected student's authorized devices after the entry becomes `recit
     "queue_entry_id": "uuid",
     "round_type": "revision",
     "surah_id": 2,
+    "surah_name": "Al-Baqarah",
     "from_ayah": 1,
     "to_ayah": 10,
     "version": 5
@@ -202,7 +231,7 @@ Sent to the selected student's authorized devices after the entry becomes `recit
 
 ### `queue.next_soon`
 
-Sent to the next waiting student after order/selection changes. It contains no timer or estimated wait.
+Sent to the next waiting student after order/selection changes. It contains no timer or estimated wait (no per-student timer in MVP).
 
 ```json
 {
@@ -221,7 +250,7 @@ Sent to the next waiting student after order/selection changes. It contains no t
 
 ### `queue.opt_out_requested`
 
-Sent only to current teachers/supervisors when approval is required.
+Sent only to current teachers/supervisors when approval is required. Auto-approved opt-outs do not emit this event.
 
 ```json
 {

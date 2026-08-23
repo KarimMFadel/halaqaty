@@ -2,7 +2,7 @@
 
 **Feature Branch**: `003-recitation-queue-system`
 **Created**: 2026-08-21
-**Status**: Draft
+**Status**: Approved (2026-08-23)
 **Input**: F-003 Recitation Queue System
 
 ## Scope
@@ -15,7 +15,10 @@ positions, turn state, grading, and history.
 
 F-003 does not own session or room lifecycle, media-credential issuance, general
 moderation, scheduling, chat, payments, recording, video, AI assessment, timers,
-dashboards, Firebase/Auth redesign, or any F-005 session/media rebuild.
+dashboards, Firebase/Auth redesign, or any F-005 session/media rebuild. F-003
+persists and preserves all prior-round history server-side but exposes no mobile
+history UI and no history REST operations beyond the existing current-queue
+surface in the MVP; historical-round projections and UI are deferred to F-007.
 
 ## Clarifications
 
@@ -26,6 +29,17 @@ dashboards, Firebase/Auth redesign, or any F-005 session/media rebuild.
 - Q: How does opt-out approval work without adding a queue-entry state? → A: By default, persist a pending request outside the queue-entry state and require manager approval; managers may configure automatic approval for that session.
 - Q: Who can see grades and teacher notes? → A: By default, current teachers/supervisors and the graded student; managers may configure managers-only or all-session-participants visibility.
 - Q: May a completed grade or note be corrected? → A: By default, authorized managers may correct it with an audit trail and update the same progress record; managers may configure corrections only before round finalization or make completed grades immutable.
+- Q: Does advancing a turn itself start recitation and grant audio? → A: No — advance is selection only; becoming `reciting`, including the audio grant via `ReciterAudioControl`, is the separate start transition (I1). (Karim, 2026-08-23)
+- Q: Does F-003 expose recitation history to users in the MVP? → A: No — F-003 persists and preserves all prior-round history server-side (FR-006 unchanged) but ships no mobile history UI and no history REST operations beyond the existing current-queue surface; historical-round projections/UI are deferred to F-007 (I3). (Karim, 2026-08-23)
+- Q: Does F-003 deliver notifications via FCM? → A: No — F-003 guarantees at-least-once REST/WebSocket/in-app delivery and emits stable, durable event IDs; Firebase device-token and FCM push infrastructure/delivery is owned by F-008, which projects from F-003 events. No FCM work in F-003 (I4). (Karim, 2026-08-23)
+- Q: What timeout, retry, and convergence parameters govern queue-event delivery, audio control, and session-end finalization? → A: Documented defaults (the Architect may refine them in the plan phase): outbox/queue-event delivery retries 5 times with exponential backoff, then is parked for operator replay (no silent drop); each `ReciterAudioControl` grant/revoke call has a 5-second timeout that neither blocks nor rolls back the queue-state commit (queue state is authoritative; audio converges); session-end queue finalization retries idempotently until finalized, targeting convergence within 10 seconds of observing session end and never blocking or altering the F-005 session-end result (FR-014 unchanged) (A1). (Karim, 2026-08-23)
+- Q: How are SC-007 and SC-008 made measurable? → A: SC-007: convergence deadline of 10 seconds after observing session end, with parked-retry exhaustion as the observable terminal outcome when convergence cannot complete. SC-008: start point = queue-mutation commit in PostgreSQL, end point = event dispatched to connected authorized clients, metric = p95 ≤ 500 ms, sample ≥ 100 committed actions per scenario, standard local-network test environment; disconnected clients are excluded from the latency sample and must recover via the FR-009 re-fetch (A1). (Karim, 2026-08-23)
+- Q: What do "move" and full-list "reorder" mean, and which entries may move? → A: "Move" repositions one waiting entry to an arbitrary slot in the durable order; full-list reorder is allowed only before round activation; managers may move waiting entries while another entry is reciting; the `reciting` entry itself may not be moved (A2a). (team default, accepted by Karim, 2026-08-23)
+- Q: How does advance behave at its edges? → A: Advance while another entry is already selected replaces the selection without creating a duplicate; advance with zero waiting entries is a clean no-waiting-entry rejection with no state mutation; advance while an entry is reciting is rejected until the turn ends (A2b). (team default, accepted by Karim, 2026-08-23)
+- Q: How is a grading-optional round completed, and can a grade be added later? → A: When a round does not require grading, completion without a grade is allowed; a grade or note may be added or changed afterwards only through the existing FR-013 audited correction flow (no new workflow) (A2c). (team default, accepted by Karim, 2026-08-23)
+- Q: When do grade/note visibility-policy changes take effect? → A: Immediately and prospectively for new snapshots and events; delivered history is never rewritten; clients re-fetch the current queue state on policy-change events using the existing FR-009 recovery pattern (A2d). (team default, accepted by Karim, 2026-08-23)
+- Q: What triggers round activation, and which prepared round activates when several are prepared? → A: Activation is automatic in round-number order: the first prepared round activates when the F-005 session goes live, and each subsequent prepared round activates when the previous round finalizes. No explicit manager activate-round action, endpoint, or UI exists in F-003; managers control rounds via prepare, reset, and the existing operations, and preparation may occur while the session is scheduled or live (B1). (Karim, 2026-08-23)
+- Q: Under `present_at_activation`, where are currently present eligible students without a manager pre-set position placed? → A: Students with a manager pre-set position keep their relative pre-set order first; present active student members without a pre-set position are appended after the pre-set students, in join order. The concurrent-join timestamp tie-break is an engineering detail already deferred to plan (B2). (Karim, 2026-08-23)
 
 ## User Scenarios & Testing
 
@@ -47,20 +61,24 @@ audio-publish entitlement always identify at most one active reciter.
 1. **Given** an authorized teacher or supervisor and an eligible session, **When**
    they prepare a round using join order or an authorized manual order, **Then**
    the system persists the pre-set ordering and applies the session's queue
-   population policy when the round becomes active without creating more than
-   one position for any student.
+   population policy when the round automatically becomes active (FR-001)
+   without creating more than one position for any student.
 2. **Given** a prepared or active round, **When** an authorized manager reorders
    or moves a waiting student, **Then** the durable positions and the
    authoritative queue view reflect the resulting order without creating a
    second position for that student.
 3. **Given** an active round with no current reciter, **When** an authorized
-   manager advances a student's turn, **Then** that entry is the sole `reciting`
-   entry and F-003 asks the sessions-owned `ReciterAudioControl` to grant audio
-   publishing only to that student.
-4. **Given** a student is reciting, **When** their turn ends, is skipped, or is
+   manager advances a student's turn, **Then** that waiting entry becomes the
+   sole selected next entry; advance does not itself make it `reciting` and
+   does not grant audio.
+4. **Given** a selected waiting entry, **When** an authorized manager starts
+   that entry, **Then** it becomes the sole `reciting` entry and F-003 asks the
+   sessions-owned `ReciterAudioControl` to grant audio publishing only to that
+   student.
+5. **Given** a student is reciting, **When** their turn ends, is skipped, or is
    finalized through an approved opt-out, **Then** F-003 asks
    `ReciterAudioControl` to revoke that student's audio-publishing entitlement
-   before another student is made the active reciter.
+   before another entry is started as the active reciter.
 
 ---
 
@@ -140,9 +158,12 @@ progress/practice record result; skip and approved opt-out must result in none.
   `waiting|reciting → skipped`, and `waiting|reciting → opted_out` after the
   configured approval outcome; `completed`, `skipped`, and `opted_out` are
   terminal for that round.
-- PostgreSQL MUST be the source of truth. REST, WebSocket, FCM, and in-app
-  delivery are at-least-once only; duplicate or concurrent requests and
-  deliveries MUST converge to one durable outcome.
+- PostgreSQL MUST be the source of truth. F-003's delivery surfaces are REST,
+  WebSocket, and in-app, all at-least-once, and every queue event MUST carry a
+  stable, durable event ID; duplicate or concurrent requests and deliveries
+  MUST converge to one durable outcome. FCM push delivery and Firebase
+  device-token infrastructure are owned by F-008, which projects from F-003
+  events; F-003 performs no FCM work.
 - Queue events and persistence MUST contain no media credential, endpoint,
   room reference, provider-specific identifier, or URL carrying such material.
   Credentials remain caller-private, memory-only F-005 start/join material.
@@ -157,6 +178,14 @@ progress/practice record result; skip and approved opt-out must result in none.
 - F-003 MUST NOT reject, delay, or roll back an F-005 session-end transition.
   Session end revokes any reciter audio and makes the active round non-actionable;
   queue finalization is idempotent and retried if it cannot finish immediately.
+- Queue-event delivery uses 5 retry attempts with exponential backoff and is
+  then parked for operator replay — never silently dropped. Each
+  `ReciterAudioControl` grant/revoke call has a 5-second timeout that neither
+  blocks nor rolls back the queue-state commit; queue state is authoritative
+  and audio converges. Session-end queue finalization retries idempotently
+  until finalized, targeting convergence within 10 seconds of observing session
+  end. These values are documented defaults; the Architect may refine them in
+  the plan phase.
 - Session queue policy is configurable only by a current active teacher or
   supervisor. Changes apply prospectively and MUST NOT rewrite durable history,
   weaken authentication/authorization, permit duplicate positions or reciters,
@@ -171,34 +200,52 @@ progress/practice record result; skip and approved opt-out must result in none.
 ### Functional Requirements
 
 - **FR-001**: The system MUST allow a teacher or supervisor to create sequential
-  rounds associated with an eligible live session, including preparation before
-  the session starts. Turn execution occurs only in an active live session.
+  rounds associated with an eligible scheduled or live session, including
+  preparation while the session is scheduled or live. Turn execution occurs only
+  in an active live session. Round activation is automatic and follows
+  round-number order: the first prepared round activates when the F-005 session
+  goes live, and each subsequent prepared round activates when the previous
+  round finalizes. F-003 provides no explicit manager activate-round action;
+  managers control rounds via prepare, reset, and the existing operations.
   Each round MUST have a number, one of `new_memorization`, `revision`,
   `old_revision`, or `test`, a Surah, an Ayah range, and a grading requirement.
 - **FR-002**: A round MUST create one durable queue position per eligible
   student selected by the session's population policy. The default
   `present_at_activation` policy includes currently present active student
-  members in their pre-set relative order; `all_active_students` includes every
-  active student member from the start. Teachers and supervisors are excluded.
-  The round MUST support join order and authorized teacher/supervisor manual
-  ordering and allow a teacher to pre-set the queue before the session starts.
+  members: students with a manager pre-set position keep their relative pre-set
+  order first, and present active student members without a pre-set position
+  are appended after the pre-set students in join order; `all_active_students`
+  includes every active student member from the start. Teachers and supervisors
+  are excluded. The round MUST support join order and authorized
+  teacher/supervisor manual ordering and allow a teacher to pre-set the queue
+  while the session is scheduled or live.
 - **FR-003**: Under `present_at_activation`, a student admitted after round
   activation MUST be appended once to the end. Under `all_active_students`, an
   existing pre-set position MUST be retained and a join MUST NOT duplicate it.
-- **FR-004**: Authorized managers MUST be able to reorder, move, skip, and
-  advance turns. Permitted transitions are `waiting → reciting → completed`,
-  `waiting|reciting → skipped`, and `waiting|reciting → opted_out` after either
-  required manager approval or configured automatic approval. `completed`,
-  `skipped`, and `opted_out` are
+- **FR-004**: Authorized managers MUST be able to reorder, move, skip, advance,
+  and start turns. "Move" repositions one waiting entry to an arbitrary slot in
+  the durable order and is permitted while another entry is `reciting`; the
+  `reciting` entry itself may not be moved. A full-list reorder is allowed only
+  before round activation. Permitted transitions are
+  `waiting → reciting → completed`, `waiting|reciting → skipped`, and
+  `waiting|reciting → opted_out` after either required manager approval or
+  configured automatic approval. `completed`, `skipped`, and `opted_out` are
   terminal for that round. Advance selects the next waiting entry and does not
-  itself start that entry. At most one entry MAY be `reciting` at any time.
+  itself start that entry; the separate start transition makes the selected
+  entry `reciting` and requests the audio grant through `ReciterAudioControl`.
+  Advance while another entry is already selected replaces that selection
+  without creating a duplicate; advance with zero waiting entries is rejected
+  cleanly as a no-waiting-entry case with no state mutation; advance while an
+  entry is `reciting` is rejected until the turn ends. At most one entry MAY be
+  `reciting` at any time.
 - **FR-005**: A student opt-out MUST require teacher/supervisor approval, be
   durably logged, and create no penalty under the default `approval_required`
   policy. A session MAY use `auto_approve`; the request then transitions the
   entry directly to `opted_out` without creating a pending queue-entry state.
 - **FR-006**: Queue entry states MUST be limited to `waiting`, `reciting`,
   `completed`, `skipped`, and `opted_out`. A reset MUST finalize the previous
-  round, create a new round, and preserve history. The default
+  round, create a new round, and preserve history; that finalization activates
+  the next prepared round under the same automatic rule (FR-001). The default
   `mark_unfinished_skipped` policy transitions unfinished entries to `skipped`;
   `preserve_last_state` retains their states as immutable historical facts.
   Either policy revokes reciter audio and leaves no actionable entry in the
@@ -207,6 +254,9 @@ progress/practice record result; skip and approved opt-out must result in none.
   `needs_review`, and `repeat`. Grade notes are optional and MUST be at most
   500 characters. When a round requires grading, completion and grading MUST be
   one atomic action; an entry MUST NOT become `completed` without its grade.
+  When a round does not require grading, completion without a grade MUST be
+  allowed; a grade or note MAY be added or changed afterwards only through the
+  FR-013 audited correction flow, with no separate post-completion workflow.
   Grade and note visibility MUST follow the session policy: default
   `managers_and_student`, `managers_only`, or `all_participants`. A grade records
   pedagogical assessment and MUST NOT prevent an authorized manager from
@@ -223,14 +273,21 @@ progress/practice record result; skip and approved opt-out must result in none.
   `ReciterAudioControl` for turn-based audio publishing. F-005 retains session,
   room, credential, and general-moderation ownership.
 - **FR-011**: F-003 MUST NOT add scheduling, chat, payments, recording, video,
-  AI assessment, timers, dashboards, Firebase/Auth redesign, or an alternative
+  AI assessment, timers, dashboards, a mobile history UI or history REST
+  operations beyond the existing current-queue surface (historical-round
+  projections/UI are F-007 work), Firebase/Auth redesign, or an alternative
   session/media implementation.
 - **FR-012**: Each session MUST have queue-policy defaults for population,
   unfinished-entry finalization, opt-out approval, grade/note visibility, and
   grade/note correction. A current active teacher or supervisor MAY change them
-  while the session is scheduled or active; workflow changes apply only to
-  subsequent actions and every change is audited. The session creator has these
+  while the session is scheduled or active; every change is audited. The
+  session creator has these
   powers only while they remain a current authorized teacher or supervisor.
+  Workflow-policy changes apply only to subsequent actions, while grade/note
+  visibility-policy changes apply immediately and prospectively to new
+  snapshots and events; already-delivered history is never rewritten, and
+  clients re-fetch the current queue state on policy-change events using the
+  FR-009 recovery pattern.
 - **FR-013**: Grade/note correction MUST follow one of `audited_any_time`
   (default), `before_round_finalization`, or `immutable`. An allowed correction
   MUST update the existing queue entry and its one progress record atomically,
@@ -238,7 +295,8 @@ progress/practice record result; skip and approved opt-out must result in none.
 - **FR-014**: F-005 session end MUST commit and return independently of F-003.
   F-003 MUST revoke any active-reciter entitlement and finalize the active round
   idempotently after observing the end; failure is retried and MUST NOT change
-  the already-ended session result.
+  the already-ended session result. Prepared rounds that never activated MUST
+  become permanently inert (retained, never activatable) at session end.
 - **FR-015**: F-003 planning MUST reconcile `docs/contracts/openapi.yaml` and
   `docs/contracts/ws_events.md` with the complete queue-control and policy
   behavior before implementation. Clarification MUST NOT invent endpoints,
@@ -284,11 +342,18 @@ progress/practice record result; skip and approved opt-out must result in none.
 - **SC-006**: Every supported session-policy value is covered by acceptance
   tests, and changing a policy never rewrites an earlier queue action or record.
 - **SC-007**: In session-end failure tests, F-005 returns the committed ended
-  session even when queue finalization initially fails; retry converges to a
-  finalized, non-actionable round with no active-reciter entitlement.
-- **SC-008**: Under the MVP limit of 50 session participants, at least 95% of
-  committed queue actions are visible to connected authorized clients within
-  500 ms, excluding external FCM delivery latency.
+  session even when queue finalization initially fails; idempotent retries
+  converge to a finalized, non-actionable round with no active-reciter
+  entitlement within 10 seconds of observing session end, and parked-retry
+  exhaustion is the observable terminal outcome when convergence cannot
+  complete (no silent drop).
+- **SC-008**: Under the MVP limit of 50 session participants, p95 latency from
+  queue-mutation commit in PostgreSQL to dispatch of the corresponding event to
+  connected authorized clients is ≤ 500 ms, measured over a sample of at least
+  100 committed queue actions per scenario in a standard local-network test
+  environment. Disconnected clients are excluded from the latency sample and
+  must recover via the FR-009 re-fetch; FCM push is not an F-003 delivery
+  channel and is not measured (F-008 owns it).
 
 ## Assumptions
 

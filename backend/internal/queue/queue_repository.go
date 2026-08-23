@@ -8,9 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+const queuePositionStageOffset = 1_000_000
 
 // Repository persists F-003 queue truth in PostgreSQL.
 type Repository struct{ pool *pgxpool.Pool }
@@ -18,12 +21,18 @@ type Repository struct{ pool *pgxpool.Pool }
 // Tx is one queue mutation transaction.
 type Tx struct{ tx pgx.Tx }
 
+type queueTxRunner func(context.Context, func(*Tx) error) error
+
 // NewQueueRepository constructs a queue repository from a PostgreSQL pool.
 func NewQueueRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
 
 // WithTx runs fn atomically and leaves domain errors unwrapped.
 func (r *Repository) WithTx(ctx context.Context, fn func(*Tx) error) error {
-	tx, err := r.pool.Begin(ctx)
+	return withQueueTx(ctx, r.pool.Begin, fn)
+}
+
+func withQueueTx(ctx context.Context, begin func(context.Context) (pgx.Tx, error), fn func(*Tx) error) error {
+	tx, err := begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin queue transaction: %w", err)
 	}
@@ -35,6 +44,21 @@ func (r *Repository) WithTx(ctx context.Context, fn func(*Tx) error) error {
 		return fmt.Errorf("commit queue transaction: %w", err)
 	}
 	return nil
+}
+
+func (r *Repository) withSessionRoundLock(ctx context.Context, sessionID string, fn func(queueTxRunner) error) error {
+	conn, err := r.pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire queue session lock connection: %w", err)
+	}
+	defer conn.Release()
+	if _, err := conn.Exec(ctx, acquireRoundAllocationLockQuery, sessionID); err != nil {
+		return fmt.Errorf("acquire queue session lock: %w", err)
+	}
+	defer func() { _, _ = conn.Exec(context.Background(), releaseRoundAllocationLockQuery, sessionID) }()
+	return fn(func(txCtx context.Context, txFn func(*Tx) error) error {
+		return withQueueTx(txCtx, conn.Begin, txFn)
+	})
 }
 
 func scanRound(row pgx.Row) (Round, error) {
@@ -71,6 +95,14 @@ func scanOutbox(row pgx.Row) (OutboxEvent, error) {
 	return event, err
 }
 
+func scanSessionPolicy(row pgx.Row) (SessionPolicyContext, error) {
+	var policy SessionPolicyContext
+	err := row.Scan(&policy.Policy.Population, &policy.Policy.Finalization, &policy.Policy.OptOut,
+		&policy.Policy.GradeVisibility, &policy.Policy.GradeCorrection, &policy.Policy.Version,
+		&policy.Status, &policy.CircleID)
+	return policy, err
+}
+
 func staleVersionError() error {
 	return &QueueError{Code: QueueErrorCodeStaleVersion, Message: "queue state changed"}
 }
@@ -81,6 +113,15 @@ func (t *Tx) LockRoundAllocation(ctx context.Context, sessionID string) error {
 		return fmt.Errorf("lock round allocation: %w", err)
 	}
 	return nil
+}
+
+// LockSessionPolicy loads queue policy and lifecycle state while holding the session row lock.
+func (t *Tx) LockSessionPolicy(ctx context.Context, sessionID string) (SessionPolicyContext, error) {
+	policy, err := scanSessionPolicy(t.tx.QueryRow(ctx, lockSessionQueuePolicyQuery, sessionID))
+	if err != nil {
+		return SessionPolicyContext{}, fmt.Errorf("lock session queue policy: %w", err)
+	}
+	return policy, nil
 }
 
 // NextRoundNumber returns the next sequential round number under allocation lock.
@@ -111,6 +152,33 @@ func (t *Tx) LockRound(ctx context.Context, roundID string) (Round, error) {
 	return round, nil
 }
 
+// LockActiveRound loads the active round for a session while holding its row lock.
+func (t *Tx) LockActiveRound(ctx context.Context, sessionID string) (Round, error) {
+	round, err := scanRound(t.tx.QueryRow(ctx, lockActiveRoundQuery, sessionID))
+	if err != nil {
+		return Round{}, fmt.Errorf("lock active queue round: %w", err)
+	}
+	return round, nil
+}
+
+// LockLowestPreparedRound loads the next prepared round while holding its row lock.
+func (t *Tx) LockLowestPreparedRound(ctx context.Context, sessionID string) (Round, error) {
+	round, err := scanRound(t.tx.QueryRow(ctx, lockLowestPreparedRoundQuery, sessionID))
+	if err != nil {
+		return Round{}, fmt.Errorf("lock lowest prepared queue round: %w", err)
+	}
+	return round, nil
+}
+
+// ActivateRound changes a prepared round to active and increments its version.
+func (t *Tx) ActivateRound(ctx context.Context, roundID string) (Round, error) {
+	round, err := scanRound(t.tx.QueryRow(ctx, activateRoundQuery, roundID))
+	if err != nil {
+		return Round{}, fmt.Errorf("activate queue round: %w", err)
+	}
+	return round, nil
+}
+
 // LockEntry loads an entry while holding its row lock.
 func (t *Tx) LockEntry(ctx context.Context, entryID string) (QueueEntry, error) {
 	entry, err := scanEntry(t.tx.QueryRow(ctx, lockEntryByIDQuery, entryID))
@@ -128,6 +196,19 @@ func (t *Tx) SetRoundSelection(ctx context.Context, roundID string, entryID *str
 	}
 	if err != nil {
 		return Round{}, fmt.Errorf("set queue selection: %w", err)
+	}
+	return round, nil
+}
+
+// ClearRoundSelection clears the selected entry when it reaches a terminal
+// state, guarded by the round version held by the enclosing transaction.
+func (t *Tx) ClearRoundSelection(ctx context.Context, roundID, entryID string, expectedVersion int64) (Round, error) {
+	round, err := scanRound(t.tx.QueryRow(ctx, clearRoundSelectionQuery, roundID, entryID, expectedVersion))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Round{}, staleVersionError()
+	}
+	if err != nil {
+		return Round{}, fmt.Errorf("clear queue selection: %w", err)
 	}
 	return round, nil
 }
@@ -213,6 +294,106 @@ func (t *Tx) SetEntryPosition(ctx context.Context, entryID string, position int)
 func (t *Tx) SetPreorderPosition(ctx context.Context, roundID, studentID string, position int) error {
 	if _, err := t.tx.Exec(ctx, updatePreorderPositionQuery, roundID, studentID, position); err != nil {
 		return fmt.Errorf("set queue preorder position: %w", err)
+	}
+	return nil
+}
+
+// ReplacePreorder atomically replaces the complete prepared candidate order.
+func (t *Tx) ReplacePreorder(ctx context.Context, roundID, actorID string, studentIDs []string) error {
+	if err := t.ValidatePreorderStudents(ctx, roundID, studentIDs); err != nil {
+		return err
+	}
+	if _, err := t.tx.Exec(ctx, deletePreorderQuery, roundID); err != nil {
+		return fmt.Errorf("clear queue preorder: %w", err)
+	}
+	for position, studentID := range studentIDs {
+		if _, err := t.tx.Exec(ctx, insertPreorderQuery, roundID, studentID, position+1, actorID); err != nil {
+			return fmt.Errorf("insert queue preorder: %w", err)
+		}
+	}
+	return nil
+}
+
+// ValidatePreorderStudents ensures every candidate is an active circle student.
+func (t *Tx) ValidatePreorderStudents(ctx context.Context, roundID string, studentIDs []string) error {
+	if len(studentIDs) == 0 {
+		return nil
+	}
+	parsed := make([]uuid.UUID, len(studentIDs))
+	for i, studentID := range studentIDs {
+		value, err := uuid.Parse(studentID)
+		if err != nil {
+			return validationError("preorder contains an invalid student id")
+		}
+		parsed[i] = value
+	}
+	var eligible int
+	if err := t.tx.QueryRow(ctx, countActivePreorderStudentsQuery, roundID, parsed).Scan(&eligible); err != nil {
+		return fmt.Errorf("validate queue preorder students: %w", err)
+	}
+	if eligible != len(studentIDs) {
+		return validationError("preorder contains a non-student circle member")
+	}
+	return nil
+}
+
+// LockEntries returns every entry in durable position order under row locks.
+func (t *Tx) LockEntries(ctx context.Context, roundID string) ([]QueueEntry, error) {
+	rows, err := t.tx.Query(ctx, lockQueueEntriesQuery, roundID)
+	if err != nil {
+		return nil, fmt.Errorf("lock queue entries: %w", err)
+	}
+	defer rows.Close()
+	var entries []QueueEntry
+	for rows.Next() {
+		entry, err := scanEntry(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan locked queue entry: %w", err)
+		}
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate locked queue entries: %w", err)
+	}
+	return entries, nil
+}
+
+// RepositionEntry uses a positive staging offset so the check constraint and
+// unique position constraint remain valid while the affected range is shifted.
+func (t *Tx) RepositionEntry(ctx context.Context, roundID, entryID string, newPosition int) error {
+	if _, err := t.tx.Exec(ctx, setAllEntryPositionsQuery, roundID); err != nil {
+		return fmt.Errorf("stage queue positions: %w", err)
+	}
+	rows, err := t.LockEntries(ctx, roundID)
+	if err != nil {
+		return err
+	}
+	if newPosition < 1 || newPosition > len(rows) {
+		return validationError("queue position is out of range")
+	}
+	from := 0
+	for _, entry := range rows {
+		if entry.ID == entryID {
+			from = entry.Position - queuePositionStageOffset
+			break
+		}
+	}
+	if from == 0 {
+		return &QueueError{Code: QueueErrorCodeValidation, Message: "queue entry was not found"}
+	}
+	for _, entry := range rows {
+		position := entry.Position - queuePositionStageOffset
+		switch {
+		case entry.ID == entryID:
+			position = newPosition
+		case from < newPosition && position > from && position <= newPosition:
+			position--
+		case from > newPosition && position >= newPosition && position < from:
+			position++
+		}
+		if err := t.SetEntryPosition(ctx, entry.ID, position); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -331,15 +512,21 @@ func (t *Tx) UpsertProgress(ctx context.Context, record NewProgress) error {
 
 // LoadQueueState returns one visibility-filtered snapshot.
 func (r *Repository) LoadQueueState(ctx context.Context, roundID string, viewer Viewer) (QueueState, error) {
-	round, err := scanRound(r.pool.QueryRow(ctx, findQueueRoundQuery, roundID))
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return QueueState{}, fmt.Errorf("begin queue snapshot: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	round, err := scanRound(tx.QueryRow(ctx, findQueueRoundQuery, roundID))
 	if err != nil {
 		return QueueState{}, fmt.Errorf("load queue round: %w", err)
 	}
-	policyCtx, err := r.SessionPolicy(ctx, round.SessionID)
+	policyCtx, err := scanSessionPolicy(tx.QueryRow(ctx, findSessionQueuePolicyQuery, round.SessionID))
 	if err != nil {
-		return QueueState{}, err
+		return QueueState{}, fmt.Errorf("load session queue policy: %w", err)
 	}
-	rows, err := r.pool.Query(ctx, listQueueEntriesQuery, roundID)
+	rows, err := tx.Query(ctx, listQueueEntriesQuery, roundID)
 	if err != nil {
 		return QueueState{}, fmt.Errorf("list queue entries: %w", err)
 	}
@@ -362,7 +549,7 @@ func (r *Repository) LoadQueueState(ctx context.Context, roundID string, viewer 
 	if !viewer.IsManager {
 		return state, nil
 	}
-	rows, err = r.pool.Query(ctx, listPreorderCandidatesQuery, roundID)
+	rows, err = tx.Query(ctx, listPreorderCandidatesQuery, roundID)
 	if err != nil {
 		return QueueState{}, fmt.Errorf("list queue preorder: %w", err)
 	}
@@ -377,7 +564,19 @@ func (r *Repository) LoadQueueState(ctx context.Context, roundID string, viewer 
 	if err := rows.Err(); err != nil {
 		return QueueState{}, fmt.Errorf("iterate queue preorder: %w", err)
 	}
+	if err := tx.Commit(ctx); err != nil {
+		return QueueState{}, fmt.Errorf("commit queue snapshot: %w", err)
+	}
 	return state, nil
+}
+
+// EntryQueueID resolves an entry's round before a mutation acquires locks.
+func (r *Repository) EntryQueueID(ctx context.Context, entryID string) (string, error) {
+	var roundID string
+	if err := r.pool.QueryRow(ctx, findEntryQueueIDQuery, entryID).Scan(&roundID); err != nil {
+		return "", fmt.Errorf("load queue entry round: %w", err)
+	}
+	return roundID, nil
 }
 
 func canViewEntryDetails(policy GradeVisibility, viewer Viewer, studentID string) bool {
@@ -396,8 +595,7 @@ func (r *Repository) SessionRole(ctx context.Context, sessionID, userID string) 
 
 // SessionPolicy reads the five queue-policy dimensions for a session.
 func (r *Repository) SessionPolicy(ctx context.Context, sessionID string) (SessionPolicyContext, error) {
-	var result SessionPolicyContext
-	err := r.pool.QueryRow(ctx, findSessionQueuePolicyQuery, sessionID).Scan(&result.Policy.Population, &result.Policy.Finalization, &result.Policy.OptOut, &result.Policy.GradeVisibility, &result.Policy.GradeCorrection, &result.Policy.Version, &result.Status, &result.CircleID)
+	result, err := scanSessionPolicy(r.pool.QueryRow(ctx, findSessionQueuePolicyQuery, sessionID))
 	if err != nil {
 		return SessionPolicyContext{}, fmt.Errorf("load session queue policy: %w", err)
 	}
@@ -406,18 +604,35 @@ func (r *Repository) SessionPolicy(ctx context.Context, sessionID string) (Sessi
 
 // UpdateSessionPolicy applies an effective policy change with an optimistic guard.
 func (r *Repository) UpdateSessionPolicy(ctx context.Context, sessionID string, expectedVersion int64, next QueuePolicy) (QueuePolicy, error) {
-	current, err := r.SessionPolicy(ctx, sessionID)
+	var updated QueuePolicy
+	err := r.WithTx(ctx, func(tx *Tx) error {
+		current, err := tx.LockSessionPolicy(ctx, sessionID)
+		if err != nil {
+			return err
+		}
+		if current.Status != "scheduled" && current.Status != "active" {
+			return &QueueError{Code: QueueErrorCodeRoundFinalized, Message: "session policy is no longer editable"}
+		}
+		if current.Policy.Version != expectedVersion {
+			return staleVersionError()
+		}
+		if samePolicy(current.Policy, next) {
+			updated = current.Policy
+			return nil
+		}
+		updated, err = tx.UpdateSessionPolicy(ctx, sessionID, expectedVersion, next)
+		return err
+	})
 	if err != nil {
 		return QueuePolicy{}, err
 	}
-	if current.Policy.Version != expectedVersion {
-		return QueuePolicy{}, staleVersionError()
-	}
-	if samePolicy(current.Policy, next) {
-		return current.Policy, nil
-	}
+	return updated, nil
+}
+
+// UpdateSessionPolicy applies a policy patch after the session row is locked.
+func (t *Tx) UpdateSessionPolicy(ctx context.Context, sessionID string, expectedVersion int64, next QueuePolicy) (QueuePolicy, error) {
 	var updated QueuePolicy
-	err = r.pool.QueryRow(ctx, updateSessionPolicyQuery, sessionID, next.Population, next.Finalization, next.OptOut, next.GradeVisibility, next.GradeCorrection, expectedVersion).Scan(&updated.Population, &updated.Finalization, &updated.OptOut, &updated.GradeVisibility, &updated.GradeCorrection, &updated.Version)
+	err := t.tx.QueryRow(ctx, updateSessionPolicyQuery, sessionID, next.Population, next.Finalization, next.OptOut, next.GradeVisibility, next.GradeCorrection, expectedVersion).Scan(&updated.Population, &updated.Finalization, &updated.OptOut, &updated.GradeVisibility, &updated.GradeCorrection, &updated.Version)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return QueuePolicy{}, staleVersionError()
 	}
@@ -425,6 +640,52 @@ func (r *Repository) UpdateSessionPolicy(ctx context.Context, sessionID string, 
 		return QueuePolicy{}, fmt.Errorf("update session queue policy: %w", err)
 	}
 	return updated, nil
+}
+
+// LockSessionPolicyForManager locks the session lifecycle row before reading
+// the actor's current circle membership and role in the same transaction.
+func (t *Tx) LockSessionPolicyForManager(ctx context.Context, sessionID, actorID string) (SessionPolicyContext, string, error) {
+	policy, err := t.LockSessionPolicy(ctx, sessionID)
+	if err != nil {
+		return SessionPolicyContext{}, "", err
+	}
+	var role string
+	if err := t.tx.QueryRow(ctx, findSessionCircleRoleQuery, sessionID, actorID).Scan(&role); err != nil {
+		return SessionPolicyContext{}, "", fmt.Errorf("load manager circle role: %w", err)
+	}
+	return policy, role, nil
+}
+
+// UpdateSessionPolicyForManager applies an optimistic policy change only when
+// the actor is a current manager in the same transaction as the session lock.
+func (r *Repository) UpdateSessionPolicyForManager(ctx context.Context, sessionID, actorID string, expectedVersion int64, next QueuePolicy) (QueuePolicy, QueuePolicy, error) {
+	var before, updated QueuePolicy
+	err := r.WithTx(ctx, func(tx *Tx) error {
+		current, role, err := tx.LockSessionPolicyForManager(ctx, sessionID, actorID)
+		if err != nil {
+			return err
+		}
+		if role != "teacher" && role != "supervisor" {
+			return &QueueError{Code: QueueErrorCodeInvalidTransition, Message: "manager role is required"}
+		}
+		if current.Status != "scheduled" && current.Status != "active" {
+			return &QueueError{Code: QueueErrorCodeRoundFinalized, Message: "session policy is no longer editable"}
+		}
+		if current.Policy.Version != expectedVersion {
+			return staleVersionError()
+		}
+		before = current.Policy
+		if samePolicy(current.Policy, next) {
+			updated = current.Policy
+			return nil
+		}
+		updated, err = tx.UpdateSessionPolicy(ctx, sessionID, expectedVersion, next)
+		return err
+	})
+	if err != nil {
+		return QueuePolicy{}, QueuePolicy{}, err
+	}
+	return before, updated, nil
 }
 
 func samePolicy(a, b QueuePolicy) bool {

@@ -351,6 +351,9 @@ const (
 	// QueueErrorCodeDuplicateCommand means an idempotency key was reused
 	// with another command.
 	QueueErrorCodeDuplicateCommand QueueErrorCode = "duplicate_command"
+	// QueueErrorCodeAudioConvergencePending means durable queue truth committed
+	// but the provider-neutral entitlement call did not converge in time.
+	QueueErrorCodeAudioConvergencePending QueueErrorCode = "audio_convergence_pending"
 )
 
 // QueueError is the queue-domain error classification. Message is safe for

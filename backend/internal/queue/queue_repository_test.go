@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -35,7 +36,7 @@ func newQueueRepository(t *testing.T) *Repository {
 	t.Helper()
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		t.Skip("DATABASE_URL is not set")
+		t.Fatal("DATABASE_URL is required for queue integration tests")
 	}
 	ctx := context.Background()
 	schema := fmt.Sprintf("test_queue_repo_%d", time.Now().UnixNano())
@@ -70,6 +71,32 @@ func newQueueRepository(t *testing.T) *Repository {
 		}
 	}
 	return NewQueueRepository(pool)
+}
+
+func qLockSession(t *testing.T, repo *Repository, sessionID string) pgx.Tx {
+	t.Helper()
+	tx, err := repo.pool.Begin(context.Background())
+	if err != nil {
+		t.Fatalf("begin session lock transaction: %v", err)
+	}
+	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
+	if _, err := tx.Exec(context.Background(), `
+		SELECT id FROM sessions WHERE id = $1::uuid FOR UPDATE
+	`, sessionID); err != nil {
+		t.Fatalf("lock session row: %v", err)
+	}
+	return tx
+}
+
+func qWaitForQueueTransaction(t *testing.T, repo *Repository) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for repo.pool.Stat().AcquiredConns() < 2 {
+		if time.Now().After(deadline) {
+			t.Fatal("queue mutation transaction did not acquire a connection")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func qSeedUser(t *testing.T, repo *Repository, label string) string {
@@ -744,6 +771,51 @@ func TestQueueRepository_QueueStateVisibilityMatrix(t *testing.T) {
 				t.Fatalf("stale policy update: got %s, want stale_version", got)
 			}
 		})
+	}
+}
+
+func TestQueueRepositoryLoadQueueStateUsesOneReadSnapshot(t *testing.T) {
+	repo := newQueueRepository(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	teacher := qSeedUser(t, repo, "snapshot-teacher")
+	student := qSeedUser(t, repo, "snapshot-student")
+	circle := qSeedCircle(t, repo, teacher)
+	qSeedMember(t, repo, circle, teacher, "teacher", time.Now().UTC())
+	qSeedMember(t, repo, circle, student, "student", time.Now().UTC())
+	session := qInsertSession(t, repo, circle, teacher, string(GradeVisibilityManagersAndStudent))
+	round := qCreateRound(t, repo, session, teacher, "active", []string{student})
+
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			_ = repo.WithTx(ctx, func(tx *Tx) error {
+				if _, err := tx.tx.Exec(ctx, `UPDATE recitation_queue SET version = version + 1 WHERE id = $1::uuid`, round.ID); err != nil {
+					return err
+				}
+				_, err := tx.tx.Exec(ctx, `UPDATE recitation_queue_entries SET version = version + 1 WHERE queue_id = $1::uuid`, round.ID)
+				return err
+			})
+		}
+	}()
+
+	for attempt := 0; attempt < 300; attempt++ {
+		state, err := repo.LoadQueueState(ctx, round.ID, Viewer{UserID: teacher, IsManager: true})
+		if err != nil {
+			t.Fatalf("load queue snapshot: %v", err)
+		}
+		if len(state.Entries) != 1 {
+			t.Fatalf("snapshot entries = %d, want 1", len(state.Entries))
+		}
+		if state.Round.Version != state.Entries[0].Version {
+			t.Fatalf("mixed queue snapshot: round version=%d entry version=%d", state.Round.Version, state.Entries[0].Version)
+		}
 	}
 }
 

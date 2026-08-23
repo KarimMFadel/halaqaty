@@ -55,6 +55,9 @@ SELECT queue_population_policy, queue_finalization_policy, queue_opt_out_policy,
 FROM sessions
 WHERE id = $1::uuid`
 
+const lockSessionQueuePolicyQuery = findSessionQueuePolicyQuery + `
+FOR UPDATE`
+
 // findSessionCircleIDQuery derives durable progress ownership from the
 // authoritative session instead of a caller-provided field.
 const findSessionCircleIDQuery = `
@@ -73,7 +76,9 @@ SET queue_population_policy = $2,
     queue_grade_visibility = $5,
     queue_grade_correction = $6,
     queue_policy_version = queue_policy_version + 1
-WHERE id = $1::uuid AND queue_policy_version = $7
+WHERE id = $1::uuid
+  AND status IN ('scheduled', 'active')
+  AND queue_policy_version = $7
 RETURNING queue_population_policy, queue_finalization_policy, queue_opt_out_policy,
           queue_grade_visibility, queue_grade_correction, queue_policy_version`
 
@@ -85,7 +90,16 @@ RETURNING queue_population_policy, queue_finalization_policy, queue_opt_out_poli
 // (CHK036). The sessions row is the anchor because the round set may be
 // empty, in which case a rounds-only FOR UPDATE would lock nothing.
 const lockRoundAllocationQuery = `
-SELECT id::text FROM sessions WHERE id = $1::uuid FOR UPDATE`
+SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))
+FROM sessions
+WHERE id = $1::uuid
+FOR UPDATE`
+
+const acquireRoundAllocationLockQuery = `
+SELECT pg_advisory_lock(hashtextextended($1::text, 0))`
+
+const releaseRoundAllocationLockQuery = `
+SELECT pg_advisory_unlock(hashtextextended($1::text, 0))`
 
 // lockRoundByIDQuery loads one round holding its row lock so advance, start,
 // complete, move, and finalize decisions serialize per round.
@@ -95,6 +109,26 @@ FROM recitation_queue
 WHERE id = $1::uuid
 FOR UPDATE`
 
+const lockActiveRoundQuery = `
+SELECT ` + roundColumns + `
+FROM recitation_queue
+WHERE session_id = $1::uuid AND lifecycle = 'active'
+FOR UPDATE`
+
+const lockLowestPreparedRoundQuery = `
+SELECT ` + roundColumns + `
+FROM recitation_queue
+WHERE session_id = $1::uuid AND lifecycle = 'prepared'
+ORDER BY round_number
+LIMIT 1
+FOR UPDATE`
+
+const activateRoundQuery = `
+UPDATE recitation_queue
+SET lifecycle = 'active', activated_at = NOW(), version = version + 1
+WHERE id = $1::uuid AND lifecycle = 'prepared'
+RETURNING ` + roundColumns
+
 // lockEntryByIDQuery loads one entry holding its row lock so state
 // transitions serialize per entry inside the round lock.
 const lockEntryByIDQuery = `
@@ -102,6 +136,8 @@ SELECT ` + entryColumns + `
 FROM recitation_queue_entries
 WHERE id = $1::uuid
 FOR UPDATE`
+
+const findEntryQueueIDQuery = `SELECT queue_id::text FROM recitation_queue_entries WHERE id = $1::uuid`
 
 // nextRoundNumberQuery allocates the next sequential round number as
 // MAX+1; it must run under lockRoundAllocationQuery (CHK036 — no reuse,
@@ -133,6 +169,14 @@ WHERE id = $1::uuid
   ))
 RETURNING ` + roundColumns
 
+// clearRoundSelectionQuery clears a terminal entry's selection with the same
+// round-version guard as selection replacement.
+const clearRoundSelectionQuery = `
+UPDATE recitation_queue
+SET selected_entry_id = NULL, version = version + 1
+WHERE id = $1::uuid AND selected_entry_id = $2::uuid AND version = $3
+RETURNING ` + roundColumns
+
 // bumpRoundVersionQuery increments the round version for queue-visible
 // mutations that do not otherwise touch the round row (e.g. entry completion).
 const bumpRoundVersionQuery = `
@@ -160,7 +204,9 @@ WHERE queue_id = $1::uuid AND status IN ('waiting', 'reciting')`
 const selectNextWaitingEntryQuery = `
 SELECT ` + entryColumns + `
 FROM recitation_queue_entries
-WHERE queue_id = $1::uuid AND status = 'waiting'
+WHERE queue_id = $1::uuid
+  AND status = 'waiting'
+  AND id IS DISTINCT FROM (SELECT selected_entry_id FROM recitation_queue WHERE id = $1::uuid)
 ORDER BY position
 LIMIT 1
 FOR UPDATE`
@@ -200,6 +246,31 @@ UPDATE recitation_queue_preorder
 SET position = $3
 WHERE queue_id = $1::uuid AND student_id = $2::uuid`
 
+const deletePreorderQuery = `DELETE FROM recitation_queue_preorder WHERE queue_id = $1::uuid`
+
+const insertPreorderQuery = `
+INSERT INTO recitation_queue_preorder (queue_id, student_id, position, added_by)
+VALUES ($1::uuid, $2::uuid, $3, $4::uuid)`
+
+const countActivePreorderStudentsQuery = `
+SELECT COUNT(*)
+FROM recitation_queue q
+JOIN sessions s ON s.id = q.session_id
+JOIN circle_members cm ON cm.circle_id = s.circle_id
+WHERE q.id = $1::uuid
+  AND cm.role = 'student'
+  AND cm.user_id = ANY($2::uuid[])`
+
+const lockQueueEntriesQuery = `
+SELECT ` + entryColumns + `
+FROM recitation_queue_entries
+WHERE queue_id = $1::uuid
+ORDER BY position
+FOR UPDATE`
+
+const setAllEntryPositionsQuery = `
+UPDATE recitation_queue_entries SET position = position + 1000000 WHERE queue_id = $1::uuid`
+
 // --- Population (activation materialization) --------------------------------
 
 // listPresentAtActivationPopulationQuery yields the activation order under
@@ -211,6 +282,8 @@ const listPresentAtActivationPopulationQuery = `
 SELECT student_id::text FROM (
     SELECT po.student_id, 0 AS seg, po.position::bigint AS seg_order, NULL::timestamptz AS joined_at, NULL::uuid AS tie_break
     FROM recitation_queue_preorder po
+    JOIN sessions s ON s.id = $1::uuid
+    JOIN circle_members pcm ON pcm.circle_id = s.circle_id AND pcm.user_id = po.student_id AND pcm.role = 'student'
     JOIN session_participant_presence p
       ON p.session_id = $1::uuid AND p.user_id = po.student_id AND p.is_currently_present
     WHERE po.queue_id = $2::uuid
@@ -236,6 +309,8 @@ const listAllActiveStudentsPopulationQuery = `
 SELECT student_id::text FROM (
     SELECT po.student_id, 0 AS seg, po.position::bigint AS seg_order, NULL::timestamptz AS joined_at, NULL::uuid AS tie_break
     FROM recitation_queue_preorder po
+    JOIN sessions s ON s.id = $1::uuid
+    JOIN circle_members pcm ON pcm.circle_id = s.circle_id AND pcm.user_id = po.student_id AND pcm.role = 'student'
     WHERE po.queue_id = $2::uuid
     UNION ALL
     SELECT cm.user_id, 1, NULL::bigint, cm.joined_at, cm.user_id

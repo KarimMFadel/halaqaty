@@ -201,7 +201,13 @@ Sent to the student who is next in queue (position 2) to give them time to prepa
 
 ### `queue.reordered` (Server → Client)
 
-Broadcast when the teacher manually reorders the queue.
+Broadcast after a manager changes the durable order, by either control:
+
+- `preorder_students` — full-list replace of pre-set candidates (round `prepared` only);
+- `entry_move` — one `waiting` entry repositioned in the active round (permitted while another entry recites; the `reciting` entry is never moved).
+
+`ordered_ids` is the resulting complete order (candidate student IDs for
+`preorder_students`; the full round entry order for `entry_move`).
 
 ```json
 {
@@ -211,9 +217,9 @@ Broadcast when the teacher manually reorders the queue.
   "payload": {
     "session_id": "uuid",
     "round_id": "uuid",
-    "order_kind": "queue_entries",
-    "ordered_ids": ["uuid1", "uuid2", "uuid3"],
-    "version": 7
+    "order_kind": "entry_move",
+    "ordered_ids": ["uuid1", "uuid2"],
+    "version": 3
   }
 }
 ```
@@ -222,7 +228,11 @@ Broadcast when the teacher manually reorders the queue.
 
 ### `queue.round_started` (Server → Client)
 
-Broadcast when the teacher starts a new recitation round.
+Emitted when a prepared round activates. Activation is automatic in round-number
+order: the first prepared round activates when the session is live and no round
+is active, and each subsequent prepared round activates when the previous round
+finalizes (including the round created by reset). No manager activate action
+exists.
 
 ```json
 {
@@ -315,8 +325,10 @@ not itself change the entry to `reciting`.
 }
 ```
 
-`reason` is `reset` or `session_ended`. F-005 session end does not wait for this
-event or for queue cleanup.
+`reason` is `reset` or `session_ended`. Session-end convergence finalizes the
+active round and every never-activated prepared round (permanently inert,
+retained); each emits this event with reason `session_ended`. Finalization never
+means the F-005 session end waited for queue cleanup.
 
 ---
 

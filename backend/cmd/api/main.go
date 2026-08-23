@@ -111,7 +111,11 @@ func main() {
 			os.Exit(1)
 		}
 		rooms := lksdk.NewRoomServiceClient(mediaCfg.Endpoint, mediaCfg.APIKey, mediaCfg.APISecret)
-		media := livekit.NewAdapter(mediaCfg, policy, rooms)
+		media, err := livekit.NewAdapterWithRoomKey(mediaCfg, policy, rooms, roomKey)
+		if err != nil {
+			logger.Error("failed to initialize LiveKit media adapter", "error", err)
+			os.Exit(1)
+		}
 		liveVerifier := livekit.NewHandlerVerifier(mediaCfg.APIKey, mediaCfg.APISecret)
 		liveSessionRepo := sessions.NewSessionRepository(pool)
 		liveSessionService, err = sessions.NewServiceWithRoomKey(liveSessionRepo, media, rbacRepo, roomKey)

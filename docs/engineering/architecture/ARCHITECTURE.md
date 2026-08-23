@@ -920,7 +920,7 @@ from F-005 participant-presence facts and must not alter them.
 | activated_at | TIMESTAMPTZ | NULL | |
 | finalized_at | TIMESTAMPTZ | NULL | |
 | UNIQUE | (session_id, round_number) | | Sequential numbering |
-| PARTIAL UNIQUE | (session_id) WHERE lifecycle IN ('prepared','active') | | One current round |
+| PARTIAL UNIQUE | (session_id) WHERE lifecycle = 'active' | | One active round |
 
 #### `recitation_queue_preorder`
 | Column | Type | Constraints | Description |

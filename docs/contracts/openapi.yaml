@@ -1000,11 +1000,15 @@ paths:
     post:
       operationId: createQueueRound
       description: |
-        Prepare a round for a scheduled session or create and activate one for
-        an active session (teacher/supervisor only). At most one prepared or
-        active round exists per session.
+        Prepares a round while the session is scheduled or live (teacher/supervisor
+        only). Several prepared rounds may stack with sequential round numbers.
+        Activation is automatic in round-number order — the first prepared round
+        activates when the session is live and no round is active, and each subsequent
+        prepared round activates when the previous round finalizes. There is no
+        activate-round endpoint, command, or UI. Never-activated prepared rounds become
+        permanently inert at session end.
       tags: [Queue]
-      summary: Prepare or activate a recitation round
+      summary: Prepare a sequential round
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1015,7 +1019,7 @@ paths:
               $ref: '#/components/schemas/StartRoundRequest'
       responses:
         '201':
-          description: Round prepared or activated under the current session state and population policy
+          description: Round prepared (and activated when the activation invariant fires)
           content:
             application/json:
               schema:
@@ -1129,7 +1133,11 @@ paths:
       operationId: resetSessionQueue
       tags: [Queue]
       summary: Finalize the current round and create the next round
-      description: Applies the session finalization policy, retains prior history, and creates the next sequential round atomically.
+      description: |
+        Requires the session's active round on a live session. Finalizes it under the
+        session finalization policy (history retained), creates the next sequential
+        round from the request, and lets the automatic activation rule activate the
+        next prepared round in round-number order.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1140,7 +1148,7 @@ paths:
               $ref: '#/components/schemas/ResetQueueRequest'
       responses:
         '201':
-          description: Prior round finalized and retained; next round created
+          description: Prior round finalized and next round created/activated
           content:
             application/json:
               schema:
@@ -1189,8 +1197,11 @@ paths:
     put:
       operationId: reorderSessionQueue
       tags: [Queue]
-      summary: Reorder waiting entries or prepared candidates
-      description: Replaces the complete reorderable order using one optimistic round version.
+      summary: Replace the complete pre-set candidate order (pre-activation only)
+      description: |
+        Full-list reorder of pre-set candidates; valid only while the round is
+        `prepared` (before activation). After activation the only order mutation is the
+        single-entry move operation. Manager-surface only.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1201,7 +1212,43 @@ paths:
               $ref: '#/components/schemas/ReorderQueueRequest'
       responses:
         '200':
-          description: Queue reordered
+          description: Prepared order replaced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueState'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /sessions/{sessionId}/queue/entries/{entryId}/move:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - $ref: '#/components/parameters/EntryId'
+    post:
+      operationId: moveQueueEntry
+      tags: [Queue]
+      summary: Move one waiting entry to an arbitrary position
+      description: |
+        Repositions exactly one `waiting` entry to an arbitrary slot in the durable
+        order of the active round; intervening entries shift. Permitted while another
+        entry is `reciting`; the `reciting` entry itself and terminal entries are
+        immovable (409). This is the only post-activation order mutation.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveEntryRequest'
+      responses:
+        '200':
+          description: Entry moved and queue snapshot returned
           content:
             application/json:
               schema:
@@ -2576,11 +2623,8 @@ components:
     ReorderQueueRequest:
       type: object
       additionalProperties: false
-      required: [order_kind, ordered_ids, expected_version]
+      required: [ordered_ids, expected_version]
       properties:
-        order_kind:
-          type: string
-          enum: [preorder_students, queue_entries]
         ordered_ids:
           type: array
           uniqueItems: true
@@ -2588,16 +2632,36 @@ components:
           items:
             type: string
             format: uuid
+          description: Complete new pre-set candidate order; must contain exactly the current candidates.
         expected_version:
           type: integer
           format: int64
           minimum: 1
 
+    MoveEntryRequest:
+      type: object
+      additionalProperties: false
+      required: [new_position, expected_version]
+      properties:
+        new_position:
+          type: integer
+          minimum: 1
+          description: Target slot in the round's durable order (1..entry count).
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Expected current round version.
+
     EntryStatusRequest:
       type: object
       additionalProperties: false
       required: [status, expected_entry_version]
-      description: Grade is required for completed when the round requires grading; grade and notes are invalid for reciting or skipped.
+      description: |
+        Grade is required with `completed` when the round requires grading, and invalid
+        otherwise (grading-optional completion carries no grade and no note; add later
+        via the correction path). `reciting` applies only to the selected entry.
+        Grade/notes are invalid for `reciting` or `skipped`.
       properties:
         status:
           type: string

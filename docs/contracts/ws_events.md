@@ -60,17 +60,51 @@ graph LR
 
 ---
 
+### Queue Event Envelope and Recovery
+
+Every `queue.*` event uses the existing authorized F-005 session topic and
+includes a stable `event_id` plus UTC `occurred_at`. Round-scoped payloads include
+`session_id`, `round_id`, and the committed monotonic round `version`; the
+session-scoped policy event carries its policy version instead. Delivery
+is at-least-once: clients deduplicate by `event_id`, ignore stale versions, and
+re-fetch `GET /sessions/{id}/queue` after reconnect, an unknown event, or a
+version gap. Events never carry a media credential, endpoint, room reference,
+provider identifier, or URL containing media material.
+
 ### `queue.state` (Server → Client)
 
-Sent when a client joins a session or when the queue is reset. Full queue snapshot.
+Sent after an authorized session-topic subscription or explicit reconciliation.
+The payload matches the visibility-filtered REST `QueueState` shape, except entry
+IDs use `queue_entry_id` for event-catalog clarity.
 
 ```json
 {
   "type": "queue.state",
+  "event_id": "uuid",
+  "occurred_at": "2026-08-23T10:15:30Z",
   "payload": {
     "session_id": "uuid",
+    "round_id": "uuid",
     "round_number": 1,
-    "status": "active",
+    "round_type": "revision",
+    "lifecycle": "active",
+    "surah_id": 2,
+    "from_ayah": 1,
+    "to_ayah": 10,
+    "grading_required": true,
+    "selected_entry_id": "uuid",
+    "version": 4,
+    "policy": {
+      "population": "present_at_activation",
+      "unfinished_finalization": "mark_unfinished_skipped",
+      "opt_out": "approval_required",
+      "grade_visibility": "managers_and_student",
+      "grade_correction": "audited_any_time",
+      "version": 1
+    },
+    "preorder": [
+      { "student_id": "uuid", "student_name": "Ahmad Al-Rashid", "position": 1 }
+    ],
     "entries": [
       {
         "queue_entry_id": "uuid",
@@ -78,9 +112,7 @@ Sent when a client joins a session or when the queue is reset. Full queue snapsh
         "student_name": "Ahmad Al-Rashid",
         "position": 1,
         "status": "reciting",
-        "surah_id": 2,
-        "from_ayah": 1,
-        "to_ayah": 10
+        "version": 2
       }
     ]
   }
@@ -100,17 +132,24 @@ Broadcast to all session participants when a single queue entry changes status.
 ```json
 {
   "type": "queue.entry_updated",
+  "event_id": "uuid",
+  "occurred_at": "2026-08-23T10:16:00Z",
   "payload": {
     "session_id": "uuid",
+    "round_id": "uuid",
     "queue_entry_id": "uuid",
     "student_id": "uuid",
     "old_status": "waiting",
     "new_status": "reciting",
     "position": 1,
-    "grade": null
+    "entry_version": 2,
+    "version": 5
   }
 }
 ```
+
+Grade/note are absent from this broadcast. Authorized recipients obtain their
+visibility-filtered projection from `queue.state` or REST.
 
 ---
 
@@ -121,13 +160,18 @@ Sent only to the student whose turn it is. Triggers the "Your turn!" notificatio
 ```json
 {
   "type": "queue.your_turn",
+  "event_id": "uuid",
+  "occurred_at": "2026-08-23T10:20:00Z",
   "payload": {
     "session_id": "uuid",
+    "round_id": "uuid",
     "queue_entry_id": "uuid",
+    "round_type": "revision",
     "surah_id": 2,
     "surah_name": "Al-Baqarah",
     "from_ayah": 1,
-    "to_ayah": 10
+    "to_ayah": 10,
+    "version": 6
   }
 }
 ```
@@ -141,10 +185,14 @@ Sent to the student who is next in queue (position 2) to give them time to prepa
 ```json
 {
   "type": "queue.next_soon",
+  "event_id": "uuid",
+  "occurred_at": "2026-08-23T10:20:00Z",
   "payload": {
     "session_id": "uuid",
+    "round_id": "uuid",
+    "queue_entry_id": "uuid",
     "position": 2,
-    "estimated_wait_seconds": null
+    "version": 6
   }
 }
 ```
@@ -158,9 +206,14 @@ Broadcast when the teacher manually reorders the queue.
 ```json
 {
   "type": "queue.reordered",
+  "event_id": "uuid",
+  "occurred_at": "2026-08-23T10:17:00Z",
   "payload": {
     "session_id": "uuid",
-    "new_order": ["uuid1", "uuid2", "uuid3"]
+    "round_id": "uuid",
+    "order_kind": "queue_entries",
+    "ordered_ids": ["uuid1", "uuid2", "uuid3"],
+    "version": 7
   }
 }
 ```
@@ -174,39 +227,112 @@ Broadcast when the teacher starts a new recitation round.
 ```json
 {
   "type": "queue.round_started",
+  "event_id": "uuid",
+  "occurred_at": "2026-08-23T10:15:30Z",
   "payload": {
     "session_id": "uuid",
+    "round_id": "uuid",
     "round_number": 2,
+    "round_type": "revision",
+    "lifecycle": "active",
     "surah_id": 3,
     "surah_name": "Al-Imran",
     "from_ayah": 1,
     "to_ayah": 20,
-    "grading_required": true
+    "grading_required": true,
+    "version": 1
   }
 }
 ```
 
 ---
 
-### `queue.grade_submitted` (Server → Client)
+### `queue.grade_submitted` (Server → Client, visibility-filtered)
 
-Broadcast to teacher/supervisors when a grade is recorded for a completed turn.
+Sent only to recipients permitted by the current grade/note visibility policy
+when a completed turn is graded or corrected.
 
 ```json
 {
   "type": "queue.grade_submitted",
+  "event_id": "uuid",
+  "occurred_at": "2026-08-23T10:30:00Z",
   "payload": {
     "session_id": "uuid",
+    "round_id": "uuid",
     "queue_entry_id": "uuid",
     "student_id": "uuid",
     "grade": "excellent",
     "notes": "Masha'Allah, strong tajweed",
-    "graded_by": "uuid"
+    "entry_version": 3,
+    "version": 8
   }
 }
 ```
 
 **Grade values:** `excellent` | `good` | `acceptable` | `needs_review` | `repeat`
+
+Actor attribution remains in redacted audit telemetry; delivery infrastructure
+must not log notes.
+
+---
+
+### `queue.advanced` (Server → Client)
+
+Broadcast after a manager durably selects the next waiting entry. Selection does
+not itself change the entry to `reciting`.
+
+```json
+{
+  "type": "queue.advanced",
+  "event_id": "uuid",
+  "occurred_at": "2026-08-23T10:18:00Z",
+  "payload": {
+    "session_id": "uuid",
+    "round_id": "uuid",
+    "selected_entry_id": "uuid",
+    "version": 9
+  }
+}
+```
+
+---
+
+### `queue.round_finalized` (Server → Client)
+
+```json
+{
+  "type": "queue.round_finalized",
+  "event_id": "uuid",
+  "occurred_at": "2026-08-23T11:00:00Z",
+  "payload": {
+    "session_id": "uuid",
+    "round_id": "uuid",
+    "round_number": 1,
+    "reason": "reset",
+    "version": 12
+  }
+}
+```
+
+`reason` is `reset` or `session_ended`. F-005 session end does not wait for this
+event or for queue cleanup.
+
+---
+
+### `queue.policy_changed` (Server → Client)
+
+Broadcast after a prospective closed-policy change. The payload contains the
+current `population`, `unfinished_finalization`, `opt_out`, `grade_visibility`,
+`grade_correction`, and policy `version`; it contains no prior values or notes.
+
+---
+
+### `queue.opt_out_requested` (Server → Client, targeted)
+
+Sent only to current teachers/supervisors when an `approval_required` request is
+pending. Payload: `session_id`, `round_id`, `request_id`, `queue_entry_id`,
+`student_id`, and round `version`. Auto-approved opt-outs do not emit this event.
 
 ---
 
@@ -463,9 +589,9 @@ Sent when the server cannot process a client command.
 
 | Event | Delivery | Deduplication |
 |-------|----------|---------------|
-| `queue.*` | At-least-once (broadcast to all in room) | Client ignores duplicate `queue_entry_id` + `new_status` pairs |
+| `queue.*` | At-least-once (authorized broadcast or targeted delivery) | Client deduplicates by `event_id`, ignores stale versions, and re-fetches on gaps |
 | `session.*` | At-least-once | Client deduplicates by event ID when supplied, otherwise by `session_id`, type, affected user, and monotonic state version |
 | `chat.message` | At-least-once | Client deduplicates by `message_id` |
-| `queue.your_turn` | At-least-once + FCM backup | Client shows notification once per `queue_entry_id` |
+| `queue.your_turn` | At-least-once; F-008 may add FCM projection | Client shows once per `event_id` and re-fetches authoritative state |
 
-> **Source of truth:** PostgreSQL is always the source of truth. On F-005 reconnection, clients obtain a fresh realtime ticket and re-fetch the authorized session participant snapshot; F-003 queue clients later re-fetch their queue operation rather than relying solely on WebSocket events.
+> **Source of truth:** PostgreSQL is always the source of truth. On F-005 reconnection, clients obtain a fresh realtime ticket and re-fetch the authorized session participant snapshot; F-003 queue clients re-fetch `GET /sessions/{id}/queue` rather than relying solely on WebSocket events.

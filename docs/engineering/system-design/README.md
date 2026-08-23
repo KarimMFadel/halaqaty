@@ -24,11 +24,10 @@ Circle has scheduled sessions
       ▼
    [active] ── teacher/supervisor calls POST /sessions/{sessionId}/queue/rounds ──►
       │                                                              │
-      │   (queue entries visible to all members via GET /sessions/{sessionId}/queue)
+      │   GET queue → POST advance → PUT entry status=reciting       │
+      │   PUT entry status=completed|skipped (grade atomic when required)
       │                                                              │
-      │   teacher/supervisor calls POST /sessions/{sessionId}/queue/entries/{entryId}/grade
-      │                                                              │
-      │◄── next round: POST /sessions/{sessionId}/queue/rounds ──────┘
+      │◄── next round: POST /sessions/{sessionId}/queue/reset ───────┘
       │
       ▼  teacher calls POST /sessions/{sessionId}/end
    [ended]
@@ -41,19 +40,22 @@ Session `status` values are codified in `openapi.yaml` (path `/circles/{circleId
 | State | Meaning | Trigger |
 |-------|---------|---------|
 | `waiting` | Student is in the queue, not yet their turn | Default when a round starts (`POST /sessions/{sessionId}/queue/rounds`) |
-| `reciting` | Currently reciting | Per-turn advancement (see [Proposed](#turn-advancement-flow) — exact endpoint shape not yet in contract) |
-| `completed` | Finished — grade recorded | Teacher/supervisor submits grade: `POST /sessions/{sessionId}/queue/entries/{entryId}/grade` |
-| `opted_out` | Student opted out (requires teacher/supervisor approval) | Student calls `POST /sessions/{sessionId}/queue/opt-out` |
+| `reciting` | Currently reciting | Manager selects with `POST .../advance`, then starts with `PUT .../status` |
+| `completed` | Finished; one practice record exists | Manager uses `PUT .../status` with atomic conditional grade/note |
+| `skipped` | Turn ended without practice credit | Manager uses `PUT .../status`; default reset also skips unfinished entries |
+| `opted_out` | Approved/auto-approved humane opt-out | Student calls `POST .../opt-out`; manager decision is separate when required |
 
-> **Note:** only `completed` and `opted_out` transitions are codified by REST endpoints today. The `waiting` → `reciting` → `completed` turn-advance step is described in the [Proposed](#turn-advancement-flow) section; its exact endpoint is not in `openapi.yaml` yet.
+`completed`, `skipped`, and `opted_out` are terminal. The existing
+`POST .../grade` route corrects a completed grade/note under session policy; it
+does not perform the completion transition or implicitly advance.
 
 ### Queue Reset (new round)
 
-`POST /api/v1/sessions/{sessionId}/queue/rounds` (teacher/supervisor only) with body referencing `StartRoundRequest` (see `openapi.yaml` for the schema). This:
+`POST /api/v1/sessions/{sessionId}/queue/reset` (teacher/supervisor only) with body referencing `ResetQueueRequest` (see `openapi.yaml` for the schema). This:
 
 1. Archives the current round's entries (read-only).
-2. Creates a new round record linked to the session.
-3. Clones the member list back into `waiting` state.
+2. Creates the next sequential round linked to the session.
+3. Applies the configured population policy and durable pre-set relative order.
 4. Returns the full `QueueState` snapshot.
 
 **Multiple passes are fully supported.** Each round is an independent unit with its own Surah range and set of progress records.
@@ -177,15 +179,6 @@ Codified rules per `ws_events.md`:
 ## Proposed (not yet in contract or ARCHITECTURE)
 
 The items below are **design proposals** documented for review. They are NOT part of the current REST or WebSocket contract and are NOT codified in `ARCHITECTURE.md`. Each must be ratified via an ADR (and reflected in `openapi.yaml` / `ws_events.md`) before implementation.
-
-### Turn advancement flow
-
-The turn-advance step (`waiting` → `reciting` → `completed`/`opted_out`) shown in the queue lifecycle above needs an explicit REST or WS command to advance the active reciter. Open questions:
-
-- Should advancement be a `PATCH /sessions/{sessionId}/queue/entries/{entryId}` (status change) or a WS command (`cmd.advance_queue`)?
-- Should `POST /sessions/{sessionId}/queue/entries/{entryId}/grade` implicitly advance the queue pointer, or is advancement a separate operation?
-
-Once decided, the chosen shape must be added to `openapi.yaml` (REST) or `ws_events.md` (WS command) and this section collapsed into the contract-anchored text above.
 
 ### Concurrent WebSocket connection limit
 

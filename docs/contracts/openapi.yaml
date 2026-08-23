@@ -972,7 +972,10 @@ paths:
       - $ref: '#/components/parameters/SessionId'
     get:
       operationId: getSessionQueue
-      description: Get current queue state
+      description: |
+        Get the PostgreSQL-authoritative current queue snapshot. Grade and note
+        fields are filtered by the session queue policy. Clients re-fetch this
+        operation after reconnect or a realtime version gap.
       tags: [Queue]
       summary: Get current queue state
       responses:
@@ -988,15 +991,22 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
 
   /sessions/{sessionId}/queue/rounds:
     parameters:
       - $ref: '#/components/parameters/SessionId'
     post:
       operationId: createQueueRound
-      description: Start a new recitation round (teacher/supervisor only)
+      description: |
+        Prepare a round for a scheduled session or create and activate one for
+        an active session (teacher/supervisor only). At most one prepared or
+        active round exists per session.
       tags: [Queue]
-      summary: Start a new recitation round (teacher/supervisor only)
+      summary: Prepare or activate a recitation round
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1005,7 +1015,7 @@ paths:
               $ref: '#/components/schemas/StartRoundRequest'
       responses:
         '201':
-          description: Round started, queue populated
+          description: Round prepared or activated under the current session state and population policy
           content:
             application/json:
               schema:
@@ -1018,12 +1028,16 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '422':
           description: Invalid Ayah range (e.g., to_ayah exceeds Surah length)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
 
   /sessions/{sessionId}/queue/entries/{entryId}/grade:
     parameters:
@@ -1036,9 +1050,14 @@ paths:
           format: uuid
     post:
       operationId: gradeQueueEntry
-      description: Submit grade for a completed recitation turn (teacher/supervisor only)
+      description: |
+        Correct the grade or note of a completed recitation turn when the
+        session correction policy permits. Updates the existing progress record
+        atomically and never creates another one.
       tags: [Queue]
-      summary: Submit grade for a completed recitation turn (teacher/supervisor only)
+      summary: Correct a completed entry grade or note
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1048,6 +1067,10 @@ paths:
       responses:
         '200':
           description: Grade recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueEntry'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1057,19 +1080,37 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: Entry is not in a gradeable state
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
 
   /sessions/{sessionId}/queue/opt-out:
     parameters:
       - $ref: '#/components/parameters/SessionId'
     post:
       operationId: optOutOfQueue
-      description: Opt out of the current round (student only, requires teacher/supervisor approval)
+      description: |
+        Student requests opt-out. The result is pending under
+        `approval_required` or immediately approved under `auto_approve`.
       tags: [Queue]
-      summary: Opt out of the current round (student only, requires teacher/supervisor approval)
+      summary: Request opt-out under the session policy
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '200':
-          description: Opt-out recorded; entry status set to opted_out
+          description: Existing idempotent opt-out request or outcome
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptOutResult'
+        '201':
+          description: Opt-out request or automatic outcome created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptOutResult'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1077,7 +1118,197 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: No active round or user is not in the queue
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /sessions/{sessionId}/queue/reset:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      operationId: resetSessionQueue
+      tags: [Queue]
+      summary: Finalize the current round and create the next round
+      description: Applies the session finalization policy, retains prior history, and creates the next sequential round atomically.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetQueueRequest'
+      responses:
+        '201':
+          description: Prior round finalized and retained; next round created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueState'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /sessions/{sessionId}/queue/advance:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      operationId: advanceSessionQueue
+      tags: [Queue]
+      summary: Select the next waiting entry without starting it
+      description: Durably selects the next waiting entry; a separate allowed status transition starts recitation.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+      responses:
+        '200':
+          description: Next entry selected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueState'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /sessions/{sessionId}/queue/order:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    put:
+      operationId: reorderSessionQueue
+      tags: [Queue]
+      summary: Reorder waiting entries or prepared candidates
+      description: Replaces the complete reorderable order using one optimistic round version.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderQueueRequest'
+      responses:
+        '200':
+          description: Queue reordered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueState'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /sessions/{sessionId}/queue/entries/{entryId}/status:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - $ref: '#/components/parameters/EntryId'
+    put:
+      operationId: updateQueueEntryStatus
+      tags: [Queue]
+      summary: Start, skip, or atomically complete an entry
+      description: Applies only the documented state transitions; completed-only progress is written in the same transaction.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntryStatusRequest'
+      responses:
+        '200':
+          description: Allowed transition committed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueState'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /sessions/{sessionId}/queue/opt-out-requests/{requestId}/decision:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      operationId: decideQueueOptOutRequest
+      tags: [Queue]
+      summary: Approve or decline a pending opt-out request
+      description: A current teacher or supervisor decides a pending request without adding a queue-entry state.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OptOutDecisionRequest'
+      responses:
+        '200':
+          description: Request decided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptOutResult'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /sessions/{sessionId}/queue/policy:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    patch:
+      operationId: updateSessionQueuePolicy
+      tags: [Queue]
+      summary: Change closed queue policy values prospectively
+      description: Updates one or more closed policy values for subsequent actions without rewriting queue history.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueuePolicyPatch'
+      responses:
+        '200':
+          description: Current queue policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueuePolicy'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   # ── Chat ──────────────────────────────────────────────────
   /circles/{circleId}/messages:
@@ -1749,6 +1980,29 @@ components:
       schema:
         type: string
         format: uuid
+    EntryId:
+      name: entryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Optional opaque retry key; reuse for a different command returns a conflict.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
 
   responses:
     BadRequest:
@@ -1783,6 +2037,18 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     TooManyRequests:
       description: Request rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnprocessableEntity:
+      description: Request failed semantic validation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+    ServiceUnavailable:
+      description: A required external operation is temporarily unavailable; authoritative state remains recoverable
       content:
         application/json:
           schema:
@@ -2236,8 +2502,12 @@ components:
     # ── Queue ──────────────────────────────────────────────
     StartRoundRequest:
       type: object
-      required: [surah_id, from_ayah, to_ayah]
+      additionalProperties: false
+      required: [round_type, surah_id, from_ayah, to_ayah, grading_required]
       properties:
+        round_type:
+          type: string
+          enum: [new_memorization, revision, old_revision, test]
         surah_id:
           type: integer
           minimum: 1
@@ -2252,34 +2522,191 @@ components:
           description: Validated against quran_surahs.ayah_count; returns 422 if exceeded
         grading_required:
           type: boolean
-          description: Override circle's default grading_policy for this round
         student_order:
           type: array
+          uniqueItems: true
+          maxItems: 50
           items:
             type: string
             format: uuid
-          description: Optional pre-defined student order; defaults to join order
+          description: Optional durable pre-set student order; all IDs must be active student members
+
+    ResetQueueRequest:
+      type: object
+      additionalProperties: false
+      required: [round_type, surah_id, from_ayah, to_ayah, grading_required, expected_version]
+      properties:
+        round_type:
+          type: string
+          enum: [new_memorization, revision, old_revision, test]
+        surah_id:
+          type: integer
+          minimum: 1
+          maximum: 114
+        from_ayah:
+          type: integer
+          minimum: 1
+        to_ayah:
+          type: integer
+          minimum: 1
+        grading_required:
+          type: boolean
+        student_order:
+          type: array
+          uniqueItems: true
+          maxItems: 50
+          items:
+            type: string
+            format: uuid
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 1
+
+    VersionRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_version]
+      properties:
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 1
+
+    ReorderQueueRequest:
+      type: object
+      additionalProperties: false
+      required: [order_kind, ordered_ids, expected_version]
+      properties:
+        order_kind:
+          type: string
+          enum: [preorder_students, queue_entries]
+        ordered_ids:
+          type: array
+          uniqueItems: true
+          maxItems: 50
+          items:
+            type: string
+            format: uuid
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 1
+
+    EntryStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status, expected_entry_version]
+      description: Grade is required for completed when the round requires grading; grade and notes are invalid for reciting or skipped.
+      properties:
+        status:
+          type: string
+          enum: [reciting, skipped, completed]
+        expected_entry_version:
+          type: integer
+          format: int64
+          minimum: 1
+        grade:
+          type: string
+          enum: [excellent, good, acceptable, needs_review, repeat]
+          nullable: true
+        notes:
+          type: string
+          maxLength: 500
+          nullable: true
 
     GradeRequest:
       type: object
-      required: [grade]
+      additionalProperties: false
+      required: [expected_entry_version]
+      minProperties: 2
       properties:
         grade:
           type: string
           enum: [excellent, good, acceptable, needs_review, repeat]
+          nullable: true
           description: |
             5-grade recitation scale (locked 2026-06-30):
             - `excellent` — ممتاز: Perfect recitation, excellent tajweed
             - `good` — جيد: Minor errors, good tajweed
             - `acceptable` — مقبول: Notable errors, basic tajweed
             - `needs_review` — يحتاج مراجعة: Significant errors; review required
-            - `repeat` — إعادة: Must fully repeat; cannot advance
+            - `repeat` — إعادة: Full repetition is recommended; manager controls remain available
         notes:
           type: string
           maxLength: 500
+          nullable: true
+        expected_entry_version:
+          type: integer
+          format: int64
+          minimum: 1
+
+    OptOutDecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [decision, expected_entry_version]
+      properties:
+        decision:
+          type: string
+          enum: [approved, declined]
+        expected_entry_version:
+          type: integer
+          format: int64
+          minimum: 1
+
+    QueuePolicyPatch:
+      type: object
+      additionalProperties: false
+      required: [expected_version]
+      minProperties: 2
+      properties:
+        population:
+          type: string
+          enum: [present_at_activation, all_active_students]
+        unfinished_finalization:
+          type: string
+          enum: [mark_unfinished_skipped, preserve_last_state]
+        opt_out:
+          type: string
+          enum: [approval_required, auto_approve]
+        grade_visibility:
+          type: string
+          enum: [managers_and_student, managers_only, all_participants]
+        grade_correction:
+          type: string
+          enum: [audited_any_time, before_round_finalization, immutable]
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 1
+
+    QueuePolicy:
+      type: object
+      required: [population, unfinished_finalization, opt_out, grade_visibility, grade_correction, version]
+      properties:
+        population:
+          type: string
+          enum: [present_at_activation, all_active_students]
+        unfinished_finalization:
+          type: string
+          enum: [mark_unfinished_skipped, preserve_last_state]
+        opt_out:
+          type: string
+          enum: [approval_required, auto_approve]
+        grade_visibility:
+          type: string
+          enum: [managers_and_student, managers_only, all_participants]
+        grade_correction:
+          type: string
+          enum: [audited_any_time, before_round_finalization, immutable]
+        version:
+          type: integer
+          format: int64
+          minimum: 1
 
     QueueEntry:
       type: object
+      required: [id, student_id, student_name, position, status, version]
       properties:
         id:
           type: string
@@ -2291,49 +2718,117 @@ components:
           type: string
         position:
           type: integer
+          minimum: 1
         status:
           type: string
           enum: [waiting, reciting, completed, skipped, opted_out]
-        surah_id:
-          type: integer
-        from_ayah:
-          type: integer
-        to_ayah:
-          type: integer
         grade:
           type: string
           enum: [excellent, good, acceptable, needs_review, repeat]
           nullable: true
         grade_notes:
           type: string
+          maxLength: 500
           nullable: true
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+
+    QueuePreorderItem:
+      type: object
+      required: [student_id, student_name, position]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        student_name:
+          type: string
+        position:
+          type: integer
+          minimum: 1
 
     QueueState:
       type: object
+      required: [session_id, round_id, round_number, round_type, lifecycle, surah_id, from_ayah, to_ayah, grading_required, version, policy, preorder, entries]
       properties:
         session_id:
           type: string
           format: uuid
+        round_id:
+          type: string
+          format: uuid
         round_number:
           type: integer
-        status:
+          minimum: 1
+        round_type:
           type: string
-          enum: [active, paused, ended]
+          enum: [new_memorization, revision, old_revision, test]
+        lifecycle:
+          type: string
+          enum: [prepared, active, finalized]
         surah_id:
           type: integer
-          nullable: true
+          minimum: 1
+          maximum: 114
         from_ayah:
           type: integer
-          nullable: true
+          minimum: 1
         to_ayah:
           type: integer
-          nullable: true
+          minimum: 1
         grading_required:
           type: boolean
+        selected_entry_id:
+          type: string
+          format: uuid
+          nullable: true
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        policy:
+          $ref: '#/components/schemas/QueuePolicy'
+        preorder:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/QueuePreorderItem'
         entries:
           type: array
+          maxItems: 50
           items:
             $ref: '#/components/schemas/QueueEntry'
+
+    OptOutRequest:
+      type: object
+      required: [id, queue_entry_id, status, requested_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        queue_entry_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, approved, declined]
+        requested_at:
+          type: string
+          format: date-time
+        decided_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    OptOutResult:
+      type: object
+      required: [request, entry]
+      properties:
+        request:
+          $ref: '#/components/schemas/OptOutRequest'
+        entry:
+          $ref: '#/components/schemas/QueueEntry'
 
     # ── Chat ───────────────────────────────────────────────
     SendMessageRequest:

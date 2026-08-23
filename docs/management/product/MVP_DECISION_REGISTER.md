@@ -33,11 +33,12 @@
 
 | ID | Question | Decision | Rationale |
 |---|---|---|---|
-| OQ-007 | Student "opt-out" of a round? | **Allowed** with teacher/supervisor approval. Opt-out logged, not penalized. | Temporary absences are real. System must be humane. |
+| OQ-007 | Student "opt-out" of a round? | **Allowed and session-configurable.** Default: persist a pending request and require teacher/supervisor approval. A manager may configure automatic approval for that session. Every request/outcome is logged and never penalized. | Preserves the humane default while allowing managers to run the live circle without queue-policy friction. |
 | OQ-008 | Per-student recitation timer? | **No timer in MVP.** Teacher manages timing verbally. | Timers create test-anxiety during Quran recitation. Teacher judgment is preferred. |
 | OQ-009 | Pre-set queue before session starts? | **Yes.** Teacher can pre-order the queue before starting the session. | Reduces dead time at session start; teachers typically know class order in advance. |
-| OQ-010 | Late-joining student position? | **Added to end of current active round.** | Predictable, fair; no disruption to students already queued. |
+| OQ-010 | Late-joining student position? | **Session-configurable.** Default `present_at_activation`: apply the pre-set relative order to eligible students present when the round activates and append later joiners. Optional `all_active_students`: create all active student positions from the start and retain each pre-set position on join. | Keeps the predictable append default while supporting managers who want a complete roster prepared in advance. |
 | OQ-011 | Double-queue per student per round? | **No.** One position per student per round. Use sequential rounds for multiple recitations. | Simplifies queue state machine; multiple rounds is the correct UX pattern. |
+| OQ-053 | Which F-003 rules are configurable per session? | **Managers may configure queue population, unfinished-entry finalization, opt-out approval, grade/note visibility, and grade/note correction.** Defaults are `present_at_activation`, `mark_unfinished_skipped`, `approval_required`, `managers_and_student`, and `audited_any_time`. Changes are prospective and audited. F-003 never blocks F-005 session end. | Gives teachers/supervisors operational flexibility without making security, data integrity, or media safety optional. |
 
 ---
 
@@ -158,5 +159,6 @@ provider registry, job framework, or new lifecycle end reason.
 | 2026-08-15 | OQ-039 | Session-scoped WebSocket ticket | Generic authenticated realtime tickets authorize circle and session topics | Lets F-004 reuse the common transport without a live-session dependency. | ADR-016 |
 | 2026-08-15 | OQ-040 | `session_attendance` conflated live presence with attendance policy | Dedicated F-005 participant-presence model; F-006 owns attendance policy | Separates realtime facts from future attendance classification and overrides. | ADR-016 |
 | 2026-08-16 | OQ-041–OQ-046 | Open F-005 scope, lock, hand, automatic-end, and realtime-topic questions | Ad-hoc-only F-005, pre-lock reconnect, all-participant hand raise, truthful automatic end, and joined-participant session topics | Resolves F-005 behavior while preserving F-004/F-006 boundaries and session privacy. | ADR-016 |
+| 2026-08-23 | OQ-007, OQ-010, OQ-053 | Fixed opt-out approval and late-join append behavior; other queue policies unspecified | Per-session queue policy with safe defaults, prospective audited manager changes, immutable safety invariants, and non-blocking F-005 session end | Lets managers adapt each circle session without weakening authorization, queue consistency, progress truth, or media safety. Approved by Karim 2026-08-23. | ADR-018 |
 
 *Any change requires: (1) a new or updated ADR in `../../engineering/architecture/adr/`, (2) an entry in the Amendment Log above, (3) approval from Karim.*

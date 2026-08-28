@@ -29,15 +29,16 @@
 | [PRD_AR.md](PRD_AR.md) | وثيقة متطلبات المنتج بالعربية |
 | [PLAN_AR.md](PLAN_AR.md) | الخطة التجارية العربية |
 | [FEATURES_AR.md](FEATURES_AR.md) | مواصفات المميزات بالعربية |
+| [JOURNEY_AR.md](JOURNEY_AR.md) | رحلة المعلم والطالب بالعربية |
+| [ROLES_AR.md](ROLES_AR.md) | الأدوار والصلاحيات التجارية |
+| [DECISIONS_AR.md](DECISIONS_AR.md) | قرارات MVP المحسومة |
+| [COMPETITOR_ANALYSIS_AR.md](COMPETITOR_ANALYSIS_AR.md) | ملخص السوق والمنافسين |
 
 ---
 
-## المستندات التقنية (بالإنجليزية)
+## نطاق النسخ العربية
 
-| المستند | الوصف |
-|---|---|
-| [ARCHITECTURE.md](../../engineering/architecture/ARCHITECTURE.md) | المعمارية التقنية، التدفقات، الـ APIs |
-| [DEPLOYMENT.md](../../engineering/deployment/DEPLOYMENT.md) | خطة النشر والتشغيل والتكلفة |
+تُكتب هذه المجموعة للأعمال والمنتج فقط: الرؤية، المستخدمون، سير الاستخدام، السياسات، الأدوار، السوق، وخارطة الطريق. لا تحتوي على تفاصيل تقنية أو تعليمات تنفيذية.
 
 ---
 

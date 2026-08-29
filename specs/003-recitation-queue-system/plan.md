@@ -7,7 +7,7 @@
 
 ## Summary
 
-F-003 adds durable, sequential recitation rounds inside an active F-005 live session: a focused `backend/internal/queue` Go domain plus an additive `/api/v1` REST surface, `queue.*` WebSocket projections, one paired migration (`000017`), and Arabic-first Flutter queue screens inside the existing sessions feature. PostgreSQL is authoritative for rounds, positions, turn state, grading, policy, and completed-turn practice records; delivery is at-least-once through a transactional outbox; audio publishing is granted/revoked only through the sessions-owned, provider-neutral `ReciterAudioControl`. This regeneration absorbs the 2026-08-23 approved clarifications (advance/start separation, automatic round activation in round-number order, single-entry move, grading-optional completion, no user-facing history, no FCM), the Architect-confirmed reliability parameters (A1), the reconciled canonical schema (ADR-019/ADR-013/ARCHITECTURE.md), and closes all 21 deferred checklist items (§DEFER ledger).
+F-003 adds durable, sequential recitation rounds inside an active F-005 live session: a focused `backend/internal/queue` Go domain plus an additive `/api/v1` REST surface, `queue.*` WebSocket projections, one paired migration (`000017`), and Arabic-first Flutter queue screens inside the existing sessions feature. PostgreSQL is authoritative for rounds, positions, displayed turn state, grading, policy, and completed-turn practice records; delivery is at-least-once through a transactional outbox. Per ADR-020, students publish audio freely in authorized F-005 sessions; F-003 never grants, revokes, or otherwise changes media permission.
 
 ## Technical Context
 
@@ -31,7 +31,7 @@ No `NEEDS CLARIFICATION` items remain — all unknowns were resolved by the appr
 |---|---|---|
 | I. Spec-First — approved spec before plan | ✅ PASS | spec.md Status: Approved 2026-08-23; checklist 23 PASS / 21 DEFER / 0 FAIL |
 | III. Tech stack — no new library/infra without ADR | ✅ PASS | No new dependencies; migration + REST/WS on existing stack |
-| IV. Security invariants (backend-only media tokens, per-circle roles, turn-based publish, parameterized SQL, rate limits) | ✅ PASS | Design D8/D9; audio only via `ReciterAudioControl`; all SQL parameterized in `*_queries.go`; platform rate limits apply (§Security map) |
+| IV. Security invariants (backend-only media tokens, per-circle roles, parameterized SQL, rate limits) | ✅ PASS | Design D8/D9; F-003 has no media control; all SQL parameterized in `*_queries.go`; platform rate limits apply (§Security map) |
 | V. Audio fidelity (Opus ≥48 kbps, no DSP, video off) | ✅ PASS | F-003 never touches provider config; ADR-015 boundary; `CanPublishVideo` always false |
 | VI. Test-first | ✅ PASS | §Testing strategy; every migration/test matrix defined before code |
 | VII. MVP scope discipline (YAGNI) | ✅ PASS | No FCM, no history UI, no timers, no dashboards; single new domain package |
@@ -78,7 +78,7 @@ backend/
     │   └── convergence.go / _test.go             # session-end finalization + restart reconciliation
     ├── sessions/
     │   ├── queue_observer.go                     # narrow F-005→F-003 lifecycle/presence hooks
-    │   └── livekit/adapter.go                    # ReciterAudioControl implementation (only LiveKit site)
+    │   └── livekit/adapter.go                    # F-005 media and explicit moderation implementation
     └── platform/
         ├── httpconst/                            # shared error codes/messages (queue additions)
         ├── logging/audit_logger.go               # redacted queue audit actions
@@ -99,19 +99,17 @@ mobile/integration_test/queue_flow_test.dart      # end-to-end queue journey
 
 ## Complexity Tracking
 
-No constitution violations to justify. (The ARCHITECTURE.md partial-unique divergence in D2 is a sync delta against an already-approved spec behavior, not an approved-artifact conflict requiring an override.)
+No constitution violations to justify.
 
 ---
 
 ## Design Decisions
 
 ### D1 — Domain placement and integration
-New `backend/internal/queue` package. Reuses F-001 identity/current-device sessions, F-002 `circle_members` roles, F-005 lifecycle/presence/realtime. Queue code calls only `sessions.ReciterAudioControl`; it never imports LiveKit or `SessionMediaGateway` (ADR-015; SC-005). F-005 exposes a narrow, optional queue observer (`sessions/queue_observer.go`) that notifies F-003 of committed session-start/participant-join/session-end facts; observer callbacks are bounded and can never block or roll back F-005 lifecycle transactions.
+New `backend/internal/queue` package. Reuses F-001 identity/current-device sessions, F-002 `circle_members` roles, and F-005 lifecycle/presence/realtime. Queue code imports no media boundary or provider type (ADR-020; SC-005). F-005 exposes a narrow, optional queue observer (`sessions/queue_observer.go`) that notifies F-003 of committed session-start/participant-join/session-end facts; observer callbacks are bounded and can never block or roll back F-005 lifecycle transactions.
 
 ### D2 — Round lifecycle: stacking + automatic activation (B1)
-Several `prepared` rounds stack per session; at most one `active` round (partial unique `(session_id) WHERE lifecycle = 'active'`); `UNIQUE (session_id, round_number)` with max+1 allocation under the per-session round lock (CHK036). **Activation invariant**: *while a session is live, if no round is active and prepared rounds exist, the lowest-numbered prepared round is active* — restored by session start, round creation on a live session, finalization-via-reset, and the restart reconciliation pass. No activate endpoint/command/UI. Reset finalizes the active round, creates the next sequential round, and the invariant activates the next prepared round in round-number order. Session end suppresses the invariant permanently: convergence finalizes the active round **and every never-activated prepared round** (permanently inert, retained, `activated_at` NULL — FR-014).
-
-> ⚠️ **Canonical divergence found and flagged**: reconciled ARCHITECTURE.md still specifies `PARTIAL UNIQUE (session_id) WHERE lifecycle IN ('prepared','active')` ("one current round"), which makes B1's "several are prepared" unimplementable. The approved spec is authoritative; this plan uses `WHERE lifecycle = 'active'` and records the one-line ARCHITECTURE.md fix in §Canonical sync (CS-7). No new ADR needed — it implements the approved spec; the current ARCHITECTURE line is the divergence.
+Several `prepared` rounds stack per session; at most one `active` round (partial unique `(session_id) WHERE lifecycle = 'active'`); `UNIQUE (session_id, round_number)` with max+1 allocation under the per-session round lock (CHK036). **Activation invariant**: *while a session is live, if no round is active and prepared rounds exist, the lowest-numbered prepared round is active* — restored by session start, round creation on a live session, and finalization-via-reset. No activate endpoint/command/UI. Reset finalizes the active round, creates the next sequential round, and activates the next prepared round in round-number order. Session end suppresses the invariant permanently: convergence finalizes the active round **and every never-activated prepared round** (permanently inert, retained, `activated_at` NULL — FR-014).
 
 ### D3 — Population and ordering (B2, FR-002/003)
 Pre-set candidates persist in `recitation_queue_preorder` (manager surface only — CHK008). At activation, entries materialize in one transaction:
@@ -125,15 +123,15 @@ Late/admitted joins: on a committed F-005 join fact, an eligible active student 
 **Empty/ineligible populations (CHK031)**: a round with zero eligible students still activates (empty); `advance` then rejects cleanly per FR-004/A2b; ineligible candidates simply reduce the activated set (population = present eligible ∩ policy).
 
 ### D4 — Controls: advance/start separation, move, reorder (I1, A2a, A2b)
-- **advance**: selects the next waiting entry durably (`selected_entry_id`); does NOT make it `reciting` and grants no audio. Replace-selection on repeat advance; zero waiting entries → clean rejection (409, no mutation); while an entry is `reciting` → rejected (409). Selection clears on the entry's terminal transition and at finalization.
-- **start**: `PUT .../entries/{id}/status {status: reciting}` applies only to the round's currently selected waiting entry; requests the audio grant via `ReciterAudioControl` after commit; the partial unique one-reciter index is the final race guard.
+- **advance**: selects the next waiting entry durably (`selected_entry_id`); does NOT make it `reciting` or change media permission. Replace-selection on repeat advance; zero waiting entries → clean rejection (409, no mutation); while an entry is `reciting` → rejected (409). Selection clears on the entry's terminal transition and at finalization.
+- **start**: `PUT .../entries/{id}/status {status: reciting}` applies only to the round's currently selected waiting entry; it records the displayed current turn only. The partial unique one-reciter index is the final queue-state guard.
 - **move**: `POST .../entries/{entryId}/move {new_position, expected_version}` — repositions exactly one `waiting` entry in the active round; permitted while another entry recites; `reciting`/terminal entries immovable (409). Emits `queue.reordered (order_kind: entry_move)`.
 - **reorder (full-list)**: `PUT .../order {ordered_ids, expected_version}` — pre-set candidates only, valid only while the round is `prepared`. The former `order_kind: queue_entries` full-list value is removed: entries do not exist pre-activation and full-list entry reordering is forbidden post-activation (A2a), so it could never be legal.
-- **skip**: `waiting|reciting → skipped` (audio revoked if reciting).
+- **skip**: `waiting|reciting → skipped` with no media operation.
 - Reset requires the live session's active round.
 
 ### D5 — Opt-out (FR-005, CHK005)
-`POST .../opt-out` (student-only, idempotent). Under `approval_required`: one pending `queue_opt_out_requests` row (partial unique per entry), managers notified via targeted `queue.opt_out_requested`; any current teacher/supervisor may decide. Approve → `waiting|reciting → opted_out` (audio revoked if reciting), durably logged, no penalty/progress. **Decline → request terminally closed and logged; entry remains `waiting`** — the transition table permits no other outcome. Under `auto_approve`: direct idempotent transition to `opted_out`, no pending state. Pending requests become non-actionable when the round finalizes (later decision → clean 409).
+`POST .../opt-out` (student-only, idempotent). Under `approval_required`: one pending `queue_opt_out_requests` row (partial unique per entry), managers notified via targeted `queue.opt_out_requested`; any current teacher/supervisor may decide. Approve → `waiting|reciting → opted_out`, durably logged, no penalty/progress. **Decline → request terminally closed and logged; entry remains `waiting`** — the transition table permits no other outcome. Under `auto_approve`: direct idempotent transition to `opted_out`, no pending state. Pending requests become non-actionable when the round finalizes (later decision → clean 409).
 
 ### D6 — Grading, completion, correction, progress (FR-007/008/013, A2c, CHK035)
 Grading-required round: `completed` requires one of the five ADR-013 grades + optional ≤500-char note, atomically, in the same transaction that inserts the single `memorization_progress` row. Grading-optional round: `completed` carries **no grade and no note**; both may be added/changed later **only** via `POST .../grade` (FR-013 correction): replaces grade and/or sets/clears the note (`notes: null` clears), updates entry + the same one progress row atomically (`queue_entry_id NOT NULL UNIQUE` makes retries and re-grades safe), emits a redacted audit event. Repeated identical corrections converge idempotently to one record state (upsert semantics; CHK035). Correction boundaries: `audited_any_time` (default) / `before_round_finalization` / `immutable`, enforced at correction time. Skipped/opted-out entries never create a progress row (SC-004). `test`-type completions retain their practice record; F-007 excludes them from Quran-map derivation.
@@ -141,24 +139,17 @@ Grading-required round: `completed` requires one of the five ADR-013 grades + op
 ### D7 — Policy (FR-012, ADR-018, A2d)
 Five CHECK-constrained columns + `queue_policy_version` on `sessions`. Manager-only (current teacher/supervisor), scheduled-or-active sessions, every change audited. Workflow policies (population, finalization, opt-out, correction) apply to subsequent actions only. **Grade/note visibility applies immediately and prospectively** to new snapshots and events; delivered history is never rewritten; clients re-fetch on `queue.policy_changed` (FR-009 pattern), which also self-heals stale/out-of-order visibility events (CHK034 — resolved in spec).
 
-### D8 — Media boundary (FR-010, ADR-015, CHK042)
-F-003 calls only `sessions.ReciterAudioControl` with neutral identifiers:
-
-```
-GrantReciterAudio(ctx, sessionID, roundID, queueEntryID, userID) error
-RevokeReciterAudio(ctx, sessionID, roundID, queueEntryID, userID) error
-```
-
-No room reference, endpoint, credential, or provider identifier ever crosses into F-003 code, persistence, events, logs, caches, or URLs (SC-005). Only `backend/internal/sessions/livekit/` implements it; `CanPublishVideo` is always false. Grants/revoke calls have a **5-second timeout** and are **non-blocking**: PostgreSQL queue truth commits first; audio converges asynchronously (a current reciter must be revoked before another entry can start; grant is retried with bounded backoff). Missing/closed media room surfaces as an adapter error through the same timeout semantics — queue truth remains authoritative (CHK033).
+### D8 — Voluntary queue / F-005 media boundary (FR-010, ADR-020)
+F-003 imports no media-control interface and never changes participant publishing permission. It stores and projects manager-set queue order and displayed turn state only. F-005 grants audio publishing to every authorized student connection and retains its independent explicit moderation controls. No room reference, endpoint, credential, provider identifier, or URL crosses into F-003 code, persistence, events, logs, caches, or URLs (SC-005); `CanPublishVideo` remains always false.
 
 ### D9 — Concurrency, idempotency, conflicts (CHK032)
-Mutations serialize on the per-session round lock (`SELECT ... FOR UPDATE` on the round row / session advisory lock) + expected-version optimistic checks (`version` on round and entries) + PostgreSQL constraints as the final barrier (one active round, one entry/student, one position/entry, one reciter, one progress/completed entry). Optional client `Idempotency-Key` stored in `queue_command_receipts`; replays return/reconstruct the committed resource; key reuse with another command is a conflict. Racing pairs and their serializer (CHK032): advance/start — round lock + one-reciter partial unique; reset/complete — round lock, reset requires active round, complete requires non-finalized; reorder/late-join — preorder lock pre-activation vs append-at-end (disjoint rows, `(queue_id, position)` rewritten transactionally); move/late-join — same; opt-out/skip — entry lock + version, first terminal transition wins, second gets 409; policy-change/action — policy changes only affect subsequent actions by design, no rollback needed; correction/reset — correction requires a completed entry in a non-finalized round under `before_round_finalization` (round lock orders them). Duplicate/concurrent requests converge to exactly one durable outcome (§Safety).
+Mutations serialize on the per-session round lock (`SELECT ... FOR UPDATE` on the round row / session advisory lock) + expected-version optimistic checks (`version` on round and entries) + PostgreSQL constraints as the final barrier (one active round, one entry/student, one position/entry, one displayed reciting entry, one progress/completed entry). Optional client `Idempotency-Key` stored in `queue_command_receipts`; replays return/reconstruct the committed resource; key reuse with another command is a conflict. Racing pairs and their serializer (CHK032): advance/start — round lock + displayed-reciter partial unique; reset/complete — round lock, reset requires active round, complete requires non-finalized; reorder/late-join — preorder lock pre-activation vs append-at-end (disjoint rows, `(queue_id, position)` rewritten transactionally); move/late-join — same; opt-out/skip — entry lock + version, first terminal transition wins, second gets 409; policy-change/action — policy changes only affect subsequent actions by design, no rollback needed; correction/reset — correction requires a completed entry in a non-finalized round under `before_round_finalization` (round lock orders them). Duplicate/concurrent requests converge to exactly one durable outcome (§Safety).
 
 ### D10 — Realtime, outbox, recovery (FR-009, A1, CHK025/033)
-Every committed queue mutation inserts a redacted-metadata row into `queue_event_outbox` in the same transaction; a dispatcher delivers to authorized connected clients through the existing hub; the worker reconstructs visibility-sensitive fields (grades/notes/names) from PostgreSQL at send time. Delivery: initial attempt + **5 retries, exponential backoff (+1/+2/+4/+8/+16 s, jittered), then parked** (`parked_at` set, metric+alert fires; operator replay — never silently dropped). Clients deduplicate by `event_id`, ignore stale versions, and re-fetch `GET /sessions/{id}/queue` on reconnect/gap/unknown event. **Restart recovery (CHK033)**: on startup the dispatcher replays pending + parked outbox entries and the convergence pass re-applies the activation invariant, finalizes rounds of ended sessions, and reconciles audio state to PostgreSQL. No FCM/device-token work anywhere in F-003 (I4) — F-008 later projects the stable durable event IDs.
+Every committed queue mutation inserts a redacted-metadata row into `queue_event_outbox` in the same transaction. Client rows are delivered to authorized connected clients through the existing hub, whose worker reconstructs visibility-sensitive fields (grades/notes/names) from PostgreSQL at send time. Delivery: initial attempt + **5 retries, exponential backoff (+1/+2/+4/+8/+16 s, jittered), then parked** (`parked_at` set, metric+alert fires; operator replay — never silently dropped). Clients deduplicate client events by `event_id`, ignore stale versions, and re-fetch `GET /sessions/{id}/queue` on reconnect/gap/unknown event. **Restart recovery (CHK033)**: on startup the dispatcher replays pending + parked client outbox entries and the wider convergence pass finalizes rounds of ended sessions. No FCM/device-token work anywhere in F-003 (I4) — F-008 later projects the stable durable event IDs.
 
 ### D11 — Session-end convergence (FR-014, A1, SC-007)
-F-005 session end commits and returns independently. After observing end, F-003: revokes any reciter audio entitlement, finalizes the active round under the finalization policy (`mark_unfinished_skipped` default / `preserve_last_state`), finalizes every never-activated prepared round as permanently inert, and clears selection — all idempotently, retried until finalized, **convergence target ≤ 10 s** after observing session end. Failure never changes the already-ended session result; parked-retry exhaustion is the observable terminal outcome when convergence cannot complete.
+F-005 session end commits and returns independently. After observing end, F-003 finalizes the active round under the finalization policy (`mark_unfinished_skipped` default / `preserve_last_state`), finalizes every never-activated prepared round as permanently inert, and clears selection — all idempotently, retried until finalized, **convergence target ≤ 10 s** after observing session end. Failure never changes the already-ended session result; parked-retry exhaustion is the observable terminal outcome when convergence cannot complete.
 
 ### D12 — History preservation (FR-006, I3)
 Finalized rounds and their entries are immutable, retained rows. `GET /sessions/{id}/queue` returns the latest round's snapshot (including a finalized one, read-only) — the **only** F-003 read surface. No history-list REST endpoints, no mobile history UI (F-007 owns projections). Corrections update the current projection only through the audited flow.
@@ -174,7 +165,6 @@ Feature-local contracts (regenerated above) are the F-003 truth for implementati
 |---|---|---|
 | Outbox delivery retries | initial attempt + **5 retries**, exponential backoff (+1/+2/+4/+8/+16 s, jitter) | queue-event delivery |
 | Retry exhaustion | **parked** (`parked_at`, alert, operator replay) — never silent drop | queue-event delivery |
-| `ReciterAudioControl` call timeout | **5 s** per grant/revoke call; non-blocking; never rolls back queue commit; PG authoritative, audio converges | media control |
 | Session-end finalization | idempotent retry until finalized; **≤ 10 s** convergence target after observing end; never blocks/alters F-005 end | SC-007 |
 | SC-008 latency | **p95 ≤ 500 ms** PG-commit → dispatch to connected authorized clients; ≥100 committed actions/scenario; standard local-network test env; disconnected clients excluded (recover via FR-009 re-fetch) | realtime delivery |
 
@@ -193,7 +183,7 @@ All surfaces require Firebase bearer + `X-Halaqaty-Session-ID` (F-001), active c
 | `POST .../opt-out-requests/{id}/decision` | current teacher/supervisor | pending request, decision enum, version |
 | `queue.*` WS events | authorized session-topic subscribers; grade/note events visibility-filtered at send time | server-built payloads only |
 
-Error codes (centralized in `httpconst`): queue conflict cases map to 409 (stale version, invalid transition, no waiting entry, entry reciting/terminal, finalized/inert round, duplicate command); input-shape failures to 400; enum/range/order/grade/note failures to 422; audio-convergence-pending signals to 503 with committed truth intact.
+Error codes (centralized in `httpconst`): queue conflict cases map to 409 (stale version, invalid transition, no waiting entry, entry reciting/terminal, finalized/inert round, duplicate command); input-shape failures to 400; enum/range/order/grade/note failures to 422. F-003 has no audio-convergence error because it performs no media operation.
 
 ## Privacy map (CHK038)
 
@@ -212,7 +202,7 @@ Error codes (centralized in `httpconst`): queue conflict cases map to 409 (stale
 
 ## Observability (CHK040)
 
-Metrics (bounded labels: command/event/outcome enums + IDs; no PII): `queue_command_duration`, `queue_command_conflicts_total`, `outbox_pending`, `outbox_parked_total` (alert), `event_delivery_lag` (the SC-008 commit→dispatch metric, p95), `audio_convergence_lag`, `session_end_finalization_lag` (SC-007, alert past 10 s), `invariant_violations_total` (alert — one-active-round/one-reciter/one-progress guards), rate-limit counters on queue surfaces. Logs carry request/user/session/round IDs; never payload secrets, grades, or notes.
+Metrics (bounded labels: command/event/outcome enums + IDs; no PII): `queue_command_duration`, `queue_command_conflicts_total`, `outbox_pending`, `outbox_parked_total` (alert), `event_delivery_lag` (the SC-008 commit→dispatch metric, p95), `session_end_finalization_lag` (SC-007, alert past 10 s), `invariant_violations_total` (alert — one-active-round/one-displayed-reciting-entry/one-progress guards), rate-limit counters on queue surfaces. Logs carry request/user/session/round IDs; never payload secrets, grades, or notes.
 
 ## Testing strategy
 
@@ -220,7 +210,7 @@ Test-first per constitution §VI. Evidence matrix extends the SCs with the defer
 
 | Criterion | Evidence (tests) |
 |---|---|
-| SC-001 one reciter / one position | acceptance + concurrency; **+ stale-version replays and process-restart reruns** (CHK025) |
+| SC-001 one displayed `reciting` entry / one position | acceptance + concurrency; **+ stale-version replays and process-restart reruns** (CHK025) |
 | SC-002 convergence | duplicate/retry + reconnect re-fetch; **+ outbox replay after restart; invariant re-check after crash windows** (CHK025) |
 | SC-003 invalid input rejection | unauthenticated/non-member/unauthorized-role, invalid Quran ranges/types/grades/notes; **+ policy enum values, order membership/uniqueness, opt-out decision values, expected-version conflicts** (CHK026) |
 | SC-004 progress exactly-once | every grade × completion; grading-optional completion; insert-vs-update separation for corrections; skip/opt-out → zero rows |
@@ -230,25 +220,17 @@ Test-first per constitution §VI. Evidence matrix extends the SCs with the defer
 | SC-008 latency | ≥100 committed actions per scenario, local-network env, commit→dispatch p95 ≤ 500 ms, disconnected excluded |
 | A2 edges | advance replace-selection / no-waiting / while-reciting; move while reciting; move-reciting-entry rejected; preorder reorder post-activation rejected |
 | B1/B2 | several prepared rounds activate in round-number order; never-activated prepared rounds inert at end; pre-set-present-then-join-order placement; UUID tie-break |
-| CHK033 | commit-then-event-failure (retry→park), grant/revoke failure (5 s timeout, truth intact), app-restart replay, closed/missing media room |
+| CHK033 | commit-then-event-failure (retry→park), Reset writes revoke barrier before next-round activation, grant/revoke failure (5 s timeout, truth intact), app-restart replay, closed/missing media room |
 
 Migration tests run on fresh schema (up/down/up) per constitution; contract tests pin REST/WS shapes against the canonical files after sync.
 
 ## Mobile experience (FR-016, CHK039)
 
-Arabic-first RTL-aware queue screens (verified in both text directions) inside `mobile/lib/features/sessions/` with Riverpod controllers (no `setState` in feature code). Enumerated UI states: **loading** (skeleton), **empty** (no round prepared — guidance for students, prepare CTA for managers), **reconnecting** (banner + FR-009 re-fetch on version gap), **recoverable errors** (retry: advance/start/complete failures, 503 audio-convergence), **terminal** (round finalized / session ended — read-only). Manager reset, skip, policy change, and F-005 end controls stay available when a queue operation or delivery path fails. Accessibility: semantic labels for positions/statuses/grades (Arabic), minimum touch targets, screen-reader-friendly turn announcements. No history UI, no FCM handling.
+Arabic-first RTL-aware queue screens (verified in both text directions) inside `mobile/lib/features/sessions/` with Riverpod controllers (no `setState` in feature code). Enumerated UI states: **loading** (skeleton), **empty** (no round prepared — guidance for students, prepare CTA for managers), **reconnecting** (banner + FR-009 re-fetch on version gap), **recoverable errors** (retry: advance/start/complete failures), **terminal** (round finalized / session ended — read-only). Manager reset, skip, policy change, and F-005 end controls stay available when a queue operation or delivery path fails. Accessibility: semantic labels for positions/statuses/grades (Arabic), minimum touch targets, screen-reader-friendly turn announcements. No history UI, no FCM handling.
 
-## Canonical sync (pending deltas — apply in implementation task 1, with `$docs-guard` + `make api-lint`)
+## Canonical sync (completed by T001–T003; barrier reconciliation included)
 
-Canonical files are NOT edited in this phase. Deltas to apply:
-
-- **CS-1** `openapi.yaml` → `POST /sessions/{sessionId}/queue/rounds` description: replace "Prepare a round for a scheduled session or create and activate one for an active session … At most one prepared or active round exists per session." with the B1 rule (prepare while scheduled/live; several prepared rounds stack; automatic activation in round-number order; no activate endpoint; never-activated rounds inert at session end).
-- **CS-2** `openapi.yaml` → add `POST /sessions/{sessionId}/queue/entries/{entryId}/move` exactly as defined in `contracts/recitation-queue.openapi.yaml` (`MoveEntryRequest`, 200 QueueState, 400/401/403/404/409/422/429) — derived 1:1 from A2a.
-- **CS-3** `openapi.yaml` → `PUT /sessions/{sessionId}/queue/order` + `ReorderQueueRequest`: restrict to prepared-round pre-set candidates; remove `order_kind` (and its `queue_entries` enum value) from the request.
-- **CS-4** `openapi.yaml` → `EntryStatusRequest` description + `POST .../reset` description: grading-optional completion semantics (no grade/no note at completion for non-grading rounds; later adds via correction) and reset→automatic next-round activation wording.
-- **CS-5** `ws_events.md` → `queue.reordered`: order_kind ∈ {`preorder_students`, `entry_move`}; ordered_ids = resulting complete order; update example (`entry_move`) and description.
-- **CS-6** `ws_events.md` → `queue.round_started` description: automatic activation triggers (not "teacher starts"); `queue.round_finalized`: session-end finalizes never-activated prepared rounds as inert (`reason: session_ended`).
-- **CS-7** `ARCHITECTURE.md` → `recitation_queue` partial unique: `WHERE lifecycle IN ('prepared','active')` → `WHERE lifecycle = 'active'` ("One active round") — implements approved B1 (see D2).
+Canonical REST, WebSocket, and architecture surfaces match the feature-local contracts: several prepared rounds may stack; activation is automatic in round-number order, including after reset; queue actions never change participant audio permission; no activate endpoint exists; and never-activated rounds are inert at session end. The canonical partial unique is `WHERE lifecycle = 'active'`.
 
 Feature-local files already align with canonical schema names (`StartRoundRequest`, `GradeRequest`); canonical `surah_name` fields in `queue.your_turn`/`queue.round_started` are kept (public reference data, not sensitive) and mirrored in the feature-local catalog.
 
@@ -276,16 +258,16 @@ Feature-local files already align with canonical schema names (`StartRoundReques
 | CHK038 privacy per data class | §Privacy map |
 | CHK039 mobile UX states + accessibility | §Mobile experience |
 | CHK040 observability metrics set | §Observability |
-| CHK042 ReciterAudioControl neutral signature | D8 |
+| CHK042 queue has no media-control dependency | D8 |
 | CHK044 exclusion lists consistent | D12/D13 + contracts (no history/FCM/timer surfaces anywhere) |
 
 (CHK034 was PASS in the checklist; listed for completeness of the 2026-08-23 defer set.)
 
 ## Risks & notes for the tasks phase
 
-1. **CS-7 is a spec-vs-ARCHITECTURE divergence** — apply the one-line ARCHITECTURE fix early; the migration must use `WHERE lifecycle = 'active'` or B1 cannot be implemented. Flagged loudly here and in the report.
+1. **Canonical sync is required** — regenerate canonical session-admission, queue, and event documentation from ADR-020 before implementation.
 2. **`move` is the one operation this regeneration adds** to the previously-drafted contract set — derived 1:1 from approved A2a; everything else reuses existing paths.
 3. Task dependencies: canonical sync (CS-1..7) → migration → domain/validation → services → outbox/convergence → handlers/routes → mobile. Flutter DTO work must not start before canonical sync lands.
-4. Tech Lead deep-review surface (mandatory Karim review): queue mutation authorization (role checks on all 10 operations), one-reciter/audio-revoke paths, correction/audit redaction, session-end independence, and the migration (constraints/partial indexes) — schedule the review after handlers + convergence exist.
-5. ~~`tasks.md` in this feature directory is stale~~ **SATISFIED 2026-08-23**: tasks.md was regenerated from this plan and verified by /speckit.analyze (GO). Do not re-run /speckit.tasks.
+4. Tech Lead deep-review surface (mandatory Karim review): queue mutation authorization (role checks on all 10 operations), one displayed-reciting-entry invariant and proof that queue code never controls audio, correction/audit redaction, session-end independence, open student-audio admission, explicit moderator controls, and the migration (constraints/partial indexes) — schedule the review after handlers + convergence exist.
+5. `tasks.md` is regenerated for ADR-020; do not mark a reopened audio-coupled task complete without fresh open-audio evidence.
 6. SC-008 measurement harness (commit→dispatch timestamps) is backend-only tooling; keep it out of production paths (metrics-based, not bespoke tracing).

@@ -398,7 +398,7 @@ Step 5: Media Routing
 - [ ] Token generation exclusively on Go backend (never client-side)
 - [ ] Audio-only in MVP (no video toggle in app)
 - [ ] Maximum session duration is 4 hours; idle room timeout is 30 minutes after the final participant leaves
-- [ ] Teacher and supervisor controls: start/end, mute all, mute/unmute an existing audio publisher, remove participant, lock/unlock room (no new joiners); unmute never grants student publishing
+- [ ] Teacher and supervisor controls: start/end, mute all, mute/unmute an existing authorized audio publisher, remove participant, lock/unlock room (no new joiners); F-003 queue actions never change publishing permission
 - [ ] Hand raise: any active participant taps 🤚 → appears in moderator UI as standalone F-005 session state; F-003 may consume it later without changing F-005 ownership
 - [ ] Screen sharing is deferred to post-MVP (same feature-flag family as video)
 - [ ] Session recording is disabled in MVP and deferred until a privacy consent/retention framework is approved

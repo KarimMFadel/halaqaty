@@ -62,7 +62,7 @@ overrides. Those responsibilities must not be coupled in F-005.
 |---|---|
 | Retain a session-only ticket | Forces F-004 to add duplicate or session-dependent realtime authorization. |
 | Store live presence in `session_attendance` | Couples F-005 transport facts to F-006 policy and manual override behavior. |
-| Allow moderator unmute to enable student publishing | Violates the constitution's turn-based student-publish invariant. |
+| Make F-003 queue actions invoke moderator mute/unmute | Couples voluntary ordering to exceptional moderation and conflicts with ADR-020. |
 
 ## References
 

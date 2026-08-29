@@ -122,7 +122,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !client.allowMessage() {
-			writeRealtimeError(conn, realtimeErrorRateLimit, "rate limit exceeded")
+			writeRealtimeError(client, realtimeErrorRateLimit, "rate limit exceeded")
 			continue
 		}
 		var msg struct {
@@ -132,12 +132,12 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Payload map[string]any `json:"payload"`
 		}
 		if err := json.Unmarshal(raw, &msg); err != nil {
-			writeRealtimeError(conn, realtimeErrorInvalid, "invalid message")
+			writeRealtimeError(client, realtimeErrorInvalid, "invalid message")
 			continue
 		}
 		if msg.Action == realtimeTypePing || msg.Type == realtimeTypePing {
 			_ = conn.SetReadDeadline(time.Now().Add(90 * time.Second))
-			_ = conn.WriteJSON(map[string]any{"type": realtimeTypePong, "server_time": time.Now().UTC().Format(time.RFC3339)})
+			_ = client.writeJSON(map[string]any{"type": realtimeTypePong, "server_time": time.Now().UTC().Format(time.RFC3339)})
 			continue
 		}
 		if strings.HasPrefix(msg.Type, "cmd.") {
@@ -145,7 +145,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if msg.Action != realtimeActionSubscribe {
-			writeRealtimeError(conn, realtimeErrorInvalid, "unsupported realtime message")
+			writeRealtimeError(client, realtimeErrorInvalid, "unsupported realtime message")
 			continue
 		}
 		topic, err := ParseTopic(msg.Topic)
@@ -154,23 +154,23 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// restore a topic with stale authorization after a transport reconnect.
 		freshTicket, ticketErr := h.tickets.Validate(client.token, client.userID)
 		if err != nil || ticketErr != nil || !h.authorized(r.Context(), freshTicket, client.userID, topic) {
-			writeRealtimeError(conn, realtimeErrorUnauthorized, "topic unauthorized")
+			writeRealtimeError(client, realtimeErrorUnauthorized, "topic unauthorized")
 			continue
 		}
 		var snapshot map[string]any
 		if topic.Kind() == TopicSession && h.snapshot != nil {
 			snapshot, err = h.snapshot(r.Context(), client.userID, topic.ID())
 			if err != nil {
-				writeRealtimeError(conn, realtimeErrorSessionEnded, "session snapshot unavailable")
+				writeRealtimeError(client, realtimeErrorSessionEnded, "session snapshot unavailable")
 				continue
 			}
 		}
 		client.mu.Lock()
 		client.topics[topic.String()] = struct{}{}
 		client.mu.Unlock()
-		_ = conn.WriteJSON(map[string]any{"type": realtimeTypeSubscribed, "topic": topic.String()})
+		_ = client.writeJSON(map[string]any{"type": realtimeTypeSubscribed, "topic": topic.String()})
 		if snapshot != nil {
-			_ = conn.WriteJSON(snapshot)
+			_ = client.writeJSON(snapshot)
 		}
 	}
 }
@@ -179,28 +179,45 @@ func (h *Hub) handleCommand(ctx context.Context, client *hubClient, command stri
 	sessionID, _ := payload["session_id"].(string)
 	topic, err := NewSessionTopic(sessionID)
 	if err != nil || h.command == nil {
-		writeRealtimeError(client.conn, realtimeErrorInvalid, "invalid session command")
+		writeRealtimeError(client, realtimeErrorInvalid, "invalid session command")
 		return
 	}
 	client.mu.Lock()
 	_, subscribed := client.topics[topic.String()]
 	client.mu.Unlock()
 	if !subscribed {
-		writeRealtimeError(client.conn, realtimeErrorUnauthorized, "session topic is not subscribed")
+		writeRealtimeError(client, realtimeErrorUnauthorized, "session topic is not subscribed")
 		return
 	}
 	eventID, event, err := h.command(ctx, client.userID, sessionID, command)
 	if err != nil {
-		writeRealtimeError(client.conn, realtimeErrorInvalid, "session command rejected")
+		writeRealtimeError(client, realtimeErrorInvalid, "session command rejected")
 		return
 	}
 	if err := h.Broadcast(topic, eventID, event); err != nil {
-		writeRealtimeError(client.conn, realtimeErrorInvalid, "realtime event unavailable")
+		writeRealtimeError(client, realtimeErrorInvalid, "realtime event unavailable")
 	}
 }
 
-func writeRealtimeError(conn *websocket.Conn, code, message string) {
-	_ = conn.WriteJSON(map[string]any{"type": realtimeTypeError, "payload": map[string]any{"code": code, "message": message}})
+func writeRealtimeError(client *hubClient, code, message string) {
+	_ = client.writeJSON(map[string]any{"type": realtimeTypeError, "payload": map[string]any{"code": code, "message": message}})
+}
+
+// writeJSON serializes one value to the client connection. It must be used
+// for every client-bound write so concurrent Broadcast calls cannot interleave
+// frames with replies written from the connection's read loop.
+func (c *hubClient) writeJSON(v any) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.conn.WriteJSON(v)
+}
+
+// writeText writes a pre-encoded text frame under the same lock used by
+// writeJSON, keeping all outbound traffic on one connection serializable.
+func (c *hubClient) writeText(data []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.conn.WriteMessage(websocket.TextMessage, data)
 }
 
 func (h *Hub) authorized(ctx context.Context, ticket Ticket, userID string, topic Topic) bool {
@@ -262,7 +279,7 @@ func (h *Hub) Broadcast(topic Topic, eventID string, payload any) error {
 		if !subscribed {
 			continue
 		}
-		if err := client.conn.WriteMessage(websocket.TextMessage, encoded); err != nil {
+		if err := client.writeText(encoded); err != nil {
 			return err
 		}
 	}

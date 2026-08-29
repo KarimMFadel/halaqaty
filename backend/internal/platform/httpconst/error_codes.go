@@ -60,8 +60,6 @@ const (
 	ErrorCodeQueueInvalidGrade = "ERR_QUEUE_INVALID_GRADE"
 	// ErrorCodeQueueInvalidNote is returned when a note exceeds the 500-character limit (422).
 	ErrorCodeQueueInvalidNote = "ERR_QUEUE_INVALID_NOTE"
-	// ErrorCodeQueueAudioConvergencePending is returned when audio entitlement is still converging; the committed queue state is intact (503).
-	ErrorCodeQueueAudioConvergencePending = "ERR_QUEUE_AUDIO_CONVERGENCE_PENDING"
 )
 
 // ValidationField names are used in the error envelope field map.

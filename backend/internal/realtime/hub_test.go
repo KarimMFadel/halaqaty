@@ -3,8 +3,11 @@ package realtime
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -212,6 +215,75 @@ func TestHub_BroadcastDeduplicatesEventIDsPerTopic(t *testing.T) {
 	_ = conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatal("duplicate broadcast was delivered")
+	}
+}
+
+func TestHub_BroadcastDoesNotRaceWithConnectionReplies(t *testing.T) {
+	tickets := NewTicketService(hubTicketReader{circleID: "11111111-1111-1111-1111-111111111111"})
+	hub := NewHub(tickets, hubSessionAuthorizer{})
+	server := httptest.NewServer(hub)
+	defer server.Close()
+
+	ticket, _ := tickets.Issue(context.Background(), "user-1")
+	conn := dialHub(t, server, ticket.Token)
+	defer func() { _ = conn.Close() }()
+
+	writeHub(t, conn, map[string]any{"action": "subscribe", "topic": "session." + hubSessionID})
+	if got := readHub(t, conn); got["type"] != "subscribed" {
+		t.Fatalf("subscribe response = %v", got)
+	}
+
+	topic, _ := NewSessionTopic(hubSessionID)
+	payload := map[string]any{"type": "session.hand_raised", "payload": map[string]any{"session_id": hubSessionID}}
+
+	const n = 25 // under maxMessagesPerMinute so every ping gets a pong
+	const expectedFrames = n + n
+
+	var received atomic.Int32
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				return
+			}
+			received.Add(1)
+		}
+	}()
+
+	errCh := make(chan error, 2)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < n; i++ {
+			if err := hub.Broadcast(topic, fmt.Sprintf("race-evt-%d", i), payload); err != nil {
+				errCh <- fmt.Errorf("broadcast: %w", err)
+				return
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < n; i++ {
+			if err := conn.WriteJSON(map[string]any{"type": "ping"}); err != nil {
+				errCh <- fmt.Errorf("ping write: %w", err)
+				return
+			}
+		}
+	}()
+
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Fatalf("concurrent writer error: %v", err)
+	}
+
+	_ = conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	<-done
+	if got := int(received.Load()); got != expectedFrames {
+		t.Fatalf("received %d frames, want %d (a lower count means a server-side write failed or a handler panic was recovered)", got, expectedFrames)
 	}
 }
 

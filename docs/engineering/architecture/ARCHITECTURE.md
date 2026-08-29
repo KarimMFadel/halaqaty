@@ -116,7 +116,8 @@ sequenceDiagram
 
 ### 2.5 Real-Time Data Flow — End-to-End Example
 
-How a teacher starting a new queue round propagates from REST call to every connected client:
+How a teacher prepares a queue round, then automatic activation propagates when
+the F-005 session becomes live:
 
 ```mermaid
 sequenceDiagram
@@ -128,16 +129,17 @@ sequenceDiagram
         participant O as Other Students
 
         rect rgb(230,245,255)
-            Note over T,O: Teacher starts a new recitation round
+            Note over T,O: Teacher prepares a new recitation round
             T->>+API: POST /sessions/{id}/queue/rounds\n{ surah_id:2, from_ayah:1, to_ayah:10 }
-            API->>DB: INSERT recitation_queue (round 1, surah_id=2)
-            API->>DB: INSERT recitation_queue_entries per session queue policy
-            DB-->>API: queue_id, entries[]
+            API->>DB: INSERT prepared recitation_queue (round 1, surah_id=2)
+            DB-->>API: prepared QueueState
+            API-->>-T: 201 QueueState { lifecycle: prepared }
+            Note over API,DB: F-005 session becomes live; no active round exists
+            API->>DB: Activate lowest prepared round and materialize entries per policy
             API->>Hub: emit queue.round_started to session room
             Hub-->>T: queue.round_started { round_number:1, surah_id:2, ... }
             Hub-->>O: queue.round_started { round_number:1, surah_id:2, ... }
             Hub-->>S: queue.round_started { round_number:1, surah_id:2, ... }
-            API-->>-T: 201 QueueState { entries: [...] }
         end
 
         rect rgb(230,255,230)
@@ -253,8 +255,9 @@ compile-time adapters:
 - `backend/internal/sessions` owns `SessionMediaGateway` and neutral session/media
   types; `backend/internal/sessions/livekit` owns all LiveKit SDK, credential, room,
   track, and webhook details.
-- F-003 calls a sessions-owned `ReciterAudioControl`; queue code never imports or
-  calls the provider gateway directly.
+- F-003 imports no media-control or provider type; it records voluntary queue
+  order and displayed turn state only. F-005 owns participant audio and explicit
+  moderation.
 - `mobile/lib/features/sessions/application` owns `MediaSession`; only
   `mobile/lib/features/sessions/data/livekit_media_session.dart` imports
   `livekit_client`.
@@ -301,13 +304,13 @@ sequenceDiagram
     Note over T,S: Step 2 — Student joins
     S->>API: POST /sessions/{id}/join
     API->>DB: verify circle membership
-    API->>Media: IssueConnection(participant, listen-only)
-    Media->>LK: GenerateToken(uid, CanPublish=false, CanPublishVideo=false)
+    API->>Media: IssueConnection(participant, audio publish enabled)
+    Media->>LK: GenerateToken(uid, CanPublish=true, CanPublishVideo=false)
     LK-->>Media: identity-scoped credential
     Media-->>API: MediaConnection
     API-->>S: { session, media_connection }
     S->>LK: LiveKitMediaSession.connect(endpoint, credential)
-    LK-->>S: Connected ✓ (subscribes to audio streams)
+    LK-->>S: Connected ✓ (publishes/subscribes to audio streams)
 
     Note over T,S: Step 3 — Student's turn (manager advances then starts)
     T->>API: POST /sessions/{id}/queue/rounds\n{ round_type, surah_id, from_ayah, to_ayah, grading_required }
@@ -315,15 +318,11 @@ sequenceDiagram
     T->>API: POST /sessions/{id}/queue/advance
     T->>API: PUT /sessions/{id}/queue/entries/{id}/status\n{ status: "reciting", expected_entry_version }
     API--)S: WS queue.your_turn { queue_entry_id, surah_id, from_ayah, to_ayah }
-    API->>Media: ReciterAudioControl.GrantReciterAudio(studentUID)
-    Media->>LK: UpdateParticipantPermissions(CanPublish=true)
     S->>LK: publishAudioTrack() [48kbps Opus]
     LK-->>T: receives student audio stream ✓
 
     Note over T,S: Step 4 — Turn ends and completion is recorded atomically
     T->>API: PUT /sessions/{id}/queue/entries/{id}/status\n{ status: "completed", grade: "excellent", expected_entry_version }
-    API->>Media: ReciterAudioControl.RevokeReciterAudio(studentUID)
-    Media->>LK: UpdateParticipantPermissions(CanPublish=false)
     API->>DB: UPDATE entry + INSERT one memorization_progress
     API--)S: WS queue.entry_updated { new_status: completed }
     API--)T: WS queue.grade_submitted { grade, student_id }
@@ -365,21 +364,16 @@ sequenceDiagram
     Note over App,LK: Student token — issued on session join
     App->>API: POST /sessions/{id}/join
     API->>DB: verify role = student/supervisor in circle_members
-    API->>Adapter: IssueConnection(listen-only permissions)
-    Adapter->>LK: GenerateToken(uid, RoomAdmin=false,\nCanPublish=false, CanPublishVideo=false)
+    API->>Adapter: IssueConnection(student audio permissions)
+    Adapter->>LK: GenerateToken(uid, RoomAdmin=false,\nCanPublish=true, CanPublishVideo=false)
     LK-->>Adapter: identity-specific token
     Adapter-->>API: MediaConnection
     API-->>App: { media_connection }
     App->>Mobile: connect(media_connection)
-    Mobile->>LK: room.connect(endpoint, credential) — listen-only ✓
+    Mobile->>LK: room.connect(endpoint, credential) — audio publish enabled ✓
 
-    Note over App,LK: Turn grant — student publish enabled for one turn only
-    API->>Adapter: SetAudioPublishing(studentUID, true)
-    Adapter->>LK: UpdateParticipantPermissions(studentUID, CanPublish=true)
-    Note right of LK: Student can now publish audio
-    API->>Adapter: SetAudioPublishing(studentUID, false)
-    Adapter->>LK: UpdateParticipantPermissions(studentUID, CanPublish=false)
-    Note right of LK: Publish revoked immediately after turn
+    Note over App,LK: F-003 queue states communicate voluntary order only;
+    Note over App,LK: explicit F-005 moderator actions handle exceptional cases
 ```
 
 > **Security invariant:** `CanPublishVideo` is **always** `false` in MVP. The token generation function enforces this unconditionally — no code path can produce a video-enabled token until `FEATURE_VIDEO_ENABLED=true` and an ADR approves the change.
@@ -566,12 +560,12 @@ stateDiagram-v2
     direction LR
     [*] --> waiting : Student added to round
 
-    waiting --> reciting : Teacher calls student's turn\n(LiveKit CanPublish → true)
-    reciting --> completed : Grade submitted\n(LiveKit CanPublish → false)
+    waiting --> reciting : Teacher records student's current turn
+    reciting --> completed : Grade submitted
     waiting --> skipped : Manager skips student
-    reciting --> skipped : Manager skips student\n(LiveKit CanPublish → false)
+    reciting --> skipped : Manager skips student
     waiting --> opted_out : Student opts out\n(per session approval policy)
-    reciting --> opted_out : Student opts out\n(LiveKit CanPublish → false)
+    reciting --> opted_out : Student opts out
 
     completed --> [*]
     skipped --> [*]
@@ -984,8 +978,8 @@ Policy changes are prospective, do not rewrite history, and are authorized by
 current active teacher/supervisor circle roles. Session creation is audit
 attribution rather than a permanent authorization grant.
 
-F-005 end commits independently. F-003 revokes reciter audio and finalizes the
-round idempotently after end; a queue failure cannot delay or roll back the
+F-005 end commits independently. F-003 finalizes the round idempotently after
+end; a queue failure cannot delay or roll back the
 ended session.
 
 #### `messages`
@@ -1262,7 +1256,7 @@ does not expose separate add/delete entry controls.
 - **Authorization:** Role-based per circle. After JWT validation, Go backend checks `circle_members` table for user's role in the requested circle
 - **Firebase token lifecycle:** Firebase ID tokens expire after 1 hour; the Flutter Firebase SDK refreshes them silently. Firebase owns refresh-token rotation and reuse detection.
 - **Backend session lifecycle:** The backend creates one opaque session per device after a verified Firebase sign-in. Every protected request includes its session ID; session activity extends the 30-day inactivity window. Current-device logout revokes only that session. A future logout-all-devices operation must revoke every session for the authenticated user. Backend sessions do not mint access or refresh tokens.
-- **Media credentials:** Generated exclusively by the Go backend through the LiveKit MVP adapter; never by the Flutter client, persisted client-side, logged, or broadcast. Student publish scope is turn-based and non-admin.
+- **Media credentials:** Generated exclusively by the Go backend through the LiveKit MVP adapter; never by the Flutter client, persisted client-side, logged, or broadcast. Authorized students receive non-admin audio-publish scope; video remains disabled. F-003 does not alter that scope.
 - **Circle role lifecycle:** Roles are stored only in `circle_members`. On creation, the creator may assign existing registered users as one or more teachers and one optional backup supervisor; if no teacher is selected, the creator becomes teacher, otherwise the creator is supervisor. Invite acceptance creates `student`. Any teacher or supervisor may change another member's role among `student`, `supervisor`, and `teacher`, but cannot change their own role or leave the circle without a teacher. See ADR-010.
 
 #### Circle permission matrix
@@ -1315,8 +1309,8 @@ sequenceDiagram
 - Room names are not publicly guessable
 - Each participant needs a JWT from Go backend to join — no anonymous access
 - Teacher's JWT includes `RoomAdmin: true` (can mute, remove)
-- Student's JWT defaults to `CanPublish: false`, `CanPublishVideo: false`, and never includes `RoomAdmin`
-- Backend grants `CanPublish: true` only for the active reciter turn, then revokes after the turn (audio-only in MVP)
+- Student's JWT includes `CanPublish: true`, `CanPublishVideo: false`, and never includes `RoomAdmin`
+- F-003 records voluntary recitation order only; teachers/supervisors retain explicit F-005 mute, mute-all, remove, lock, and end controls
 - Room is deleted from LiveKit server when session ends
 
 ### Rate Limiting

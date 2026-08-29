@@ -278,7 +278,7 @@ func rsWaitForQueueTransaction(t *testing.T, repo *Repository) {
 func TestRoundServicePrepareScheduledAndLive(t *testing.T) {
 	t.Run("scheduled prepare stacks without activation", func(t *testing.T) {
 		repo := newRoundServiceRepository(t)
-		service := NewRoundService(repo, nil)
+		service := NewRoundService(repo)
 		teacher := rsSeedUser(t, repo, "scheduled-teacher")
 		circle := rsSeedCircle(t, repo, teacher)
 		session := rsInsertSession(t, repo, circle, teacher)
@@ -324,7 +324,7 @@ func TestRoundServicePrepareScheduledAndLive(t *testing.T) {
 
 	t.Run("live prepare activates lowest prepared and stacks later rounds", func(t *testing.T) {
 		repo := newRoundServiceRepository(t)
-		service := NewRoundService(repo, nil)
+		service := NewRoundService(repo)
 		base := time.Now().UTC().Add(-time.Hour)
 		teacher := rsSeedUser(t, repo, "live-teacher")
 		studentA := rsSeedUser(t, repo, "live-student-a")
@@ -386,7 +386,7 @@ func TestRoundServicePrepareScheduledAndLive(t *testing.T) {
 
 func TestRoundServicePrepareRejectsEndedSessionAfterLifecycleRace(t *testing.T) {
 	repo := newRoundServiceRepository(t)
-	service := NewRoundService(repo, nil)
+	service := NewRoundService(repo)
 	teacher := rsSeedUser(t, repo, "prepare-ended-race-teacher")
 	circle := rsSeedCircle(t, repo, teacher)
 	session := rsInsertSession(t, repo, circle, teacher)
@@ -480,14 +480,14 @@ func TestRoundServiceResetAndActivationRejectEndedSessionWithoutMutation(t *test
 			teacher := rsSeedUser(t, repo, "ended-"+test.name+"-teacher")
 			circle := rsSeedCircle(t, repo, teacher)
 			session := rsInsertSession(t, repo, circle, teacher)
-			test.run(t, repo, NewRoundService(repo, nil), session, teacher)
+			test.run(t, repo, NewRoundService(repo), session, teacher)
 		})
 	}
 }
 
 func TestRoundServicePreorderRequiresActiveCircleStudent(t *testing.T) {
 	repo := newRoundServiceRepository(t)
-	service := NewRoundService(repo, nil)
+	service := NewRoundService(repo)
 	teacher := rsSeedUser(t, repo, "preorder-auth-teacher")
 	student := rsSeedUser(t, repo, "preorder-auth-student")
 	supervisor := rsSeedUser(t, repo, "preorder-auth-supervisor")
@@ -517,7 +517,7 @@ func TestRoundServicePreorderRequiresActiveCircleStudent(t *testing.T) {
 
 func TestRoundServicePrepareUsesStackedMaxPlusOneNumbering(t *testing.T) {
 	repo := newRoundServiceRepository(t)
-	service := NewRoundService(repo, nil)
+	service := NewRoundService(repo)
 	teacher := rsSeedUser(t, repo, "numbering-teacher")
 	circle := rsSeedCircle(t, repo, teacher)
 	session := rsInsertSession(t, repo, circle, teacher)
@@ -572,7 +572,7 @@ func TestRoundServicePrepareUsesStackedMaxPlusOneNumbering(t *testing.T) {
 func TestRoundServiceActivationInvariantAndPopulationPolicies(t *testing.T) {
 	t.Run("present_at_activation orders preset present first then present join order with uuid tie break", func(t *testing.T) {
 		repo := newRoundServiceRepository(t)
-		service := NewRoundService(repo, nil)
+		service := NewRoundService(repo)
 		base := time.Now().UTC().Add(-2 * time.Hour)
 		teacher := rsSeedUser(t, repo, "present-teacher")
 		supervisor := rsSeedUser(t, repo, "present-supervisor")
@@ -634,7 +634,7 @@ func TestRoundServiceActivationInvariantAndPopulationPolicies(t *testing.T) {
 
 	t.Run("all_active_students orders preset first then circle join order with uuid tie break", func(t *testing.T) {
 		repo := newRoundServiceRepository(t)
-		service := NewRoundService(repo, nil)
+		service := NewRoundService(repo)
 		base := time.Now().UTC().Add(-2 * time.Hour)
 		teacher := rsSeedUser(t, repo, "all-teacher")
 		supervisor := rsSeedUser(t, repo, "all-supervisor")
@@ -686,7 +686,7 @@ func TestRoundServiceActivationInvariantAndPopulationPolicies(t *testing.T) {
 
 	t.Run("empty student population still activates round", func(t *testing.T) {
 		repo := newRoundServiceRepository(t)
-		service := NewRoundService(repo, nil)
+		service := NewRoundService(repo)
 		base := time.Now().UTC().Add(-time.Hour)
 		teacher := rsSeedUser(t, repo, "empty-teacher")
 		supervisor := rsSeedUser(t, repo, "empty-supervisor")
@@ -728,7 +728,7 @@ func TestRoundServiceActivationInvariantAndPopulationPolicies(t *testing.T) {
 
 func TestRoundServiceReorderAndMoveConstraints(t *testing.T) {
 	repo := newRoundServiceRepository(t)
-	service := NewRoundService(repo, nil)
+	service := NewRoundService(repo)
 	base := time.Now().UTC().Add(-time.Hour)
 	teacher := rsSeedUser(t, repo, "move-teacher")
 	s1 := rsSeedUser(t, repo, "move-s1")
@@ -808,7 +808,7 @@ func TestRoundServiceReorderAndMoveConstraints(t *testing.T) {
 
 func TestRoundServiceResetChainActivatesPreparedRoundsInRoundNumberOrder(t *testing.T) {
 	repo := newRoundServiceRepository(t)
-	service := NewRoundService(repo, nil)
+	service := NewRoundService(repo)
 	base := time.Now().UTC().Add(-time.Hour)
 	teacher := rsSeedUser(t, repo, "reset-teacher")
 	student := rsSeedUser(t, repo, "reset-student")
@@ -920,11 +920,12 @@ func TestRoundServiceResetChainActivatesPreparedRoundsInRoundNumberOrder(t *test
 	}
 }
 
-func TestRoundServiceResetRevokesCurrentReciterAfterDurableFinalization(t *testing.T) {
+// TestRoundServiceResetActivatesSuccessorImmediately verifies that a reset
+// immediately activates its successor without an audio-control barrier.
+func TestRoundServiceResetActivatesSuccessorImmediately(t *testing.T) {
 	repo := newRoundServiceRepository(t)
-	control := &fakeReciterAudioControl{}
-	rounds := NewRoundService(repo, control)
-	turns := NewTurnService(repo, control)
+	rounds := NewRoundService(repo)
+	turns := NewTurnService(repo)
 	base := time.Now().UTC().Add(-time.Hour)
 	teacher := rsSeedUser(t, repo, "reset-audio-teacher")
 	student := rsSeedUser(t, repo, "reset-audio-student")
@@ -944,11 +945,10 @@ func TestRoundServiceResetRevokesCurrentReciterAfterDurableFinalization(t *testi
 	}
 	state := rsQueueState(t, repo, first.ID)
 	entry := state.Entries[0]
-	selected, err := turns.Advance(context.Background(), first.ID, state.Round.Version)
-	if err != nil {
+	if _, err := turns.Advance(context.Background(), first.ID, state.Round.Version); err != nil {
 		t.Fatalf("advance round: %v", err)
 	}
-	if _, err := turns.Start(context.Background(), entry.ID, selected.Version); err != nil {
+	if _, err := turns.Start(context.Background(), entry.ID, entry.Version); err != nil {
 		t.Fatalf("start reciter: %v", err)
 	}
 
@@ -959,116 +959,22 @@ func TestRoundServiceResetRevokesCurrentReciterAfterDurableFinalization(t *testi
 	if err != nil {
 		t.Fatalf("reset round: %v", err)
 	}
-	if len(control.revokeCalls) != 1 || control.revokeCalls[0].queueEntryID != entry.ID {
-		t.Fatalf("revoke calls = %+v, want one revoke for %s", control.revokeCalls, entry.ID)
-	}
 	finalized := rsMustRound(t, repo, first.ID)
 	if finalized.Lifecycle != RoundLifecycleFinalized || finalized.SelectedEntryID != nil {
 		t.Fatalf("old round after reset = %+v, want finalized and unselected", finalized)
 	}
-	if current := rsMustRound(t, repo, reset.ID); current.Lifecycle != RoundLifecycleActive {
-		t.Fatalf("reset round lifecycle = %s, want active", current.Lifecycle)
+	if current := rsMustRound(t, repo, reset.ID); current.Lifecycle != RoundLifecycleActive || current.ActivatedAt == nil {
+		t.Fatalf("reset successor = %+v, want immediately active", current)
 	}
-}
-
-func TestRoundServiceResetWaitsForRevokeBeforeActivationOrGrant(t *testing.T) {
-	repo := newRoundServiceRepository(t)
-	control := &fakeReciterAudioControl{}
-	revokeStarted := make(chan struct{})
-	allowRevoke := make(chan struct{})
-	var releaseOnce sync.Once
-	releaseRevoke := func() { releaseOnce.Do(func() { close(allowRevoke) }) }
-	defer releaseRevoke()
-	control.onRevoke = func(audioCall) error {
-		close(revokeStarted)
-		<-allowRevoke
-		return nil
-	}
-	rounds := NewRoundService(repo, control)
-	turns := NewTurnService(repo, control)
-	base := time.Now().UTC().Add(-time.Hour)
-	teacher := rsSeedUser(t, repo, "reset-barrier-teacher")
-	student := rsSeedUser(t, repo, "reset-barrier-student")
-	circle := rsSeedCircle(t, repo, teacher)
-	rsSeedMember(t, repo, circle, teacher, "teacher", base)
-	rsSeedMember(t, repo, circle, student, "student", base.Add(time.Minute))
-	session := rsInsertSession(t, repo, circle, teacher)
-	rsInsertPresence(t, repo, session, student, base.Add(2*time.Minute), true)
-	rsSetSessionStatus(t, repo, session, "active")
-
-	first, err := rounds.Prepare(context.Background(), PrepareRoundInput{
-		SessionID: session, Type: RoundTypeRevision, SurahID: 1, FromAyah: 1,
-		ToAyah: 7, SurahAyahCount: 7, GradingRequired: true, CreatedBy: teacher,
-	})
-	if err != nil {
-		t.Fatalf("prepare reset barrier round: %v", err)
-	}
-	initial := rsQueueState(t, repo, first.ID)
-	entry := initial.Entries[0]
-	selected, err := turns.Advance(context.Background(), first.ID, initial.Round.Version)
-	if err != nil {
-		t.Fatalf("advance reset barrier round: %v", err)
-	}
-	if _, err := turns.Start(context.Background(), entry.ID, selected.Version); err != nil {
-		t.Fatalf("start reset barrier reciter: %v", err)
-	}
-
-	resetDone := make(chan error, 1)
-	go func() {
-		_, resetErr := rounds.Reset(context.Background(), PrepareRoundInput{
-			SessionID: session, Type: RoundTypeTest, SurahID: 2, FromAyah: 1,
-			ToAyah: 2, SurahAyahCount: 286, GradingRequired: false, CreatedBy: teacher,
-		})
-		resetDone <- resetErr
-	}()
-
-	select {
-	case <-revokeStarted:
-	case <-time.After(5 * time.Second):
-		t.Fatal("reset did not reach the blocking revoke")
-	}
-
-	var activeRounds int
+	var audioIntentCount int
 	if err := repo.pool.QueryRow(context.Background(), `
-		SELECT COUNT(*) FROM recitation_queue
-		WHERE session_id = $1::uuid AND lifecycle = 'active'
-	`, session).Scan(&activeRounds); err != nil {
-		t.Fatalf("read reset barrier active rounds: %v", err)
+		SELECT COUNT(*)
+		FROM queue_event_outbox
+		WHERE session_id = $1::uuid AND event_type = 'queue.audio_revoke_before_activation'
+	`, session).Scan(&audioIntentCount); err != nil {
+		t.Fatalf("count reset audio intents: %v", err)
 	}
-	if activeRounds != 0 {
-		t.Fatalf("active rounds during revoke = %d, want 0", activeRounds)
-	}
-	var nextLifecycle RoundLifecycle
-	if err := repo.pool.QueryRow(context.Background(), `
-		SELECT lifecycle FROM recitation_queue
-		WHERE session_id = $1::uuid AND round_number = 2
-	`, session).Scan(&nextLifecycle); err != nil {
-		t.Fatalf("read reset barrier next round: %v", err)
-	}
-	if nextLifecycle != RoundLifecyclePrepared {
-		t.Fatalf("next round during revoke = %s, want prepared", nextLifecycle)
-	}
-	if len(control.grantCalls) != 1 {
-		t.Fatalf("audio grants during revoke = %d, want initial grant only", len(control.grantCalls))
-	}
-	if _, err := turns.Start(context.Background(), entry.ID, selected.Version+1); roundServiceQueueErrCode(t, err) != QueueErrorCodeRoundFinalized {
-		t.Fatalf("concurrent start during revoke error = %v, want round_finalized", err)
-	}
-	if len(control.grantCalls) != 1 {
-		t.Fatalf("audio grants after concurrent start = %d, want initial grant only", len(control.grantCalls))
-	}
-
-	releaseRevoke()
-	if err := <-resetDone; err != nil {
-		t.Fatalf("reset after revoke: %v", err)
-	}
-	if err := repo.pool.QueryRow(context.Background(), `
-		SELECT COUNT(*) FROM recitation_queue
-		WHERE session_id = $1::uuid AND lifecycle = 'active'
-	`, session).Scan(&activeRounds); err != nil {
-		t.Fatalf("read reset barrier final active rounds: %v", err)
-	}
-	if activeRounds != 1 {
-		t.Fatalf("active rounds after revoke = %d, want 1", activeRounds)
+	if audioIntentCount != 0 {
+		t.Fatalf("reset audio intents = %d, want none", audioIntentCount)
 	}
 }

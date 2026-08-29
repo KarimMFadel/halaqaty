@@ -1,6 +1,6 @@
 # F-003 Recitation Queue WebSocket Events
 
-Canonical catalog: `docs/contracts/ws_events.md`. All events use the existing authenticated F-005 session topic and are server-to-client projections only. PostgreSQL is authoritative; clients re-fetch `GET /sessions/{id}/queue` after reconnect, an unknown event, or any version gap. Regenerated 2026-08-23 from the approved spec clarifications; pending canonical sync deltas are listed in `plan.md` §Canonical sync.
+Canonical catalog: `docs/contracts/ws_events.md`. All events use the existing authenticated F-005 session topic and are server-to-client projections only. PostgreSQL is authoritative; clients re-fetch `GET /sessions/{id}/queue` after reconnect, an unknown event, or any version gap. Regenerated 2026-08-23 from the approved spec clarifications; canonical sync is complete as recorded in `plan.md` §Canonical sync.
 
 ## Common envelope
 
@@ -37,9 +37,9 @@ included for managers only; other participants receive an empty array.
 
 Emitted when a prepared round activates. Activation is automatic in round-number
 order: the first prepared round activates when the session is live and no round
-is active, and each subsequent prepared round activates when the previous round
-finalizes (including the round created by reset). No manager activate action
-exists.
+  is active, and each subsequent prepared round activates when the previous round
+  finalizes, including after reset. Queue activation never changes participant
+  audio permission. No manager activate action exists.
 
 ```json
 {
@@ -126,7 +126,8 @@ Broadcast after a manager changes the durable order, by either control:
 }
 ```
 
-Selection does not change the selected entry from `waiting` to `reciting`. A
+Selection does not change the selected entry from `waiting` to `reciting` or
+change audio permission. A
 replacing advance emits this event again with the new `selected_entry_id`.
 Rejected advances (zero waiting entries; an entry already `reciting`) mutate
 nothing and emit no event — the actor receives the REST conflict.

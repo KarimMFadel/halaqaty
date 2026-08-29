@@ -142,7 +142,6 @@ type QueueMetrics struct {
 	outboxPending          atomic.Int64
 	outboxParkedTotal      atomic.Int64
 	eventDeliveryLag       durationHistogram
-	audioConvergenceLag    durationHistogram
 	sessionEndFinalization durationHistogram
 
 	invariantViolationsTotal  atomic.Int64
@@ -161,7 +160,6 @@ type QueueMetricsSummary struct {
 	OutboxPending             int64
 	OutboxParkedTotal         int64
 	EventDeliveryLag          DurationSummary
-	AudioConvergenceLag       DurationSummary
 	SessionEndFinalizationLag DurationSummary
 	InvariantViolationsTotal  int64
 	InvariantViolationsByKind [invariantKindCount]int64
@@ -214,14 +212,6 @@ func (m *QueueMetrics) RecordEventDeliveryLag(d time.Duration) {
 	m.eventDeliveryLag.record(d)
 }
 
-// RecordAudioConvergenceLag adds one audio_convergence_lag sample.
-func (m *QueueMetrics) RecordAudioConvergenceLag(d time.Duration) {
-	if m == nil {
-		return
-	}
-	m.audioConvergenceLag.record(d)
-}
-
 // RecordSessionEndFinalizationLag adds one session_end_finalization_lag
 // sample (SC-007 convergence deadline is 10s).
 func (m *QueueMetrics) RecordSessionEndFinalizationLag(d time.Duration) {
@@ -270,7 +260,6 @@ func (m *QueueMetrics) Summary() QueueMetricsSummary {
 		OutboxPending:             m.outboxPending.Load(),
 		OutboxParkedTotal:         m.outboxParkedTotal.Load(),
 		EventDeliveryLag:          m.eventDeliveryLag.summary(),
-		AudioConvergenceLag:       m.audioConvergenceLag.summary(),
 		SessionEndFinalizationLag: m.sessionEndFinalization.summary(),
 		InvariantViolationsTotal:  m.invariantViolationsTotal.Load(),
 		RateLimitedRequests:       m.rateLimitedRequests.Load(),

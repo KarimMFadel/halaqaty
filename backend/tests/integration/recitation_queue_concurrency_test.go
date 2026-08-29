@@ -335,7 +335,7 @@ func cqCompleteRecitingEntry(ctx context.Context, f *recitationQueueConcurrencyF
 	})
 }
 
-func cqOptOutEntry(ctx context.Context, f *recitationQueueConcurrencyFixture, roundID, entryID, studentID string, expectedVersion int64) error {
+func cqOptOutEntry(ctx context.Context, f *recitationQueueConcurrencyFixture, roundID, entryID, studentID string, expectedEntryVersion int64) error {
 	return f.repo.WithTx(ctx, func(tx *queue.Tx) error {
 		round, err := tx.LockRound(ctx, roundID)
 		if err != nil {
@@ -344,12 +344,13 @@ func cqOptOutEntry(ctx context.Context, f *recitationQueueConcurrencyFixture, ro
 		if round.Lifecycle != queue.RoundLifecycleActive {
 			return &queue.QueueError{Code: queue.QueueErrorCodeRoundFinalized, Message: "queue round is not active"}
 		}
-		if round.Version != expectedVersion {
-			return &queue.QueueError{Code: queue.QueueErrorCodeStaleVersion, Message: "queue state changed"}
-		}
 		entry, err := tx.LockEntry(ctx, entryID)
 		if err != nil {
 			return err
+		}
+		// Entry-scoped guard mirroring EntryStatusRequest.expected_entry_version.
+		if entry.Version != expectedEntryVersion {
+			return &queue.QueueError{Code: queue.QueueErrorCodeStaleVersion, Message: "queue entry changed"}
 		}
 		if !queue.CanTransitionEntry(entry.Status, queue.EntryStatusOptedOut) {
 			return &queue.QueueError{Code: queue.QueueErrorCodeEntryTerminal, Message: "entry is terminal"}
@@ -416,7 +417,7 @@ func TestRecitationQueueConcurrency_AdvanceAndStart(t *testing.T) {
 	state := cqState(t, f, round.ID)
 	firstEntry := cqEntry(t, state, first)
 	selected := cqSelectEntry(t, f, round.ID, firstEntry.ID, round.Version)
-	turns := queue.NewTurnService(f.repo, nil)
+	turns := queue.NewTurnService(f.repo)
 
 	results := cqRace(t,
 		func(ctx context.Context) error {
@@ -424,11 +425,16 @@ func TestRecitationQueueConcurrency_AdvanceAndStart(t *testing.T) {
 			return err
 		},
 		func(ctx context.Context) error {
-			_, err := turns.Start(ctx, firstEntry.ID, selected.Version)
+			_, err := turns.Start(ctx, firstEntry.ID, firstEntry.Version)
 			return err
 		},
 	)
 
+	// Advance (round token) and Start (entry token) guard different rows, so
+	// both may legitimately commit when they target the same selected entry
+	// (select-then-start is a consistent pair). The CHK032 invariants below
+	// are what must hold: exactly one displayed reciter and a durable
+	// selection that matches it.
 	successes := 0
 	for _, result := range results {
 		err := result.err
@@ -440,16 +446,16 @@ func TestRecitationQueueConcurrency_AdvanceAndStart(t *testing.T) {
 			t.Fatalf("advance/start race returned unexpected error: %v", err)
 		}
 	}
-	if successes != 1 {
-		t.Fatalf("advance/start race successes = %d, want exactly 1: %v", successes, results)
+	if successes < 1 || successes > 2 {
+		t.Fatalf("advance/start race successes = %d, want 1 or 2: %v", successes, results)
 	}
 
 	final := cqState(t, f, round.ID)
 	if cqCountReciters(final) > 1 {
 		t.Fatalf("advance/start race created multiple reciters: %+v", final.Entries)
 	}
-	if final.Round.Version != selected.Version+1 {
-		t.Fatalf("advance/start final version = %d, want %d", final.Round.Version, selected.Version+1)
+	if final.Round.Version <= selected.Version {
+		t.Fatalf("advance/start final version = %d, want > %d", final.Round.Version, selected.Version)
 	}
 	if final.Round.SelectedEntryID == nil {
 		t.Fatal("advance/start race lost the durable selection")
@@ -464,12 +470,11 @@ func TestRecitationQueueConcurrency_ResetAndComplete(t *testing.T) {
 	student := f.addStudent(t, "reset-complete", time.Now().UTC())
 	round := cqCreateActiveRound(t, f, student)
 	entry := cqEntry(t, cqState(t, f, round.ID), student)
-	turns := queue.NewTurnService(f.repo, nil)
-	selected, err := turns.Advance(context.Background(), round.ID, round.Version)
-	if err != nil {
+	turns := queue.NewTurnService(f.repo)
+	if _, err := turns.Advance(context.Background(), round.ID, round.Version); err != nil {
 		t.Fatalf("prepare reset/complete race selection: %v", err)
 	}
-	if _, err := turns.Start(context.Background(), entry.ID, selected.Version); err != nil {
+	if _, err := turns.Start(context.Background(), entry.ID, entry.Version); err != nil {
 		t.Fatalf("prepare reset/complete race start: %v", err)
 	}
 	before := cqState(t, f, round.ID)
@@ -483,7 +488,7 @@ func TestRecitationQueueConcurrency_ResetAndComplete(t *testing.T) {
 		GradingRequired: true,
 		CreatedBy:       f.teacher,
 	}
-	rounds := queue.NewRoundService(f.repo, nil)
+	rounds := queue.NewRoundService(f.repo)
 	results := cqRace(t,
 		func(ctx context.Context) error {
 			_, err := rounds.Reset(ctx, resetInput)
@@ -559,7 +564,7 @@ func TestRecitationQueueConcurrency_MoveAndLateJoinAppend(t *testing.T) {
 	moving := cqEntry(t, initial, first)
 	secondEntry := cqEntry(t, initial, second)
 	thirdEntry := cqEntry(t, initial, third)
-	rounds := queue.NewRoundService(f.repo, nil)
+	rounds := queue.NewRoundService(f.repo)
 	results := cqRace(t,
 		func(ctx context.Context) error {
 			_, err := rounds.Move(ctx, moving.ID, initial.Round.Version, 3)
@@ -636,16 +641,15 @@ func TestRecitationQueueConcurrency_OptOutAndSkipFirstTerminalWins(t *testing.T)
 	student := f.addStudent(t, "optout-skip", time.Now().UTC())
 	round := cqCreateActiveRound(t, f, student)
 	entry := cqEntry(t, cqState(t, f, round.ID), student)
-	turns := queue.NewTurnService(f.repo, nil)
-	initial := cqState(t, f, round.ID)
+	turns := queue.NewTurnService(f.repo)
 
 	results := cqRace(t,
 		func(ctx context.Context) error {
-			_, err := turns.Skip(ctx, entry.ID, initial.Round.Version, f.teacher)
+			_, err := turns.Skip(ctx, entry.ID, entry.Version, f.teacher)
 			return err
 		},
 		func(ctx context.Context) error {
-			return cqOptOutEntry(ctx, f, round.ID, entry.ID, student, initial.Round.Version)
+			return cqOptOutEntry(ctx, f, round.ID, entry.ID, student, entry.Version)
 		},
 	)
 
@@ -672,8 +676,8 @@ func TestRecitationQueueConcurrency_OptOutAndSkipFirstTerminalWins(t *testing.T)
 	if cqCountReciters(final) != 0 {
 		t.Fatalf("opt-out/skip race left a reciter: %+v", final.Entries)
 	}
-	if final.Round.Version != initial.Round.Version+1 {
-		t.Fatalf("opt-out/skip final version = %d, want %d", final.Round.Version, initial.Round.Version+1)
+	if final.Round.Version != round.Version+1 {
+		t.Fatalf("opt-out/skip final version = %d, want %d", final.Round.Version, round.Version+1)
 	}
 	var terminalRows int
 	if err := f.pool.QueryRow(context.Background(), `
@@ -694,7 +698,7 @@ func TestRecitationQueueConcurrency_StaleVersionReplaysConverge(t *testing.T) {
 	second := f.addStudent(t, "stale-replay-second", time.Now().UTC().Add(time.Second))
 	round := cqCreateActiveRound(t, f, first, second)
 	initial := cqState(t, f, round.ID)
-	turns := queue.NewTurnService(f.repo, nil)
+	turns := queue.NewTurnService(f.repo)
 
 	results := cqRace(t,
 		func(ctx context.Context) error {

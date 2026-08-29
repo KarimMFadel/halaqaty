@@ -104,11 +104,11 @@ func videoGrant(t *testing.T, claims map[string]any) map[string]any {
 
 // ---- T018: connection issuance ------------------------------------------------
 
-func TestIssueConnectionStudentIsListenOnly(t *testing.T) {
+func TestIssueConnectionStudentPublishesAudioOnly(t *testing.T) {
 	rooms := &fakeRoomClient{}
 	adapter, _ := newTestAdapter(rooms)
 
-	conn, err := adapter.IssueConnection(context.Background(), "room-ref-1", "student-1", sessions.MediaGrants{CanPublishAudio: false})
+	conn, err := adapter.IssueConnection(context.Background(), "room-ref-1", "student-1", sessions.MediaGrants{CanPublishAudio: true})
 	if err != nil {
 		t.Fatalf("IssueConnection: %v", err)
 	}
@@ -127,8 +127,8 @@ func TestIssueConnectionStudentIsListenOnly(t *testing.T) {
 	if grant["room"] != "room-ref-1" {
 		t.Fatalf("room = %v, want room-ref-1", grant["room"])
 	}
-	if canPublish, ok := grant["canPublish"].(bool); !ok || canPublish {
-		t.Fatalf("student canPublish = %v, want explicit false", grant["canPublish"])
+	if canPublish, ok := grant["canPublish"].(bool); !ok || !canPublish {
+		t.Fatalf("student canPublish = %v, want true", grant["canPublish"])
 	}
 	if claims["sub"] != "student-1" && claims["identity"] != "student-1" {
 		t.Fatalf("token identity = %v, want student-1", claims["sub"])

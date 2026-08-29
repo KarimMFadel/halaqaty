@@ -115,7 +115,7 @@ Go Backend
   ├─ 1. Validate caller is a member of the circle
   ├─ 2. Check session status = active (else 409 "Session is not active")
   ├─ 3. Issue participant MediaConnection through the LiveKit MVP adapter:
-  │     - CanPublish: false (default — overridden per-turn for active reciter)
+  │     - CanPublish: true (authorized student audio participation)
   │     - CanSubscribe: true
   │     - CanPublishVideo: false (always)
   │     - Credential expiry: at most 1 hour, independent of the 4-hour session maximum

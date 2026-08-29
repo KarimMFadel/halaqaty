@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -19,13 +18,12 @@ const (
 
 // RoundService owns preparation, automatic activation, durable ordering, and reset.
 type RoundService struct {
-	repo    *Repository
-	control sessions.ReciterAudioControl
+	repo *Repository
 }
 
 // NewRoundService constructs a round service over the queue repository.
-func NewRoundService(repo *Repository, control sessions.ReciterAudioControl) *RoundService {
-	return &RoundService{repo: repo, control: control}
+func NewRoundService(repo *Repository) *RoundService {
+	return &RoundService{repo: repo}
 }
 
 // PrepareRoundInput contains the immutable facts needed to prepare a round.
@@ -77,7 +75,7 @@ func (s *RoundService) Prepare(ctx context.Context, in PrepareRoundInput) (Round
 		if policy.Status == "scheduled" {
 			return nil
 		}
-		activated, err := s.activateLowest(ctx, tx, in.SessionID, policy)
+		activated, err := activateLowest(ctx, tx, in.SessionID, policy)
 		if err != nil {
 			return err
 		}
@@ -122,7 +120,7 @@ func validatePreorderIDs(studentIDs []string) error {
 	return nil
 }
 
-func (s *RoundService) activateLowest(ctx context.Context, tx *Tx, sessionID string, policy SessionPolicyContext) (Round, error) {
+func activateLowest(ctx context.Context, tx *Tx, sessionID string, policy SessionPolicyContext) (Round, error) {
 	if _, err := tx.LockActiveRound(ctx, sessionID); err == nil {
 		return Round{}, nil
 	} else if !errors.Is(err, pgx.ErrNoRows) {
@@ -172,7 +170,7 @@ func (s *RoundService) ActivateIfNeeded(ctx context.Context, sessionID string) e
 		if policy.Status != "active" {
 			return &QueueError{Code: QueueErrorCodeRoundFinalized, Message: "session is not active"}
 		}
-		_, err = s.activateLowest(ctx, tx, sessionID, policy)
+		_, err = activateLowest(ctx, tx, sessionID, policy)
 		return err
 	})
 }
@@ -258,16 +256,14 @@ func (s *RoundService) Move(ctx context.Context, entryID string, expectedVersion
 	return moved, err
 }
 
-// Reset finalizes the active round, revokes its audio entitlement, and then
-// activates the lowest prepared round.
+// Reset finalizes the active round, creates its successor, and restores the
+// normal activation invariant without changing participant audio permission.
 func (s *RoundService) Reset(ctx context.Context, in PrepareRoundInput) (Round, error) {
 	if err := validatePrepareInput(in); err != nil {
 		return Round{}, err
 	}
 	var next Round
 	err := s.repo.withSessionRoundLock(ctx, in.SessionID, func(runTx queueTxRunner) error {
-		var reciter QueueEntry
-		revoke := false
 		if err := runTx(ctx, func(tx *Tx) error {
 			policy, err := tx.LockSessionPolicy(ctx, in.SessionID)
 			if err != nil {
@@ -279,16 +275,6 @@ func (s *RoundService) Reset(ctx context.Context, in PrepareRoundInput) (Round, 
 			active, err := tx.LockActiveRound(ctx, in.SessionID)
 			if err != nil {
 				return err
-			}
-			if active.SelectedEntryID != nil {
-				selected, err := tx.LockEntry(ctx, *active.SelectedEntryID)
-				if err != nil {
-					return err
-				}
-				if selected.Status == EntryStatusReciting {
-					reciter = selected
-					revoke = true
-				}
 			}
 			finalized, err := tx.FinalizeRound(ctx, active.ID, active.Version, policy.Policy.Finalization, in.CreatedBy)
 			if err != nil {
@@ -316,11 +302,6 @@ func (s *RoundService) Reset(ctx context.Context, in PrepareRoundInput) (Round, 
 		}); err != nil {
 			return err
 		}
-		if revoke && s.control != nil {
-			if err := s.control.RevokeReciterAudio(ctx, in.SessionID, reciter.QueueID, reciter.ID, reciter.StudentID); err != nil {
-				return &QueueError{Code: QueueErrorCodeAudioConvergencePending, Message: "recitation audio is still being applied; queue state is saved", Err: err}
-			}
-		}
 		return runTx(ctx, func(tx *Tx) error {
 			policy, err := tx.LockSessionPolicy(ctx, in.SessionID)
 			if err != nil {
@@ -329,7 +310,7 @@ func (s *RoundService) Reset(ctx context.Context, in PrepareRoundInput) (Round, 
 			if policy.Status != "active" {
 				return &QueueError{Code: QueueErrorCodeRoundFinalized, Message: "session is not active"}
 			}
-			activated, err := s.activateLowest(ctx, tx, in.SessionID, policy)
+			activated, err := activateLowest(ctx, tx, in.SessionID, policy)
 			if err != nil {
 				return err
 			}

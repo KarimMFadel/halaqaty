@@ -28,44 +28,6 @@ var turnServiceMigrations = []string{
 	"000017_recitation_queue_system.up.sql",
 }
 
-type audioCall struct {
-	sessionID    string
-	roundID      string
-	queueEntryID string
-	userID       string
-}
-
-type fakeReciterAudioControl struct {
-	grantErr    error
-	revokeErr   error
-	grantCalls  []audioCall
-	revokeCalls []audioCall
-	onGrant     func(audioCall) error
-	onRevoke    func(audioCall) error
-}
-
-func (f *fakeReciterAudioControl) GrantReciterAudio(_ context.Context, sessionID, roundID, queueEntryID, userID string) error {
-	call := audioCall{sessionID: sessionID, roundID: roundID, queueEntryID: queueEntryID, userID: userID}
-	f.grantCalls = append(f.grantCalls, call)
-	if f.onGrant != nil {
-		if err := f.onGrant(call); err != nil {
-			return err
-		}
-	}
-	return f.grantErr
-}
-
-func (f *fakeReciterAudioControl) RevokeReciterAudio(_ context.Context, sessionID, roundID, queueEntryID, userID string) error {
-	call := audioCall{sessionID: sessionID, roundID: roundID, queueEntryID: queueEntryID, userID: userID}
-	f.revokeCalls = append(f.revokeCalls, call)
-	if f.onRevoke != nil {
-		if err := f.onRevoke(call); err != nil {
-			return err
-		}
-	}
-	return f.revokeErr
-}
-
 func newTurnServiceRepository(t *testing.T) *Repository {
 	t.Helper()
 	dbURL := os.Getenv("DATABASE_URL")
@@ -305,21 +267,9 @@ func recitingEntries(state QueueState) []QueueEntry {
 	return entries
 }
 
-func TestTurnServiceAudioConvergenceClassification(t *testing.T) {
-	if IsAudioConvergencePending(nil) {
-		t.Fatal("nil error classified as audio convergence pending")
-	}
-	if !IsAudioConvergencePending(&QueueError{Code: QueueErrorCodeAudioConvergencePending}) {
-		t.Fatal("audio convergence error was not classified")
-	}
-	if IsAudioConvergencePending(&QueueError{Code: QueueErrorCodeStaleVersion}) {
-		t.Fatal("stale version classified as audio convergence pending")
-	}
-}
-
 func TestTurnServiceAdvanceReplacesSelectionWithoutDuplicate(t *testing.T) {
 	repo, teacherID, _, students, round, state := createTurnServiceFixture(t, 2)
-	service := NewTurnService(repo, nil)
+	service := NewTurnService(repo)
 
 	firstRound, err := service.Advance(context.Background(), round.ID, round.Version)
 	if err != nil {
@@ -353,7 +303,7 @@ func TestTurnServiceAdvanceReplacesSelectionWithoutDuplicate(t *testing.T) {
 
 func TestTurnServiceAdvanceWithNoWaitingEntryDoesNotMutate(t *testing.T) {
 	repo, teacherID, _, _, round, state := createTurnServiceFixture(t, 0)
-	service := NewTurnService(repo, nil)
+	service := NewTurnService(repo)
 
 	_, err := service.Advance(context.Background(), round.ID, round.Version)
 	if err == nil {
@@ -382,7 +332,7 @@ func TestTurnServiceAdvanceWithNoWaitingEntryDoesNotMutate(t *testing.T) {
 
 func TestTurnServiceAdvanceRejectsWhileReciting(t *testing.T) {
 	repo, teacherID, _, students, round, state := createTurnServiceFixture(t, 2)
-	service := NewTurnService(repo, nil)
+	service := NewTurnService(repo)
 
 	reciting := transitionEntryStatus(t, repo, findEntry(t, state, students[0]).ID, EntryStatusWaiting, EntryStatusReciting)
 	_, err := service.Advance(context.Background(), round.ID, round.Version)
@@ -406,21 +356,21 @@ func TestTurnServiceAdvanceRejectsWhileReciting(t *testing.T) {
 
 func TestTurnServiceStartRequiresSelectedWaitingEntry(t *testing.T) {
 	repo, teacherID, _, students, round, state := createTurnServiceFixture(t, 2)
-	service := NewTurnService(repo, nil)
+	service := NewTurnService(repo)
 
 	firstEntry := findEntry(t, state, students[0])
 	secondEntry := findEntry(t, state, students[1])
 
-	if _, err := service.Start(context.Background(), firstEntry.ID, round.Version); err == nil {
+	if _, err := service.Start(context.Background(), firstEntry.ID, firstEntry.Version); err == nil {
 		t.Fatal("start without selection succeeded")
 	}
 
-	selectedRound := insertSelectedEntry(t, repo, round.ID, secondEntry.ID, round.Version)
-	if _, err := service.Start(context.Background(), firstEntry.ID, selectedRound.Version); err == nil {
+	insertSelectedEntry(t, repo, round.ID, secondEntry.ID, round.Version)
+	if _, err := service.Start(context.Background(), firstEntry.ID, firstEntry.Version); err == nil {
 		t.Fatal("start for unselected entry succeeded")
 	}
 
-	if _, err := service.Start(context.Background(), secondEntry.ID, selectedRound.Version); err != nil {
+	if _, err := service.Start(context.Background(), secondEntry.ID, secondEntry.Version); err != nil {
 		t.Fatalf("start selected entry: %v", err)
 	}
 
@@ -431,16 +381,36 @@ func TestTurnServiceStartRequiresSelectedWaitingEntry(t *testing.T) {
 	}
 }
 
+func TestTurnServiceRecordsTurnsWithoutMediaControl(t *testing.T) {
+	repo, teacherID, _, students, round, state := createTurnServiceFixture(t, 1)
+	entry := findEntry(t, state, students[0])
+	insertSelectedEntry(t, repo, round.ID, entry.ID, round.Version)
+
+	service := NewTurnService(repo)
+	started, err := service.Start(context.Background(), entry.ID, entry.Version)
+	if err != nil {
+		t.Fatalf("start without media control: %v", err)
+	}
+	if started.Status != EntryStatusReciting {
+		t.Fatalf("started status = %s, want reciting", started.Status)
+	}
+
+	state = queueStateForManager(t, repo, round.ID, teacherID)
+	if got := findEntry(t, state, students[0]).Status; got != EntryStatusReciting {
+		t.Fatalf("persisted status = %s, want reciting", got)
+	}
+}
+
 func TestTurnServiceStartUsesOneReciterDatabaseGuard(t *testing.T) {
 	repo, teacherID, _, students, round, state := createTurnServiceFixture(t, 2)
-	service := NewTurnService(repo, nil)
+	service := NewTurnService(repo)
 
 	firstEntry := findEntry(t, state, students[0])
 	secondEntry := findEntry(t, state, students[1])
 	reciting := transitionEntryStatus(t, repo, firstEntry.ID, EntryStatusWaiting, EntryStatusReciting)
-	selectedRound := insertSelectedEntry(t, repo, round.ID, secondEntry.ID, round.Version)
+	insertSelectedEntry(t, repo, round.ID, secondEntry.ID, round.Version)
 
-	_, err := service.Start(context.Background(), secondEntry.ID, selectedRound.Version)
+	_, err := service.Start(context.Background(), secondEntry.ID, secondEntry.Version)
 	if err == nil {
 		t.Fatal("start with existing reciter succeeded")
 	}
@@ -462,191 +432,27 @@ func TestTurnServiceSkipHandlesWaitingAndRecitingEntries(t *testing.T) {
 	recitingEntry := findEntry(t, state, students[1])
 
 	recitingEntry = transitionEntryStatus(t, repo, recitingEntry.ID, EntryStatusWaiting, EntryStatusReciting)
-	control := &fakeReciterAudioControl{}
-	service := NewTurnService(repo, control)
+	service := NewTurnService(repo)
 
-	waitingSkipped, err := service.Skip(context.Background(), waitingEntry.ID, round.Version, teacherID)
+	waitingSkipped, err := service.Skip(context.Background(), waitingEntry.ID, waitingEntry.Version, teacherID)
 	if err != nil {
 		t.Fatalf("skip waiting entry: %v", err)
 	}
 	if waitingSkipped.Status != EntryStatusSkipped {
 		t.Fatalf("waiting skip status = %s, want skipped", waitingSkipped.Status)
 	}
-	if len(control.revokeCalls) != 0 {
-		t.Fatalf("waiting skip revoke calls = %d, want 0", len(control.revokeCalls))
-	}
-
-	afterWaiting := roundState(t, repo, round.ID)
-	recitingSkipped, err := service.Skip(context.Background(), recitingEntry.ID, afterWaiting.Version, teacherID)
+	recitingSkipped, err := service.Skip(context.Background(), recitingEntry.ID, recitingEntry.Version, teacherID)
 	if err != nil {
 		t.Fatalf("skip reciting entry: %v", err)
 	}
 	if recitingSkipped.Status != EntryStatusSkipped {
 		t.Fatalf("reciting skip status = %s, want skipped", recitingSkipped.Status)
 	}
-	if len(control.revokeCalls) != 1 || control.revokeCalls[0].queueEntryID != recitingEntry.ID {
-		t.Fatalf("revoke calls = %+v, want one revoke for %s", control.revokeCalls, recitingEntry.ID)
-	}
-
 	state = queueStateForManager(t, repo, round.ID, teacherID)
 	for _, entry := range state.Entries {
 		if entry.Status != EntryStatusSkipped {
 			t.Fatalf("entry %s status = %s, want skipped", entry.ID, entry.Status)
 		}
-	}
-}
-
-func TestTurnServiceStartGrantsAudioAfterCommit(t *testing.T) {
-	repo, teacherID, _, students, round, state := createTurnServiceFixture(t, 1)
-	entry := findEntry(t, state, students[0])
-	selectedRound := insertSelectedEntry(t, repo, round.ID, entry.ID, round.Version)
-
-	control := &fakeReciterAudioControl{}
-	control.onGrant = func(call audioCall) error {
-		committedRound := roundState(t, repo, call.roundID)
-		if committedRound.Version != selectedRound.Version+1 {
-			return fmt.Errorf("round version at grant = %d, want %d", committedRound.Version, selectedRound.Version+1)
-		}
-		committed := queueStateForManager(t, repo, call.roundID, teacherID)
-		started := findEntry(t, committed, students[0])
-		if started.Status != EntryStatusReciting {
-			return fmt.Errorf("entry status at grant = %s, want reciting", started.Status)
-		}
-		if outboxCount(t, repo, call.roundID) != 1 {
-			return fmt.Errorf("outbox count at grant = %d, want 1", outboxCount(t, repo, call.roundID))
-		}
-		return nil
-	}
-	service := NewTurnService(repo, control)
-
-	started, err := service.Start(context.Background(), entry.ID, selectedRound.Version)
-	if err != nil {
-		t.Fatalf("start: %v", err)
-	}
-	if started.Status != EntryStatusReciting {
-		t.Fatalf("started status = %s, want reciting", started.Status)
-	}
-	if len(control.grantCalls) != 1 || control.grantCalls[0].queueEntryID != entry.ID {
-		t.Fatalf("grant calls = %+v, want one call for %s", control.grantCalls, entry.ID)
-	}
-}
-
-func TestTurnServiceSkipRevokesAudioBeforeNextReciterStarts(t *testing.T) {
-	repo, teacherID, _, students, round, state := createTurnServiceFixture(t, 2)
-	firstEntry := findEntry(t, state, students[0])
-	secondEntry := findEntry(t, state, students[1])
-
-	var callOrder []string
-	control := &fakeReciterAudioControl{}
-	control.onGrant = func(call audioCall) error {
-		callOrder = append(callOrder, "grant:"+call.queueEntryID)
-		return nil
-	}
-	control.onRevoke = func(call audioCall) error {
-		callOrder = append(callOrder, "revoke:"+call.queueEntryID)
-		committed := queueStateForManager(t, repo, call.roundID, teacherID)
-		if got := recitingEntries(committed); len(got) != 0 {
-			return fmt.Errorf("reciting entries at revoke = %d, want 0", len(got))
-		}
-		return nil
-	}
-	service := NewTurnService(repo, control)
-
-	selectedRound := insertSelectedEntry(t, repo, round.ID, firstEntry.ID, round.Version)
-	if _, err := service.Start(context.Background(), firstEntry.ID, selectedRound.Version); err != nil {
-		t.Fatalf("start first entry: %v", err)
-	}
-
-	afterStart := roundState(t, repo, round.ID)
-	if _, err := service.Skip(context.Background(), firstEntry.ID, afterStart.Version, teacherID); err != nil {
-		t.Fatalf("skip first entry: %v", err)
-	}
-
-	afterSkip := roundState(t, repo, round.ID)
-	if afterSkip.SelectedEntryID != nil {
-		t.Fatalf("selection after skip = %v, want cleared", afterSkip.SelectedEntryID)
-	}
-	nextSelected, err := service.Advance(context.Background(), round.ID, afterSkip.Version)
-	if err != nil {
-		t.Fatalf("advance next waiting entry: %v", err)
-	}
-	if nextSelected.SelectedEntryID == nil || *nextSelected.SelectedEntryID != secondEntry.ID {
-		t.Fatalf("next selection = %v, want %s", nextSelected.SelectedEntryID, secondEntry.ID)
-	}
-	if _, err := service.Start(context.Background(), secondEntry.ID, nextSelected.Version); err != nil {
-		t.Fatalf("start second entry: %v", err)
-	}
-
-	wantOrder := []string{
-		"grant:" + firstEntry.ID,
-		"revoke:" + firstEntry.ID,
-		"grant:" + secondEntry.ID,
-	}
-	if len(callOrder) != len(wantOrder) {
-		t.Fatalf("call order = %v, want %v", callOrder, wantOrder)
-	}
-	for i := range wantOrder {
-		if callOrder[i] != wantOrder[i] {
-			t.Fatalf("call order = %v, want %v", callOrder, wantOrder)
-		}
-	}
-}
-
-func TestTurnServiceStartReturnsCommittedTruthOnAudioFailure(t *testing.T) {
-	repo, teacherID, _, students, round, state := createTurnServiceFixture(t, 1)
-	entry := findEntry(t, state, students[0])
-	selectedRound := insertSelectedEntry(t, repo, round.ID, entry.ID, round.Version)
-
-	control := &fakeReciterAudioControl{grantErr: context.DeadlineExceeded}
-	service := NewTurnService(repo, control)
-
-	started, err := service.Start(context.Background(), entry.ID, selectedRound.Version)
-	if err == nil {
-		t.Fatal("start with audio failure succeeded")
-	}
-	if !IsAudioConvergencePending(err) {
-		t.Fatalf("start audio failure error = %v, want audio convergence pending", err)
-	}
-	if started.Status != EntryStatusReciting {
-		t.Fatalf("returned entry status = %s, want reciting", started.Status)
-	}
-
-	committed := queueStateForManager(t, repo, round.ID, teacherID)
-	persisted := findEntry(t, committed, students[0])
-	if persisted.Status != EntryStatusReciting {
-		t.Fatalf("persisted status = %s, want reciting", persisted.Status)
-	}
-	if outboxCount(t, repo, round.ID) != 1 {
-		t.Fatalf("outbox count = %d, want 1", outboxCount(t, repo, round.ID))
-	}
-}
-
-func TestTurnServiceSkipReturnsCommittedTruthOnAudioFailure(t *testing.T) {
-	repo, teacherID, _, students, round, state := createTurnServiceFixture(t, 1)
-	entry := findEntry(t, state, students[0])
-	entry = transitionEntryStatus(t, repo, entry.ID, EntryStatusWaiting, EntryStatusReciting)
-
-	control := &fakeReciterAudioControl{revokeErr: context.DeadlineExceeded}
-	service := NewTurnService(repo, control)
-
-	skipped, err := service.Skip(context.Background(), entry.ID, round.Version, teacherID)
-	if err == nil {
-		t.Fatal("skip with audio failure succeeded")
-	}
-	if !IsAudioConvergencePending(err) {
-		t.Fatalf("skip audio failure error = %v, want audio convergence pending", err)
-	}
-	if skipped.Status != EntryStatusSkipped {
-		t.Fatalf("returned entry status = %s, want skipped", skipped.Status)
-	}
-
-	committed := queueStateForManager(t, repo, round.ID, teacherID)
-	persisted := findEntry(t, committed, students[0])
-	if persisted.Status != EntryStatusSkipped {
-		t.Fatalf("persisted status = %s, want skipped", persisted.Status)
-	}
-	if len(control.revokeCalls) != 1 {
-		t.Fatalf("revoke calls = %d, want 1", len(control.revokeCalls))
 	}
 }
 
@@ -656,10 +462,10 @@ func TestTurnServiceStartWithExistingReciterLeavesCommittedTruth(t *testing.T) {
 	secondEntry := findEntry(t, state, students[1])
 
 	_ = transitionEntryStatus(t, repo, firstEntry.ID, EntryStatusWaiting, EntryStatusReciting)
-	selectedRound := insertSelectedEntry(t, repo, round.ID, secondEntry.ID, round.Version)
-	service := NewTurnService(repo, nil)
+	insertSelectedEntry(t, repo, round.ID, secondEntry.ID, round.Version)
+	service := NewTurnService(repo)
 
-	_, err := service.Start(context.Background(), secondEntry.ID, selectedRound.Version)
+	_, err := service.Start(context.Background(), secondEntry.ID, secondEntry.Version)
 	if err == nil {
 		t.Fatal("start with existing reciter succeeded")
 	}
@@ -674,30 +480,43 @@ func TestTurnServiceStartWithExistingReciterLeavesCommittedTruth(t *testing.T) {
 	}
 }
 
-func TestTurnServiceStartReportsStaleVersionWhenRoundChanged(t *testing.T) {
+func TestTurnServiceStartReportsStaleEntryVersion(t *testing.T) {
 	repo, _, _, students, round, state := createTurnServiceFixture(t, 1)
 	entry := findEntry(t, state, students[0])
-	selectedRound := insertSelectedEntry(t, repo, round.ID, entry.ID, round.Version)
-	service := NewTurnService(repo, nil)
+	insertSelectedEntry(t, repo, round.ID, entry.ID, round.Version)
 
-	if _, err := service.Start(context.Background(), entry.ID, round.Version); err == nil {
-		t.Fatal("start with stale round version succeeded")
+	// Bump the entry's own optimistic-lock version out from under the caller;
+	// the version guard fires before the selection and status checks.
+	bumped := transitionEntryStatus(t, repo, entry.ID, EntryStatusWaiting, EntryStatusReciting)
+	service := NewTurnService(repo)
+
+	_, err := service.Start(context.Background(), entry.ID, entry.Version)
+	if err == nil {
+		t.Fatal("start with stale entry version succeeded")
 	}
-	if selectedRound.Version == round.Version {
-		t.Fatalf("selected round version = %d, want > %d", selectedRound.Version, round.Version)
+	var qerr *QueueError
+	if !errors.As(err, &qerr) || qerr.Code != QueueErrorCodeStaleVersion {
+		t.Fatalf("stale start error = %v, want stale_version", err)
+	}
+	if bumped.Version == entry.Version {
+		t.Fatalf("bumped entry version = %d, want > %d", bumped.Version, entry.Version)
 	}
 }
 
-func TestTurnServiceSkipReportsStaleVersionWhenRoundChanged(t *testing.T) {
+func TestTurnServiceSkipReportsStaleEntryVersion(t *testing.T) {
 	repo, teacherID, _, students, round, state := createTurnServiceFixture(t, 1)
 	entry := findEntry(t, state, students[0])
-	service := NewTurnService(repo, nil)
+	insertSelectedEntry(t, repo, round.ID, entry.ID, round.Version)
 
-	selectedRound := insertSelectedEntry(t, repo, round.ID, entry.ID, round.Version)
-	if _, err := service.Skip(context.Background(), entry.ID, round.Version, teacherID); err == nil {
-		t.Fatal("skip with stale round version succeeded")
+	// Skipping a reciting entry with the current version is legal, so only
+	// the stale token can explain the first rejection below.
+	bumped := transitionEntryStatus(t, repo, entry.ID, EntryStatusWaiting, EntryStatusReciting)
+	service := NewTurnService(repo)
+
+	if _, err := service.Skip(context.Background(), entry.ID, entry.Version, teacherID); err == nil {
+		t.Fatal("skip with stale entry version succeeded")
 	}
-	if selectedRound.Version == round.Version {
-		t.Fatalf("selected round version = %d, want > %d", selectedRound.Version, round.Version)
+	if _, err := service.Skip(context.Background(), entry.ID, bumped.Version, teacherID); err != nil {
+		t.Fatalf("skip reciting entry with current version: %v", err)
 	}
 }

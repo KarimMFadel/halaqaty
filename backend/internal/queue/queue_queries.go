@@ -352,15 +352,15 @@ WHERE session_id = $1::uuid AND actor_id = $2::uuid AND idempotency_key = $3`
 
 // --- Transactional outbox ---------------------------------------------------
 
-// insertOutboxEventQuery writes one queue.* event in the same transaction as
-// the queue mutation it describes.
+// insertOutboxEventQuery writes one client event or internal convergence
+// intent in the same transaction as the queue mutation it describes.
 const insertOutboxEventQuery = `
 INSERT INTO queue_event_outbox (event_id, session_id, round_id, event_type, resource_id,
                                 round_version, event_metadata, available_at, attempt_count)
 VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5::uuid, $6, $7, $8, $9)`
 
 // claimDueOutboxEventsQuery claims due, undelivered, unparked events in due
-// order; SKIP LOCKED lets parallel dispatchers partition the backlog without
+// order. SKIP LOCKED lets parallel dispatchers partition the backlog without
 // blocking each other.
 const claimDueOutboxEventsQuery = `
 SELECT ` + outboxColumns + `
@@ -370,10 +370,9 @@ ORDER BY available_at, event_id
 LIMIT $1
 FOR UPDATE SKIP LOCKED`
 
-// claimReplayOutboxEventsQuery is used at dispatcher startup. It includes
-// parked rows so restart recovery makes every undelivered durable event
-// observable to the projector; ordinary polling continues to exclude parked
-// rows until an operator/recovery pass handles them.
+// claimReplayOutboxEventsQuery is used at client dispatcher startup. It
+// includes parked rows so restart recovery makes every undelivered event
+// observable to the projector.
 const claimReplayOutboxEventsQuery = `
 SELECT ` + outboxColumns + `
 FROM queue_event_outbox

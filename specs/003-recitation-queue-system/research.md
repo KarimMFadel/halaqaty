@@ -7,7 +7,7 @@
 
 ## 1. Ownership and integration
 
-**Decision**: Add a focused `backend/internal/queue` domain. Reuse F-001 identity, F-002 circle roles, and F-005 session presence/realtime/media. Queue code calls only `sessions.ReciterAudioControl`; F-005 resolves private media state.
+**Decision**: Add a focused `backend/internal/queue` domain. Reuse F-001 identity, F-002 circle roles, and F-005 session presence/realtime. Queue code has no media-control dependency; F-005 independently owns open student audio and explicit moderation.
 
 **Rationale**: This keeps F-003 cohesive without rebuilding session lifecycle or leaking LiveKit types.
 
@@ -15,7 +15,7 @@
 
 ## 2. Round lifecycle and pre-set ordering
 
-**Decision**: Use `prepared`, `active`, and `finalized` round lifecycle values, distinct from the five queue-entry states. Persist pre-set candidate order separately; materialize entries at activation according to policy. Several prepared rounds may stack per session with sequential numbers (clarification B1: activation order is round-number order when several are prepared). Activation is governed by one invariant — *while a session is live, if no round is active and a prepared round exists, the lowest-numbered prepared round is active* — restored by: F-005 session start, round creation on a live session, round finalization via reset, and a reconciliation pass after restart/crash. No activate endpoint, command, or UI exists. Session end suppresses the invariant permanently: the convergence worker finalizes the active round and every never-activated prepared round (retained, `activated_at` stays NULL, never activatable — FR-014 "permanently inert").
+**Decision**: Use `prepared`, `active`, and `finalized` round lifecycle values, distinct from the five queue-entry states. Persist pre-set candidate order separately; materialize entries at activation according to policy. Several prepared rounds may stack per session with sequential numbers (clarification B1: activation order is round-number order when several are prepared). Activation is governed by one invariant — *while a session is live, if no round is active and a prepared round exists, the lowest-numbered prepared round is active* — restored by F-005 session start, round creation on a live session, and round finalization via reset. No activate endpoint, command, or UI exists. Session end suppresses the invariant permanently: the convergence worker finalizes the active round and every never-activated prepared round (retained, `activated_at` stays NULL, never activatable — FR-014 "permanently inert").
 
 **Rationale**: A default `present_at_activation` round cannot know its eligible population before presence exists, while pre-set order must still be durable. One invariant covers session-start activation, mid-session first prepare, reset chaining, and crash recovery without a special case per trigger.
 
@@ -60,13 +60,13 @@ deterministic (closes the B2 deferred tie-break).
 
 **Alternatives considered**: Asynchronous progress creation (can lose records); a second F-003 practice table (duplicates F-007's canonical source); insert-on-grade separate from completion (breaks atomicity).
 
-## 7. Media convergence
+## 7. Voluntary queue and open audio
 
-**Decision**: PostgreSQL commits authoritative turn state. A start grant is attempted immediately and retried with bounded backoff when unavailable. A current reciter must be revoked before another entry can start. Ended-session cleanup is idempotent asynchronous convergence and never delays F-005's committed end.
+**Decision**: PostgreSQL commits authoritative queue state only. A manager's start, skip, completion, opt-out decision, reset, or session-end queue finalization never grants, revokes, mutes, or otherwise changes student audio permission. Students publish audio freely in an authorized F-005 session; teacher/supervisor moderation remains a separate explicit F-005 action.
 
-**Rationale**: PostgreSQL and LiveKit cannot share a transaction. This ordering never grants a non-reciter and favors safety over temporary availability.
+**Rationale**: Quran circles rely on mutual respect and teacher guidance. The queue communicates intended order without turning ordinary participation into a technical restriction.
 
-**Alternatives considered**: Grant before DB commit (temporary unauthorized publisher); distributed transaction (unsupported/over-engineered); blocking F-005 end (rejected by ADR-018).
+**Alternatives considered**: Queue-controlled one-reciter publishing (rejected by ADR-020); distributed queue/media transaction (unnecessary); blocking F-005 end for queue cleanup (rejected by ADR-018).
 
 ## 8. Realtime, FCM, and recovery
 
@@ -86,7 +86,7 @@ deterministic (closes the B2 deferred tie-break).
 
 ## 10. Timeouts, retries, and observability
 
-**Decision**: Reuse request deadlines and global REST/WS rate limits; bound database calls by request context and media operations by a 5-second adapter call timeout. Retry only idempotent event/media reconciliation with capped exponential backoff and jitter. Outbox delivery: 5 retries with exponential backoff, then parked for operator replay (parked rows alert; never silently dropped). Session-end queue finalization: idempotent retry until finalized, convergence target ≤ 10 seconds after observing session end, never blocking or altering the F-005 session-end result. SC-008 latency: p95 ≤ 500 ms from PostgreSQL queue-mutation commit to dispatch to connected authorized clients, ≥ 100 committed actions per scenario, standard local-network test environment; disconnected clients are excluded and recover via the FR-009 re-fetch. Emit metrics for queue mutation latency/conflicts, event lag/failure, media convergence failure, cleanup backlog, and invariant violations; logs include request/user/session/round IDs and never payload secrets or grade notes.
+**Decision**: Reuse request deadlines and global REST/WS rate limits; bound database calls by request context. Retry only idempotent event and queue-finalization reconciliation with capped exponential backoff and jitter. Outbox delivery: 5 retries with exponential backoff, then parked for operator replay (parked rows alert; never silently dropped). Session-end queue finalization: idempotent retry until finalized, convergence target ≤ 10 seconds after observing session end, never blocking or altering the F-005 session-end result. SC-008 latency: p95 ≤ 500 ms from PostgreSQL queue-mutation commit to dispatch to connected authorized clients, ≥ 100 committed actions per scenario, standard local-network test environment; disconnected clients are excluded and recover via the FR-009 re-fetch. Emit metrics for queue mutation latency/conflicts, event lag/failure, cleanup backlog, and invariant violations; logs include request/user/session/round IDs and never payload secrets or grade notes.
 
 **Rationale**: These are the Architect-confirmed A1 parameter values; they meet the reliability baseline with existing infrastructure and keep sensitive educational content out of logs.
 
@@ -96,17 +96,17 @@ deterministic (closes the B2 deferred tie-break).
 
 **Decision**: Allow several `prepared` rounds per session; enforce at most one `active` round via a partial unique index on `(session_id) WHERE lifecycle = 'active'` (not `IN ('prepared','active')`). Sequential numbering stays enforced by `UNIQUE (session_id, round_number)`.
 
-**Rationale**: Approved clarification B1 explicitly names "which prepared round activates when several are prepared", which is impossible if only one prepared-or-active round may exist. The reconciled ARCHITECTURE.md queue section still carries the older `IN ('prepared','active')` wording; the spec is the approved authority, so the plan adopts the active-only partial unique and records a one-line ARCHITECTURE.md sync delta for the implementation phase.
+**Rationale**: Approved clarification B1 explicitly names "which prepared round activates when several are prepared", which is impossible if only one prepared-or-active round may exist. Canonical architecture now uses the active-only partial unique, matching the approved specification.
 
 **Alternatives considered**: Keep the one-prepared-or-active constraint (makes B1's rule and mid-live prepare-stacking unimplementable); a separate "next round" pointer table (extra state for no benefit).
 
 ## 12. Canonical contract sync strategy
 
-**Decision**: Regenerate the feature-local contracts to the final F-003 shape now; leave `docs/contracts/openapi.yaml`, `docs/contracts/ws_events.md`, and the one ARCHITECTURE.md constraint line untouched in the plan phase. Record every pending canonical delta as an explicit list in `plan.md`; the first implementation task applies them to the canonical files with `$docs-guard` review and `make api-lint` before any handler or mobile DTO is written.
+**Decision**: Feature-local and canonical REST/WebSocket/architecture contracts are synchronized before implementation, with `$docs-guard` review and API lint evidence. Queue status descriptions explicitly state that they do not control media permission.
 
-**Rationale**: FR-015 makes canonical reconciliation a precondition of implementation, but canonical docs are repo-level sources of truth edited in their own reviewed change — not silently inside `/speckit.plan`.
+**Rationale**: FR-015 makes canonical reconciliation a precondition of implementation; keeping both contract layers synchronized prevents handler and mobile DTO drift.
 
-**Alternatives considered**: Edit canonical contracts during planning (mixes doc-authority phases, unreviewed); defer reconciliation to whenever handlers land (invites drift, violates FR-015 ordering).
+**Alternatives considered**: Defer reconciliation until handlers land (invites drift, violates FR-015 ordering).
 
 ## 13. Delivery scope boundary (F-008/F-007)
 

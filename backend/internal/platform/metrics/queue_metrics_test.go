@@ -13,7 +13,6 @@ func TestQueueMetricsNilReceiverIsSafe(t *testing.T) {
 	m.SetOutboxPending(5)
 	m.RecordOutboxParked()
 	m.RecordEventDeliveryLag(time.Second)
-	m.RecordAudioConvergenceLag(time.Second)
 	m.RecordSessionEndFinalizationLag(time.Second)
 	m.RecordInvariantViolation(InvariantOneActiveRound)
 	m.RecordRateLimitedRequest()
@@ -124,15 +123,10 @@ func TestQueueMetricsCommandDurationHistogram(t *testing.T) {
 func TestQueueMetricsLagHistogramsAlertPastTenSeconds(t *testing.T) {
 	m := new(QueueMetrics)
 	m.RecordEventDeliveryLag(200 * time.Millisecond)
-	m.RecordAudioConvergenceLag(11 * time.Second)
 	m.RecordSessionEndFinalizationLag(15 * time.Second)
 	summary := m.Summary()
 	if summary.EventDeliveryLag.Count != 1 || summary.EventDeliveryLag.MaxMs != 200 {
 		t.Fatalf("EventDeliveryLag = %+v", summary.EventDeliveryLag)
-	}
-	// SC-007: callers alert when MaxMs crosses the 10s convergence deadline.
-	if summary.AudioConvergenceLag.MaxMs <= 10000 {
-		t.Fatalf("AudioConvergenceLag.MaxMs = %d, want >10000", summary.AudioConvergenceLag.MaxMs)
 	}
 	if summary.SessionEndFinalizationLag.MaxMs != 15000 {
 		t.Fatalf("SessionEndFinalizationLag.MaxMs = %d, want 15000", summary.SessionEndFinalizationLag.MaxMs)

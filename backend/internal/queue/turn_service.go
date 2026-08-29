@@ -3,25 +3,22 @@ package queue
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 
-	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
 	"github.com/google/uuid"
 )
 
 const queueEventAdvanced = "queue.advanced"
 const queueEventEntryUpdated = "queue.entry_updated"
 
-// TurnService owns selection and one-reciter-at-a-time entry transitions.
+// TurnService owns selection and one-displayed-reciting-entry transitions.
 type TurnService struct {
-	repo    *Repository
-	control sessions.ReciterAudioControl
+	repo *Repository
 }
 
-// NewTurnService constructs a turn service with the provider-neutral audio boundary.
-func NewTurnService(repo *Repository, control sessions.ReciterAudioControl) *TurnService {
-	return &TurnService{repo: repo, control: control}
+// NewTurnService constructs a turn service over the durable queue repository.
+func NewTurnService(repo *Repository) *TurnService {
+	return &TurnService{repo: repo}
 }
 
 // Advance selects the next waiting entry without starting it.
@@ -68,10 +65,12 @@ func (s *TurnService) Advance(ctx context.Context, roundID string, expectedVersi
 	return selected, err
 }
 
-// Start transitions only the currently selected waiting entry to reciting and
-// grants audio after the database commit.
-func (s *TurnService) Start(ctx context.Context, entryID string, expectedVersion int64) (QueueEntry, error) {
-	if err := ValidateExpectedVersion(expectedVersion); err != nil {
+// Start transitions only the currently selected waiting entry to the displayed
+// reciting state. expectedEntryVersion is the entry's own optimistic-lock
+// version (EntryStatusRequest.expected_entry_version in the contract); it does
+// not change participant audio permission.
+func (s *TurnService) Start(ctx context.Context, entryID string, expectedEntryVersion int64) (QueueEntry, error) {
+	if err := ValidateExpectedVersion(expectedEntryVersion); err != nil {
 		return QueueEntry{}, err
 	}
 	var started QueueEntry
@@ -92,7 +91,7 @@ func (s *TurnService) Start(ctx context.Context, entryID string, expectedVersion
 		if round.Lifecycle != RoundLifecycleActive {
 			return &QueueError{Code: QueueErrorCodeRoundFinalized, Message: "queue round is not active"}
 		}
-		if round.Version != expectedVersion {
+		if entry.Version != expectedEntryVersion {
 			return staleVersionError()
 		}
 		if round.SelectedEntryID == nil || *round.SelectedEntryID != entryID {
@@ -115,24 +114,18 @@ func (s *TurnService) Start(ctx context.Context, entryID string, expectedVersion
 	if err != nil {
 		return QueueEntry{}, err
 	}
-	if s.control == nil {
-		return started, nil
-	}
-	if err := s.control.GrantReciterAudio(ctx, round.SessionID, round.ID, started.ID, started.StudentID); err != nil {
-		return started, &QueueError{Code: QueueErrorCodeAudioConvergencePending, Message: "recitation audio is still being applied; queue state is saved", Err: err}
-	}
 	return started, nil
 }
 
-// Skip transitions a waiting or reciting entry to skipped and revokes audio
-// after the durable transition when the entry was reciting.
-func (s *TurnService) Skip(ctx context.Context, entryID string, expectedVersion int64, resolvedBy string) (QueueEntry, error) {
-	if err := ValidateExpectedVersion(expectedVersion); err != nil {
+// Skip transitions a waiting or reciting entry to skipped without changing
+// participant audio permission. expectedEntryVersion is the entry's own
+// optimistic-lock version (EntryStatusRequest.expected_entry_version).
+func (s *TurnService) Skip(ctx context.Context, entryID string, expectedEntryVersion int64, resolvedBy string) (QueueEntry, error) {
+	if err := ValidateExpectedVersion(expectedEntryVersion); err != nil {
 		return QueueEntry{}, err
 	}
 	var skipped QueueEntry
 	var round Round
-	revoke := false
 	roundID, err := s.repo.EntryQueueID(ctx, entryID)
 	if err != nil {
 		return QueueEntry{}, err
@@ -149,11 +142,8 @@ func (s *TurnService) Skip(ctx context.Context, entryID string, expectedVersion 
 		if round.Lifecycle != RoundLifecycleActive {
 			return &QueueError{Code: QueueErrorCodeRoundFinalized, Message: "queue round is not active"}
 		}
-		if round.Version != expectedVersion {
+		if entry.Version != expectedEntryVersion {
 			return staleVersionError()
-		}
-		if entry.Status == EntryStatusReciting {
-			revoke = true
 		}
 		skipped, err = tx.TransitionEntry(ctx, entry.ID, entry.Status, entry.Version, EntryStatusSkipped, nil, nil, &resolvedBy)
 		if err != nil {
@@ -176,17 +166,5 @@ func (s *TurnService) Skip(ctx context.Context, entryID string, expectedVersion 
 	if err != nil {
 		return QueueEntry{}, err
 	}
-	if revoke && s.control != nil {
-		if err := s.control.RevokeReciterAudio(ctx, round.SessionID, round.ID, skipped.ID, skipped.StudentID); err != nil {
-			return skipped, &QueueError{Code: QueueErrorCodeAudioConvergencePending, Message: "recitation audio is still being applied; queue state is saved", Err: err}
-		}
-	}
 	return skipped, nil
-}
-
-// IsAudioConvergencePending reports whether err represents a committed queue
-// mutation whose external audio entitlement still needs reconciliation.
-func IsAudioConvergencePending(err error) bool {
-	var queueErr *QueueError
-	return errors.As(err, &queueErr) && queueErr.Code == QueueErrorCodeAudioConvergencePending
 }

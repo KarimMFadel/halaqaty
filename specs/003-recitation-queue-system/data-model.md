@@ -50,11 +50,11 @@ range against `ayah_count` inside the round transaction (invalid range → HTTP 
 
 Indexes/constraints:
 
-- **Partial unique `(session_id) WHERE lifecycle = 'active'`** — at most one active round. Several `prepared` rounds may stack per session (clarification B1). *(Pending one-line sync of ARCHITECTURE.md, which still reads `IN ('prepared','active')` — see plan §Canonical sync.)*
+- **Partial unique `(session_id) WHERE lifecycle = 'active'`** — at most one active round. Several `prepared` rounds may stack per session (clarification B1).
 - `UNIQUE (session_id, round_number)` — sequential numbering without reuse (closes CHK036).
 - Selected entry must be validated inside the locked transaction as belonging to the round and remaining `waiting`.
 
-**Activation invariant (B1)**: while a session is live, if no round is active and prepared rounds exist, the lowest-numbered prepared round is active. Restored by F-005 session start, round creation on a live session, finalization-via-reset, and the restart/reconciliation pass. Session end suppresses the invariant permanently: the convergence worker finalizes the active round **and every never-activated prepared round** (retained, `activated_at` NULL, never activatable — FR-014 "permanently inert").
+**Activation invariant (B1)**: while a session is live, if no round is active and prepared rounds exist, the lowest-numbered prepared round is active. The invariant is restored by F-005 session start, round creation on a live session, and finalization-via-reset. Session end suppresses the invariant permanently: the convergence worker finalizes the active round **and every never-activated prepared round** (retained, `activated_at` NULL, never activatable — FR-014 "permanently inert").
 
 ### `recitation_queue_preorder`
 
@@ -86,7 +86,7 @@ Activation materializes entries: pre-set students **who are present-eligible und
 | `resolved_by` | uuid nullable | FK users; manager responsible for terminal transition |
 | `created_at`, `updated_at` | timestamptz | UTC |
 
-Unique constraints: `(queue_id, student_id)` and `(queue_id, position)`. A partial unique index on `queue_id WHERE status='reciting'` enforces one reciter. A completed grading-required entry must have a grade; skipped/opted-out entries must have no grade/progress. Cross-table grading-required validation remains transactional service logic because PostgreSQL CHECK constraints cannot reference the round.
+Unique constraints: `(queue_id, student_id)` and `(queue_id, position)`. A partial unique index on `queue_id WHERE status='reciting'` enforces one manager-recorded current turn; it has no media-permission effect. A completed grading-required entry must have a grade; skipped/opted-out entries must have no grade/progress. Cross-table grading-required validation remains transactional service logic because PostgreSQL CHECK constraints cannot reference the round.
 
 **Move semantics (A2a)**: moving one `waiting` entry to an arbitrary slot rewrites the affected positions inside one locked transaction (the `(queue_id, position)` unique constraint holds throughout); the `reciting` entry and terminal entries are immovable. Full-list reorder applies only to preorder candidates while the round is `prepared`.
 
@@ -123,9 +123,9 @@ Primary key: `(session_id, actor_id, idempotency_key)`. A reused key with anothe
 
 | Field | Type | Constraints/meaning |
 |---|---|---|
-| `event_id` | uuid | primary key and client deduplication key |
+| `event_id` | uuid | primary key; client deduplication key for client-visible rows |
 | `session_id`, `round_id` | uuid | required scope FKs |
-| `event_type` | varchar(48) | closed `queue.*` event name |
+| `event_type` | varchar(48) | closed client `queue.*` event name |
 | `resource_id` | uuid nullable | entry/request affected by the event |
 | `round_version` | bigint | committed queue version |
 | `event_metadata` | jsonb | server-built non-sensitive transition/order facts only |
@@ -133,7 +133,7 @@ Primary key: `(session_id, actor_id, idempotency_key)`. A reused key with anothe
 | `attempt_count` | integer | non-negative |
 | `parked_at` | timestamptz nullable | set when the 5 exponential-backoff retries are exhausted |
 
-The outbox row is inserted with the business transaction. Delivery attempts: initial attempt plus 5 retries with exponential backoff (+1s, +2s, +4s, +8s, +16s, with jitter); on exhaustion the row is parked (`parked_at` set, alert fires) for operator replay — never silently dropped. Metadata may retain facts needed for an exact delta (for example old/new state or ordered IDs) but stores no grade, note, student display name, media value, URL, or provider data. Delivery reconstructs visibility-sensitive fields from PostgreSQL, so grade visibility is enforced at send time. Retention cleanup is operational data hygiene, not deletion of queue history.
+The outbox row is inserted with the business transaction. Delivery attempts: initial attempt plus 5 retries with exponential backoff (+1s, +2s, +4s, +8s, +16s, with jitter); on exhaustion the row is parked (`parked_at` set, alert fires) for operator replay — never silently dropped. Client rows reconstruct visibility-sensitive fields from PostgreSQL, so grade visibility is enforced at send time. Metadata may retain facts needed for an exact client delta (for example old/new state or ordered IDs) but stores no grade, note, student display name, media value, URL, or provider data. Retention cleanup is operational data hygiene, not deletion of queue history.
 
 ### `memorization_progress`
 
@@ -171,7 +171,7 @@ Only the completion transaction may insert. Correction updates this same row (re
 
 - `prepared -> active`: automatic activation invariant (B1) — lowest-numbered prepared round when the session is live and no round is active.
 - `prepared -> finalized`: session-end convergence only (never-activated round becomes permanently inert; `activated_at` stays NULL).
-- `active -> finalized`: reset (finalization policy applied) or ended-session convergence. Reset also creates the next sequential round; the activation invariant then activates the next prepared round in round-number order (which may be a previously prepared round or the reset-created one).
+- `active -> finalized`: reset (finalization policy applied) or ended-session convergence. Reset also creates the next sequential round; the activation invariant then activates the next prepared round in round-number order.
 - `finalized` is terminal. Reset creates a new row and the next round number; it never reopens or reuses history.
 
 ### Entry states (exactly five)
@@ -181,18 +181,18 @@ Only the completion transaction may insert. Correction updates this same row (re
 - `waiting | reciting -> opted_out` only through approved/auto-approved opt-out
 - `completed`, `skipped`, `opted_out` are terminal for that round.
 
-Default finalization converts unfinished entries to `skipped`. `preserve_last_state` retains their last values, but the finalized round makes them immutable/non-actionable and clears selection. Both paths revoke any reciter audio.
+Default finalization converts unfinished entries to `skipped`. `preserve_last_state` retains their last values, but the finalized round makes them immutable/non-actionable and clears selection. Neither path changes audio permission.
 
 ## Transaction boundaries
 
 - Round create/activation/reset and population are single transactions under the per-session round lock (round numbers allocated max+1 — CHK036).
 - Pre-activation full-list reorder locks all pre-order candidates; post-activation move locks the round and rewrites only the affected positions.
 - Advance locks the round and waiting entries, replaces any existing selection, and increments round version.
-- Start locks round/entry, requires the entry be the selected waiting entry, and relies on the partial unique reciter index as the final race guard.
+- Start locks round/entry, requires the entry be the selected waiting entry, and relies on the partial unique displayed-reciter index as the final queue-state race guard.
 - Complete locks round/entry, validates conditional grade, transitions the entry, and inserts progress atomically.
 - Correction locks entry/progress, validates policy/version, and updates both atomically.
 - Policy patch locks the session and increments its policy version only when values change.
-- Events and structured audit records are written in-transaction (outbox/audit rows); realtime dispatch and audio-control calls occur after commit; their failure triggers bounded retry/parking and never rolls back queue truth.
+- Events and structured audit records are written in-transaction (outbox/audit rows); realtime dispatch occurs after commit, and its failure triggers bounded retry/parking without rolling back queue truth. F-003 performs no media operation.
 
 ## Visibility projection
 

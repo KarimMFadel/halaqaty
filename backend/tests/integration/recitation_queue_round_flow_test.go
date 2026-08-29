@@ -24,32 +24,6 @@ type roundFlowFixture struct {
 	sessionID  string
 }
 
-type roundFlowAudioCall struct {
-	kind         string
-	sessionID    string
-	roundID      string
-	queueEntryID string
-	userID       string
-}
-
-type roundFlowAudioControl struct {
-	calls []roundFlowAudioCall
-}
-
-func (c *roundFlowAudioControl) GrantReciterAudio(_ context.Context, sessionID, roundID, queueEntryID, userID string) error {
-	c.calls = append(c.calls, roundFlowAudioCall{
-		kind: "grant", sessionID: sessionID, roundID: roundID, queueEntryID: queueEntryID, userID: userID,
-	})
-	return nil
-}
-
-func (c *roundFlowAudioControl) RevokeReciterAudio(_ context.Context, sessionID, roundID, queueEntryID, userID string) error {
-	c.calls = append(c.calls, roundFlowAudioCall{
-		kind: "revoke", sessionID: sessionID, roundID: roundID, queueEntryID: queueEntryID, userID: userID,
-	})
-	return nil
-}
-
 // TestRecitationQueueRoundFlow covers T022's PostgreSQL acceptance smoke flow
 // for both queue population policies. It deliberately uses the service layer
 // because REST handler wiring is a separate T024/T029 concern.
@@ -64,11 +38,58 @@ func TestRecitationQueueRoundFlow(t *testing.T) {
 	}
 }
 
+// TestRecitationQueueRoundFlow_ResetActivatesSuccessorImmediately catches a
+// reset implementation that leaves an active session without its immediate
+// successor or persists the retired audio-convergence barrier.
+func TestRecitationQueueRoundFlow_ResetActivatesSuccessorImmediately(t *testing.T) {
+	ctx := context.Background()
+	fixture := newRoundFlowFixture(t, queue.PopulationPolicyPresentAtActivation)
+	setRoundFlowSessionActive(t, fixture)
+
+	rounds := queue.NewRoundService(fixture.repo)
+	first, err := rounds.Prepare(ctx, queue.PrepareRoundInput{
+		SessionID: fixture.sessionID, Type: queue.RoundTypeRevision, SurahID: 1,
+		FromAyah: 1, ToAyah: 7, SurahAyahCount: 7, GradingRequired: true,
+		CreatedBy: fixture.teacherID,
+	})
+	if err != nil {
+		t.Fatalf("prepare active round: %v", err)
+	}
+	if state := roundFlowState(t, fixture.repo, first.ID); state.Round.Lifecycle != queue.RoundLifecycleActive {
+		t.Fatalf("prepared round lifecycle = %s, want active", state.Round.Lifecycle)
+	}
+
+	next, err := rounds.Reset(ctx, queue.PrepareRoundInput{
+		SessionID: fixture.sessionID, Type: queue.RoundTypeTest, SurahID: 2,
+		FromAyah: 1, ToAyah: 3, SurahAyahCount: 286, GradingRequired: false,
+		CreatedBy: fixture.teacherID,
+	})
+	if err != nil {
+		t.Fatalf("reset active round: %v", err)
+	}
+	if next.Lifecycle != queue.RoundLifecycleActive || next.ActivatedAt == nil {
+		t.Fatalf("reset successor = %+v, want immediately active", next)
+	}
+
+	var audioRevokeIntentCount int
+	if err := fixture.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM queue_event_outbox
+		WHERE session_id = $1::uuid
+		  AND event_type = 'queue.audio_revoke_before_activation'
+	`, fixture.sessionID).Scan(&audioRevokeIntentCount); err != nil {
+		t.Fatalf("count reset audio-revoke intents: %v", err)
+	}
+	if audioRevokeIntentCount != 0 {
+		t.Fatalf("reset audio-revoke intents = %d, want none", audioRevokeIntentCount)
+	}
+}
+
 func runRecitationQueueRoundFlow(t *testing.T, population queue.PopulationPolicy) {
 	t.Helper()
 	ctx := context.Background()
 	fixture := newRoundFlowFixture(t, population)
-	service := queue.NewRoundService(fixture.repo, nil)
+	service := queue.NewRoundService(fixture.repo)
 
 	assertRoundFlowAuthorizationContext(t, fixture)
 
@@ -139,8 +160,7 @@ func runRecitationQueueRoundFlow(t *testing.T, population queue.PopulationPolicy
 		t.Fatalf("activated entries missing first=%+v moved=%+v", firstEntry, movedEntry)
 	}
 
-	audio := &roundFlowAudioControl{}
-	turns := queue.NewTurnService(fixture.repo, audio)
+	turns := queue.NewTurnService(fixture.repo)
 	selected, err := turns.Advance(ctx, first.ID, firstState.Round.Version)
 	if err != nil {
 		t.Fatalf("advance first turn: %v", err)
@@ -153,11 +173,8 @@ func runRecitationQueueRoundFlow(t *testing.T, population queue.PopulationPolicy
 		t.Fatalf("durable selection = %v, want %s", selectedState.Round.SelectedEntryID, firstEntry.ID)
 	}
 	assertStatusCount(t, selectedState, queue.EntryStatusWaiting, len(firstState.Entries))
-	if len(audio.calls) != 0 {
-		t.Fatalf("audio calls after advance = %+v, want none", audio.calls)
-	}
 
-	started, err := turns.Start(ctx, firstEntry.ID, selected.Version)
+	started, err := turns.Start(ctx, firstEntry.ID, firstEntry.Version)
 	if err != nil {
 		t.Fatalf("start selected turn: %v", err)
 	}
@@ -166,9 +183,6 @@ func runRecitationQueueRoundFlow(t *testing.T, population queue.PopulationPolicy
 	}
 	startedState := roundFlowState(t, fixture.repo, first.ID)
 	assertStatusCount(t, startedState, queue.EntryStatusReciting, 1)
-	if len(audio.calls) != 1 || audio.calls[0].kind != "grant" || audio.calls[0].queueEntryID != firstEntry.ID || audio.calls[0].userID != firstEntry.StudentID {
-		t.Fatalf("audio calls after start = %+v, want one grant for %s", audio.calls, firstEntry.ID)
-	}
 
 	moved, err := service.Move(ctx, movedEntry.ID, startedState.Round.Version, 2)
 	if err != nil {
@@ -186,15 +200,12 @@ func runRecitationQueueRoundFlow(t *testing.T, population queue.PopulationPolicy
 		t.Fatalf("reciting entry after move = %s, want reciting", got)
 	}
 
-	skipped, err := turns.Skip(ctx, firstEntry.ID, movedState.Round.Version, fixture.teacherID)
+	skipped, err := turns.Skip(ctx, firstEntry.ID, roundFlowEntryVersion(t, movedState, firstEntry.ID), fixture.teacherID)
 	if err != nil {
 		t.Fatalf("skip first reciting turn: %v", err)
 	}
 	if skipped.Status != queue.EntryStatusSkipped {
 		t.Fatalf("skipped first status = %s, want skipped", skipped.Status)
-	}
-	if len(audio.calls) != 2 || audio.calls[1].kind != "revoke" || audio.calls[1].queueEntryID != firstEntry.ID {
-		t.Fatalf("audio calls after first skip = %+v, want revoke for %s", audio.calls, firstEntry.ID)
 	}
 	afterFirstSkip := roundFlowState(t, fixture.repo, first.ID)
 	if afterFirstSkip.Round.SelectedEntryID != nil {
@@ -208,18 +219,16 @@ func runRecitationQueueRoundFlow(t *testing.T, population queue.PopulationPolicy
 	if nextSelected.SelectedEntryID == nil || *nextSelected.SelectedEntryID != movedEntry.ID {
 		t.Fatalf("next selected entry = %v, want moved entry %s", nextSelected.SelectedEntryID, movedEntry.ID)
 	}
-	if _, err := turns.Start(ctx, movedEntry.ID, nextSelected.Version); err != nil {
+	startedMovedEntry, err := turns.Start(ctx, movedEntry.ID, moved.Version)
+	if err != nil {
 		t.Fatalf("start moved entry: %v", err)
 	}
 	startedMoved := roundFlowState(t, fixture.repo, first.ID)
 	if got := len(queueFlowRecitingEntries(startedMoved)); got != 1 || queueFlowRecitingEntries(startedMoved)[0].ID != movedEntry.ID {
 		t.Fatalf("reciting entries after second start = %+v, want only %s", queueFlowRecitingEntries(startedMoved), movedEntry.ID)
 	}
-	if _, err := turns.Skip(ctx, movedEntry.ID, startedMoved.Round.Version, fixture.teacherID); err != nil {
+	if _, err := turns.Skip(ctx, movedEntry.ID, startedMovedEntry.Version, fixture.teacherID); err != nil {
 		t.Fatalf("skip moved turn: %v", err)
-	}
-	if len(audio.calls) != 4 || audio.calls[2].kind != "grant" || audio.calls[2].queueEntryID != movedEntry.ID || audio.calls[3].kind != "revoke" || audio.calls[3].queueEntryID != movedEntry.ID {
-		t.Fatalf("audio calls after second skip = %+v, want grant/revoke for %s", audio.calls, movedEntry.ID)
 	}
 
 	beforeReset := roundFlowState(t, fixture.repo, first.ID)
@@ -534,6 +543,20 @@ func queueFlowEntryIDs(state queue.QueueState) []string {
 		ids = append(ids, entry.ID)
 	}
 	return ids
+}
+
+// roundFlowEntryVersion returns an entry's current optimistic-lock version.
+// Move rewrites every entry position, bumping every entry version, so entry
+// tokens must be re-read from committed state after any Move.
+func roundFlowEntryVersion(t *testing.T, state queue.QueueState, entryID string) int64 {
+	t.Helper()
+	for _, entry := range state.Entries {
+		if entry.ID == entryID {
+			return entry.Version
+		}
+	}
+	t.Fatalf("entry %s not found in queue state", entryID)
+	return 0
 }
 
 func intersectStrings(left, right []string) []string {

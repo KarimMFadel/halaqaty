@@ -231,8 +231,8 @@ Broadcast after a manager changes the durable order, by either control:
 Emitted when a prepared round activates. Activation is automatic in round-number
 order: the first prepared round activates when the session is live and no round
 is active, and each subsequent prepared round activates when the previous round
-finalizes (including the round created by reset). No manager activate action
-exists.
+finalizes, including after reset. Queue activation does not change participant
+audio permission. No manager activate action exists.
 
 ```json
 {

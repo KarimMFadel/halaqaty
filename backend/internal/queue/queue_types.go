@@ -249,12 +249,12 @@ type CommandReceipt struct {
 	CreatedAt      time.Time
 }
 
-// OutboxEvent is one transactional queue.* event awaiting realtime delivery.
+// OutboxEvent is one transactional client event or internal convergence intent.
 type OutboxEvent struct {
 	EventID       string
 	SessionID     string
 	RoundID       string
-	EventType     string // closed queue.* event name
+	EventType     string // closed client queue.* name or internal queue intent
 	ResourceID    *string
 	RoundVersion  int64
 	EventMetadata json.RawMessage // server-built, non-sensitive transition facts only
@@ -351,9 +351,6 @@ const (
 	// QueueErrorCodeDuplicateCommand means an idempotency key was reused
 	// with another command.
 	QueueErrorCodeDuplicateCommand QueueErrorCode = "duplicate_command"
-	// QueueErrorCodeAudioConvergencePending means durable queue truth committed
-	// but the provider-neutral entitlement call did not converge in time.
-	QueueErrorCodeAudioConvergencePending QueueErrorCode = "audio_convergence_pending"
 )
 
 // QueueError is the queue-domain error classification. Message is safe for

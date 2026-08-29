@@ -3,11 +3,10 @@ package sessions
 import "context"
 
 // MediaGrants carries the audio-only connection entitlement the sessions
-// domain grants to exactly one participant. Video publishing is never
-// grantable (constitution §V), so no video field exists.
+// domain grants to an authorized participant. Video publishing is never
+// grantable, so no video field exists.
 type MediaGrants struct {
-	// CanPublishAudio is true only for moderator connections or a student
-	// inside a future F-003 reciter turn.
+	// CanPublishAudio is true for an authorized participant's audio connection.
 	CanPublishAudio bool
 }
 
@@ -34,23 +33,4 @@ type SessionMediaGateway interface {
 	MuteAll(ctx context.Context, roomRef MediaRoomRef) error
 	// RemoveParticipant disconnects one participant from the room.
 	RemoveParticipant(ctx context.Context, roomRef MediaRoomRef, userID string) error
-}
-
-// ReciterAudioControl is the narrow sessions-owned boundary the F-003
-// recitation queue uses to grant or revoke a student's temporary audio
-// publishing (FR-019, ADR-015, plan D8). F-003 calls it with neutral
-// identifiers only; no room reference, endpoint, credential, or provider
-// identifier ever crosses into F-003 code, persistence, events, or logs
-// (SC-005). Only the LiveKit adapter under
-// backend/internal/sessions/livekit implements it.
-type ReciterAudioControl interface {
-	// GrantReciterAudio grants userID temporary audio-only publishing for the
-	// recitation turn identified by roundID and queueEntryID inside the live
-	// session identified by sessionID. It is idempotent: granting an
-	// already-granted user applies one effective grant. Video publishing is
-	// never grantable (constitution §V).
-	GrantReciterAudio(ctx context.Context, sessionID, roundID, queueEntryID, userID string) error
-	// RevokeReciterAudio removes the reciter audio entitlement. It is
-	// idempotent: revoking a user who holds no grant succeeds.
-	RevokeReciterAudio(ctx context.Context, sessionID, roundID, queueEntryID, userID string) error
 }

@@ -7,8 +7,8 @@ info:
     this feature-local contract is the F-003 overlay regenerated 2026-08-23 from the
     approved spec clarifications (advance/start split, automatic round activation in
     round-number order, single-entry move, grading-optional completion, no history
-    surface, no FCM). Schema names mirror the canonical file. Pending canonical sync
-    deltas are listed in `specs/003-recitation-queue-system/plan.md` §Canonical sync.
+    surface, no FCM). Schema names mirror the canonical file; canonical sync is
+    complete as recorded in `specs/003-recitation-queue-system/plan.md` §Canonical sync.
   contact:
     name: Halaqaty
     url: https://halaqaty.app
@@ -91,8 +91,11 @@ paths:
       description: |
         Requires the session's active round on a live session. Finalizes it under the
         session finalization policy (history retained), creates the next sequential
-        round from the request, and lets the automatic activation rule activate the
-        next prepared round in round-number order.
+        round from the request. If the prior round has a reciting entry, the
+        response returns the successor as `prepared` while a durable private audio
+        revoke intent retries; it activates automatically in round-number order
+        only after that revoke succeeds. Otherwise the automatic activation rule
+        activates the next prepared round immediately.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -102,7 +105,7 @@ paths:
             schema: { $ref: '#/components/schemas/ResetQueueRequest' }
       responses:
         '201':
-          description: Prior round finalized and next round created/activated
+          description: Prior round finalized and successor created; it activates under the normal round-number rule without changing participant audio permission
           content:
             application/json:
               schema: { $ref: '#/components/schemas/QueueState' }
@@ -123,7 +126,7 @@ paths:
       summary: Select the next waiting entry without starting it
       description: |
         Durably selects the next waiting entry; the separate start transition makes it
-        `reciting` and requests the audio grant. Advance while another entry is already
+        `reciting` as the displayed current turn without changing audio permission. Advance while another entry is already
         selected replaces that selection without creating a duplicate; advance with zero
         waiting entries is rejected cleanly with no state mutation; advance while an
         entry is `reciting` is rejected until the turn ends.
@@ -224,7 +227,8 @@ paths:
       description: |
         Applies an allowed transition and atomically writes completed-only progress.
         `reciting` applies only to the round's currently selected waiting entry and is
-        rejected while another entry is reciting. For a grading-required round,
+        rejected while another entry is displayed as reciting. It records queue state
+        only and never changes student audio permission. For a grading-required round,
         `completed` must carry the grade (note optional, ≤ 500 chars) in the same atomic
         action; for a grading-optional round, `completed` carries neither grade nor note
         — both may be added or changed afterwards only through the audited correction
@@ -249,7 +253,6 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationError' }
         '429': { $ref: '#/components/responses/RateLimited' }
-        '503': { $ref: '#/components/responses/MediaUnavailable' }
 
   /sessions/{sessionId}/queue/entries/{entryId}/grade:
     parameters:
@@ -329,7 +332,7 @@ paths:
       summary: Approve or decline a pending student opt-out request
       description: |
         Any current teacher or supervisor decides one pending request. Approve
-        transitions the entry to `opted_out` (audio revoked if reciting); decline
+        transitions the entry to `opted_out`; decline
         terminally closes and durably logs the request while the entry remains
         `waiting`. Requests pending when the round finalizes are non-actionable (409).
       parameters:
@@ -351,7 +354,6 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '429': { $ref: '#/components/responses/RateLimited' }
-        '503': { $ref: '#/components/responses/MediaUnavailable' }
 
   /sessions/{sessionId}/queue/policy:
     parameters:
@@ -427,7 +429,6 @@ components:
     Conflict: { description: 'Stale version, invalid state transition, no waiting entry, entry reciting/terminal, finalized/inert round, duplicate command conflict, or invariant conflict', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
     ValidationError: { description: 'Invalid Quran range, enum, order, position, grade, or note', content: { application/json: { schema: { $ref: '#/components/schemas/ValidationError' } } } }
     RateLimited: { description: REST rate limit exceeded, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
-    MediaUnavailable: { description: Queue truth committed or retained but reciter audio convergence is temporarily unavailable, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
   schemas:
     StartRoundRequest:
       type: object
@@ -498,7 +499,8 @@ components:
       description: |
         Grade is required with `completed` when the round requires grading, and invalid
         otherwise (grading-optional completion carries no grade and no note; add later
-        via the correction path). `reciting` applies only to the selected entry.
+        via the correction path). `reciting` applies only to the selected entry and
+        records the displayed turn without changing media permission.
         Grade/notes are invalid for `reciting` or `skipped`.
     GradeRequest:
       type: object

@@ -2,7 +2,7 @@
 
 > All frozen decisions for the Halaqaty MVP. Binding on all implementation. To change a decision, create an ADR in [`../../engineering/architecture/adr/`](../../engineering/architecture/adr/) and update this file with an entry in the Amendment Log.
 
-**Last updated:** 2026-08-19
+**Last updated:** 2026-08-28
 
 ---
 
@@ -39,6 +39,7 @@
 | OQ-010 | Late-joining student position? | **Session-configurable.** Default `present_at_activation`: apply the pre-set relative order to eligible students present when the round activates and append later joiners. Optional `all_active_students`: create all active student positions from the start and retain each pre-set position on join. | Keeps the predictable append default while supporting managers who want a complete roster prepared in advance. |
 | OQ-011 | Double-queue per student per round? | **No.** One position per student per round. Use sequential rounds for multiple recitations. | Simplifies queue state machine; multiple rounds is the correct UX pattern. |
 | OQ-053 | Which F-003 rules are configurable per session? | **Managers may configure queue population, unfinished-entry finalization, opt-out approval, grade/note visibility, and grade/note correction.** Defaults are `present_at_activation`, `mark_unfinished_skipped`, `approval_required`, `managers_and_student`, and `audited_any_time`. Changes are prospective and audited. F-003 never blocks F-005 session end. | Gives teachers/supervisors operational flexibility without making security, data integrity, or media safety optional. |
+| OQ-054 | Does the recitation queue control student microphone publishing? | **No.** F-003 records the voluntary order and manager-set displayed turn status only. Students may publish audio freely in an authorized live session; speaking out of order has no automatic queue or media consequence. | Quran circles rely on mutual respect and teacher guidance. Queue coordination must not turn ordinary participation into a technical restriction. |
 
 ---
 
@@ -62,7 +63,7 @@
 | PRD-5 | Video feature flag rollout model? | **Per-tier once enabled.** Free: no video. Pro/Institution: video only if both the global master flag AND the tier flag are true. | Aligns with monetization; prevents accidental activation via a single-flag change. |
 | PRD-6 | Recording consent and retention model? | **Explicit participant consent screen before every session.** Consent stored per-session in DB. Teacher must acknowledge liability. Default retention: 7 days. | Protects minors who may be in circles; GDPR-aligned. |
 | OQ-037 | F-005 room moderation roles? | **Teachers and supervisors have identical F-005 moderation rights:** start/end, lock/unlock, mute-all, mute/unmute an existing audio publisher, and remove. | Supervisors support teachers in running a circle. This does not grant students publishing permission. |
-| OQ-038 | Individual unmute and student publishing? | **Individual unmute is supported only for a participant who already has audio-publish entitlement.** It never grants a student publish permission; F-003 remains the sole owner of turn-based student publishing and must revalidate this rule. | Preserves teacher/supervisor moderation without weakening turn-based student audio safety. |
+| OQ-038 | Individual unmute and student publishing? | **Students receive audio-publish entitlement when they join an authorized live session.** Individual unmute restores an existing publisher only; teachers and supervisors retain explicit mute, mute-all, remove, lock, and end controls. F-003 never changes publishing permission. | Keeps Zoom-like voluntary participation while preserving separate moderator safety controls. |
 | OQ-039 | Shared realtime authorization model? | **Use one generic authenticated realtime ticket endpoint, `POST /api/v1/realtime/tickets`, for authorized circle and session topic subscriptions.** It replaces the session-only ticket model; the WebSocket hub revalidates authorization. | F-005 supplies common transport while F-004 can reuse it for circle chat without an active live session. |
 | OQ-040 | Live presence versus attendance persistence? | **F-005 uses `actual_start` / `actual_end` and a dedicated `session_participant_presence` model for durable live presence and hand state.** F-006 owns the separate `session_attendance` policy, classification, and overrides. | Keeps authoritative realtime facts distinct from future attendance policy and avoids coupling F-005 to F-006. |
 | OQ-041 | F-005 session creation scope? | **F-005 creates ad-hoc sessions only; F-006 owns scheduled-session creation.** | Prevents scheduling scope from entering the live-session foundation. |
@@ -160,5 +161,6 @@ provider registry, job framework, or new lifecycle end reason.
 | 2026-08-15 | OQ-040 | `session_attendance` conflated live presence with attendance policy | Dedicated F-005 participant-presence model; F-006 owns attendance policy | Separates realtime facts from future attendance classification and overrides. | ADR-016 |
 | 2026-08-16 | OQ-041–OQ-046 | Open F-005 scope, lock, hand, automatic-end, and realtime-topic questions | Ad-hoc-only F-005, pre-lock reconnect, all-participant hand raise, truthful automatic end, and joined-participant session topics | Resolves F-005 behavior while preserving F-004/F-006 boundaries and session privacy. | ADR-016 |
 | 2026-08-23 | OQ-007, OQ-010, OQ-053 | Fixed opt-out approval and late-join append behavior; other queue policies unspecified | Per-session queue policy with safe defaults, prospective audited manager changes, immutable safety invariants, and non-blocking F-005 session end | Lets managers adapt each circle session without weakening authorization, queue consistency, progress truth, or media safety. Approved by Karim 2026-08-23. | ADR-018 |
+| 2026-08-28 | OQ-038, OQ-054 | F-003 owned turn-based student publishing; students joined listen-only | Students publish audio freely in authorized live sessions; F-003 is a voluntary ordered queue and displayed-turn tracker, while F-005 retains explicit moderator controls | Matches the intended Zoom-like halaqa experience without removing teacher/supervisor safety controls. Approved by Karim 2026-08-28. | ADR-020 |
 
 *Any change requires: (1) a new or updated ADR in `../../engineering/architecture/adr/`, (2) an entry in the Amendment Log above, (3) approval from Karim.*

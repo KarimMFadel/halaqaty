@@ -598,7 +598,7 @@ func TestStartSessionConcurrentStartsConvergeToOneRoom(t *testing.T) {
 
 // ---- T013: join ---------------------------------------------------------------
 
-func TestJoinSessionGrantsLeastPrivilegeConnections(t *testing.T) {
+func TestJoinSessionGrantsStudentAudioPublishing(t *testing.T) {
 	svc, _, gw, roles := newUS1Service()
 	seedUS1Roles(roles)
 	created, err := svc.CreateAdHocSession(context.Background(), us1Teacher, us1CircleID)
@@ -610,7 +610,7 @@ func TestJoinSessionGrantsLeastPrivilegeConnections(t *testing.T) {
 		t.Fatalf("StartSession: %v", err)
 	}
 
-	// Student joins: listen-only connection (constitution §IV.4).
+	// Student joins with audio publishing; F-003 queue state never changes it.
 	_, studentConn, err := svc.JoinSession(context.Background(), us1Student, created.ID)
 	if err != nil {
 		t.Fatalf("student JoinSession: %v", err)
@@ -627,8 +627,8 @@ func TestJoinSessionGrantsLeastPrivilegeConnections(t *testing.T) {
 	if studentGrant == nil {
 		t.Fatal("student connection was never issued")
 	}
-	if studentGrant.CanPublishAudio {
-		t.Fatal("student join must never grant audio publishing outside an F-003 reciter turn")
+	if !studentGrant.CanPublishAudio {
+		t.Fatal("student join must grant audio publishing independently of F-003 queue state")
 	}
 
 	// Teacher joining later still gets publish rights.

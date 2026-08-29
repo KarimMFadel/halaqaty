@@ -917,7 +917,7 @@ paths:
           format: uuid
     post:
       operationId: unmuteSessionParticipant
-      description: Restore an existing audio-publish entitlement; never grant a student publishing permission.
+      description: Restore audio for an existing authorized publisher; it never changes queue state or grants room access.
       tags: [Sessions]
       summary: Unmute an existing publisher
       responses:
@@ -1136,8 +1136,9 @@ paths:
       description: |
         Requires the session's active round on a live session. Finalizes it under the
         session finalization policy (history retained), creates the next sequential
-        round from the request, and lets the automatic activation rule activate the
-        next prepared round in round-number order.
+        round from the request. The automatic activation rule activates the next
+        prepared round in round-number order without changing participant audio
+        permission.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1148,7 +1149,7 @@ paths:
               $ref: '#/components/schemas/ResetQueueRequest'
       responses:
         '201':
-          description: Prior round finalized and next round created/activated
+          description: Prior round finalized and successor created; it activates under the normal round-number rule without changing participant audio permission
           content:
             application/json:
               schema:

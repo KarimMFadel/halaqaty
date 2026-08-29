@@ -19,9 +19,9 @@ type OutboxStore interface {
 	ParkOutboxEvent(context.Context, string) error
 }
 
-// OutboxProjector reconstructs the visibility-filtered payload from
-// PostgreSQL at send time and delivers it. Outbox metadata alone is never a
-// client payload because it intentionally excludes grade, notes, and names.
+// OutboxProjector performs one committed outbox operation. Client event
+// projectors reconstruct visibility-filtered payloads from PostgreSQL. Metadata
+// alone is never a client payload because it excludes grade, notes, and names.
 type OutboxProjector interface {
 	ProjectAndDeliver(context.Context, OutboxEvent) error
 }

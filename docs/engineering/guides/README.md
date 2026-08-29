@@ -109,8 +109,10 @@ location /ws {
 
 **Symptom:** Students join the LiveKit room but audio is silent.
 
-**Check 1 — Student publish permission not granted:**
-In MVP, students can only publish audio when it is their turn (`CanPublish: true`). By default, `CanPublish: false`. Verify the teacher has advanced the queue to the student's turn.
+**Check 1 — Student audio-publish permission:**
+Authorized students join with `CanPublish: true`; F-003 queue order does not
+change that permission. Verify the authorized join completed and that an
+explicit F-005 moderator action has not muted or removed the participant.
 
 **Check 2 — Flutter audio permissions not granted:**
 ```

@@ -12,8 +12,8 @@ vary operationally, and a queue rule must not prevent a teacher or supervisor
 from ending an F-005 session or adapting the current recitation workflow.
 
 Making every rule optional would conflict with per-circle authorization,
-PostgreSQL source-of-truth, one-position/one-reciter integrity, completed-only
-progress, and the constitutional active-reciter media boundary. The design must
+PostgreSQL source-of-truth, one-position/one-displayed-reciting-entry integrity,
+and completed-only progress. The design must
 therefore separate configurable session policy from immutable platform safety.
 
 ## Decision
@@ -47,7 +47,7 @@ The following remain non-configurable:
 - PostgreSQL as source of truth and completed-only progress creation;
 - completed `test` turns remain practice history but do not alter F-007
   Quran-map memorization/revision status;
-- provider-neutral `ReciterAudioControl`, active-reciter-only student audio,
+- open student audio and the independent explicit F-005 moderation controls,
   video disabled, and complete media credential/room-reference secrecy; and
 - retained finalized history, with prior correction values preserved by audit,
   and no student self-logging.
@@ -55,8 +55,8 @@ The following remain non-configurable:
 F-005 session lifecycle is independent of F-003 policy. A teacher/supervisor or
 automatic F-005 rule may end the session without queue approval or synchronous
 queue cleanup. The committed ended session is returned immediately. F-003 then
-revokes any reciter entitlement and finalizes the active round idempotently;
-failure is redacted telemetry plus retry and never rolls back or delays end.
+finalizes the active round idempotently; failure is redacted telemetry plus
+retry and never rolls back or delays end.
 
 The exact persistence fields and REST/event representations are decided during
 F-003 planning and contract synchronization. They must use closed values above

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,15 +16,19 @@ import 'package:integration_test/integration_test.dart';
 
 const _liveSessionId = 'live-session-1';
 
+/// Bounded wait for dialog/dropdown open-close transitions to finish.
+const _dialogSettle = Duration(milliseconds: 300);
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'Queue flow: manager mutations keep student microphone publishing enabled',
+    'Queue flow: manager mutations keep the separate student microphone untouched',
     (tester) async {
       final backend = _QueueFlowBackend();
-      final media = _OpenStudentMicrophone();
-      final realtime = _EmptyRealtimeClient();
+      final managerMedia = _RecordingMediaSession();
+      final realtime = _StreamingRealtimeClient();
+      final sessionApi = _QueueFlowSessionApi();
       final queue = QueueController(
         backend,
         () async => (token: 'token', sessionId: 'backend-session'),
@@ -30,14 +36,20 @@ void main() {
         isManager: true,
       );
       final room = SessionRoomController(
-        _QueueFlowSessionApi(),
+        sessionApi,
         () async => (token: 'token', sessionId: 'backend-session'),
-        media,
+        managerMedia,
         realtime: realtime,
         isModerator: true,
         queue: queue,
       );
       addTearDown(queue.dispose);
+      final student = _StudentRoomFixture();
+      addTearDown(student.dispose);
+      await student.room.join(_liveSessionId);
+      expect(student.room.state.status, SessionRoomStatus.connected);
+      expect(
+          student.media.connectedRoom?.endpoint, 'wss://student-media.example');
 
       await tester.pumpWidget(
         ProviderScope(
@@ -57,21 +69,21 @@ void main() {
         ),
       );
 
+      // The manager connects independently from the student media room.
       await tester.tap(find.text('Join'));
       await _pumpUntil(
           tester, () => room.state.status == SessionRoomStatus.connected);
       expect(room.state.status, SessionRoomStatus.connected);
 
-      await queue.prepareRound(
-        roundType: 'revision',
-        surahId: 2,
-        fromAyah: 1,
-        toAyah: 5,
-        gradingRequired: false,
-      );
+      // Prepare goes through the round-details dialog, not the controller.
+      await tester.tap(find.bySemanticsLabel('Prepare round'));
+      await tester.pump(_dialogSettle);
+      await tester.enterText(_editableWithin('Surah number'), '2');
+      await tester.enterText(_editableWithin('To ayah'), '5');
       await tester.pump();
+      await tester.tap(find.bySemanticsLabel('Confirm'));
+      await _pumpUntil(tester, () => queue.state.queue?.roundNumber == 1);
       expect(queue.state.queue?.lifecycle, 'active');
-      expect(queue.state.queue?.roundNumber, 1);
 
       await tester.tap(find.bySemanticsLabel('Select next'));
       await tester.pump();
@@ -80,36 +92,50 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Start recitation'));
       await tester.pump();
       expect(_entry(queue, 'entry-1').status, 'reciting');
+      // Manager queue actions never touch the separate student microphone.
+      expect(student.media.microphoneCommands, isZero);
 
-      await queue.moveEntry('entry-2', 1);
+      // Move entry-2 to position 1 through the move dialog while entry-1
+      // keeps reciting.
+      await tester.tap(find.bySemanticsLabel('Move student'));
+      await tester.pump(_dialogSettle);
+      expect(find.text('Student B'), findsWidgets);
+      await tester.enterText(_editableWithin('New position'), '1');
       await tester.pump();
+      await tester.tap(find.bySemanticsLabel('Confirm'));
+      await _pumpUntil(tester, () => _entry(queue, 'entry-2').position == 1);
       expect(_entry(queue, 'entry-1').status, 'reciting');
-      expect(_entry(queue, 'entry-2').position, 1);
 
       await tester.tap(find.bySemanticsLabel('Skip turn'));
       await tester.pump();
       expect(_entry(queue, 'entry-1').status, 'skipped');
 
-      await queue.reset(
-        roundType: 'revision',
-        surahId: 2,
-        fromAyah: 1,
-        toAyah: 5,
-        gradingRequired: false,
-      );
-      await tester.pump();
-      expect(queue.state.queue?.roundNumber, 2);
+      // Reset goes through the round-details dialog prefilled from the queue.
+      await tester.tap(find.bySemanticsLabel('Reset round'));
+      await tester.pump(_dialogSettle);
+      await tester.tap(find.bySemanticsLabel('Confirm'));
+      await _pumpUntil(tester, () => queue.state.queue?.roundNumber == 2);
       expect(queue.state.queue?.lifecycle, 'active');
 
+      // A realtime transport closure, not a participants REST failure, makes
+      // the room retryable. The reconnect then replaces the queue from GET.
       final queueFetchesBeforeReconnect = backend.queueFetches;
-      await room.retry();
+      final participantsBeforeDisconnect = sessionApi.participantsCalls;
+      backend.replaceAuthoritativeSnapshot(roundNumber: 9);
+      await realtime.disconnect();
+      await _pumpUntil(
+          tester, () => room.state.status == SessionRoomStatus.error);
+      expect(sessionApi.participantsCalls, participantsBeforeDisconnect);
+      expect(realtime.sessionEventsCalls, 1);
+      await tester.tap(find.text('Retry'));
       await _pumpUntil(
           tester, () => room.state.status == SessionRoomStatus.connected);
       expect(backend.queueFetches, queueFetchesBeforeReconnect + 1);
-      expect(queue.state.queue?.roundNumber, 2);
+      expect(queue.state.queue?.roundNumber, 9);
+      expect(realtime.sessionEventsCalls, 2);
 
-      expect(media.microphoneEnabled, isTrue);
-      expect(media.microphoneCommands, isZero);
+      expect(student.media.microphoneEnabled, isTrue);
+      expect(student.media.microphoneCommands, isZero);
     },
   );
 }
@@ -127,6 +153,12 @@ Future<void> _pumpUntil(
   expect(condition(), isTrue, reason: 'Timed out waiting for the session room');
 }
 
+/// Locates the editable text of a field labeled via its Semantics wrapper.
+Finder _editableWithin(String label) => find.descendant(
+      of: find.bySemanticsLabel(label),
+      matching: find.byType(EditableText),
+    );
+
 QueueEntry _entry(QueueController controller, String entryId) =>
     controller.state.queue!.entries.singleWhere((entry) => entry.id == entryId);
 
@@ -138,6 +170,11 @@ class _QueueFlowBackend extends QueueApiClient {
   int _queueVersion = 0;
   String? _selectedEntryId;
   List<_BackendEntry> _entries = const [];
+
+  void replaceAuthoritativeSnapshot({required int roundNumber}) {
+    _roundNumber = roundNumber;
+    _queueVersion += 10;
+  }
 
   @override
   Future<QueueState> getQueue({
@@ -324,6 +361,8 @@ class _BackendEntry {
 class _QueueFlowSessionApi extends SessionApiClient {
   _QueueFlowSessionApi() : super(Dio());
 
+  int participantsCalls = 0;
+
   @override
   Future<SessionConnection> join({
     required String token,
@@ -337,15 +376,17 @@ class _QueueFlowSessionApi extends SessionApiClient {
     required String token,
     required String sessionId,
     required String liveSessionId,
-  }) async =>
-      const [
-        SessionParticipant(
-          userId: 'student-1',
-          displayName: 'Student A',
-          role: CircleRole.student,
-          isCurrentlyPresent: true,
-        ),
-      ];
+  }) async {
+    participantsCalls++;
+    return const [
+      SessionParticipant(
+        userId: 'student-1',
+        displayName: 'Student A',
+        role: CircleRole.student,
+        isCurrentlyPresent: true,
+      ),
+    ];
+  }
 }
 
 final _connection = SessionConnection(
@@ -365,12 +406,30 @@ final _connection = SessionConnection(
   isModerator: true,
 );
 
-class _OpenStudentMicrophone implements MediaSession {
-  bool microphoneEnabled = true;
-  int microphoneCommands = 0;
+class _RecordingMediaSession implements MediaSession {
+  MediaConnection? connectedRoom;
 
   @override
-  Future<void> connect(MediaConnection connection) async {}
+  Future<void> connect(MediaConnection connection) async {
+    connectedRoom = connection;
+  }
+
+  @override
+  Future<void> disconnect() async {}
+
+  @override
+  Future<void> setMicrophoneEnabled(bool enabled) async {}
+}
+
+class _StudentMediaSession implements MediaSession {
+  bool microphoneEnabled = true;
+  int microphoneCommands = 0;
+  MediaConnection? connectedRoom;
+
+  @override
+  Future<void> connect(MediaConnection connection) async {
+    connectedRoom = connection;
+  }
 
   @override
   Future<void> disconnect() async {}
@@ -382,21 +441,86 @@ class _OpenStudentMicrophone implements MediaSession {
   }
 }
 
-class _EmptyRealtimeClient implements RealtimeSessionClient {
+class _StreamingRealtimeClient implements RealtimeSessionClient {
+  StreamController<RealtimeSessionEvent>? _events;
+  int sessionEventsCalls = 0;
+
+  Future<void> disconnect() => _events?.close() ?? Future.value();
+
   @override
   Stream<RealtimeSessionEvent> sessionEvents(
     String liveSessionId, {
     required String token,
     required String backendSessionId,
-  }) =>
-      const Stream.empty();
+  }) {
+    sessionEventsCalls++;
+    _events = StreamController<RealtimeSessionEvent>.broadcast(sync: true);
+    return _events!.stream;
+  }
 
   @override
-  Future<void> dispose() async {}
+  Future<void> dispose() => disconnect();
 
   @override
   Future<void> lowerHand(String liveSessionId) async {}
 
   @override
   Future<void> raiseHand(String liveSessionId) async {}
+}
+
+class _StudentRoomFixture {
+  _StudentRoomFixture()
+      : media = _StudentMediaSession(),
+        realtime = _StreamingRealtimeClient() {
+    // The room must use the same dedicated media and realtime instances that
+    // this fixture observes; queue actions are not injected into it.
+    room = SessionRoomController(
+      _StudentSessionApi(),
+      () async => (token: 'student-token', sessionId: 'student-session'),
+      media,
+      realtime: realtime,
+    );
+  }
+
+  final _StudentMediaSession media;
+  final _StreamingRealtimeClient realtime;
+  late final SessionRoomController room;
+
+  void dispose() {
+    room.dispose();
+  }
+}
+
+class _StudentSessionApi extends SessionApiClient {
+  _StudentSessionApi() : super(Dio());
+
+  @override
+  Future<SessionConnection> join({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+  }) async =>
+      SessionConnection(
+        session: const SessionModel(
+          id: _liveSessionId,
+          circleId: 'circle-1',
+          status: 'active',
+          mediaMode: 'audio',
+          participantCount: 1,
+          isLocked: false,
+        ),
+        mediaConnection: MediaConnection(
+          endpoint: 'wss://student-media.example',
+          credential: 'student-short-lived-credential',
+          expiresAt: DateTime.utc(2026, 9, 1),
+        ),
+      );
+
+  @override
+  Future<List<SessionParticipant>> participants({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+  }) async =>
+      const [];
 }

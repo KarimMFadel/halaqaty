@@ -123,6 +123,25 @@ void main() {
     expect(find.text(SessionUiLabels.sessionEnded), findsOneWidget);
   });
 
+  testWidgets('realtime interruption keeps moderator end control available',
+      (tester) async {
+    final realtime = RecordingRealtimeClient();
+    await tester.pumpWidget(_app(
+      RecoverySessionApi(),
+      realtime: realtime,
+      direction: TextDirection.rtl,
+      isModerator: true,
+    ));
+    await tester.tap(find.text(SessionUiLabels.join));
+    await _pumpAsync(tester);
+
+    await realtime.close();
+    await tester.pump();
+
+    expect(find.text(SessionUiLabels.retry), findsOneWidget);
+    expect(find.text(SessionUiLabels.endSession), findsOneWidget);
+  });
+
   testWidgets('connection failure uses safe Arabic error copy', (tester) async {
     await tester.pumpWidget(
         _app(FailingRecoverySessionApi(), direction: TextDirection.rtl));
@@ -195,6 +214,8 @@ class RecordingRealtimeClient implements RealtimeSessionClient {
   void emit(RealtimeSessionEvent event) {
     scheduleMicrotask(() => _events.add(event));
   }
+
+  Future<void> close() => _events.close();
 
   @override
   Stream<RealtimeSessionEvent> sessionEvents(String liveSessionId,

@@ -19,6 +19,8 @@ media enforcement.
 ## Decision
 
 F-003 is a voluntary coordination and progress-tracking queue only.
+This decision amends Constitution §IV.4, replacing turn-based student audio
+publishing with session-wide audio publishing for authorized students.
 
 - Teachers and supervisors manage ordering and set the displayed `reciting`,
   `completed`, `skipped`, and related queue states.

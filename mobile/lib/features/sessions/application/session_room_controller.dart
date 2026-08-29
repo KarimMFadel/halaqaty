@@ -114,6 +114,9 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
   }
 
   Future<void> _connect(String liveSessionId, bool start) async {
+    // Remember the attempted room so the Retry affordance works even when
+    // the very first connect fails.
+    _liveSessionId = liveSessionId;
     state = state.copyWith(
         status: SessionRoomStatus.loading,
         clearError: true,
@@ -135,7 +138,6 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
           token: credentials.token,
           sessionId: credentials.sessionId,
           liveSessionId: liveSessionId);
-      _liveSessionId = liveSessionId;
       _lastEventKey = null;
       final isModerator = state.isModerator || connection.isModerator;
       state = state.copyWith(
@@ -152,7 +154,7 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
       _subscription = _realtime
           .sessionEvents(liveSessionId,
               token: credentials.token, backendSessionId: credentials.sessionId)
-          .listen(_applyEvent);
+          .listen(_applyEvent, onDone: _handleRealtimeDisconnect);
     } catch (error) {
       state = state.copyWith(
           status: SessionRoomStatus.error,
@@ -175,11 +177,56 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
         message.contains('404');
   }
 
+  void _handleRealtimeDisconnect() {
+    if (!mounted || state.status != SessionRoomStatus.connected) return;
+    _subscription = null;
+    state = state.copyWith(
+      status: SessionRoomStatus.error,
+      errorMessage: 'Realtime connection closed',
+      recovery: SessionRoomRecovery.retryable,
+    );
+  }
+
   /// Hand commands are WS-only per `ws_events.md` (`cmd.raise_hand`).
   Future<void> raiseHand() => _sendHandCommand(_realtime.raiseHand);
   Future<void> lowerHand() => _sendHandCommand(_realtime.lowerHand);
 
   Future<void> advanceQueue() => _queue?.advance() ?? Future.value();
+
+  Future<void> prepareQueueRound({
+    required String roundType,
+    required int surahId,
+    required int fromAyah,
+    required int toAyah,
+    required bool gradingRequired,
+  }) =>
+      _queue?.prepareRound(
+        roundType: roundType,
+        surahId: surahId,
+        fromAyah: fromAyah,
+        toAyah: toAyah,
+        gradingRequired: gradingRequired,
+      ) ??
+      Future.value();
+
+  Future<void> moveQueueEntry(String entryId, int newPosition) =>
+      _queue?.moveEntry(entryId, newPosition) ?? Future.value();
+
+  Future<void> resetQueueRound({
+    required String roundType,
+    required int surahId,
+    required int fromAyah,
+    required int toAyah,
+    required bool gradingRequired,
+  }) =>
+      _queue?.reset(
+        roundType: roundType,
+        surahId: surahId,
+        fromAyah: fromAyah,
+        toAyah: toAyah,
+        gradingRequired: gradingRequired,
+      ) ??
+      Future.value();
 
   Future<void> startSelectedQueueEntry() {
     final queue = state.queueState?.queue;

@@ -22,6 +22,7 @@ class QueueManagerPanel extends StatelessWidget {
     required this.onAdvance,
     required this.onStart,
     required this.onSkip,
+    required this.onReset,
     required this.onEditPolicy,
   });
 
@@ -33,6 +34,7 @@ class QueueManagerPanel extends StatelessWidget {
   final VoidCallback onAdvance;
   final VoidCallback onStart;
   final VoidCallback onSkip;
+  final VoidCallback onReset;
   final VoidCallback onEditPolicy;
 
   @override
@@ -118,6 +120,10 @@ class QueueManagerPanel extends StatelessWidget {
             _QueueAction(
               label: labels.skip,
               onPressed: isTerminal ? null : onSkip,
+            ),
+            _QueueAction(
+              label: labels.reset,
+              onPressed: isTerminal ? null : onReset,
             ),
             _QueueAction(
               label: labels.policy,
@@ -206,6 +212,7 @@ class _QueueLabels {
   String get start =>
       rtl ? SessionUiLabels.startRecitation : 'Start recitation';
   String get skip => rtl ? SessionUiLabels.skipTurn : 'Skip turn';
+  String get reset => rtl ? SessionUiLabels.resetQueue : 'Reset round';
   String get policy => rtl ? SessionUiLabels.queuePolicy : 'Queue policy';
 
   String entryLabel(int position) =>

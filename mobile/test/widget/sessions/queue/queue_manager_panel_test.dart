@@ -22,6 +22,7 @@ void main() {
       'اختيار التالي',
       'بدء التلاوة',
       'تخطي الدور',
+      'إعادة تعيين الجولة',
       'سياسة القائمة',
     ]) {
       expect(find.bySemanticsLabel(label), findsOneWidget);
@@ -49,6 +50,7 @@ void main() {
     await tester.tap(find.bySemanticsLabel('اختيار التالي'));
     await tester.tap(find.bySemanticsLabel('بدء التلاوة'));
     await tester.tap(find.bySemanticsLabel('تخطي الدور'));
+    await tester.tap(find.bySemanticsLabel('إعادة تعيين الجولة'));
     await tester.tap(find.bySemanticsLabel('سياسة القائمة'));
 
     expect(actions, [
@@ -58,6 +60,7 @@ void main() {
       'advance',
       'start',
       'skip',
+      'reset',
       'policy',
     ]);
     semantics.dispose();
@@ -80,6 +83,7 @@ void main() {
       'Select next',
       'Start recitation',
       'Skip turn',
+      'Reset round',
       'Queue policy',
     ]) {
       expect(find.bySemanticsLabel(label), findsOneWidget);
@@ -89,7 +93,8 @@ void main() {
 
     await tester.tap(find.bySemanticsLabel('Select next'));
     await tester.tap(find.bySemanticsLabel('Start recitation'));
-    expect(actions, ['advance', 'start']);
+    await tester.tap(find.bySemanticsLabel('Reset round'));
+    expect(actions, ['advance', 'start', 'reset']);
     semantics.dispose();
   });
 
@@ -167,6 +172,7 @@ Widget _panel({
             onAdvance: () => actions.add('advance'),
             onStart: () => actions.add('start'),
             onSkip: () => actions.add('skip'),
+            onReset: () => actions.add('reset'),
             onEditPolicy: () => actions.add('policy'),
           ),
         ),

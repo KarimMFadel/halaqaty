@@ -259,7 +259,7 @@ func (e *rqcEnv) newSession(t *testing.T, live bool) string {
 		t.Fatalf("insert session: %v", err)
 	}
 	if live {
-		started, err := sessions.NewSessionRepository(e.pool).StartSession(ctx, sessionID, sessions.MediaRoomRef("rqc-contract-room"))
+		started, err := sessions.NewSessionRepository(e.pool).StartSession(ctx, sessionID, sessions.MediaRoomRef("rqc-contract-room-"+sessionID))
 		if err != nil {
 			t.Fatalf("start session: %v", err)
 		}
@@ -555,6 +555,31 @@ func TestRecitationQueueManagement_Reorder(t *testing.T) {
 		}
 		if got := rqcNum(t, state, "version"); got != version+1 {
 			t.Fatalf("version after reorder = %v, want %v", got, version+1)
+		}
+	})
+
+	t.Run("reorder targets the prepared round when another round is active", func(t *testing.T) {
+		sessionID, _ := env.liveRound(t)
+		prepare := fmt.Sprintf(`{"round_type":"test","surah_id":2,"from_ayah":1,"to_ayah":3,"grading_required":false,"student_order":[%q,%q,%q]}`,
+			env.students[0], env.students[1], env.students[2])
+		rec := env.req(t, env.teacherID, http.MethodPost, "/api/v1/sessions/"+sessionID+"/queue/rounds", prepare, "")
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("prepare stacked round: got %d want 201 body=%s", rec.Code, rec.Body.String())
+		}
+		prepared := rqcDecode(t, rec)
+		reorder := fmt.Sprintf(`{"ordered_ids":[%q,%q,%q],"expected_version":%d}`,
+			env.students[2], env.students[0], env.students[1], int(rqcNum(t, prepared, "version")))
+		rec = env.req(t, env.teacherID, http.MethodPut, "/api/v1/sessions/"+sessionID+"/queue/order", reorder, "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("reorder stacked prepared round: got %d want 200 body=%s", rec.Code, rec.Body.String())
+		}
+		state := rqcDecode(t, rec)
+		if got := rqcStr(t, state, "lifecycle"); got != "prepared" {
+			t.Fatalf("reordered lifecycle = %q, want prepared", got)
+		}
+		preorder := rqcObjects(t, state, "preorder")
+		if got := rqcStr(t, preorder[0], "student_id"); got != env.students[2] {
+			t.Fatalf("reordered preorder[0] = %q, want %q", got, env.students[2])
 		}
 	})
 
@@ -877,6 +902,32 @@ func TestRecitationQueueManagement_IdempotencyReplay(t *testing.T) {
 	envl := rqcDecodeError(t, rec)
 	if envl.Error.Code != httpconst.ErrorCodeQueueDuplicateCommand {
 		t.Fatalf("error code = %q, want %q", envl.Error.Code, httpconst.ErrorCodeQueueDuplicateCommand)
+	}
+}
+
+func TestRecitationQueueManagement_IdempotencyReplayAdvance(t *testing.T) {
+	env := setupRqcEnv(t)
+	sessionID, state := env.liveRound(t)
+	const key = "rqc-advance-replay-1"
+	body := fmt.Sprintf(`{"expected_version":%d}`, int(rqcNum(t, state, "version")))
+
+	first := env.req(t, env.teacherID, http.MethodPost, "/api/v1/sessions/"+sessionID+"/queue/advance", body, key)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first advance: got %d want 200 body=%s", first.Code, first.Body.String())
+	}
+	selected := rqcStr(t, rqcDecode(t, first), "selected_entry_id")
+
+	replay := env.req(t, env.teacherID, http.MethodPost, "/api/v1/sessions/"+sessionID+"/queue/advance", body, key)
+	if replay.Code != http.StatusOK {
+		t.Fatalf("advance replay: got %d want 200 body=%s", replay.Code, replay.Body.String())
+	}
+	if got := rqcStr(t, rqcDecode(t, replay), "selected_entry_id"); got != selected {
+		t.Fatalf("replay selected_entry_id = %q, want %q", got, selected)
+	}
+
+	crossCommand := env.req(t, env.teacherID, http.MethodPatch, "/api/v1/sessions/"+sessionID+"/queue/policy", `{"opt_out":"auto_approve","expected_version":1}`, key)
+	if crossCommand.Code != http.StatusConflict {
+		t.Fatalf("cross-command key reuse: got %d want 409 body=%s", crossCommand.Code, crossCommand.Body.String())
 	}
 }
 

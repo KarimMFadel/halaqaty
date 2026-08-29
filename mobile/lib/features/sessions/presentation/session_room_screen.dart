@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
+import 'package:halaqaty_mobile/features/sessions/application/queue_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/application/session_room_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/domain/session_models.dart';
+import 'package:halaqaty_mobile/features/sessions/presentation/queue/queue_manager_panel.dart';
 import 'package:halaqaty_mobile/features/sessions/presentation/session_ui_labels.dart';
 
 class SessionRoomScreen extends ConsumerWidget {
@@ -16,6 +18,7 @@ class SessionRoomScreen extends ConsumerWidget {
     final state = ref.watch(sessionRoomControllerProvider(sessionId));
     final controller =
         ref.read(sessionRoomControllerProvider(sessionId).notifier);
+    final queueState = state.queueState;
     final rtl = Directionality.of(context) == TextDirection.rtl;
     return Scaffold(
       appBar: AppBar(title: Text(rtl ? SessionUiLabels.title : 'Live session')),
@@ -68,6 +71,20 @@ class SessionRoomScreen extends ConsumerWidget {
           if (state.actionErrorMessage != null)
             Text(rtl ? SessionUiLabels.actionFailed : 'Action failed',
                 style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          if (state.isModerator && queueState != null) ...[
+            const SizedBox(height: 8),
+            QueueManagerPanel(
+              queue: queueState.queue,
+              status: _queuePanelStatus(state),
+              onPrepare: () => _showQueueActionPrompt(context, rtl),
+              onReorder: () => _showQueueActionPrompt(context, rtl),
+              onMove: () => _showQueueActionPrompt(context, rtl),
+              onAdvance: controller.advanceQueue,
+              onStart: controller.startSelectedQueueEntry,
+              onSkip: controller.skipSelectedQueueEntry,
+              onEditPolicy: () => _showQueueActionPrompt(context, rtl),
+            ),
+          ],
           if (state.status == SessionRoomStatus.connected) ...[
             const SizedBox(height: 8),
             Text(rtl ? SessionUiLabels.participantsTitle : 'Participants',
@@ -104,6 +121,38 @@ class SessionRoomScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+QueueManagerPanelStatus _queuePanelStatus(
+  SessionRoomState room,
+) {
+  final queue = room.queueState;
+  if (room.status == SessionRoomStatus.ended ||
+      queue?.status == QueueControllerStatus.ended) {
+    return QueueManagerPanelStatus.terminal;
+  }
+  if (room.status == SessionRoomStatus.loading && queue?.queue != null) {
+    return QueueManagerPanelStatus.reconnecting;
+  }
+  return switch (queue?.status) {
+    QueueControllerStatus.loading => QueueManagerPanelStatus.loading,
+    QueueControllerStatus.idle => QueueManagerPanelStatus.empty,
+    QueueControllerStatus.ready when queue?.queue?.entries.isEmpty ?? true =>
+      QueueManagerPanelStatus.empty,
+    QueueControllerStatus.ready => QueueManagerPanelStatus.ready,
+    QueueControllerStatus.error => QueueManagerPanelStatus.recoverableError,
+    QueueControllerStatus.ended => QueueManagerPanelStatus.terminal,
+    null => QueueManagerPanelStatus.loading,
+  };
+}
+
+void _showQueueActionPrompt(BuildContext context, bool rtl) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+          rtl ? 'اختر تفاصيل الجولة أولًا' : 'Choose the round details first'),
+    ),
+  );
 }
 
 class _ParticipantList extends StatelessWidget {

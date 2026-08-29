@@ -570,11 +570,84 @@ func (r *Repository) LoadQueueState(ctx context.Context, roundID string, viewer 
 	return state, nil
 }
 
+// CurrentRound returns the displayed active round, or the lowest prepared
+// round while the session is scheduled.
+func (r *Repository) CurrentRound(ctx context.Context, sessionID string) (Round, error) {
+	round, err := scanRound(r.pool.QueryRow(ctx, findCurrentQueueRoundQuery, sessionID))
+	if err != nil {
+		return Round{}, fmt.Errorf("load current queue round: %w", err)
+	}
+	return round, nil
+}
+
+// LowestPreparedRound returns the next prepared round for pre-activation edits.
+func (r *Repository) LowestPreparedRound(ctx context.Context, sessionID string) (Round, error) {
+	round, err := scanRound(r.pool.QueryRow(ctx, findLowestPreparedQueueRoundQuery, sessionID))
+	if err != nil {
+		return Round{}, fmt.Errorf("load lowest prepared queue round: %w", err)
+	}
+	return round, nil
+}
+
+// Round loads one queue round by its immutable identifier.
+func (r *Repository) Round(ctx context.Context, roundID string) (Round, error) {
+	round, err := scanRound(r.pool.QueryRow(ctx, findQueueRoundQuery, roundID))
+	if err != nil {
+		return Round{}, fmt.Errorf("load queue round: %w", err)
+	}
+	return round, nil
+}
+
+// SurahName returns the canonical transliterated name for an immutable Surah ID.
+func (r *Repository) SurahName(ctx context.Context, surahID int) (string, error) {
+	var name string
+	if err := r.pool.QueryRow(ctx, findSurahNameQuery, surahID).Scan(&name); err != nil {
+		return "", fmt.Errorf("load Surah name: %w", err)
+	}
+	return name, nil
+}
+
+// DisplayNames returns the profile display names needed by public queue
+// projections. Queue persistence deliberately keeps profile data out of rows.
+func (r *Repository) DisplayNames(ctx context.Context, userIDs []string) (map[string]string, error) {
+	names := make(map[string]string, len(userIDs))
+	if len(userIDs) == 0 {
+		return names, nil
+	}
+	rows, err := r.pool.Query(ctx, findProfileDisplayNamesQuery, userIDs)
+	if err != nil {
+		return nil, fmt.Errorf("load queue display names: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var userID, displayName string
+		if err := rows.Scan(&userID, &displayName); err != nil {
+			return nil, fmt.Errorf("scan queue display name: %w", err)
+		}
+		names[userID] = displayName
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate queue display names: %w", err)
+	}
+	return names, nil
+}
+
 // EntryQueueID resolves an entry's round before a mutation acquires locks.
 func (r *Repository) EntryQueueID(ctx context.Context, entryID string) (string, error) {
 	var roundID string
 	if err := r.pool.QueryRow(ctx, findEntryQueueIDQuery, entryID).Scan(&roundID); err != nil {
 		return "", fmt.Errorf("load queue entry round: %w", err)
+	}
+	return roundID, nil
+}
+
+// EntryQueueIDForSession resolves an entry's round only when it belongs to the
+// requested session. It protects session-scoped handler routes from cross-
+// session entry identifiers before a mutation begins.
+func (r *Repository) EntryQueueIDForSession(ctx context.Context, sessionID, entryID string) (string, error) {
+	var roundID string
+	if err := r.pool.QueryRow(ctx, findEntryQueueIDForSessionQuery, entryID, sessionID).Scan(&roundID); err != nil {
+		return "", fmt.Errorf("load session queue entry round: %w", err)
 	}
 	return roundID, nil
 }
@@ -591,6 +664,27 @@ func (r *Repository) SessionRole(ctx context.Context, sessionID, userID string) 
 		return "", fmt.Errorf("load session circle role: %w", err)
 	}
 	return role, nil
+}
+
+// SessionManagerIDs returns the current teachers and supervisors for a session.
+func (r *Repository) SessionManagerIDs(ctx context.Context, sessionID string) ([]string, error) {
+	rows, err := r.pool.Query(ctx, findSessionManagerIDsQuery, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("list session queue managers: %w", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan session queue manager: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate session queue managers: %w", err)
+	}
+	return ids, nil
 }
 
 // SessionPolicy reads the five queue-policy dimensions for a session.
@@ -680,7 +774,18 @@ func (r *Repository) UpdateSessionPolicyForManager(ctx context.Context, sessionI
 			return nil
 		}
 		updated, err = tx.UpdateSessionPolicy(ctx, sessionID, expectedVersion, next)
-		return err
+		if err != nil || current.Status != "active" {
+			return err
+		}
+		round, err := tx.LockActiveRound(ctx, sessionID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return tx.InsertOutboxEvent(ctx, OutboxEvent{EventID: uuid.NewString(), SessionID: sessionID, RoundID: round.ID,
+			EventType: queueEventPolicyChanged, RoundVersion: updated.Version, EventMetadata: json.RawMessage(`{}`)})
 	})
 	if err != nil {
 		return QueuePolicy{}, QueuePolicy{}, err

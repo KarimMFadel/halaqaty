@@ -2,6 +2,8 @@ package queue
 
 import "context"
 
+const queueEventPolicyChanged = "queue.policy_changed"
+
 // PolicyAuditSink receives redacted policy-change facts after a successful
 // database update. ADR-012 keeps the MVP audit sink operational/structured;
 // durable queryable audit storage is intentionally deferred.

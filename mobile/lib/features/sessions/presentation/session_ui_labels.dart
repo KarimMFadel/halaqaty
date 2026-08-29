@@ -28,4 +28,21 @@ class SessionUiLabels {
   static const endSession = 'إنهاء الجلسة';
   static const sessionEnded = 'انتهت الجلسة';
   static const actionFailed = 'تعذر تنفيذ الإجراء';
+  static const queueTitle = 'قائمة التلاوة';
+  static const queueLoading = 'جارٍ تحميل قائمة التلاوة...';
+  static const queueEmpty = 'لا توجد جولة تلاوة حالية';
+  static const queueReconnecting = 'جارٍ إعادة الاتصال بقائمة التلاوة...';
+  static const queueUpdateFailed = 'تعذر تحديث قائمة التلاوة';
+  static const queueEnded = 'انتهت جولة التلاوة';
+  static const prepareRound = 'إعداد الجولة';
+  static const reorderQueue = 'إعادة ترتيب الدور';
+  static const moveStudent = 'نقل الطالب';
+  static const selectNext = 'اختيار التالي';
+  static const startRecitation = 'بدء التلاوة';
+  static const skipTurn = 'تخطي الدور';
+  static const queuePolicy = 'سياسة القائمة';
+  static const reciting = 'يتلو الآن';
+  static const waiting = 'بانتظار الدور';
+  static const selected = 'تم اختيار الدور';
+  static const skipped = 'تم التخطي';
 }

@@ -45,6 +45,13 @@ FROM sessions s
 LEFT JOIN circle_members cm ON cm.circle_id = s.circle_id AND cm.user_id = $2::uuid
 WHERE s.id = $1::uuid`
 
+const findSessionManagerIDsQuery = `
+SELECT cm.user_id::text
+FROM sessions s
+JOIN circle_members cm ON cm.circle_id = s.circle_id
+WHERE s.id = $1::uuid AND cm.role IN ('teacher', 'supervisor')
+ORDER BY cm.user_id`
+
 // findSessionQueuePolicyQuery reads the five policy dimensions with their
 // version plus the session status and owning circle needed by authorization
 // and policy-change guards.
@@ -138,6 +145,12 @@ WHERE id = $1::uuid
 FOR UPDATE`
 
 const findEntryQueueIDQuery = `SELECT queue_id::text FROM recitation_queue_entries WHERE id = $1::uuid`
+
+const findEntryQueueIDForSessionQuery = `
+SELECT e.queue_id::text
+FROM recitation_queue_entries e
+JOIN recitation_queue q ON q.id = e.queue_id
+WHERE e.id = $1::uuid AND q.session_id = $2::uuid`
 
 // nextRoundNumberQuery allocates the next sequential round number as
 // MAX+1; it must run under lockRoundAllocationQuery (CHK036 — no reuse,
@@ -366,7 +379,7 @@ const claimDueOutboxEventsQuery = `
 SELECT ` + outboxColumns + `
 FROM queue_event_outbox
 WHERE available_at <= NOW() AND delivered_at IS NULL AND parked_at IS NULL
-ORDER BY available_at, event_id
+ORDER BY session_id, round_id, round_version, available_at, event_id
 LIMIT $1
 FOR UPDATE SKIP LOCKED`
 
@@ -377,7 +390,7 @@ const claimReplayOutboxEventsQuery = `
 SELECT ` + outboxColumns + `
 FROM queue_event_outbox
 WHERE delivered_at IS NULL
-ORDER BY parked_at NULLS FIRST, available_at, event_id
+ORDER BY session_id, round_id, round_version, parked_at NULLS FIRST, available_at, event_id
 LIMIT $1
 FOR UPDATE SKIP LOCKED`
 
@@ -431,6 +444,27 @@ const findQueueRoundQuery = `
 SELECT ` + roundColumns + `
 FROM recitation_queue
 WHERE id = $1::uuid`
+
+const findSurahNameQuery = `SELECT name_transliterated FROM quran_surahs WHERE id = $1`
+
+const findCurrentQueueRoundQuery = `
+SELECT ` + roundColumns + `
+FROM recitation_queue
+WHERE session_id = $1::uuid AND lifecycle IN ('active', 'prepared')
+ORDER BY CASE lifecycle WHEN 'active' THEN 0 ELSE 1 END, round_number
+LIMIT 1`
+
+const findLowestPreparedQueueRoundQuery = `
+SELECT ` + roundColumns + `
+FROM recitation_queue
+WHERE session_id = $1::uuid AND lifecycle = 'prepared'
+ORDER BY round_number
+LIMIT 1`
+
+const findProfileDisplayNamesQuery = `
+SELECT user_id::text, display_name
+FROM profiles
+WHERE user_id = ANY($1::uuid[])`
 
 // listQueueEntriesQuery loads a round's entries in position order; grade and
 // teacher_notes are dropped per policy + viewer by the repository before the

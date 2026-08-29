@@ -44,6 +44,7 @@ type queueRBACEnv struct {
 	backendSessions map[string]string
 	sessionID       string // live session created by the teacher (main session)
 	creatorSession  string // scheduled session created by the later-demoted creator
+	foreignSession  string // active other-circle session the teacher cannot manage
 }
 
 // rbacManagerOps returns one request builder per US1 manager operation against
@@ -221,6 +222,14 @@ func setupQueueRBACEnv(t *testing.T) *queueRBACEnv {
 
 	// Filler students give the main session's active round real entries.
 	fillers := []string{env.seedQueueRBACUser(t, "filler-a"), env.seedQueueRBACUser(t, "filler-b")}
+	for _, fillerID := range fillers {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO circle_members (circle_id, user_id, role)
+			VALUES ($1::uuid, $2::uuid, 'student')
+		`, circleID, fillerID); err != nil {
+			t.Fatalf("seed filler student membership: %v", err)
+		}
+	}
 
 	// Main session: created by the teacher, live, with an active round
 	// (entries materialized for present students) and a stacked prepared round.
@@ -292,6 +301,42 @@ func setupQueueRBACEnv(t *testing.T) *queueRBACEnv {
 		WHERE circle_id = $1::uuid AND user_id = $2::uuid
 	`, circleID, env.userIDs["creator"]); err != nil {
 		t.Fatalf("demote creator: %v", err)
+	}
+
+	// The foreign active round belongs to another circle. Its entries exercise
+	// the session-path ownership boundary for entry mutations.
+	for _, fillerID := range fillers {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO circle_members (circle_id, user_id, role)
+			VALUES ($1::uuid, $2::uuid, 'student')
+		`, otherCircleID, fillerID); err != nil {
+			t.Fatalf("seed foreign filler membership: %v", err)
+		}
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO sessions (circle_id, created_by)
+		VALUES ($1::uuid, $2::uuid)
+		RETURNING id::text
+	`, otherCircleID, env.userIDs["outsider"]).Scan(&env.foreignSession); err != nil {
+		t.Fatalf("insert foreign session: %v", err)
+	}
+	for _, fillerID := range fillers {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO session_participant_presence (session_id, user_id, first_joined_at, last_joined_at, is_currently_present)
+			VALUES ($1::uuid, $2::uuid, NOW(), NOW(), TRUE)
+		`, env.foreignSession, fillerID); err != nil {
+			t.Fatalf("seed foreign presence: %v", err)
+		}
+	}
+	if _, err := sessions.NewSessionRepository(pool).StartSession(ctx, env.foreignSession, sessions.MediaRoomRef("t025-foreign-room")); err != nil {
+		t.Fatalf("start foreign session: %v", err)
+	}
+	if _, err := rounds.Prepare(ctx, queue.PrepareRoundInput{
+		SessionID: env.foreignSession, Type: queue.RoundTypeRevision, SurahID: 1,
+		FromAyah: 1, ToAyah: 7, SurahAyahCount: 7, GradingRequired: false,
+		CreatedBy: env.userIDs["outsider"], Preorder: fillers,
+	}); err != nil {
+		t.Fatalf("prepare foreign round: %v", err)
 	}
 
 	return env
@@ -418,6 +463,18 @@ func (e *queueRBACEnv) entryRefFor(t *testing.T, sessionID string) (string, int6
 	return entryID, version
 }
 
+func (e *queueRBACEnv) entrySnapshot(t *testing.T, entryID string) (position int, status string, version int64) {
+	t.Helper()
+	if err := e.pool.QueryRow(context.Background(), `
+		SELECT position, status, version
+		FROM recitation_queue_entries
+		WHERE id = $1::uuid
+	`, entryID).Scan(&position, &status, &version); err != nil {
+		t.Fatalf("snapshot entry %s: %v", entryID, err)
+	}
+	return position, status, version
+}
+
 func (e *queueRBACEnv) policyVersion(t *testing.T, sessionID string) int64 {
 	t.Helper()
 	var version int64
@@ -508,6 +565,44 @@ func TestRecitationQueueRBAC(t *testing.T) {
 		// The creator seeded this session and its round while still a
 		// teacher; the current student role must outrank creator identity.
 		env.assertAllManagerOpsDenied(t, env.creatorSession, "creator", env.tokens["creator"], http.StatusForbidden, httpconst.ErrorCodeForbidden)
+	})
+
+	t.Run("manager cannot mutate a foreign-session entry through own session path", func(t *testing.T) {
+		foreignEntryID, foreignEntryVersion := env.entryRefFor(t, env.foreignSession)
+		foreignRoundVersion := env.roundVersion(t, env.foreignSession, "active")
+		headers := map[string]string{
+			httpconst.HeaderAuthorization: env.tokens["teacher"],
+			httpconst.HeaderSessionID:     env.backendSessions["teacher"],
+			httpconst.HeaderContentType:   httpconst.ContentTypeApplicationJSON,
+		}
+		for _, attempt := range []struct {
+			name, method, suffix, body string
+		}{
+			{"move", http.MethodPost, "/move", fmt.Sprintf(`{"new_position":1,"expected_version":%d}`, foreignRoundVersion)},
+			{"status", http.MethodPut, "/status", fmt.Sprintf(`{"status":"skipped","expected_entry_version":%d}`, foreignEntryVersion)},
+		} {
+			t.Run(attempt.name, func(t *testing.T) {
+				beforePosition, beforeStatus, beforeVersion := env.entrySnapshot(t, foreignEntryID)
+				beforeOwn := env.queueTablesSnapshot(t, env.sessionID)
+				beforeForeign := env.queueTablesSnapshot(t, env.foreignSession)
+				resp := doJSONRequest(t, env.mux, attempt.method,
+					"/api/v1/sessions/"+env.sessionID+"/queue/entries/"+foreignEntryID+attempt.suffix,
+					attempt.body, headers)
+				if resp.Code != http.StatusNotFound {
+					t.Fatalf("foreign %s: got %d want 404 body=%s", attempt.name, resp.Code, resp.Body.String())
+				}
+				afterPosition, afterStatus, afterVersion := env.entrySnapshot(t, foreignEntryID)
+				if got, want := [3]any{afterPosition, afterStatus, afterVersion}, [3]any{beforePosition, beforeStatus, beforeVersion}; got != want {
+					t.Fatalf("foreign %s mutated entry: before=%v after=%v", attempt.name, want, got)
+				}
+				if after := env.queueTablesSnapshot(t, env.sessionID); after != beforeOwn {
+					t.Fatalf("foreign %s changed own-session queue rows: before=%v after=%v", attempt.name, beforeOwn, after)
+				}
+				if after := env.queueTablesSnapshot(t, env.foreignSession); after != beforeForeign {
+					t.Fatalf("foreign %s changed foreign-session queue rows: before=%v after=%v", attempt.name, beforeForeign, after)
+				}
+			})
+		}
 	})
 
 	t.Run("teacher happy-path control proves the 403s are RBAC", func(t *testing.T) {

@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/auth/data/auth_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
+import 'package:halaqaty_mobile/features/sessions/data/queue_api_client.dart';
 import 'package:halaqaty_mobile/features/sessions/data/session_api_client.dart';
 import 'package:halaqaty_mobile/features/sessions/data/session_protocol_constants.dart';
 
@@ -13,7 +14,7 @@ import 'package:halaqaty_mobile/features/sessions/data/session_protocol_constant
 ///
 /// Only session-scoped facts are modeled (US2); queue/chat events and
 /// `session.participant_muted` (no US2 client state) are dropped by the parser.
-sealed class RealtimeSessionEvent {
+abstract class RealtimeSessionEvent {
   const RealtimeSessionEvent({required this.sessionId});
   final String sessionId;
 }
@@ -80,6 +81,173 @@ class LockChangedEvent extends RealtimeSessionEvent {
 class SessionEndedEvent extends RealtimeSessionEvent {
   const SessionEndedEvent({required super.sessionId, this.endReason});
   final String? endReason;
+}
+
+/// A queue projection delivered over the at-least-once session topic.
+sealed class QueueRealtimeEvent extends RealtimeSessionEvent {
+  const QueueRealtimeEvent({
+    required super.sessionId,
+    required this.eventId,
+    this.version,
+  });
+
+  final String eventId;
+  final int? version;
+}
+
+/// A full, visibility-filtered queue snapshot.
+class QueueStateEvent extends QueueRealtimeEvent {
+  QueueStateEvent({
+    required super.sessionId,
+    required super.eventId,
+    required this.queue,
+  }) : super(version: queue.version);
+
+  final QueueState queue;
+}
+
+/// Signals that a queue projection was skipped and REST reconciliation is due.
+class QueueVersionGapEvent extends QueueRealtimeEvent {
+  const QueueVersionGapEvent({
+    required super.sessionId,
+    required super.eventId,
+    required this.previousVersion,
+    required this.receivedVersion,
+  }) : super(version: receivedVersion);
+
+  final int previousVersion;
+  final int receivedVersion;
+}
+
+/// A policy change requires a fresh visibility-filtered queue projection.
+class QueuePolicyChangedEvent extends QueueRealtimeEvent {
+  const QueuePolicyChangedEvent({
+    required super.sessionId,
+    required super.eventId,
+    required this.policyVersion,
+  }) : super(version: policyVersion);
+
+  final int policyVersion;
+}
+
+/// A recognized incremental queue projection.
+class QueueChangeEvent extends QueueRealtimeEvent {
+  const QueueChangeEvent({
+    required super.sessionId,
+    required super.eventId,
+    required super.version,
+    required this.type,
+  });
+
+  final String type;
+}
+
+/// Decodes queue frames and tracks delivery per websocket session.
+class QueueRealtimeEventDecoder {
+  QueueRealtimeEventDecoder(this._liveSessionId);
+
+  final String _liveSessionId;
+  final Set<String> _seenEventIds = {};
+  int? _roundVersion;
+
+  RealtimeSessionEvent? decode(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return null;
+      final type = decoded[SessionJsonKeys.type];
+      final payload = decoded[SessionJsonKeys.payload];
+      final eventId = decoded[SessionJsonKeys.eventId];
+      if (type is! String ||
+          !_queueTypes.contains(type) ||
+          payload is! Map<String, dynamic> ||
+          eventId is! String ||
+          eventId.isEmpty ||
+          payload[SessionJsonKeys.sessionId] != _liveSessionId ||
+          !_seenEventIds.add(eventId)) {
+        return null;
+      }
+
+      if (type == SessionRealtimeTypes.queueState) {
+        final queue = QueueState.fromJson(_queueStatePayload(payload));
+        _roundVersion = queue.version;
+        return QueueStateEvent(
+          sessionId: _liveSessionId,
+          eventId: eventId,
+          queue: queue,
+        );
+      }
+
+      if (type == SessionRealtimeTypes.queuePolicyChanged) {
+        final policy = payload[SessionJsonKeys.policy];
+        final version = policy is Map<String, dynamic>
+            ? policy[SessionJsonKeys.version]
+            : null;
+        if (version is! int) return null;
+        return QueuePolicyChangedEvent(
+          sessionId: _liveSessionId,
+          eventId: eventId,
+          policyVersion: version,
+        );
+      }
+
+      final version = payload[SessionJsonKeys.version];
+      if (version is! int ||
+          (_roundVersion != null && version <= _roundVersion!)) {
+        return null;
+      }
+      final previousVersion = _roundVersion;
+      _roundVersion = version;
+      if (previousVersion != null && version > previousVersion + 1) {
+        return QueueVersionGapEvent(
+          sessionId: _liveSessionId,
+          eventId: eventId,
+          previousVersion: previousVersion,
+          receivedVersion: version,
+        );
+      }
+      return QueueChangeEvent(
+        sessionId: _liveSessionId,
+        eventId: eventId,
+        version: version,
+        type: type,
+      );
+    } on FormatException {
+      return null;
+    } on TypeError {
+      return null;
+    }
+  }
+
+  static const _queueTypes = {
+    SessionRealtimeTypes.queueState,
+    SessionRealtimeTypes.queueEntryUpdated,
+    SessionRealtimeTypes.queueYourTurn,
+    SessionRealtimeTypes.queueNextSoon,
+    SessionRealtimeTypes.queueReordered,
+    SessionRealtimeTypes.queueRoundStarted,
+    SessionRealtimeTypes.queueGradeSubmitted,
+    SessionRealtimeTypes.queueAdvanced,
+    SessionRealtimeTypes.queueRoundFinalized,
+    SessionRealtimeTypes.queuePolicyChanged,
+    SessionRealtimeTypes.queueOptOutRequested,
+  };
+
+  static Map<String, dynamic> _queueStatePayload(
+    Map<String, dynamic> payload,
+  ) {
+    final entries = payload[SessionJsonKeys.entries];
+    if (entries is! List) return payload;
+    return {
+      ...payload,
+      SessionJsonKeys.entries: entries.map((entry) {
+        if (entry is! Map<String, dynamic>) return entry;
+        return {
+          ...entry,
+          SessionJsonKeys.id: entry[SessionJsonKeys.queueEntryId],
+        };
+      }).toList(growable: false),
+    };
+  }
 }
 
 /// Parses one WS text frame into a session event for [liveSessionId].
@@ -241,6 +409,7 @@ class WebSocketRealtimeSessionClient implements RealtimeSessionClient {
           .replace(queryParameters: {'token': ticket});
       final socket = await WebSocket.connect(url.toString());
       _socket = socket;
+      final queueDecoder = QueueRealtimeEventDecoder(liveSessionId);
       socket
           .add(jsonEncode(realtimeSubscribeMessage('session.$liveSessionId')));
       _heartbeat?.cancel();
@@ -249,7 +418,8 @@ class WebSocketRealtimeSessionClient implements RealtimeSessionClient {
       });
       socket.listen((data) {
         if (data is! String || sink.isClosed) return;
-        final event = parseRealtimeSessionEvent(data, liveSessionId);
+        final event = parseRealtimeSessionEvent(data, liveSessionId) ??
+            queueDecoder.decode(data);
         if (event != null) sink.add(event);
       },
           // ponytail: transport errors close the stream instead of surfacing;

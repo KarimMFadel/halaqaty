@@ -13,12 +13,14 @@ import (
 	firebaseAdmin "firebase.google.com/go/v4"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	apirouter "github.com/KarimMFadel/halaqaty/backend/internal/api"
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/config"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/logging"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
 	"github.com/KarimMFadel/halaqaty/backend/internal/profile"
+	"github.com/KarimMFadel/halaqaty/backend/internal/queue"
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
 	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
@@ -87,6 +89,9 @@ func main() {
 	rbacRepo := rbac.NewRepository(pool)
 	rbacService := rbac.NewService(rbacRepo, auditLogger)
 	rbacHandler := rbac.NewHandler(rbacService)
+	queueRepo := queue.NewQueueRepository(pool)
+	queueRounds := queue.NewRoundService(queueRepo)
+	queueHandler := queue.NewHandler(queueRepo, queueRounds, queue.NewTurnService(queueRepo), queue.NewPolicyService(queueRepo))
 
 	var sessionHandler *sessions.Handler
 	var liveSessionService *sessions.Service
@@ -119,6 +124,7 @@ func main() {
 			logger.Error("failed to initialize live session service", "error", err)
 			os.Exit(1)
 		}
+		liveSessionService.SetQueueObserver(sessions.NewBoundedQueueObserver(queue.NewSessionObserver(queueRounds), 0))
 		sessionReconciler, err = sessions.NewReconciler(liveSessionRepo, media, roomKey)
 		if err != nil {
 			logger.Error("failed to initialize session reconciler", "error", err)
@@ -136,12 +142,14 @@ func main() {
 	rateLimitMW := middleware.NewRateLimitMiddleware(cfg.RateLimitPerIPPerMin, cfg.RateLimitPerUserPerMin)
 
 	realtimeHub := realtime.NewHub(ticketService, sessionTopicAuthorizer)
+	queueProjector := queue.NewRealtimeOutboxProjector(queueRepo, realtimeHub)
+	realtimeHub.RegisterSessionEventProvider(queueProjector.QueueState)
 	if liveSessionService != nil {
 		realtimeHub.SetSessionSnapshotProvider(liveSessionService.RealtimeSnapshot)
 		realtimeHub.SetSessionCommandHandler(liveSessionService.HandleRealtimeCommand)
 	}
 
-	mwSet := MiddlewareSet{
+	mwSet := apirouter.MiddlewareSet{
 		Auth:            authMW,
 		Role:            roleMW,
 		RateLimit:       rateLimitMW,
@@ -151,6 +159,7 @@ func main() {
 		SessionHandler:  sessionHandler,
 		RealtimeHandler: realtimeHandler,
 		RealtimeHub:     realtimeHub,
+		QueueHandler:    queueHandler,
 		Timeout:         cfg.RequestTimeout,
 		Logger:          logger,
 		Metrics:         authMetrics,
@@ -158,7 +167,7 @@ func main() {
 	}
 
 	// ── Router ────────────────────────────────────────────────────────────────
-	router := NewRouter(mwSet)
+	router := apirouter.NewRouter(mwSet)
 
 	// ── Server ────────────────────────────────────────────────────────────────
 	srv := &http.Server{

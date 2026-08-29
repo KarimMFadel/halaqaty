@@ -49,6 +49,7 @@ type Hub struct {
 	upgrader websocket.Upgrader
 	snapshot SessionSnapshotProvider
 	command  SessionCommandHandler
+	events   []SessionEventProvider
 
 	mu         sync.Mutex
 	clients    map[*hubClient]struct{}
@@ -83,6 +84,17 @@ func (h *Hub) SetSessionCommandHandler(handler SessionCommandHandler) {
 	if h != nil {
 		h.command = handler
 	}
+}
+
+// RegisterSessionEventProvider adds an event emitted after an authorized
+// session-topic subscription. Providers run after the session snapshot.
+func (h *Hub) RegisterSessionEventProvider(provider SessionEventProvider) {
+	if h == nil || provider == nil {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.events = append(h.events, provider)
 }
 
 // ServeHTTP authenticates a ticket query parameter and serves one connection.
@@ -171,6 +183,21 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = client.writeJSON(map[string]any{"type": realtimeTypeSubscribed, "topic": topic.String()})
 		if snapshot != nil {
 			_ = client.writeJSON(snapshot)
+		}
+		if topic.Kind() == TopicSession {
+			h.mu.Lock()
+			providers := append([]SessionEventProvider(nil), h.events...)
+			h.mu.Unlock()
+			for _, provider := range providers {
+				event, eventErr := provider(r.Context(), client.userID, topic.ID())
+				if eventErr != nil {
+					writeRealtimeError(client, realtimeErrorSessionEnded, "session event unavailable")
+					break
+				}
+				if event != nil {
+					_ = client.writeJSON(event)
+				}
+			}
 		}
 	}
 }
@@ -281,6 +308,46 @@ func (h *Hub) Broadcast(topic Topic, eventID string, payload any) error {
 		}
 		if err := client.writeText(encoded); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// SendToUser sends one redacted event to every subscribed device of one user.
+// Duplicate IDs are ignored per topic and recipient.
+func (h *Hub) SendToUser(topic Topic, userID, eventID string, payload any) error {
+	if h == nil {
+		return errors.New("realtime hub is not configured")
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if eventID != "" {
+		key := topic.String() + ":" + userID
+		seen := h.seenEvents[key]
+		if seen == nil {
+			seen = map[string]struct{}{}
+			h.seenEvents[key] = seen
+		}
+		if _, ok := seen[eventID]; ok {
+			return nil
+		}
+		seen[eventID] = struct{}{}
+	}
+	for client := range h.clients {
+		if client.userID != userID {
+			continue
+		}
+		client.mu.Lock()
+		_, subscribed := client.topics[topic.String()]
+		client.mu.Unlock()
+		if subscribed {
+			if err := client.writeText(encoded); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

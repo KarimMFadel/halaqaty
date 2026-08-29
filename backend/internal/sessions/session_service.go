@@ -49,10 +49,11 @@ type CircleRoleReader interface {
 // lifecycle compare-and-set, capacity, and least-privilege media connection
 // issuance (US1). LiveKit specifics stay behind SessionMediaGateway (ADR-015).
 type Service struct {
-	store   Store
-	gateway SessionMediaGateway
-	roles   CircleRoleReader
-	roomKey []byte
+	store         Store
+	gateway       SessionMediaGateway
+	roles         CircleRoleReader
+	roomKey       []byte
+	queueObserver QueueObserver
 }
 
 type moderationStore interface {
@@ -73,6 +74,14 @@ type connectionAdmissionStore interface {
 // gateway, and circle-role ports.
 func NewService(store Store, gateway SessionMediaGateway, roles CircleRoleReader) *Service {
 	return &Service{store: store, gateway: gateway, roles: roles}
+}
+
+// SetQueueObserver registers an optional post-commit F-003 lifecycle observer.
+// Observer failure never changes the authoritative F-005 result.
+func (s *Service) SetQueueObserver(observer QueueObserver) {
+	if s != nil {
+		s.queueObserver = observer
+	}
 }
 
 // NewServiceWithRoomKey constructs a service with the backend-only HMAC key
@@ -179,6 +188,9 @@ func (s *Service) StartSession(ctx context.Context, actorID, sessionID string) (
 	})
 	if err != nil {
 		return Session{}, MediaConnection{}, fmt.Errorf("start session: %w", err)
+	}
+	if s.queueObserver != nil {
+		_ = s.queueObserver.OnSessionStarted(ctx, sessionID)
 	}
 	return started, conn, nil
 }

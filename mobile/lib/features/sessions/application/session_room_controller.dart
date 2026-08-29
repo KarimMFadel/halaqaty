@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/application/media_session.dart';
+import 'package:halaqaty_mobile/features/sessions/application/queue_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/data/realtime_session_client.dart';
 import 'package:halaqaty_mobile/features/sessions/data/session_api_client.dart';
 
@@ -20,7 +21,8 @@ class SessionRoomState {
       this.isLocked = false,
       this.isModerator = false,
       this.actionErrorMessage,
-      this.recovery = SessionRoomRecovery.none});
+      this.recovery = SessionRoomRecovery.none,
+      this.queueState});
   final SessionRoomStatus status;
   final SessionConnection? connection;
   final String? errorMessage;
@@ -29,6 +31,7 @@ class SessionRoomState {
   final bool isModerator;
   final String? actionErrorMessage;
   final SessionRoomRecovery recovery;
+  final QueueControllerState? queueState;
 
   SessionRoomState copyWith(
           {SessionRoomStatus? status,
@@ -40,7 +43,8 @@ class SessionRoomState {
           bool? isModerator,
           String? actionErrorMessage,
           bool clearActionError = false,
-          SessionRoomRecovery? recovery}) =>
+          SessionRoomRecovery? recovery,
+          QueueControllerState? queueState}) =>
       SessionRoomState(
         status: status ?? this.status,
         connection: connection ?? this.connection,
@@ -52,18 +56,32 @@ class SessionRoomState {
             ? null
             : (actionErrorMessage ?? this.actionErrorMessage),
         recovery: recovery ?? this.recovery,
+        queueState: queueState ?? this.queueState,
       );
 }
 
 class SessionRoomController extends StateNotifier<SessionRoomState> {
-  SessionRoomController(this._api, this._credentials, this._mediaSession,
-      {required RealtimeSessionClient realtime, bool isModerator = false})
-      : _realtime = realtime,
-        super(SessionRoomState(isModerator: isModerator));
+  SessionRoomController(
+    this._api,
+    this._credentials,
+    this._mediaSession, {
+    required RealtimeSessionClient realtime,
+    bool isModerator = false,
+    QueueController? queue,
+  })  : _realtime = realtime,
+        _queue = queue,
+        super(SessionRoomState(
+          isModerator: isModerator,
+          queueState: queue?.state,
+        )) {
+    _queueListener = queue?.addListener(_applyQueueState);
+  }
   final SessionApiClient _api;
   final Future<({String token, String sessionId})> Function() _credentials;
   final MediaSession _mediaSession;
   final RealtimeSessionClient _realtime;
+  final QueueController? _queue;
+  RemoveListener? _queueListener;
   StreamSubscription<RealtimeSessionEvent>? _subscription;
   String? _liveSessionId;
   String? _lastEventKey;
@@ -84,6 +102,7 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
 
   /// Leaves the room without attempting another REST retry.
   Future<void> leave() async {
+    await _queue?.leave();
     await _mediaSession.disconnect();
     await _subscription?.cancel();
     _subscription = null;
@@ -118,14 +137,17 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
           liveSessionId: liveSessionId);
       _liveSessionId = liveSessionId;
       _lastEventKey = null;
+      final isModerator = state.isModerator || connection.isModerator;
       state = state.copyWith(
           status: SessionRoomStatus.connected,
           connection: connection,
           participants: participants,
           isLocked: connection.session.isLocked,
-          isModerator: state.isModerator || connection.isModerator,
+          isModerator: isModerator,
           recovery: SessionRoomRecovery.none,
           clearActionError: true);
+      _queue?.setManager(isModerator);
+      await _queue?.connect(liveSessionId, listenRealtime: false);
       unawaited(_subscription?.cancel());
       _subscription = _realtime
           .sessionEvents(liveSessionId,
@@ -156,6 +178,26 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
   /// Hand commands are WS-only per `ws_events.md` (`cmd.raise_hand`).
   Future<void> raiseHand() => _sendHandCommand(_realtime.raiseHand);
   Future<void> lowerHand() => _sendHandCommand(_realtime.lowerHand);
+
+  Future<void> advanceQueue() => _queue?.advance() ?? Future.value();
+
+  Future<void> startSelectedQueueEntry() {
+    final queue = state.queueState?.queue;
+    final selectedEntryId = queue?.selectedEntryId;
+    if (queue == null || selectedEntryId == null) return Future.value();
+    return _queue?.startEntry(selectedEntryId) ?? Future.value();
+  }
+
+  Future<void> skipSelectedQueueEntry() {
+    final queue = state.queueState?.queue;
+    final selectedEntryId = queue?.selectedEntryId;
+    if (queue == null || selectedEntryId == null) return Future.value();
+    return _queue?.skipEntry(selectedEntryId) ?? Future.value();
+  }
+
+  void _applyQueueState(QueueControllerState queueState) {
+    state = state.copyWith(queueState: queueState);
+  }
 
   Future<void> _sendHandCommand(
       Future<void> Function(String liveSessionId) send) async {
@@ -221,6 +263,7 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
             token: credentials.token,
             sessionId: credentials.sessionId,
             liveSessionId: _liveSessionId!);
+        await _queue?.end();
         state = state.copyWith(status: SessionRoomStatus.ended);
       });
 
@@ -237,6 +280,7 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
   }
 
   void _applyEvent(RealtimeSessionEvent event) {
+    _queue?.handleRealtimeEvent(event);
     switch (event) {
       // Snapshots are authoritative and never deduplicated.
       case SessionSnapshotEvent():
@@ -324,6 +368,7 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
 
   @override
   void dispose() {
+    _queueListener?.call();
     _subscription?.cancel();
     unawaited(_realtime.dispose());
     _mediaSession.disconnect();
@@ -332,7 +377,7 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
 }
 
 final sessionRoomControllerProvider = StateNotifierProvider.family<
-    SessionRoomController, SessionRoomState, String>((ref, _) {
+    SessionRoomController, SessionRoomState, String>((ref, liveSessionId) {
   final auth = ref.watch(authControllerProvider);
   return SessionRoomController(ref.watch(sessionApiClientProvider), () async {
     final user = ref.read(firebaseAuthProvider).currentUser;
@@ -346,5 +391,6 @@ final sessionRoomControllerProvider = StateNotifierProvider.family<
     final sessionValue = sessionId;
     return (token: tokenValue, sessionId: sessionValue);
   }, ref.watch(mediaSessionProvider),
-      realtime: ref.watch(realtimeSessionClientProvider));
+      realtime: ref.watch(realtimeSessionClientProvider),
+      queue: ref.watch(queueControllerProvider(liveSessionId).notifier));
 });

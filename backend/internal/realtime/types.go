@@ -7,6 +7,7 @@
 package realtime
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -17,6 +18,23 @@ import (
 // TicketTTL is how long an issued realtime ticket stays valid, per the
 // canonical WebSocket contract (60 seconds).
 const TicketTTL = 60 * time.Second
+
+// Queue event names registered on the shared session-topic transport.
+const (
+	EventQueueState         = "queue.state"
+	EventQueueRoundStarted  = "queue.round_started"
+	EventQueueReordered     = "queue.reordered"
+	EventQueueAdvanced      = "queue.advanced"
+	EventQueueEntryUpdated  = "queue.entry_updated"
+	EventQueuePolicyChanged = "queue.policy_changed"
+	EventQueueYourTurn      = "queue.your_turn"
+	EventQueueNextSoon      = "queue.next_soon"
+)
+
+// SessionEventProvider supplies one already-authorized event after a session
+// topic subscription succeeds. A nil event means the provider has no state for
+// that subscription.
+type SessionEventProvider func(context.Context, string, string) (map[string]any, error)
 
 // TopicKind distinguishes realtime subscription scopes.
 type TopicKind string

@@ -11,6 +11,7 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
+	"github.com/KarimMFadel/halaqaty/backend/internal/queue"
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
 )
 
@@ -21,6 +22,59 @@ func TestRouter_F005ProtectedRoutesRequireAuth(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("F-005 route status = %d, want 401 from auth middleware", rec.Code)
 	}
+}
+
+func TestRouter_QueueRoutesRequireAuth(t *testing.T) {
+	router := NewRouter(MiddlewareSet{
+		Auth:         middlewareForRouteTest(),
+		QueueHandler: queue.NewHandler(nil, nil, nil, nil),
+	})
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/sessions/00000000-0000-0000-0000-000000000001/queue", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("queue route status = %d, want 401 from production auth middleware", rec.Code)
+	}
+}
+
+func TestRouter_QueueRoutesUseProductionRateLimits(t *testing.T) {
+	path := "/api/v1/sessions/00000000-0000-0000-0000-000000000001/queue"
+
+	t.Run("per IP applies before authentication", func(t *testing.T) {
+		router := NewRouter(MiddlewareSet{
+			Auth:         middlewareForRouteTest(),
+			QueueHandler: queue.NewHandler(nil, nil, nil, nil),
+			RateLimit:    middleware.NewRateLimitMiddleware(1, 0),
+		})
+		for attempt, want := range []int{http.StatusUnauthorized, http.StatusTooManyRequests} {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.RemoteAddr = "198.51.100.17:4321"
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+			if rec.Code != want {
+				t.Fatalf("attempt %d: got %d, want %d", attempt+1, rec.Code, want)
+			}
+		}
+	})
+
+	t.Run("per user applies after authentication", func(t *testing.T) {
+		router := NewRouter(MiddlewareSet{
+			Auth: middleware.NewAuthMiddleware(
+				authenticatedRouteVerifier{}, auth.NewSessionService(time.Hour), authenticatedRouteSessionRepo{},
+			),
+			QueueHandler: queue.NewHandler(nil, nil, nil, nil),
+			RateLimit:    middleware.NewRateLimitMiddleware(0, 1),
+		})
+		for attempt, want := range []int{http.StatusInternalServerError, http.StatusTooManyRequests} {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.Header.Set("Authorization", "Bearer valid-token")
+			req.Header.Set("X-Halaqaty-Session-ID", "session-1")
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+			if rec.Code != want {
+				t.Fatalf("attempt %d: got %d, want %d", attempt+1, rec.Code, want)
+			}
+		}
+	})
 }
 
 func TestRouter_RegistersVersionedAuthRoutes(t *testing.T) {

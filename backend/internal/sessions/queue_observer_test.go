@@ -55,9 +55,9 @@ func TestBoundedQueueObserverDispatchesAllFacts(t *testing.T) {
 	obs := &recordingObserver{}
 	bounded := NewBoundedQueueObserver(obs, time.Second)
 
-	bounded.OnSessionStarted(context.Background(), "session-1")
-	bounded.OnParticipantJoined(context.Background(), "session-1", "user-1")
-	bounded.OnSessionEnded(context.Background(), "session-1")
+	_ = bounded.OnSessionStarted(context.Background(), "session-1")
+	_ = bounded.OnParticipantJoined(context.Background(), "session-1", "user-1")
+	_ = bounded.OnSessionEnded(context.Background(), "session-1")
 
 	if len(obs.started) != 1 || obs.started[0] != "session-1" {
 		t.Fatalf("started facts = %v, want [session-1]", obs.started)
@@ -79,7 +79,7 @@ func TestBoundedQueueObserverBoundsHangingCallback(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		bounded.OnParticipantJoined(context.Background(), "session-1", "user-1")
+		_ = bounded.OnParticipantJoined(context.Background(), "session-1", "user-1")
 	}()
 	select {
 	case <-done:
@@ -97,7 +97,7 @@ func TestBoundedQueueObserverRecoversPanickingCallback(t *testing.T) {
 	go func() {
 		defer close(done)
 		// Must not panic the caller.
-		bounded.OnSessionEnded(context.Background(), "session-1")
+		_ = bounded.OnSessionEnded(context.Background(), "session-1")
 	}()
 	select {
 	case <-done:
@@ -110,11 +110,11 @@ func TestBoundedQueueObserverSwallowsCallbackError(t *testing.T) {
 	obs := &recordingObserver{returnErr: errors.New("queue side effect failed")}
 	bounded := NewBoundedQueueObserver(obs, time.Second)
 
-	// The methods have no error return; the contract under test is that a
-	// failing callback is not propagated as a panic or a hang.
-	bounded.OnSessionStarted(context.Background(), "session-1")
-	bounded.OnParticipantJoined(context.Background(), "session-1", "user-1")
-	bounded.OnSessionEnded(context.Background(), "session-1")
+	// The wrapper does not propagate callback errors; the contract under test
+	// is that a failing callback does not become a panic or a hang.
+	_ = bounded.OnSessionStarted(context.Background(), "session-1")
+	_ = bounded.OnParticipantJoined(context.Background(), "session-1", "user-1")
+	_ = bounded.OnSessionEnded(context.Background(), "session-1")
 
 	if len(obs.started)+len(obs.joined)+len(obs.ended) != 3 {
 		t.Fatal("failing callbacks must still be dispatched")

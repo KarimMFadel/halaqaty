@@ -66,6 +66,22 @@ jobs:
     needs: detect-test-targets
     if: needs.detect-test-targets.outputs.go_enabled == 'true'
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: halaqaty
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d halaqaty"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/halaqaty?sslmode=disable
     defaults:
       run:
         working-directory: backend

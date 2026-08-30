@@ -173,7 +173,7 @@ func (p *RealtimeOutboxProjector) ProjectAndDeliver(ctx context.Context, event O
 	if p == nil || p.repo == nil || p.hub == nil {
 		return errors.New("queue realtime projector is not configured")
 	}
-	if !isUS1QueueEvent(event.EventType) {
+	if !isQueueEvent(event.EventType) {
 		return nil
 	}
 	topic, err := realtime.NewSessionTopic(event.SessionID)
@@ -193,7 +193,8 @@ func (p *RealtimeOutboxProjector) ProjectAndDeliver(ctx context.Context, event O
 		return err
 	}
 	envelope := realtimeEnvelope(event.EventType, event.EventID, payload)
-	if event.EventType == realtime.EventQueueReordered && metadataString(metadata, "order_kind") == "preorder_students" {
+	switch event.EventType {
+	case realtime.EventQueueOptOutRequested:
 		managers, err := p.repo.SessionManagerIDs(ctx, event.SessionID)
 		if err != nil {
 			return err
@@ -203,8 +204,24 @@ func (p *RealtimeOutboxProjector) ProjectAndDeliver(ctx context.Context, event O
 				return err
 			}
 		}
-	} else if err := p.hub.Broadcast(topic, event.EventID, envelope); err != nil {
-		return err
+	case realtime.EventQueueReordered:
+		if metadataString(metadata, "order_kind") == "preorder_students" {
+			managers, err := p.repo.SessionManagerIDs(ctx, event.SessionID)
+			if err != nil {
+				return err
+			}
+			for _, managerID := range managers {
+				if err := p.hub.SendToUser(topic, managerID, event.EventID, envelope); err != nil {
+					return err
+				}
+			}
+			break
+		}
+		fallthrough
+	default:
+		if err := p.hub.Broadcast(topic, event.EventID, envelope); err != nil {
+			return err
+		}
 	}
 	return p.deliverTurnPrompts(ctx, topic, event, state, metadata)
 }
@@ -249,10 +266,21 @@ func (p *RealtimeOutboxProjector) eventPayload(ctx context.Context, event Outbox
 			return nil, err
 		}
 		base = map[string]any{"session_id": event.SessionID, "policy": policyResponse(policy.Policy)}
+	case realtime.EventQueueOptOutRequested:
+		base["request_id"] = stringOrEmpty(event.ResourceID)
+		base["queue_entry_id"] = metadataString(metadata, "queue_entry_id")
+		base["student_id"] = metadataString(metadata, "student_id")
 	default:
 		return nil, errors.New("unsupported queue event")
 	}
 	return base, nil
+}
+
+func stringOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func (p *RealtimeOutboxProjector) deliverTurnPrompts(ctx context.Context, topic realtime.Topic, event OutboxEvent, state QueueState, metadata map[string]any) error {
@@ -305,9 +333,10 @@ func (p *RealtimeOutboxProjector) sendNextSoon(topic realtime.Topic, event Outbo
 	return p.hub.SendToUser(topic, entry.StudentID, eventID, realtimeEnvelope(realtime.EventQueueNextSoon, eventID, payload))
 }
 
-func isUS1QueueEvent(eventType string) bool {
+func isQueueEvent(eventType string) bool {
 	switch eventType {
-	case realtime.EventQueueRoundStarted, realtime.EventQueueReordered, realtime.EventQueueAdvanced, realtime.EventQueueEntryUpdated, realtime.EventQueuePolicyChanged:
+	case realtime.EventQueueRoundStarted, realtime.EventQueueReordered, realtime.EventQueueAdvanced,
+		realtime.EventQueueEntryUpdated, realtime.EventQueuePolicyChanged, realtime.EventQueueOptOutRequested:
 		return true
 	default:
 		return false

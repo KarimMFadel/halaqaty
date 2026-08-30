@@ -130,6 +130,30 @@ func TestLoadLiveKitConfig_RejectsNonTLSAndInvalidEndpoints(t *testing.T) {
 	}
 }
 
+func TestLoadLiveKitConfig_AllowsInsecureLoopbackForLocalDevelopment(t *testing.T) {
+	for _, endpoint := range []string{
+		"http://localhost:7880",
+		"ws://127.0.0.1:7880",
+		"http://[::1]:7880",
+	} {
+		t.Run(endpoint, func(t *testing.T) {
+			env := map[string]string{
+				"LIVEKIT_ENDPOINT":   endpoint,
+				"LIVEKIT_API_KEY":    "devkey",
+				"LIVEKIT_API_SECRET": "secret",
+			}
+
+			cfg, err := loadLiveKitConfig(func(key string) string { return env[key] })
+			if err != nil {
+				t.Fatalf("load loopback config: %v", err)
+			}
+			if cfg.Endpoint != endpoint {
+				t.Fatalf("endpoint: got %q, want %q", cfg.Endpoint, endpoint)
+			}
+		})
+	}
+}
+
 // TestLiveKitConfig_SecretNeverFormatted guards the constitution §IV secret
 // invariant: no formatting of the config may expose APISecret, so a future
 // String()/GoString()/MarshalJSON change that includes it fails here. %#v

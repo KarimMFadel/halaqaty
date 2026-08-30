@@ -91,7 +91,8 @@ func main() {
 	rbacHandler := rbac.NewHandler(rbacService)
 	queueRepo := queue.NewQueueRepository(pool)
 	queueRounds := queue.NewRoundService(queueRepo)
-	queueHandler := queue.NewHandler(queueRepo, queueRounds, queue.NewTurnService(queueRepo), queue.NewPolicyService(queueRepo))
+	queueOptOuts := queue.NewOptOutService(queueRepo)
+	queueHandler := queue.NewHandler(queueRepo, queueRounds, queue.NewTurnService(queueRepo), queue.NewPolicyService(queueRepo), queueOptOuts)
 
 	var sessionHandler *sessions.Handler
 	var liveSessionService *sessions.Service

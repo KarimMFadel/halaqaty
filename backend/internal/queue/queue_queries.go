@@ -437,6 +437,77 @@ VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, $10, $11, $1
 ON CONFLICT (queue_entry_id) DO UPDATE
 SET grade = EXCLUDED.grade, notes = EXCLUDED.notes, updated_at = NOW()`
 
+// --- Opt-out requests -------------------------------------------------------
+
+// findOwnEntryForSessionQuery resolves a student's own entry in the session's
+// active round. No active round or no entry for the student resolves to no rows.
+const findOwnEntryForSessionQuery = `
+SELECT ` + entryColumns + `
+FROM (
+    SELECT ` + entryColumns + `
+    FROM recitation_queue_entries
+    WHERE queue_id = (SELECT id FROM recitation_queue WHERE session_id = $1::uuid AND lifecycle = 'active')
+) e
+WHERE e.student_id = $2::text`
+
+// findOptOutRequestByEntryAndRequesterQuery returns the latest request for an
+// entry created by the requesting student (pending or decided).
+const findOptOutRequestByEntryAndRequesterQuery = `
+SELECT id::text, queue_entry_id::text, requested_by::text, status, decided_by::text, requested_at, decided_at, idempotency_key
+FROM queue_opt_out_requests
+WHERE queue_entry_id = $1::uuid AND requested_by = $2::uuid
+ORDER BY requested_at DESC
+LIMIT 1`
+
+// findPendingOptOutRequestByEntryQuery returns the single pending request for
+// an entry, enforced by the partial unique index.
+const findPendingOptOutRequestByEntryQuery = `
+SELECT id::text, queue_entry_id::text, requested_by::text, status, decided_by::text, requested_at, decided_at, idempotency_key
+FROM queue_opt_out_requests
+WHERE queue_entry_id = $1::uuid AND status = 'pending'`
+
+// lockOptOutRequestByIDQuery locks one opt-out request row for a decision.
+const lockOptOutRequestByIDQuery = `
+SELECT id::text, queue_entry_id::text, requested_by::text, status, decided_by::text, requested_at, decided_at, idempotency_key
+FROM queue_opt_out_requests
+WHERE id = $1::uuid
+FOR UPDATE`
+
+// insertOptOutRequestQuery creates one opt-out request row. decided_by is set
+// only for auto-approved requests; pending requests leave it NULL.
+const insertOptOutRequestQuery = `
+INSERT INTO queue_opt_out_requests (queue_entry_id, requested_by, status, decided_by, decided_at, idempotency_key)
+VALUES ($1::uuid, $2::uuid, $3, $4::uuid, CASE WHEN $4::uuid IS NOT NULL THEN NOW() ELSE NULL END, $5)
+RETURNING id::text, queue_entry_id::text, requested_by::text, status, decided_by::text, requested_at, decided_at, idempotency_key`
+
+// decideOptOutRequestQuery applies a terminal decision to a pending request.
+const decideOptOutRequestQuery = `
+UPDATE queue_opt_out_requests
+SET status = $2, decided_by = $3::uuid, decided_at = NOW()
+WHERE id = $1::uuid AND status = 'pending'
+RETURNING id::text, queue_entry_id::text, requested_by::text, status, decided_by::text, requested_at, decided_at, idempotency_key`
+
+// --- Late-join append -------------------------------------------------------
+
+// findEntryByStudentAndRoundQuery checks for an existing materialized entry
+// before appending a late joiner; duplicates converge to a no-op.
+const findEntryByStudentAndRoundQuery = `
+SELECT ` + entryColumns + `
+FROM recitation_queue_entries
+WHERE queue_id = $1::uuid AND student_id = $2::uuid`
+
+// nextEntryPositionQuery allocates the next position at the end of the round.
+const nextEntryPositionQuery = `
+SELECT COALESCE(MAX(position), 0) + 1 FROM recitation_queue_entries WHERE queue_id = $1::uuid`
+
+// findSessionStudentMembershipQuery returns the caller's current circle role
+// and membership timestamp for late-join eligibility under all_active_students.
+const findSessionStudentMembershipQuery = `
+SELECT cm.role, cm.joined_at
+FROM circle_members cm
+JOIN sessions s ON s.circle_id = cm.circle_id
+WHERE s.id = $1::uuid AND cm.user_id = $2::uuid`
+
 // --- Visibility projection --------------------------------------------------
 
 // findQueueRoundQuery loads one round without locking (snapshot reads).

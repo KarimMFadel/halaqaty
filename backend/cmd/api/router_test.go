@@ -27,7 +27,7 @@ func TestRouter_F005ProtectedRoutesRequireAuth(t *testing.T) {
 func TestRouter_QueueRoutesRequireAuth(t *testing.T) {
 	router := NewRouter(MiddlewareSet{
 		Auth:         middlewareForRouteTest(),
-		QueueHandler: queue.NewHandler(nil, nil, nil, nil),
+		QueueHandler: queue.NewHandler(nil, nil, nil, nil, nil),
 	})
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/sessions/00000000-0000-0000-0000-000000000001/queue", nil))
@@ -42,7 +42,7 @@ func TestRouter_QueueRoutesUseProductionRateLimits(t *testing.T) {
 	t.Run("per IP applies before authentication", func(t *testing.T) {
 		router := NewRouter(MiddlewareSet{
 			Auth:         middlewareForRouteTest(),
-			QueueHandler: queue.NewHandler(nil, nil, nil, nil),
+			QueueHandler: queue.NewHandler(nil, nil, nil, nil, nil),
 			RateLimit:    middleware.NewRateLimitMiddleware(1, 0),
 		})
 		for attempt, want := range []int{http.StatusUnauthorized, http.StatusTooManyRequests} {
@@ -61,7 +61,7 @@ func TestRouter_QueueRoutesUseProductionRateLimits(t *testing.T) {
 			Auth: middleware.NewAuthMiddleware(
 				authenticatedRouteVerifier{}, auth.NewSessionService(time.Hour), authenticatedRouteSessionRepo{},
 			),
-			QueueHandler: queue.NewHandler(nil, nil, nil, nil),
+			QueueHandler: queue.NewHandler(nil, nil, nil, nil, nil),
 			RateLimit:    middleware.NewRateLimitMiddleware(0, 1),
 		})
 		for attempt, want := range []int{http.StatusInternalServerError, http.StatusTooManyRequests} {

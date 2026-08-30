@@ -265,6 +265,8 @@ func (r *Router) registerRoutes() {
 			r.mux.Handle(routeSessionQueueEntryMove, r.requireWithUserLimit(http.HandlerFunc(queueHandler.MoveEntry)))
 			r.mux.Handle(routeSessionQueueEntryStatus, r.requireWithUserLimit(http.HandlerFunc(queueHandler.UpdateEntryStatus)))
 			r.mux.Handle(routeSessionQueuePolicy, r.requireWithUserLimit(http.HandlerFunc(queueHandler.UpdatePolicy)))
+			r.mux.Handle(routeSessionQueueOptOut, r.requireWithUserLimit(http.HandlerFunc(queueHandler.RequestOptOut)))
+			r.mux.Handle(routeSessionQueueOptOutDecision, r.requireWithUserLimit(http.HandlerFunc(queueHandler.DecideOptOutRequest)))
 		}
 	}
 	if r.mw.SessionHandler != nil {

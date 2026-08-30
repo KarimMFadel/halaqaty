@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -16,17 +17,18 @@ import (
 
 const idempotencyKeyHeader = "Idempotency-Key"
 
-// Handler exposes the F-003 US1 queue-management REST operations.
+// Handler exposes the F-003 queue-management REST operations.
 type Handler struct {
 	repo     *Repository
 	rounds   *RoundService
 	turns    *TurnService
 	policies *PolicyService
+	optOuts  *OptOutService
 }
 
 // NewHandler constructs the queue REST handler over the queue services.
-func NewHandler(repo *Repository, rounds *RoundService, turns *TurnService, policies *PolicyService) *Handler {
-	return &Handler{repo: repo, rounds: rounds, turns: turns, policies: policies}
+func NewHandler(repo *Repository, rounds *RoundService, turns *TurnService, policies *PolicyService, optOuts *OptOutService) *Handler {
+	return &Handler{repo: repo, rounds: rounds, turns: turns, policies: policies, optOuts: optOuts}
 }
 
 type roundRequest struct {
@@ -67,6 +69,11 @@ type policyPatchRequest struct {
 	GradeVisibility *GradeVisibility    `json:"grade_visibility"`
 	GradeCorrection *GradeCorrection    `json:"grade_correction"`
 	ExpectedVersion int64               `json:"expected_version"`
+}
+
+type optOutDecisionRequest struct {
+	Decision             OptOutRequestStatus `json:"decision"`
+	ExpectedEntryVersion int64               `json:"expected_entry_version"`
 }
 
 // GetQueue returns the current queue projection allowed for the caller.
@@ -351,6 +358,111 @@ func (h *Handler) UpdatePolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	phttp.WriteJSON(w, http.StatusOK, policyResponse(updated))
+}
+
+// RequestOptOut creates or replays a student opt-out request under the
+// session's opt-out policy. Managers are forbidden; the caller resolves their
+// own entry by session and student identity.
+func (h *Handler) RequestOptOut(w http.ResponseWriter, r *http.Request) {
+	sessionID, actorID, manager, ok := h.authorize(w, r, false)
+	if !ok {
+		return
+	}
+	if manager {
+		phttp.WriteError(w, httpconst.ErrorCodeForbidden, httpconst.ErrorMessageForbidden, http.StatusForbidden)
+		return
+	}
+
+	entry, err := h.repo.FindOwnEntryForSession(r.Context(), sessionID, actorID)
+	if err != nil {
+		writeQueueError(w, err)
+		return
+	}
+	status := http.StatusCreated
+	if _, err := h.repo.FindOptOutRequestByEntryAndRequester(r.Context(), entry.ID, actorID); err == nil {
+		status = http.StatusOK
+	}
+
+	if _, replay := h.receipt(w, r, sessionID, actorID, "queue.request_opt_out"); replay {
+		result, err := h.optOuts.Request(r.Context(), sessionID, actorID)
+		if err != nil {
+			writeQueueError(w, err)
+			return
+		}
+		h.writeOptOutResult(w, r, result, http.StatusOK)
+		return
+	}
+
+	result, err := h.optOuts.Request(r.Context(), sessionID, actorID)
+	if err != nil {
+		writeQueueError(w, err)
+		return
+	}
+	if err := h.recordReceipt(r, sessionID, actorID, result.Request.ID, result.Entry.Version); err != nil {
+		writeQueueError(w, err)
+		return
+	}
+	h.writeOptOutResult(w, r, result, status)
+}
+
+// DecideOptOutRequest allows a teacher or supervisor to approve or decline one
+// pending opt-out request.
+func (h *Handler) DecideOptOutRequest(w http.ResponseWriter, r *http.Request) {
+	_, actorID, _, ok := h.authorize(w, r, true)
+	if !ok {
+		return
+	}
+	requestID, ok := pathUUID(w, r, "requestId", "request_id")
+	if !ok {
+		return
+	}
+	var req optOutDecisionRequest
+	if !phttp.DecodeJSONBody(w, r, &req) || !validateVersion(w, req.ExpectedEntryVersion) {
+		return
+	}
+	if req.Decision != OptOutRequestStatusApproved && req.Decision != OptOutRequestStatusDeclined {
+		writeQueueValidation(w, httpconst.ErrorCodeQueueInvalidEnum, httpconst.ErrorMessageQueueInvalidEnum, httpconst.FieldDecision)
+		return
+	}
+
+	result, err := h.optOuts.Decide(r.Context(), requestID, actorID, req.Decision, req.ExpectedEntryVersion)
+	if err != nil {
+		writeQueueError(w, err)
+		return
+	}
+	h.writeOptOutResult(w, r, result, http.StatusOK)
+}
+
+func (h *Handler) writeOptOutResult(w http.ResponseWriter, r *http.Request, result OptOutResult, status int) {
+	response, err := optOutResultResponse(r.Context(), h.repo, result)
+	if err != nil {
+		writeQueueError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, status, response)
+}
+
+func optOutResultResponse(ctx context.Context, repo *Repository, result OptOutResult) (map[string]any, error) {
+	names, err := repo.DisplayNames(ctx, []string{result.Entry.StudentID})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"request": map[string]any{
+			"id":             result.Request.ID,
+			"queue_entry_id": result.Request.QueueEntryID,
+			"status":         result.Request.Status,
+			"requested_at":   result.Request.RequestedAt.UTC().Format(time.RFC3339Nano),
+		},
+		"entry": map[string]any{
+			"id":           result.Entry.ID,
+			"student_id":   result.Entry.StudentID,
+			"student_name": names[result.Entry.StudentID],
+			"position":     result.Entry.Position,
+			"status":       result.Entry.Status,
+			"version":      result.Entry.Version,
+		},
+	}, nil
 }
 
 func (h *Handler) replayState(w http.ResponseWriter, r *http.Request, receipt *CommandReceipt, actorID string) {

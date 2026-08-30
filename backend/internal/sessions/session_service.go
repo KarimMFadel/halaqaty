@@ -208,13 +208,20 @@ func (s *Service) JoinSession(ctx context.Context, actorID, sessionID string) (S
 		return Session{}, MediaConnection{}, err
 	}
 	if admission, ok := s.store.(connectionAdmissionStore); ok {
-		return admission.JoinSessionWithConnection(ctx, sessionID, actorID, MediaGrants{CanPublishAudio: true}, func(issueCtx context.Context, roomRef MediaRoomRef, grants MediaGrants) (MediaConnection, error) {
+		joined, conn, err := admission.JoinSessionWithConnection(ctx, sessionID, actorID, MediaGrants{CanPublishAudio: true}, func(issueCtx context.Context, roomRef MediaRoomRef, grants MediaGrants) (MediaConnection, error) {
 			conn, err := s.gateway.IssueConnection(issueCtx, roomRef, actorID, grants)
 			if err != nil {
 				return MediaConnection{}, fmt.Errorf("%w: %v", ErrMediaUnavailable, err)
 			}
 			return conn, nil
 		})
+		if err != nil {
+			return Session{}, MediaConnection{}, err
+		}
+		if s.queueObserver != nil {
+			_ = s.queueObserver.OnParticipantJoined(ctx, sessionID, actorID)
+		}
+		return joined, conn, nil
 	}
 	joined, err := s.store.JoinSession(ctx, sessionID, actorID)
 	if errors.Is(err, ErrSessionLocked) {
@@ -239,6 +246,9 @@ func (s *Service) JoinSession(ctx context.Context, actorID, sessionID string) (S
 			_, _ = leaver.LeaveSession(ctx, sessionID, actorID)
 		}
 		return Session{}, MediaConnection{}, fmt.Errorf("join session: issue connection: %w: %v", ErrMediaUnavailable, err)
+	}
+	if s.queueObserver != nil {
+		_ = s.queueObserver.OnParticipantJoined(ctx, sessionID, actorID)
 	}
 	return joined, conn, nil
 }

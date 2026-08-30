@@ -159,6 +159,7 @@ func setupRqcEnv(t *testing.T) *rqcEnv {
 		queue.NewRoundService(repo),
 		queue.NewTurnService(repo),
 		queue.NewPolicyService(repo),
+		queue.NewOptOutService(repo),
 	)
 
 	env := &rqcEnv{mux: rqcMux(handler), pool: pool}

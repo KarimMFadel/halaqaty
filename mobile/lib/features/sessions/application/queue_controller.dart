@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
@@ -7,6 +8,8 @@ import 'package:halaqaty_mobile/features/sessions/data/realtime_session_client.d
 
 enum QueueControllerStatus { idle, loading, ready, error, ended }
 
+enum QueueOptOutFeedback { pending, declined, approved, autoApproved }
+
 class QueueControllerState {
   const QueueControllerState({
     this.status = QueueControllerStatus.idle,
@@ -14,6 +17,7 @@ class QueueControllerState {
     this.errorMessage,
     this.actionErrorMessage,
     this.isManager = false,
+    this.optOutFeedback,
   });
 
   final QueueControllerStatus status;
@@ -21,6 +25,7 @@ class QueueControllerState {
   final String? errorMessage;
   final String? actionErrorMessage;
   final bool isManager;
+  final QueueOptOutFeedback? optOutFeedback;
 
   QueueControllerState copyWith({
     QueueControllerStatus? status,
@@ -30,6 +35,8 @@ class QueueControllerState {
     String? actionErrorMessage,
     bool clearActionError = false,
     bool? isManager,
+    QueueOptOutFeedback? optOutFeedback,
+    bool clearOptOutFeedback = false,
   }) =>
       QueueControllerState(
         status: status ?? this.status,
@@ -39,6 +46,9 @@ class QueueControllerState {
             ? null
             : (actionErrorMessage ?? this.actionErrorMessage),
         isManager: isManager ?? this.isManager,
+        optOutFeedback: clearOptOutFeedback
+            ? null
+            : (optOutFeedback ?? this.optOutFeedback),
       );
 }
 
@@ -75,6 +85,7 @@ class QueueController extends StateNotifier<QueueControllerState> {
       status: QueueControllerStatus.loading,
       clearError: true,
       clearActionError: true,
+      clearOptOutFeedback: true,
     );
     await _refresh();
     if (!listenRealtime || _liveSessionId != liveSessionId) return;
@@ -101,7 +112,10 @@ class QueueController extends StateNotifier<QueueControllerState> {
     _subscription = null;
     _liveSessionId = null;
     _eventIds.clear();
-    state = QueueControllerState(isManager: state.isManager);
+    state = QueueControllerState(
+      isManager: state.isManager,
+      optOutFeedback: null,
+    );
   }
 
   Future<void> end() async {
@@ -169,6 +183,28 @@ class QueueController extends StateNotifier<QueueControllerState> {
         liveSessionId: _liveSessionId!,
         expectedVersion: queue.version,
       ));
+
+  Future<void> requestOptOut() async {
+    final queue = state.queue;
+    if (state.isManager || queue == null || _liveSessionId == null) return;
+    try {
+      final credentials = await _credentials();
+      final result = await _api.optOut(
+        token: credentials.token,
+        sessionId: credentials.sessionId,
+        liveSessionId: _liveSessionId!,
+        idempotencyKey: _newIdempotencyKey(),
+      );
+      final feedback = _mapOptOutFeedback(result, queue.policy.optOut);
+      await _refresh();
+      state = state.copyWith(
+        optOutFeedback: feedback,
+        clearActionError: true,
+      );
+    } catch (error) {
+      state = state.copyWith(actionErrorMessage: error.toString());
+    }
+  }
 
   Future<void> reorder(List<String> orderedIds) =>
       _runManager((credentials, queue) => _api.reorder(
@@ -300,6 +336,27 @@ class QueueController extends StateNotifier<QueueControllerState> {
         sessionId: credentials.sessionId,
         liveSessionId: _liveSessionId!,
       );
+
+  static QueueOptOutFeedback _mapOptOutFeedback(
+    OptOutResult result,
+    String optOutPolicy,
+  ) =>
+      switch (result.request.status) {
+        'pending' => QueueOptOutFeedback.pending,
+        'declined' => QueueOptOutFeedback.declined,
+        'approved' when optOutPolicy == 'auto_approve' =>
+          QueueOptOutFeedback.autoApproved,
+        _ => QueueOptOutFeedback.approved,
+      };
+
+  static String _newIdempotencyKey() {
+    final bytes = List<int>.generate(16, (_) => Random.secure().nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+  }
 
   @override
   void dispose() {

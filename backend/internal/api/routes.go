@@ -64,12 +64,14 @@ const (
 )
 
 const (
-	routeSessionQueueGet          = "GET /api/v1/sessions/{sessionId}/queue"
-	routeSessionQueueRoundsCreate = "POST /api/v1/sessions/{sessionId}/queue/rounds"
-	routeSessionQueueReset        = "POST /api/v1/sessions/{sessionId}/queue/reset"
-	routeSessionQueueAdvance      = "POST /api/v1/sessions/{sessionId}/queue/advance"
-	routeSessionQueueOrder        = "PUT /api/v1/sessions/{sessionId}/queue/order"
-	routeSessionQueueEntryMove    = "POST /api/v1/sessions/{sessionId}/queue/entries/{entryId}/move"
-	routeSessionQueueEntryStatus  = "PUT /api/v1/sessions/{sessionId}/queue/entries/{entryId}/status"
-	routeSessionQueuePolicy       = "PATCH /api/v1/sessions/{sessionId}/queue/policy"
+	routeSessionQueueGet            = "GET /api/v1/sessions/{sessionId}/queue"
+	routeSessionQueueRoundsCreate   = "POST /api/v1/sessions/{sessionId}/queue/rounds"
+	routeSessionQueueReset          = "POST /api/v1/sessions/{sessionId}/queue/reset"
+	routeSessionQueueAdvance        = "POST /api/v1/sessions/{sessionId}/queue/advance"
+	routeSessionQueueOrder          = "PUT /api/v1/sessions/{sessionId}/queue/order"
+	routeSessionQueueEntryMove      = "POST /api/v1/sessions/{sessionId}/queue/entries/{entryId}/move"
+	routeSessionQueueEntryStatus    = "PUT /api/v1/sessions/{sessionId}/queue/entries/{entryId}/status"
+	routeSessionQueuePolicy         = "PATCH /api/v1/sessions/{sessionId}/queue/policy"
+	routeSessionQueueOptOut         = "POST /api/v1/sessions/{sessionId}/queue/opt-out"
+	routeSessionQueueOptOutDecision = "POST /api/v1/sessions/{sessionId}/queue/opt-out-requests/{requestId}/decision"
 )

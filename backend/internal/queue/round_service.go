@@ -256,6 +256,72 @@ func (s *RoundService) Move(ctx context.Context, entryID string, expectedVersion
 	return moved, err
 }
 
+// AppendLateJoiner adds one waiting entry at the end of the active round for a
+// participant who joined after activation. It is idempotent: duplicate join
+// facts converge to a single entry, and under all_active_students members who
+// were already materialized at activation are ignored. The operation performs
+// no media action and never fails the F-005 join transaction.
+func (s *RoundService) AppendLateJoiner(ctx context.Context, sessionID, userID string) error {
+	return s.repo.WithTx(ctx, func(tx *Tx) error {
+		policy, err := tx.LockSessionPolicy(ctx, sessionID)
+		if err != nil {
+			return err
+		}
+		if policy.Status != "active" {
+			return nil
+		}
+		round, err := tx.LockActiveRound(ctx, sessionID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
+			return err
+		}
+
+		existing, err := tx.FindEntryByStudentAndRound(ctx, round.ID, userID)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			return nil
+		}
+
+		role, joinedAt, err := tx.FindSessionStudentMembership(ctx, sessionID, userID)
+		if err != nil {
+			return err
+		}
+		if role != "student" {
+			return nil
+		}
+		if policy.Policy.Population == PopulationPolicyAllActiveStudents {
+			if round.ActivatedAt != nil && joinedAt != nil && !joinedAt.After(*round.ActivatedAt) {
+				return nil
+			}
+		}
+
+		position, err := tx.NextEntryPosition(ctx, round.ID)
+		if err != nil {
+			return err
+		}
+		entry, err := tx.InsertQueueEntry(ctx, round.ID, userID, position)
+		if err != nil {
+			return err
+		}
+		if err := tx.BumpRoundVersion(ctx, round.ID); err != nil {
+			return err
+		}
+		return tx.InsertOutboxEvent(ctx, OutboxEvent{
+			EventID:       uuid.NewString(),
+			SessionID:     sessionID,
+			RoundID:       round.ID,
+			EventType:     queueEventEntryUpdated,
+			ResourceID:    &entry.ID,
+			RoundVersion:  round.Version + 1,
+			EventMetadata: json.RawMessage(`{"new_status":"waiting"}`),
+		})
+	})
+}
+
 // Reset finalizes the active round, creates its successor, and restores the
 // normal activation invariant without changing participant audio permission.
 func (s *RoundService) Reset(ctx context.Context, in PrepareRoundInput) (Round, error) {

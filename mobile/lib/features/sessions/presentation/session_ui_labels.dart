@@ -62,4 +62,15 @@ class SessionUiLabels {
   static const waiting = 'بانتظار الدور';
   static const selected = 'تم اختيار الدور';
   static const skipped = 'تم التخطي';
+  static const optedOut = 'معتذر';
+  static const optOutAction = 'الاعتذار عن الدور';
+  static const optOutRequesting = 'جارٍ إرسال الاعتذار...';
+  static const optOutPending = 'بانتظار موافقة المعلم';
+  static const optOutDeclined = 'يبقى دورك محفوظًا لك';
+  static const optOutApproved = 'تم اعتماد الاعتذار';
+  static const optOutAutoApproved = 'تم اعتماد الاعتذار تلقائيًا';
+  static const queueEmptyGuidance = 'لم تبدأ جولة التلاوة بعد؛ سيظهر دورك هنا';
+
+  static String yourPosition(int position) => 'موضعك: $position';
+  static String position(int position) => 'الموضع $position';
 }

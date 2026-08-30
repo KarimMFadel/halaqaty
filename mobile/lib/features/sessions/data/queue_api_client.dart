@@ -144,6 +144,48 @@ class QueueState {
           .toList(growable: false);
 }
 
+class OptOutRequest {
+  const OptOutRequest({
+    required this.id,
+    required this.queueEntryId,
+    required this.status,
+    required this.requestedAt,
+    this.decidedAt,
+  });
+
+  final String id;
+  final String queueEntryId;
+  final String status;
+  final DateTime requestedAt;
+  final DateTime? decidedAt;
+
+  factory OptOutRequest.fromJson(Map<String, dynamic> json) => OptOutRequest(
+        id: json['id'] as String,
+        queueEntryId: json['queue_entry_id'] as String,
+        status: json['status'] as String,
+        requestedAt: DateTime.parse(json['requested_at'] as String),
+        decidedAt: json['decided_at'] == null
+            ? null
+            : DateTime.parse(json['decided_at'] as String),
+      );
+}
+
+class OptOutResult {
+  const OptOutResult({
+    required this.request,
+    required this.entry,
+  });
+
+  final OptOutRequest request;
+  final QueueEntry entry;
+
+  factory OptOutResult.fromJson(Map<String, dynamic> json) => OptOutResult(
+        request:
+            OptOutRequest.fromJson(json['request'] as Map<String, dynamic>),
+        entry: QueueEntry.fromJson(json['entry'] as Map<String, dynamic>),
+      );
+}
+
 class QueueApiException implements Exception {
   const QueueApiException({
     required this.statusCode,
@@ -276,6 +318,23 @@ class QueueApiClient {
               headers: _headers(token, sessionId, idempotencyKey),
             ),
           ));
+
+  Future<OptOutResult> optOut({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+    String? idempotencyKey,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '${_queuePath(liveSessionId)}/opt-out',
+        options: Options(headers: _headers(token, sessionId, idempotencyKey)),
+      );
+      return OptOutResult.fromJson(response.data!);
+    } on DioException catch (error) {
+      throw _exception(error);
+    }
+  }
 
   Future<QueueState> reset({
     required String token,

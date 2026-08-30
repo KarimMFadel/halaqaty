@@ -161,6 +161,7 @@ func setupQueueRBACEnv(t *testing.T) *queueRBACEnv {
 		queue.NewRoundService(repo),
 		queue.NewTurnService(repo),
 		queue.NewPolicyService(repo),
+		queue.NewOptOutService(repo),
 	)
 
 	mux := http.NewServeMux()

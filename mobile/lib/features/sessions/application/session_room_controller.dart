@@ -22,7 +22,8 @@ class SessionRoomState {
       this.isModerator = false,
       this.actionErrorMessage,
       this.recovery = SessionRoomRecovery.none,
-      this.queueState});
+      this.queueState,
+      this.currentUserId});
   final SessionRoomStatus status;
   final SessionConnection? connection;
   final String? errorMessage;
@@ -32,6 +33,7 @@ class SessionRoomState {
   final String? actionErrorMessage;
   final SessionRoomRecovery recovery;
   final QueueControllerState? queueState;
+  final String? currentUserId;
 
   SessionRoomState copyWith(
           {SessionRoomStatus? status,
@@ -44,7 +46,8 @@ class SessionRoomState {
           String? actionErrorMessage,
           bool clearActionError = false,
           SessionRoomRecovery? recovery,
-          QueueControllerState? queueState}) =>
+          QueueControllerState? queueState,
+          String? currentUserId}) =>
       SessionRoomState(
         status: status ?? this.status,
         connection: connection ?? this.connection,
@@ -57,6 +60,7 @@ class SessionRoomState {
             : (actionErrorMessage ?? this.actionErrorMessage),
         recovery: recovery ?? this.recovery,
         queueState: queueState ?? this.queueState,
+        currentUserId: currentUserId ?? this.currentUserId,
       );
 }
 
@@ -68,11 +72,13 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
     required RealtimeSessionClient realtime,
     bool isModerator = false,
     QueueController? queue,
+    String? currentUserId,
   })  : _realtime = realtime,
         _queue = queue,
         super(SessionRoomState(
           isModerator: isModerator,
           queueState: queue?.state,
+          currentUserId: currentUserId,
         )) {
     _queueListener = queue?.addListener(_applyQueueState);
   }
@@ -192,6 +198,9 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
   Future<void> lowerHand() => _sendHandCommand(_realtime.lowerHand);
 
   Future<void> advanceQueue() => _queue?.advance() ?? Future.value();
+
+  Future<void> requestQueueOptOut() =>
+      _queue?.requestOptOut() ?? Future.value();
 
   Future<void> prepareQueueRound({
     required String roundType,
@@ -439,5 +448,6 @@ final sessionRoomControllerProvider = StateNotifierProvider.family<
     return (token: tokenValue, sessionId: sessionValue);
   }, ref.watch(mediaSessionProvider),
       realtime: ref.watch(realtimeSessionClientProvider),
-      queue: ref.watch(queueControllerProvider(liveSessionId).notifier));
+      queue: ref.watch(queueControllerProvider(liveSessionId).notifier),
+      currentUserId: auth.user?.id);
 });

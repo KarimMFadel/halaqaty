@@ -16,8 +16,10 @@ func (o *SessionObserver) OnSessionStarted(ctx context.Context, sessionID string
 	return o.rounds.ActivateIfNeeded(ctx, sessionID)
 }
 
-// OnParticipantJoined is reserved for the later late-join population task.
-func (o *SessionObserver) OnParticipantJoined(context.Context, string, string) error { return nil }
+// OnParticipantJoined appends one durable waiting entry for a late joiner.
+func (o *SessionObserver) OnParticipantJoined(ctx context.Context, sessionID, userID string) error {
+	return o.rounds.AppendLateJoiner(ctx, sessionID, userID)
+}
 
 // OnSessionEnded is reserved for the later queue finalization task.
 func (o *SessionObserver) OnSessionEnded(context.Context, string) error { return nil }

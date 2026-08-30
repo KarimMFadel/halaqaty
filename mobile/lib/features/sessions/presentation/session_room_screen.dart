@@ -6,6 +6,7 @@ import 'package:halaqaty_mobile/features/sessions/application/session_room_contr
 import 'package:halaqaty_mobile/features/sessions/data/queue_api_client.dart';
 import 'package:halaqaty_mobile/features/sessions/domain/session_models.dart';
 import 'package:halaqaty_mobile/features/sessions/presentation/queue/queue_manager_panel.dart';
+import 'package:halaqaty_mobile/features/sessions/presentation/queue/queue_student_panel.dart';
 import 'package:halaqaty_mobile/features/sessions/presentation/session_ui_labels.dart';
 
 class SessionRoomScreen extends ConsumerWidget {
@@ -105,6 +106,16 @@ class SessionRoomScreen extends ConsumerWidget {
               onEditPolicy: () => _showQueueActionPrompt(context, rtl),
             ),
           ],
+          if (!state.isModerator && queueState != null) ...[
+            const SizedBox(height: 8),
+            QueueStudentPanel(
+              queue: queueState.queue,
+              myEntry: _myEntry(queueState.queue?.entries, state.currentUserId),
+              status: _queueStudentPanelStatus(state),
+              optOutStatus: _studentOptOutStatus(queueState.optOutFeedback),
+              onRequestOptOut: controller.requestQueueOptOut,
+            ),
+          ],
           if (showRoomControls) ...[
             const SizedBox(height: 8),
             Text(rtl ? SessionUiLabels.participantsTitle : 'Participants',
@@ -169,6 +180,45 @@ QueueManagerPanelStatus _queuePanelStatus(
     QueueControllerStatus.error => QueueManagerPanelStatus.recoverableError,
     QueueControllerStatus.ended => QueueManagerPanelStatus.terminal,
     null => QueueManagerPanelStatus.loading,
+  };
+}
+
+QueueEntry? _myEntry(List<QueueEntry>? entries, String? currentUserId) {
+  if (entries == null || currentUserId == null) return null;
+  for (final entry in entries) {
+    if (entry.studentId == currentUserId) return entry;
+  }
+  return null;
+}
+
+QueueStudentPanelStatus _queueStudentPanelStatus(SessionRoomState room) {
+  final queue = room.queueState;
+  if (room.status == SessionRoomStatus.ended ||
+      queue?.status == QueueControllerStatus.ended) {
+    return QueueStudentPanelStatus.terminal;
+  }
+  if (room.status == SessionRoomStatus.loading && queue?.queue != null) {
+    return QueueStudentPanelStatus.reconnecting;
+  }
+  return switch (queue?.status) {
+    QueueControllerStatus.loading => QueueStudentPanelStatus.loading,
+    QueueControllerStatus.idle => QueueStudentPanelStatus.empty,
+    QueueControllerStatus.ready when queue?.queue?.entries.isEmpty ?? true =>
+      QueueStudentPanelStatus.empty,
+    QueueControllerStatus.ready => QueueStudentPanelStatus.ready,
+    QueueControllerStatus.error => QueueStudentPanelStatus.recoverableError,
+    QueueControllerStatus.ended => QueueStudentPanelStatus.terminal,
+    null => QueueStudentPanelStatus.loading,
+  };
+}
+
+StudentOptOutStatus _studentOptOutStatus(QueueOptOutFeedback? feedback) {
+  if (feedback == null) return StudentOptOutStatus.notRequested;
+  return switch (feedback) {
+    QueueOptOutFeedback.pending => StudentOptOutStatus.pending,
+    QueueOptOutFeedback.declined => StudentOptOutStatus.declined,
+    QueueOptOutFeedback.approved => StudentOptOutStatus.approved,
+    QueueOptOutFeedback.autoApproved => StudentOptOutStatus.autoApproved,
   };
 }
 

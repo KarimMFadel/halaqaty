@@ -27,8 +27,9 @@ const (
 	EventQueueAdvanced      = "queue.advanced"
 	EventQueueEntryUpdated  = "queue.entry_updated"
 	EventQueuePolicyChanged = "queue.policy_changed"
-	EventQueueYourTurn      = "queue.your_turn"
-	EventQueueNextSoon      = "queue.next_soon"
+	EventQueueYourTurn        = "queue.your_turn"
+	EventQueueNextSoon        = "queue.next_soon"
+	EventQueueOptOutRequested = "queue.opt_out_requested"
 )
 
 // SessionEventProvider supplies one already-authorized event after a session

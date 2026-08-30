@@ -884,6 +884,138 @@ func (r *Repository) OutboxCounts(ctx context.Context, sessionID string) (int64,
 	return pending, parked, nil
 }
 
+func scanOptOutRequest(row pgx.Row) (OptOutRequest, error) {
+	var r OptOutRequest
+	var decidedBy *string
+	var idemKey *string
+	err := row.Scan(&r.ID, &r.QueueEntryID, &r.RequestedBy, &r.Status, &decidedBy, &r.RequestedAt, &r.DecidedAt, &idemKey)
+	r.DecidedBy = decidedBy
+	r.IdempotencyKey = idemKey
+	return r, err
+}
+
+type queryRower interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func findOwnEntryForSession(ctx context.Context, db queryRower, sessionID, studentID string) (QueueEntry, error) {
+	entry, err := scanEntry(db.QueryRow(ctx, findOwnEntryForSessionQuery, sessionID, studentID))
+	if err != nil {
+		return QueueEntry{}, fmt.Errorf("find own queue entry: %w", err)
+	}
+	return entry, nil
+}
+
+// FindOwnEntryForSession resolves a student's entry in the session's active
+// round for snapshot reads.
+func (r *Repository) FindOwnEntryForSession(ctx context.Context, sessionID, studentID string) (QueueEntry, error) {
+	return findOwnEntryForSession(ctx, r.pool, sessionID, studentID)
+}
+
+// FindOwnEntryForSession resolves a student's entry inside a transaction.
+func (t *Tx) FindOwnEntryForSession(ctx context.Context, sessionID, studentID string) (QueueEntry, error) {
+	return findOwnEntryForSession(ctx, t.tx, sessionID, studentID)
+}
+
+func findOptOutRequestByEntryAndRequester(ctx context.Context, db queryRower, entryID, studentID string) (OptOutRequest, error) {
+	request, err := scanOptOutRequest(db.QueryRow(ctx, findOptOutRequestByEntryAndRequesterQuery, entryID, studentID))
+	if err != nil {
+		return OptOutRequest{}, fmt.Errorf("find opt-out request: %w", err)
+	}
+	return request, nil
+}
+
+// FindOptOutRequestByEntryAndRequester returns the latest opt-out request for
+// an entry created by the requesting student.
+func (r *Repository) FindOptOutRequestByEntryAndRequester(ctx context.Context, entryID, studentID string) (OptOutRequest, error) {
+	return findOptOutRequestByEntryAndRequester(ctx, r.pool, entryID, studentID)
+}
+
+// FindOptOutRequestByEntryAndRequester returns the latest opt-out request for
+// an entry created by the requesting student inside a transaction.
+func (t *Tx) FindOptOutRequestByEntryAndRequester(ctx context.Context, entryID, studentID string) (OptOutRequest, error) {
+	return findOptOutRequestByEntryAndRequester(ctx, t.tx, entryID, studentID)
+}
+
+// FindPendingOptOutRequestByEntry returns the single pending request for an
+// entry, or pgx.ErrNoRows when none exists.
+func (t *Tx) FindPendingOptOutRequestByEntry(ctx context.Context, entryID string) (*OptOutRequest, error) {
+	request, err := scanOptOutRequest(t.tx.QueryRow(ctx, findPendingOptOutRequestByEntryQuery, entryID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find pending opt-out request: %w", err)
+	}
+	return &request, nil
+}
+
+// LockOptOutRequest loads and locks one opt-out request row.
+func (t *Tx) LockOptOutRequest(ctx context.Context, requestID string) (OptOutRequest, error) {
+	request, err := scanOptOutRequest(t.tx.QueryRow(ctx, lockOptOutRequestByIDQuery, requestID))
+	if err != nil {
+		return OptOutRequest{}, fmt.Errorf("lock opt-out request: %w", err)
+	}
+	return request, nil
+}
+
+// InsertOptOutRequest creates one opt-out request row. decidedBy is nil for
+// pending requests and the acting student for auto-approved requests.
+func (t *Tx) InsertOptOutRequest(ctx context.Context, entryID, requester string, status OptOutRequestStatus, decidedBy *string) (OptOutRequest, error) {
+	request, err := scanOptOutRequest(t.tx.QueryRow(ctx, insertOptOutRequestQuery, entryID, requester, status, stringOrNil(decidedBy), nil))
+	if err != nil {
+		return OptOutRequest{}, fmt.Errorf("insert opt-out request: %w", err)
+	}
+	return request, nil
+}
+
+// DecideOptOutRequest applies a terminal status to a pending request.
+func (t *Tx) DecideOptOutRequest(ctx context.Context, requestID string, status OptOutRequestStatus, decidedBy string) (OptOutRequest, error) {
+	request, err := scanOptOutRequest(t.tx.QueryRow(ctx, decideOptOutRequestQuery, requestID, status, decidedBy))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return OptOutRequest{}, &QueueError{Code: QueueErrorCodeInvalidTransition, Message: "opt-out request is already decided"}
+	}
+	if err != nil {
+		return OptOutRequest{}, fmt.Errorf("decide opt-out request: %w", err)
+	}
+	return request, nil
+}
+
+// FindEntryByStudentAndRound returns an existing entry for a student in a round.
+func (t *Tx) FindEntryByStudentAndRound(ctx context.Context, roundID, studentID string) (*QueueEntry, error) {
+	entry, err := scanEntry(t.tx.QueryRow(ctx, findEntryByStudentAndRoundQuery, roundID, studentID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find entry by student and round: %w", err)
+	}
+	return &entry, nil
+}
+
+// NextEntryPosition returns the next available position at the end of a round.
+func (t *Tx) NextEntryPosition(ctx context.Context, roundID string) (int, error) {
+	var position int
+	if err := t.tx.QueryRow(ctx, nextEntryPositionQuery, roundID).Scan(&position); err != nil {
+		return 0, fmt.Errorf("next queue entry position: %w", err)
+	}
+	return position, nil
+}
+
+// FindSessionStudentMembership returns the student's circle role and join
+// timestamp for late-join eligibility decisions.
+func (t *Tx) FindSessionStudentMembership(ctx context.Context, sessionID, userID string) (string, *time.Time, error) {
+	var role string
+	var joinedAt *time.Time
+	if err := t.tx.QueryRow(ctx, findSessionStudentMembershipQuery, sessionID, userID).Scan(&role, &joinedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", nil, nil
+		}
+		return "", nil, fmt.Errorf("find session student membership: %w", err)
+	}
+	return role, joinedAt, nil
+}
+
 func stringOrNil(value *string) any {
 	if value == nil {
 		return nil

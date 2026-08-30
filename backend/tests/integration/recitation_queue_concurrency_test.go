@@ -442,7 +442,7 @@ func TestRecitationQueueConcurrency_AdvanceAndStart(t *testing.T) {
 			successes++
 			continue
 		}
-		if code, ok := cqQueueErrorCode(err); !ok || (code != queue.QueueErrorCodeStaleVersion && code != queue.QueueErrorCodeEntryReciting) {
+		if code, ok := cqQueueErrorCode(err); !ok || (code != queue.QueueErrorCodeStaleVersion && code != queue.QueueErrorCodeEntryReciting && code != queue.QueueErrorCodeInvalidTransition) {
 			t.Fatalf("advance/start race returned unexpected error: %v", err)
 		}
 	}

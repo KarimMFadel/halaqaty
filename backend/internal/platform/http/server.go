@@ -1,10 +1,13 @@
 package http
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,6 +18,11 @@ import (
 // TimeoutMiddleware returns the standard JSON timeout envelope when a request exceeds its deadline.
 func TimeoutMiddleware(timeout time.Duration, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		ctx, cancel := context.WithTimeout(r.Context(), timeout)
 		defer cancel()
 
@@ -140,6 +148,15 @@ type responseRecorder struct {
 func (rr *responseRecorder) WriteHeader(code int) {
 	rr.statusCode = code
 	rr.ResponseWriter.WriteHeader(code)
+}
+
+func (rr *responseRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := rr.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, http.ErrNotSupported
+	}
+	rr.statusCode = http.StatusSwitchingProtocols
+	return hijacker.Hijack()
 }
 
 // MaxBytesMiddleware wraps each request body with an http.MaxBytesReader so

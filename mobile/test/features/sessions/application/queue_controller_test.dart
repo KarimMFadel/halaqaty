@@ -193,18 +193,290 @@ void main() {
     await roomController.leave();
     expect(queueController.state.status, QueueControllerStatus.idle);
   });
+
+  group('T045 (US2): duplicate, out-of-order, and unknown events', () {
+    test('applies a duplicated queue change event only once', () async {
+      final realtime = _FakeRealtimeClient();
+      final queueApi = _FakeQueueApiClient([
+        _queueState(version: 1),
+        _queueState(version: 2),
+      ]);
+      final controller = _queueController(queueApi, realtime);
+      addTearDown(controller.dispose);
+      await controller.connect(_liveSessionId);
+
+      realtime.emit(const QueueChangeEvent(
+        sessionId: _liveSessionId,
+        eventId: 'duplicate-advanced',
+        version: 2,
+        type: 'queue.advanced',
+      ));
+      realtime.emit(const QueueChangeEvent(
+        sessionId: _liveSessionId,
+        eventId: 'duplicate-advanced',
+        version: 2,
+        type: 'queue.advanced',
+      ));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(queueApi.getQueueCalls, 2); // connect + one refresh, never two
+      expect(controller.state.queue?.version, 2);
+    });
+
+    test('ignores an out-of-order queue change event with a stale version',
+        () async {
+      final realtime = _FakeRealtimeClient();
+      final queueApi = _FakeQueueApiClient([_queueState(version: 2)]);
+      final controller = _queueController(queueApi, realtime);
+      addTearDown(controller.dispose);
+      await controller.connect(_liveSessionId);
+
+      realtime.emit(const QueueChangeEvent(
+        sessionId: _liveSessionId,
+        eventId: 'stale-entry-update',
+        version: 1,
+        type: 'queue.entry_updated',
+      ));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(queueApi.getQueueCalls, 1);
+      expect(controller.state.queue?.version, 2);
+      expect(controller.state.status, QueueControllerStatus.ready);
+    });
+
+    test('ignores an unknown event type without crashing or corrupting state',
+        () async {
+      final realtime = _FakeRealtimeClient();
+      final queueApi = _FakeQueueApiClient([_queueState(version: 1)]);
+      final controller = _queueController(queueApi, realtime);
+      addTearDown(controller.dispose);
+      await controller.connect(_liveSessionId);
+
+      realtime.emit(const _UnknownRealtimeEvent());
+      await Future<void>.delayed(Duration.zero);
+
+      expect(queueApi.getQueueCalls, 1);
+      expect(controller.state.status, QueueControllerStatus.ready);
+      expect(controller.state.queue?.version, 1);
+    });
+
+    test('re-fetches on an unrecognized queue event type with a fresh version',
+        () async {
+      final realtime = _FakeRealtimeClient();
+      final queueApi = _FakeQueueApiClient([
+        _queueState(version: 1),
+        _queueState(version: 2),
+      ]);
+      final controller = _queueController(queueApi, realtime);
+      addTearDown(controller.dispose);
+      await controller.connect(_liveSessionId);
+
+      realtime.emit(const QueueChangeEvent(
+        sessionId: _liveSessionId,
+        eventId: 'future-event',
+        version: 2,
+        type: 'queue.some_future_event',
+      ));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(queueApi.getQueueCalls, 2);
+      expect(controller.state.queue?.version, 2);
+      expect(controller.state.status, QueueControllerStatus.ready);
+    });
+
+    test('reconnect replaces projected state with the authoritative snapshot',
+        () async {
+      final realtime = _FakeRealtimeClient();
+      final queueApi = _FakeQueueApiClient([
+        _queueState(
+          version: 1,
+          entries: [_entryJson('entry-1', status: 'waiting')],
+        ),
+        _queueState(
+          version: 3,
+          entries: [_entryJson('entry-3', status: 'opted_out')],
+        ),
+      ]);
+      final controller = _queueController(queueApi, realtime);
+      addTearDown(controller.dispose);
+      await controller.connect(_liveSessionId);
+
+      realtime.emit(QueueStateEvent(
+        sessionId: _liveSessionId,
+        eventId: 'projected-2',
+        queue: _queueState(version: 2, entries: [
+          _entryJson('entry-1', status: 'waiting'),
+          _entryJson('entry-2', status: 'waiting'),
+        ]),
+      ));
+      expect(controller.state.queue?.entries.length, 2);
+
+      await controller.connect(_liveSessionId);
+
+      // PostgreSQL truth replaces the projected state wholesale.
+      expect(queueApi.getQueueCalls, 2);
+      expect(controller.state.queue?.version, 3);
+      expect(
+        controller.state.queue?.entries.map((entry) => entry.id).toList(),
+        ['entry-3'],
+      );
+
+      // Dedup cache resets on reconnect: the replayed event id applies again.
+      realtime.emit(QueueStateEvent(
+        sessionId: _liveSessionId,
+        eventId: 'projected-2',
+        queue: _queueState(
+          version: 4,
+          entries: [_entryJson('entry-3', status: 'opted_out')],
+        ),
+      ));
+      expect(controller.state.queue?.version, 4);
+    });
+  });
+
+  group('T045 (US2): student opt-out command', () {
+    test(
+        'approval_required submits a pending request and keeps the entry '
+        'waiting', () async {
+      final queueApi = _FakeQueueApiClient([_queueState(version: 1)])
+        ..optOutResult = _optOutResult(
+          requestStatus: 'pending',
+          entryStatus: 'waiting',
+        );
+      final controller =
+          _queueController(queueApi, _FakeRealtimeClient(), isManager: false);
+      addTearDown(controller.dispose);
+      await controller.connect(_liveSessionId);
+
+      await controller.requestOptOut();
+
+      expect(queueApi.optOutCalls, 1);
+      expect(controller.state.optOutFeedback, QueueOptOutFeedback.pending);
+      expect(controller.state.queue?.entries.single.status, 'waiting');
+      expect(controller.state.actionErrorMessage, isNull);
+    });
+
+    test('a declined request keeps the entry waiting', () async {
+      final queueApi = _FakeQueueApiClient([_queueState(version: 1)])
+        ..optOutResult = _optOutResult(
+          requestStatus: 'declined',
+          entryStatus: 'waiting',
+        );
+      final controller =
+          _queueController(queueApi, _FakeRealtimeClient(), isManager: false);
+      addTearDown(controller.dispose);
+      await controller.connect(_liveSessionId);
+
+      await controller.requestOptOut();
+
+      expect(queueApi.optOutCalls, 1);
+      expect(controller.state.optOutFeedback, QueueOptOutFeedback.declined);
+      expect(controller.state.queue?.entries.single.status, 'waiting');
+    });
+
+    test('an approved request opts the entry out of the round', () async {
+      final queueApi = _FakeQueueApiClient([
+        _queueState(version: 1),
+        _queueState(
+          version: 2,
+          entries: [_entryJson('entry-1', status: 'opted_out')],
+        ),
+      ])
+        ..optOutResult = _optOutResult(
+          requestStatus: 'approved',
+          entryStatus: 'opted_out',
+        );
+      final controller =
+          _queueController(queueApi, _FakeRealtimeClient(), isManager: false);
+      addTearDown(controller.dispose);
+      await controller.connect(_liveSessionId);
+
+      await controller.requestOptOut();
+
+      expect(queueApi.optOutCalls, 1);
+      expect(controller.state.optOutFeedback, QueueOptOutFeedback.approved);
+      expect(controller.state.queue?.entries.single.status, 'opted_out');
+    });
+
+    test('auto_approve applies immediately without a pending state', () async {
+      final queueApi = _FakeQueueApiClient([
+        _queueState(version: 1, optOutPolicy: 'auto_approve'),
+        _queueState(
+          version: 2,
+          optOutPolicy: 'auto_approve',
+          entries: [_entryJson('entry-1', status: 'opted_out')],
+        ),
+      ])
+        ..optOutResult = _optOutResult(
+          requestStatus: 'approved',
+          entryStatus: 'opted_out',
+        );
+      final controller =
+          _queueController(queueApi, _FakeRealtimeClient(), isManager: false);
+      addTearDown(controller.dispose);
+      await controller.connect(_liveSessionId);
+
+      await controller.requestOptOut();
+
+      expect(queueApi.optOutCalls, 1);
+      expect(
+        controller.state.optOutFeedback,
+        QueueOptOutFeedback.autoApproved,
+      );
+      expect(controller.state.queue?.entries.single.status, 'opted_out');
+      expect(queueApi.getQueueCalls, 2);
+    });
+
+    test('manager controllers never issue the student-only opt-out command',
+        () async {
+      final queueApi = _FakeQueueApiClient([_queueState(version: 1)])
+        ..optOutResult = _optOutResult(
+          requestStatus: 'pending',
+          entryStatus: 'waiting',
+        );
+      final controller = _queueController(queueApi, _FakeRealtimeClient());
+      addTearDown(controller.dispose);
+      await controller.connect(_liveSessionId);
+
+      await controller.requestOptOut();
+
+      expect(queueApi.optOutCalls, 0);
+      expect(controller.state.optOutFeedback, isNull);
+    });
+
+    test('opt-out failure is action-local and retains the snapshot', () async {
+      final queueApi = _FakeQueueApiClient([_queueState(version: 1)])
+        ..optOutFailure = StateError('opt-out failed');
+      final controller =
+          _queueController(queueApi, _FakeRealtimeClient(), isManager: false);
+      addTearDown(controller.dispose);
+      await controller.connect(_liveSessionId);
+
+      await controller.requestOptOut();
+
+      expect(controller.state.optOutFeedback, isNull);
+      expect(controller.state.actionErrorMessage, contains('opt-out failed'));
+      expect(controller.state.queue?.version, 1);
+      expect(controller.state.status, QueueControllerStatus.ready);
+    });
+  });
 }
 
 QueueController _queueController(
   QueueApiClient api,
-  RealtimeSessionClient realtime,
-) =>
+  RealtimeSessionClient realtime, {
+  bool isManager = true,
+}) =>
     QueueController(
       api,
       () async => (token: 'token', sessionId: 'backend-session'),
       realtime: realtime,
-      isManager: true,
+      isManager: isManager,
     );
+
+class _UnknownRealtimeEvent extends RealtimeSessionEvent {
+  const _UnknownRealtimeEvent() : super(sessionId: _liveSessionId);
+}
 
 class _FakeQueueApiClient extends QueueApiClient {
   _FakeQueueApiClient(this.snapshots) : super(Dio());
@@ -213,6 +485,9 @@ class _FakeQueueApiClient extends QueueApiClient {
   int getQueueCalls = 0;
   int advanceCalls = 0;
   Object? advanceFailure;
+  int optOutCalls = 0;
+  OptOutResult? optOutResult;
+  Object? optOutFailure;
 
   @override
   Future<QueueState> getQueue({
@@ -224,6 +499,19 @@ class _FakeQueueApiClient extends QueueApiClient {
         getQueueCalls < snapshots.length ? getQueueCalls : snapshots.length - 1;
     getQueueCalls++;
     return snapshots[snapshotIndex];
+  }
+
+  @override
+  Future<OptOutResult> optOut({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+    String? idempotencyKey,
+  }) async {
+    optOutCalls++;
+    final failure = optOutFailure;
+    if (failure != null) throw failure;
+    return optOutResult!;
   }
 
   @override
@@ -311,7 +599,12 @@ class _FakeSessionApi extends SessionApiClient {
   }
 }
 
-QueueState _queueState({required int version, int policyVersion = 1}) =>
+QueueState _queueState({
+  required int version,
+  int policyVersion = 1,
+  String optOutPolicy = 'approval_required',
+  List<Map<String, dynamic>>? entries,
+}) =>
     QueueState.fromJson({
       'session_id': _liveSessionId,
       'round_id': 'round-1',
@@ -327,22 +620,56 @@ QueueState _queueState({required int version, int policyVersion = 1}) =>
       'policy': {
         'population': 'present_at_activation',
         'unfinished_finalization': 'mark_unfinished_skipped',
-        'opt_out': 'approval_required',
+        'opt_out': optOutPolicy,
         'grade_visibility': 'managers_and_student',
         'grade_correction': 'audited_any_time',
         'version': policyVersion,
       },
       'preorder': const [],
-      'entries': [
-        {
-          'id': 'entry-1',
-          'student_id': 'student-1',
-          'student_name': 'مريم',
-          'position': 1,
-          'status': 'waiting',
-          'version': 1,
-        },
-      ],
+      'entries': entries ??
+          [
+            {
+              'id': 'entry-1',
+              'student_id': 'student-1',
+              'student_name': 'مريم',
+              'position': 1,
+              'status': 'waiting',
+              'version': 1,
+            },
+          ],
+    });
+
+Map<String, dynamic> _entryJson(
+  String id, {
+  String studentId = 'student-1',
+  String studentName = 'مريم',
+  int position = 1,
+  String status = 'waiting',
+  int version = 1,
+}) =>
+    {
+      'id': id,
+      'student_id': studentId,
+      'student_name': studentName,
+      'position': position,
+      'status': status,
+      'version': version,
+    };
+
+OptOutResult _optOutResult({
+  required String requestStatus,
+  required String entryStatus,
+}) =>
+    OptOutResult.fromJson({
+      'request': {
+        'id': 'request-1',
+        'queue_entry_id': 'entry-1',
+        'status': requestStatus,
+        'requested_at': '2026-08-30T09:00:00Z',
+        'decided_at':
+            requestStatus == 'pending' ? null : '2026-08-30T09:01:00Z',
+      },
+      'entry': _entryJson('entry-1', status: entryStatus, version: 2),
     });
 
 SessionConnection _sessionConnection() => SessionConnection(

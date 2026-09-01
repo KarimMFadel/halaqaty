@@ -86,17 +86,18 @@ is not the current contract: email/password is the supported password flow.
    existing server configuration mechanism. Never put the Admin SDK service
    account JSON in the mobile app or in source control.
 
-For T048, create two ordinary test users through the app's registration screen
-or Firebase Authentication's user-management page:
+For the verified local T048 setup, the Firebase project is `halaqaty-test` and
+these two test identities were created in Firebase Authentication:
 
-```text
-teacher.t048@example.test
-student.t048@example.test
-```
+| Test identity | Firebase email | Firebase UID |
+|---|---|---|
+| Teacher | `teacher.test@example.com` | `InJDagN7cHTGYHWWfOUsq6DGFkA3` |
+| Student | `student.test@example.com` | `zIYyvPqiMLPOKkxBwEa4zIPZGPi1` |
 
-Use addresses in a domain you control or two real test addresses. Use strong,
-unique test passwords and store them in a local password manager. Do not put
-the passwords in the repository or in the T048 environment variables.
+The passwords are intentionally not documented. They remain local test
+credentials in the ignored `.env` file and should be rotated if they are ever
+shared. Firebase Authentication accounts are test identities only; teacher and
+student authorization is assigned by Halaqaty circle membership in PostgreSQL.
 
 ## Create the Halaqaty backend sessions
 
@@ -115,6 +116,96 @@ expiry, device ownership, and activity tracking. It is different from:
 - the Firebase UID;
 - the LiveKit room name or media credential; and
 - the F-005 live-session ID created by the teacher during T048.
+
+## Verified Docker setup and run process
+
+The following is the process used for the successful T048 run on 2026-09-01:
+
+1. Copy `.env.example` to `.env` and fill local Firebase, database, LiveKit,
+   and T048 values. Keep `.env` untracked.
+2. Build and start the repository tools and infrastructure:
+
+   ```powershell
+   docker compose build flutter-tools
+   docker compose up -d postgres flutter-tools
+   docker compose --profile media up -d livekit
+   ```
+
+3. Apply migrations and start the Go API from `backend/`, using the Firebase
+   Admin service account at `.firebase/service-account.json` through
+   `GOOGLE_APPLICATION_CREDENTIALS`. This file is ignored and must never be
+   copied into the mobile image or committed.
+4. Sign in each Firebase test identity to obtain a fresh Firebase ID token,
+   then create a Halaqaty backend session with
+   `POST /api/v1/auth/sessions`. Put the resulting token, session ID, and local
+   user ID into the local `T048_*` environment variables. Tokens expire; do
+   not paste them into documentation, logs, or shell history.
+5. Run the real-backend Linux integration test inside the tools container:
+
+   ```powershell
+   docker compose exec flutter-tools `
+     xvfb-run -a flutter test integration_test/queue_late_join_opt_out_test.dart -d linux
+   ```
+
+6. The expected result is `All tests passed!`. The test creates and cleans up
+   its own circle/session data. It verifies late joining, manager-only events,
+   opt-out approval and decline, duplicate-event handling, reconnect snapshot
+   recovery, policy changes, round reset, and UI updates.
+
+The Flutter container uses the local image `halaqaty-flutter-tools:local`, built
+from `docker/flutter-tools.Dockerfile`. That image is based on the repository's
+Flutter CI image and includes Flutter/Dart, Xvfb, Node.js, Firebase CLI, and
+FlutterFire CLI. The Compose services are:
+
+| Service | Image | Container | Purpose |
+|---|---|---|---|
+| `postgres` | `postgres:16-alpine` | `halaqaty-postgres` | Authoritative test database |
+| `livekit` | `livekit/livekit-server:v1.8.3` | `halaqaty-livekit` | Local self-hosted media server |
+| `flutter-tools` | `halaqaty-flutter-tools:local` | `halaqaty-dev-tools` | Flutter tests and Firebase CLI |
+
+The Flutter tools container mounts the repository at `/workspace`, persists
+the Pub cache, and uses `host.docker.internal` to reach the API running on the
+Windows host. For a fresh machine, the fallback image
+`ghcr.io/cirruslabs/flutter:stable` can run ordinary Flutter commands, but the
+project Compose image is preferred for T048 because it also provides Xvfb and
+the Firebase tooling.
+
+## Firebase files and CLI configuration
+
+Firebase CLI login authenticates the developer for project configuration; it
+does not create an account for each application user. FlutterFire configuration
+generates `mobile/lib/firebase_options.dart`. Native Firebase files, when the
+platform folders are present, belong at `mobile/android/app/google-services.json`
+and `mobile/ios/Runner/GoogleService-Info.plist`.
+
+T048 was run as a Linux integration test with pre-provisioned Firebase ID
+tokens, so Android/iOS native files were not required for that verification.
+The temporary `mobile/linux/` platform scaffold exists only to provide the
+Linux test target and can be regenerated with Flutter in the Docker container.
+The Firebase Admin service-account JSON is different from these client config
+files: it is server-only, stays under `.firebase/`, and is always ignored.
+
+## Verification record
+
+The T048 closure was checked with fresh Firebase tokens and fresh backend
+sessions. The recorded evidence was:
+
+| Check | Result |
+|---|---|
+| T048 real-backend Linux journey | Passed: `All tests passed!` |
+| Flutter unit/widget tests | Passed: 126 tests |
+| Linux integration journeys | Passed individually: auth, circles, roles, profile, queue, and T048 |
+| Flutter analyze/format for T048 changes | Passed; unrelated informational diagnostics remain elsewhere |
+| Go short tests | Passed |
+| Go integration tests with PostgreSQL | Passed |
+| Go vet and golangci-lint | Passed |
+| Secret/diff checks | No secrets in the current diff; `.env`, Firebase config, and service-account files are ignored |
+
+The implementation process followed the feature task order: backend realtime
+delivery and queue-round fixes, Flutter event decoding and refresh ordering,
+the real-backend T048 journey, then focused quality checks and task evidence.
+The completion checkbox for T048 is recorded in
+`specs/003-recitation-queue-system/tasks.md`.
 
 ## LiveKit for local testing
 

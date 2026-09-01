@@ -23,6 +23,11 @@ Every PR is fully traceable: user story → contract → implementation → test
 
 ## Prerequisites
 
+For the Firebase/LiveKit credentials, Docker images, and the verified T048
+real-backend integration run, see the [Firebase and LiveKit testing setup
+guide](docs/engineering/guides/firebase-livekit-testing-setup.md). Keep all
+tokens, passwords, and Firebase Admin service-account files local and ignored.
+
 | Tool | Version | Install |
 |---|---|---|
 | `uv` | 0.11+ | See below |

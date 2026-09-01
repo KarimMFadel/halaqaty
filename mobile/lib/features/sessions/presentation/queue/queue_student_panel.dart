@@ -105,24 +105,30 @@ class _EntryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Semantics(
-              container: true,
-              label: labels.position(entry.position),
-              child: ExcludeSemantics(
-                child: Text('${entry.position}. '),
-              ),
+            Row(
+              children: [
+                Semantics(
+                  container: true,
+                  label: labels.position(entry.position),
+                  child: ExcludeSemantics(
+                    child: Text('${entry.position}. '),
+                  ),
+                ),
+                Expanded(child: Text(entry.studentName)),
+                const SizedBox(width: 8),
+                Semantics(
+                  container: true,
+                  label: labels.entryStatus(entry.status),
+                  child: ExcludeSemantics(
+                    child: Text(labels.entryStatus(entry.status)),
+                  ),
+                ),
+              ],
             ),
-            Expanded(child: Text(entry.studentName)),
-            const SizedBox(width: 8),
-            Semantics(
-              container: true,
-              label: labels.entryStatus(entry.status),
-              child: ExcludeSemantics(
-                child: Text(labels.entryStatus(entry.status)),
-              ),
-            ),
+            _VisibleGrade(entry: entry, labels: labels),
           ],
         ),
       );
@@ -137,27 +143,51 @@ class _MyEntryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Semantics(
-              container: true,
-              label: labels.yourPosition(entry.position),
-              child: ExcludeSemantics(
-                child: Text('${entry.position}. '),
-              ),
+            Row(
+              children: [
+                Semantics(
+                  container: true,
+                  label: labels.yourPosition(entry.position),
+                  child: ExcludeSemantics(
+                    child: Text('${entry.position}. '),
+                  ),
+                ),
+                Expanded(child: Text(entry.studentName)),
+                const SizedBox(width: 8),
+                Semantics(
+                  container: true,
+                  label: labels.entryStatus(entry.status),
+                  child: ExcludeSemantics(
+                    child: Text(labels.entryStatus(entry.status)),
+                  ),
+                ),
+              ],
             ),
-            Expanded(child: Text(entry.studentName)),
-            const SizedBox(width: 8),
-            Semantics(
-              container: true,
-              label: labels.entryStatus(entry.status),
-              child: ExcludeSemantics(
-                child: Text(labels.entryStatus(entry.status)),
-              ),
-            ),
+            _VisibleGrade(entry: entry, labels: labels),
           ],
         ),
       );
+}
+
+class _VisibleGrade extends StatelessWidget {
+  const _VisibleGrade({required this.entry, required this.labels});
+
+  final QueueEntry entry;
+  final _QueueLabels labels;
+
+  @override
+  Widget build(BuildContext context) {
+    if (entry.grade == null && entry.gradeNotes == null) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(labels.grade(entry.grade, entry.gradeNotes)),
+    );
+  }
 }
 
 class _OptOutFeedback extends StatelessWidget {
@@ -251,5 +281,24 @@ class _QueueLabels {
         'skipped' => rtl ? SessionUiLabels.skipped : 'Skipped',
         'opted_out' => rtl ? SessionUiLabels.optedOut : 'Opted out',
         _ => status,
+      };
+
+  String grade(String? value, String? notes) {
+    final parts = <String>[
+      if (value != null)
+        rtl ? 'التقييم: ${_gradeLabel(value)}' : 'Grade: ${_gradeLabel(value)}',
+      if (notes != null && notes.isNotEmpty)
+        rtl ? 'ملاحظة: $notes' : 'Note: $notes',
+    ];
+    return parts.join(' · ');
+  }
+
+  String _gradeLabel(String value) => switch (value) {
+        'excellent' => rtl ? 'ممتاز' : 'Excellent',
+        'good' => rtl ? 'جيد' : 'Good',
+        'acceptable' => rtl ? 'مقبول' : 'Acceptable',
+        'needs_review' => rtl ? 'يحتاج مراجعة' : 'Needs review',
+        'repeat' => rtl ? 'إعادة' : 'Repeat',
+        _ => value,
       };
 }

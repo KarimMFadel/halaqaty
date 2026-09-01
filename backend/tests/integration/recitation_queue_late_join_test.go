@@ -21,7 +21,7 @@ import (
 
 // ljJoinHook returns the production join hook bound to the fixture session.
 func ljJoinHook(f *recitationQueueConcurrencyFixture) *queue.SessionObserver {
-	return queue.NewSessionObserver(queue.NewRoundService(f.repo))
+	return queue.NewSessionObserver(queue.NewRoundService(f.repo), nil)
 }
 
 // ljSnapshot returns the durable entry student IDs and round version.

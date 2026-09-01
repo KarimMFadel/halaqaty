@@ -243,7 +243,7 @@ func TestOptOutServiceLateJoinAppendsOnceAtEndUnderBothPolicies(t *testing.T) {
 		}
 		late := qSeedUser(t, f.repo, "oo-late-present")
 		qSeedMember(t, f.repo, circleID, late, "student", time.Now().UTC())
-		observer := NewSessionObserver(NewRoundService(f.repo))
+		observer := NewSessionObserver(NewRoundService(f.repo), nil)
 
 		var beforeVersion int64
 		var beforeCount int
@@ -289,7 +289,7 @@ func TestOptOutServiceLateJoinAppendsOnceAtEndUnderBothPolicies(t *testing.T) {
 		if _, err := f.repo.pool.Exec(ctx, `UPDATE sessions SET queue_population_policy = $2 WHERE id = $1::uuid`, f.session, PopulationPolicyAllActiveStudents); err != nil {
 			t.Fatalf("set population policy: %v", err)
 		}
-		observer := NewSessionObserver(NewRoundService(f.repo))
+		observer := NewSessionObserver(NewRoundService(f.repo), nil)
 		early := f.entryFor(t, qFirstStudent(t, f))
 
 		// The early member was active at activation and already materialized;

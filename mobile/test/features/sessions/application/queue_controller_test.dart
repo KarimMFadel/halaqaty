@@ -353,6 +353,93 @@ void main() {
     });
   });
 
+  group('T059 (US3): grading and finalization', () {
+    test('completes a reciting entry with grade and optional note', () async {
+      final queueApi = _FakeQueueApiClient([
+        _queueState(
+            version: 1,
+            entries: [_entryJson('entry-1', status: 'reciting', version: 2)]),
+        _queueState(version: 2, entries: [
+          _entryJson('entry-1',
+              status: 'completed',
+              version: 3,
+              grade: 'good',
+              gradeNotes: 'clear')
+        ]),
+      ]);
+      final controller =
+          _queueController(queueApi, _FakeRealtimeClient(), isManager: true);
+      addTearDown(controller.dispose);
+      await controller.connect(_liveSessionId, listenRealtime: false);
+
+      await controller.completeQueueEntry('entry-1',
+          grade: 'good', notes: 'clear');
+
+      expect(queueApi.completeCalls, 1);
+      expect(queueApi.lastGrade, 'good');
+      expect(queueApi.lastNotes, 'clear');
+      expect(controller.state.queue?.entries.single.status, 'completed');
+    });
+
+    test('corrects only the note without losing the current grade', () async {
+      final queueApi = _FakeQueueApiClient([
+        _queueState(version: 1, entries: [
+          _entryJson('entry-1',
+              status: 'completed', version: 2, grade: 'good', gradeNotes: 'old')
+        ]),
+        _queueState(version: 2, entries: [
+          _entryJson('entry-1',
+              status: 'completed', version: 3, grade: 'good', gradeNotes: 'new')
+        ]),
+      ]);
+      final controller =
+          _queueController(queueApi, _FakeRealtimeClient(), isManager: true);
+      addTearDown(controller.dispose);
+      await controller.connect(_liveSessionId, listenRealtime: false);
+
+      await controller.correctQueueEntry('entry-1', notes: 'new');
+
+      expect(queueApi.correctCalls, 1);
+      expect(queueApi.lastCorrectGrade, isNull);
+      expect(queueApi.lastCorrectNotes, 'new');
+      expect(controller.state.queue?.entries.single.grade, 'good');
+    });
+
+    test('keeps the queue action-local when grading fails', () async {
+      final queueApi = _FakeQueueApiClient([_queueState(version: 1)])
+        ..completeFailure = StateError('grade failed');
+      final controller =
+          _queueController(queueApi, _FakeRealtimeClient(), isManager: true);
+      addTearDown(controller.dispose);
+      await controller.connect(_liveSessionId, listenRealtime: false);
+
+      await controller.completeQueueEntry('entry-1', grade: 'good');
+
+      expect(controller.state.queue?.version, 1);
+      expect(controller.state.actionErrorMessage, contains('grade failed'));
+    });
+
+    test('completes a grading-optional entry without a grade', () async {
+      final queueApi = _FakeQueueApiClient([
+        _queueState(
+            version: 1,
+            entries: [_entryJson('entry-1', status: 'reciting', version: 2)]),
+        _queueState(
+            version: 2,
+            entries: [_entryJson('entry-1', status: 'completed', version: 3)]),
+      ]);
+      final controller =
+          _queueController(queueApi, _FakeRealtimeClient(), isManager: true);
+      addTearDown(controller.dispose);
+      await controller.connect(_liveSessionId, listenRealtime: false);
+
+      await controller.completeQueueEntry('entry-1');
+
+      expect(queueApi.completeCalls, 1);
+      expect(queueApi.lastGrade, isNull);
+    });
+  });
+
   group('T045 (US2): student opt-out command', () {
     test(
         'approval_required submits a pending request and keeps the entry '
@@ -578,6 +665,14 @@ class _FakeQueueApiClient extends QueueApiClient {
   Completer<void>? getQueueBlock;
   int advanceCalls = 0;
   Object? advanceFailure;
+  int completeCalls = 0;
+  Object? completeFailure;
+  String? lastGrade;
+  String? lastNotes;
+  int correctCalls = 0;
+  Object? correctFailure;
+  String? lastCorrectGrade;
+  String? lastCorrectNotes;
   int optOutCalls = 0;
   OptOutResult? optOutResult;
   Object? optOutFailure;
@@ -621,6 +716,43 @@ class _FakeQueueApiClient extends QueueApiClient {
     final failure = advanceFailure;
     if (failure != null) throw failure;
     return snapshots.last;
+  }
+
+  @override
+  Future<QueueState> completeEntry({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+    required String entryId,
+    required int expectedEntryVersion,
+    String? grade,
+    String? notes,
+    String? idempotencyKey,
+  }) async {
+    completeCalls++;
+    if (completeFailure != null) throw completeFailure!;
+    lastGrade = grade;
+    lastNotes = notes;
+    return snapshots.last;
+  }
+
+  @override
+  Future<QueueEntry> correctEntry({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+    required String entryId,
+    required int expectedEntryVersion,
+    String? grade,
+    String? notes,
+    bool includeNotes = false,
+    String? idempotencyKey,
+  }) async {
+    correctCalls++;
+    if (correctFailure != null) throw correctFailure!;
+    lastCorrectGrade = grade;
+    lastCorrectNotes = notes;
+    return snapshots.last.entries.single;
   }
 }
 
@@ -742,6 +874,8 @@ Map<String, dynamic> _entryJson(
   int position = 1,
   String status = 'waiting',
   int version = 1,
+  String? grade,
+  String? gradeNotes,
 }) =>
     {
       'id': id,
@@ -749,6 +883,8 @@ Map<String, dynamic> _entryJson(
       'student_name': studentName,
       'position': position,
       'status': status,
+      if (grade != null) 'grade': grade,
+      if (gradeNotes != null) 'grade_notes': gradeNotes,
       'version': version,
     };
 

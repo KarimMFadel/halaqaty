@@ -227,6 +227,10 @@ func (p *RealtimeOutboxProjector) ProjectAndDeliver(ctx context.Context, event O
 				return err
 			}
 		}
+	case realtime.EventQueueGradeSubmitted:
+		if err := p.deliverGradeSubmitted(ctx, topic, event, state, metadata); err != nil {
+			return err
+		}
 	case realtime.EventQueueReordered:
 		if metadataString(metadata, "order_kind") == "preorder_students" {
 			managers, err := p.repo.SessionManagerIDs(ctx, event.SessionID)
@@ -283,12 +287,26 @@ func (p *RealtimeOutboxProjector) eventPayload(ctx context.Context, event Outbox
 		base["new_status"] = metadataString(metadata, "new_status")
 		base["position"] = entry.Position
 		base["entry_version"] = entry.Version
+	case realtime.EventQueueGradeSubmitted:
+		entry, ok := queueEntry(state, event.ResourceID)
+		if !ok {
+			return nil, errors.New("queue grade submitted resource is unavailable")
+		}
+		base["queue_entry_id"] = entry.ID
+		base["student_id"] = entry.StudentID
+		base["grade"] = entry.Grade
+		base["notes"] = entry.TeacherNotes
+		base["position"] = entry.Position
+		base["entry_version"] = entry.Version
 	case realtime.EventQueuePolicyChanged:
 		policy, err := p.repo.SessionPolicy(ctx, event.SessionID)
 		if err != nil {
 			return nil, err
 		}
 		base = map[string]any{"session_id": event.SessionID, "policy": policyResponse(policy.Policy)}
+	case realtime.EventQueueRoundFinalized:
+		base["round_id"] = event.RoundID
+		base["reason"] = metadataString(metadata, "reason")
 	case realtime.EventQueueOptOutRequested:
 		base["request_id"] = stringOrEmpty(event.ResourceID)
 		base["queue_entry_id"] = metadataString(metadata, "queue_entry_id")
@@ -304,6 +322,51 @@ func stringOrEmpty(value *string) string {
 		return ""
 	}
 	return *value
+}
+
+func (p *RealtimeOutboxProjector) deliverGradeSubmitted(ctx context.Context, topic realtime.Topic, event OutboxEvent, state QueueState, metadata map[string]any) error {
+	policy, err := p.repo.SessionPolicy(ctx, event.SessionID)
+	if err != nil {
+		return fmt.Errorf("load grade visibility policy: %w", err)
+	}
+	payload, err := p.eventPayload(ctx, event, state, metadata)
+	if err != nil {
+		return err
+	}
+	envelope := realtimeEnvelope(event.EventType, event.EventID, payload)
+	switch policy.Policy.GradeVisibility {
+	case GradeVisibilityManagersOnly:
+		managers, err := p.repo.SessionManagerIDs(ctx, event.SessionID)
+		if err != nil {
+			return err
+		}
+		for _, managerID := range managers {
+			if err := p.hub.SendToUser(topic, managerID, event.EventID, envelope); err != nil {
+				return err
+			}
+		}
+	case GradeVisibilityManagersAndStudent:
+		managers, err := p.repo.SessionManagerIDs(ctx, event.SessionID)
+		if err != nil {
+			return err
+		}
+		for _, managerID := range managers {
+			if err := p.hub.SendToUser(topic, managerID, event.EventID, envelope); err != nil {
+				return err
+			}
+		}
+		studentID := metadataString(metadata, "student_id")
+		if studentID != "" {
+			if err := p.hub.SendToUser(topic, studentID, event.EventID, envelope); err != nil {
+				return err
+			}
+		}
+	case GradeVisibilityAllParticipants:
+		if err := p.hub.Broadcast(topic, event.EventID, envelope); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p *RealtimeOutboxProjector) deliverTurnPrompts(ctx context.Context, topic realtime.Topic, event OutboxEvent, state QueueState, metadata map[string]any) error {
@@ -359,7 +422,8 @@ func (p *RealtimeOutboxProjector) sendNextSoon(topic realtime.Topic, event Outbo
 func isQueueEvent(eventType string) bool {
 	switch eventType {
 	case realtime.EventQueueRoundStarted, realtime.EventQueueReordered, realtime.EventQueueAdvanced,
-		realtime.EventQueueEntryUpdated, realtime.EventQueuePolicyChanged, realtime.EventQueueOptOutRequested:
+		realtime.EventQueueEntryUpdated, realtime.EventQueuePolicyChanged, realtime.EventQueueOptOutRequested,
+		realtime.EventQueueGradeSubmitted, realtime.EventQueueRoundFinalized:
 		return true
 	default:
 		return false

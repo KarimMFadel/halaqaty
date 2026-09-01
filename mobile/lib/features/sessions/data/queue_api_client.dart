@@ -319,6 +319,56 @@ class QueueApiClient {
             ),
           ));
 
+  Future<QueueState> completeEntry({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+    required String entryId,
+    required int expectedEntryVersion,
+    String? grade,
+    String? notes,
+    String? idempotencyKey,
+  }) =>
+      _state(() => _dio.put<Map<String, dynamic>>(
+            '${_queuePath(liveSessionId)}/entries/$entryId/status',
+            data: {
+              'status': 'completed',
+              'expected_entry_version': expectedEntryVersion,
+              if (grade != null) 'grade': grade,
+              if (notes != null) 'notes': notes,
+            },
+            options: Options(
+              headers: _headers(token, sessionId, idempotencyKey),
+            ),
+          ));
+
+  Future<QueueEntry> correctEntry({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+    required String entryId,
+    required int expectedEntryVersion,
+    String? grade,
+    String? notes,
+    bool includeNotes = false,
+    String? idempotencyKey,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '${_queuePath(liveSessionId)}/entries/$entryId/grade',
+        data: {
+          'expected_entry_version': expectedEntryVersion,
+          if (grade != null) 'grade': grade,
+          if (includeNotes) 'notes': notes,
+        },
+        options: Options(headers: _headers(token, sessionId, idempotencyKey)),
+      );
+      return QueueEntry.fromJson(response.data!);
+    } on DioException catch (error) {
+      throw _exception(error);
+    }
+  }
+
   Future<OptOutResult> optOut({
     required String token,
     required String sessionId,

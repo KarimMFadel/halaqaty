@@ -221,7 +221,14 @@ func (s *RoundService) Move(ctx context.Context, entryID string, expectedVersion
 	if err != nil {
 		return QueueEntry{}, err
 	}
+	sessionID, err := s.repo.EntrySessionID(ctx, entryID)
+	if err != nil {
+		return QueueEntry{}, err
+	}
 	err = s.repo.WithTx(ctx, func(tx *Tx) error {
+		if err := tx.LockSession(ctx, sessionID); err != nil {
+			return err
+		}
 		round, err := tx.LockRound(ctx, roundID)
 		if err != nil {
 			return err
@@ -318,6 +325,32 @@ func (s *RoundService) AppendLateJoiner(ctx context.Context, sessionID, userID s
 			ResourceID:    &entry.ID,
 			RoundVersion:  round.Version + 1,
 			EventMetadata: json.RawMessage(`{"new_status":"waiting"}`),
+		})
+	})
+}
+
+// FinalizeActiveRound finalizes the session's active round if one exists.
+// It is idempotent: an already-finalized or missing active round is not an error.
+func (s *RoundService) FinalizeActiveRound(ctx context.Context, sessionID, resolvedBy string) error {
+	return s.repo.withSessionRoundLock(ctx, sessionID, func(runTx queueTxRunner) error {
+		return runTx(ctx, func(tx *Tx) error {
+			policy, err := tx.LockSessionPolicy(ctx, sessionID)
+			if err != nil {
+				return err
+			}
+			active, err := tx.LockActiveRound(ctx, sessionID)
+			if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return nil
+				}
+				return err
+			}
+			finalized, err := tx.FinalizeRound(ctx, active.ID, active.Version, policy.Policy.Finalization, resolvedBy)
+			if err != nil {
+				return err
+			}
+			return tx.InsertOutboxEvent(ctx, OutboxEvent{EventID: uuid.NewString(), SessionID: sessionID, RoundID: active.ID,
+				EventType: queueEventRoundFinalized, RoundVersion: finalized.Version, EventMetadata: json.RawMessage(`{"reason":"session_ended"}`)})
 		})
 	})
 }

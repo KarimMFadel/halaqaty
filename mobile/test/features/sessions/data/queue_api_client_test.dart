@@ -68,6 +68,72 @@ void main() {
   });
 
   group('QueueApiClient', () {
+    test('sends atomic completion and audited correction payloads', () async {
+      final requests = <RequestOptions>[];
+      final client = QueueApiClient(
+        Dio()
+          ..httpClientAdapter = _QueueAdapter(
+            requests,
+            [
+              _QueuedResponse.ok(_queueStateJson()),
+              _QueuedResponse.ok({
+                'id': _entryId,
+                'student_id': '55555555-5555-5555-5555-555555555555',
+                'student_name': 'مريم',
+                'position': 1,
+                'status': 'completed',
+                'grade': 'good',
+                'grade_notes': null,
+                'version': 4,
+              }),
+            ],
+          ),
+      );
+
+      await client.completeEntry(
+        token: _token,
+        sessionId: _backendSessionId,
+        liveSessionId: _liveSessionId,
+        entryId: _entryId,
+        expectedEntryVersion: 3,
+        grade: 'excellent',
+        notes: 'Strong recitation',
+        idempotencyKey: 'complete-retry',
+      );
+      await client.correctEntry(
+        token: _token,
+        sessionId: _backendSessionId,
+        liveSessionId: _liveSessionId,
+        entryId: _entryId,
+        expectedEntryVersion: 4,
+        grade: 'good',
+        includeNotes: true,
+        idempotencyKey: 'correct-retry',
+      );
+
+      expect(_request(requests, 0), {
+        'path': '/sessions/$_liveSessionId/queue/entries/$_entryId/status',
+        'method': 'PUT',
+        'data': {
+          'status': 'completed',
+          'expected_entry_version': 3,
+          'grade': 'excellent',
+          'notes': 'Strong recitation',
+        },
+        'idempotencyKey': 'complete-retry',
+      });
+      expect(_request(requests, 1), {
+        'path': '/sessions/$_liveSessionId/queue/entries/$_entryId/grade',
+        'method': 'POST',
+        'data': {
+          'expected_entry_version': 4,
+          'grade': 'good',
+          'notes': null,
+        },
+        'idempotencyKey': 'correct-retry',
+      });
+    });
+
     test('manager commands send documented payloads and idempotency keys',
         () async {
       final requests = <RequestOptions>[];

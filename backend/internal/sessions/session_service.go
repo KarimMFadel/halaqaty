@@ -300,6 +300,12 @@ func (s *Service) EndSession(ctx context.Context, actorID, sessionID string, rea
 		// by the reconciler, so a provider close failure must not undo success.
 		_ = s.gateway.CloseRoom(ctx, sess.MediaRoomRef)
 	}
+	if s.queueObserver != nil {
+		// Best-effort notification to the queue observer; the bounded observer
+		// enforces the convergence timeout and swallows errors so that session
+		// end cannot be undone by a slow queue finalization.
+		_ = s.queueObserver.OnSessionEnded(ctx, sessionID)
+	}
 	return ended, nil
 }
 

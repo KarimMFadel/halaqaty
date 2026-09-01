@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
@@ -7,6 +9,7 @@ import 'package:halaqaty_mobile/features/sessions/data/queue_api_client.dart';
 import 'package:halaqaty_mobile/features/sessions/domain/session_models.dart';
 import 'package:halaqaty_mobile/features/sessions/presentation/queue/queue_manager_panel.dart';
 import 'package:halaqaty_mobile/features/sessions/presentation/queue/queue_student_panel.dart';
+import 'package:halaqaty_mobile/features/sessions/presentation/queue/queue_grading_panel.dart';
 import 'package:halaqaty_mobile/features/sessions/presentation/session_ui_labels.dart';
 
 class SessionRoomScreen extends ConsumerWidget {
@@ -105,6 +108,23 @@ class SessionRoomScreen extends ConsumerWidget {
               ),
               onEditPolicy: () => _showQueueActionPrompt(context, rtl),
             ),
+            if (_gradingEntry(queueState.queue) case final entry?)
+              QueueGradingPanel(
+                entry: entry,
+                gradingRequired: queueState.queue!.gradingRequired,
+                lifecycle: queueState.queue!.lifecycle,
+                onComplete: (grade, notes) => unawaited(
+                  ref
+                      .read(queueControllerProvider(sessionId).notifier)
+                      .completeQueueEntry(entry.id, grade: grade, notes: notes),
+                ),
+                onCorrect: (grade, notes, clearNotes) => unawaited(
+                  ref
+                      .read(queueControllerProvider(sessionId).notifier)
+                      .correctQueueEntry(entry.id,
+                          grade: grade, notes: notes, clearNotes: clearNotes),
+                ),
+              ),
           ],
           if (!state.isModerator && queueState != null) ...[
             const SizedBox(height: 8),
@@ -152,6 +172,19 @@ class SessionRoomScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+QueueEntry? _gradingEntry(QueueState? queue) {
+  if (queue == null) return null;
+  for (final entry in queue.entries) {
+    if (entry.id == queue.selectedEntryId || entry.status == 'reciting') {
+      return entry;
+    }
+  }
+  for (final entry in queue.entries) {
+    if (entry.status == 'completed') return entry;
+  }
+  return null;
 }
 
 bool _showRoomControls(SessionRoomState state) =>

@@ -200,6 +200,16 @@ func (s *OptOutService) requestAutoApprove(ctx context.Context, tx *Tx, sessionI
 // are rejected before any mutation; an already-decided request returns a clean
 // invalid-transition conflict.
 func (s *OptOutService) Decide(ctx context.Context, requestID, managerID string, decision OptOutRequestStatus, expectedEntryVersion int64) (OptOutResult, error) {
+	return s.decide(ctx, "", requestID, managerID, decision, expectedEntryVersion)
+}
+
+// DecideForSession applies a manager decision after verifying the request
+// belongs to the session addressed by the route.
+func (s *OptOutService) DecideForSession(ctx context.Context, sessionID, requestID, managerID string, decision OptOutRequestStatus, expectedEntryVersion int64) (OptOutResult, error) {
+	return s.decide(ctx, sessionID, requestID, managerID, decision, expectedEntryVersion)
+}
+
+func (s *OptOutService) decide(ctx context.Context, sessionID, requestID, managerID string, decision OptOutRequestStatus, expectedEntryVersion int64) (OptOutResult, error) {
 	if decision != OptOutRequestStatusApproved && decision != OptOutRequestStatusDeclined {
 		return OptOutResult{}, &QueueError{Code: QueueErrorCodeValidation, Message: "invalid decision"}
 	}
@@ -220,6 +230,9 @@ func (s *OptOutService) Decide(ctx context.Context, requestID, managerID string,
 		round, err := tx.LockRound(ctx, entry.QueueID)
 		if err != nil {
 			return err
+		}
+		if sessionID != "" && round.SessionID != sessionID {
+			return &QueueError{Code: QueueErrorCodeInvalidTransition, Message: "opt-out request does not belong to this session"}
 		}
 		if round.Lifecycle == RoundLifecycleFinalized {
 			return &QueueError{Code: QueueErrorCodeRoundFinalized, Message: "round is finalized and no longer accepts changes"}

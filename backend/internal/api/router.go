@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
@@ -33,6 +34,7 @@ type MiddlewareSet struct {
 	Timeout         time.Duration
 	Logger          *slog.Logger
 	Metrics         *metrics.AuthMetrics
+	QueueMetrics    *metrics.QueueMetrics
 	MetricsToken    string
 }
 
@@ -78,7 +80,20 @@ func (r *Router) Handler() http.Handler {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	return phttp.TimeoutMiddleware(timeout, handler)
+	timedHandler := phttp.TimeoutMiddleware(timeout, handler)
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if isRealtimeWebSocketUpgrade(req) {
+			handler.ServeHTTP(w, req)
+			return
+		}
+		timedHandler.ServeHTTP(w, req)
+	})
+}
+
+func isRealtimeWebSocketUpgrade(req *http.Request) bool {
+	return req.Method == http.MethodGet &&
+		req.URL.Path == routeRealtimeWebSocketPath &&
+		strings.EqualFold(req.Header.Get("Upgrade"), "websocket")
 }
 
 // requireWithUserLimit chains: auth (sets principal) → per-user rate limit → handler.
@@ -285,8 +300,16 @@ func (r *Router) metricsHandler() http.Handler {
 			phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
 			return
 		}
-		phttp.WriteJSON(w, http.StatusOK, r.mw.Metrics.Summary())
+		phttp.WriteJSON(w, http.StatusOK, metricsResponse{
+			MetricsSummary: r.mw.Metrics.Summary(),
+			Queue:          r.mw.QueueMetrics.Summary(),
+		})
 	})
+}
+
+type metricsResponse struct {
+	metrics.MetricsSummary
+	Queue metrics.QueueMetricsSummary `json:"queue"`
 }
 
 func validationMiddleware(next http.Handler) http.Handler {

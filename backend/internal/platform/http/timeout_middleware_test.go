@@ -36,20 +36,18 @@ func TestTimeoutMiddleware_ReturnsJSONErrorEnvelope(t *testing.T) {
 	}
 }
 
-func TestWebSocketUpgradeThroughSharedMiddleware(t *testing.T) {
+func TestWebSocketUpgradeThroughResponseRecorder(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(testWriter{t}, nil))
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := websocket.Upgrade(w, r, nil, 0, 0)
+		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
 		if err != nil {
 			t.Errorf("upgrade websocket: %v", err)
 			return
 		}
 		defer conn.Close()
 	})
-	wrapped := TimeoutMiddleware(time.Second,
-		RecoveryMiddleware(logger,
-			RequestIDMiddleware(LoggerMiddleware(logger, handler)),
-		),
+	wrapped := RecoveryMiddleware(logger,
+		RequestIDMiddleware(LoggerMiddleware(logger, handler)),
 	)
 	server := httptest.NewServer(wrapped)
 	defer server.Close()

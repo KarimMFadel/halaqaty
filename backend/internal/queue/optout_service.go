@@ -108,6 +108,10 @@ func (s *OptOutService) requestApprovalRequired(ctx context.Context, tx *Tx, ses
 	if pending != nil {
 		return OptOutResult{Request: *pending, Entry: entry}, nil
 	}
+	round, err := tx.LockRound(ctx, entry.QueueID)
+	if err != nil {
+		return OptOutResult{}, err
+	}
 
 	request, err := tx.InsertOptOutRequest(ctx, entry.ID, studentID, OptOutRequestStatusPending, nil)
 	if err != nil {
@@ -126,7 +130,7 @@ func (s *OptOutService) requestApprovalRequired(ctx context.Context, tx *Tx, ses
 		RoundID:       entry.QueueID,
 		EventType:     queueEventOptOutRequested,
 		ResourceID:    &request.ID,
-		RoundVersion:  entry.Version,
+		RoundVersion:  round.Version,
 		EventMetadata: mustEncodeOptOutMetadata(metadata),
 	}); err != nil {
 		return OptOutResult{}, err

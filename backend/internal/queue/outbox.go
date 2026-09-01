@@ -20,6 +20,7 @@ const outboxRetryLimit = 5
 
 // OutboxStore is the small persistence seam required by asynchronous delivery.
 type OutboxStore interface {
+	ClaimDueOutboxEvents(context.Context, int) ([]OutboxEvent, error)
 	ClaimReplayOutboxEvents(context.Context, int) ([]OutboxEvent, error)
 	MarkOutboxDelivered(context.Context, string) error
 	RetryOutboxEvent(context.Context, string, time.Time) error
@@ -72,6 +73,23 @@ func defaultOutboxJitter(delay time.Duration) time.Duration {
 		return delay
 	}
 	return delay - delta + time.Duration(rand.Int63n(int64(2*delta)+1))
+}
+
+// DispatchDue delivers the currently due client events.
+func (d *OutboxDispatcher) DispatchDue(ctx context.Context, limit int) error {
+	if d.store == nil || d.projector == nil {
+		return fmt.Errorf("outbox dispatcher requires store and projector")
+	}
+	events, err := d.store.ClaimDueOutboxEvents(ctx, limit)
+	if err != nil {
+		return fmt.Errorf("claim due outbox events: %w", err)
+	}
+	for _, event := range events {
+		if err := d.Dispatch(ctx, event); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Replay processes pending and parked rows after startup recovery.
@@ -164,6 +182,11 @@ func (p *RealtimeOutboxProjector) QueueState(ctx context.Context, actorID, sessi
 	payload, err := queueStateResponse(ctx, p.repo, state)
 	if err != nil {
 		return nil, err
+	}
+	entries, _ := payload["entries"].([]map[string]any)
+	for _, entry := range entries {
+		entry["queue_entry_id"] = entry["id"]
+		delete(entry, "id")
 	}
 	return realtimeEnvelope(realtime.EventQueueState, projectedEventID(round.ID+":"+strconv.FormatInt(state.Round.Version, 10), actorID, realtime.EventQueueState), payload), nil
 }

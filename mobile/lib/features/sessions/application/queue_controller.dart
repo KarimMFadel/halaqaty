@@ -70,6 +70,8 @@ class QueueController extends StateNotifier<QueueControllerState> {
   final Set<String> _eventIds = {};
   StreamSubscription<RealtimeSessionEvent>? _subscription;
   String? _liveSessionId;
+  String? _pendingOptOutEntryId;
+  int _refreshGeneration = 0;
 
   void setManager(bool isManager) {
     state = state.copyWith(isManager: isManager);
@@ -80,6 +82,7 @@ class QueueController extends StateNotifier<QueueControllerState> {
     await _subscription?.cancel();
     _subscription = null;
     _liveSessionId = liveSessionId;
+    _pendingOptOutEntryId = null;
     _eventIds.clear();
     state = state.copyWith(
       status: QueueControllerStatus.loading,
@@ -111,6 +114,7 @@ class QueueController extends StateNotifier<QueueControllerState> {
     await _subscription?.cancel();
     _subscription = null;
     _liveSessionId = null;
+    _pendingOptOutEntryId = null;
     _eventIds.clear();
     state = QueueControllerState(
       isManager: state.isManager,
@@ -134,10 +138,12 @@ class QueueController extends StateNotifier<QueueControllerState> {
 
     final current = state.queue;
     if (event case QueueStateEvent()) {
-      if (current != null && event.queue.version <= current.version) return;
-      if (current != null && event.queue.version > current.version + 1) {
-        unawaited(_refresh());
-        return;
+      if (current != null && event.queue.roundId == current.roundId) {
+        if (event.queue.version <= current.version) return;
+        if (event.queue.version > current.version + 1) {
+          unawaited(_refresh());
+          return;
+        }
       }
       state = state.copyWith(
         status: QueueControllerStatus.ready,
@@ -151,7 +157,7 @@ class QueueController extends StateNotifier<QueueControllerState> {
       return;
     }
     if (event.version == null ||
-        (current != null && event.version! <= current.version)) {
+        (current != null && event.version! < current.version)) {
       return;
     }
     unawaited(_refresh());
@@ -196,11 +202,13 @@ class QueueController extends StateNotifier<QueueControllerState> {
         idempotencyKey: _newIdempotencyKey(),
       );
       final feedback = _mapOptOutFeedback(result, queue.policy.optOut);
-      await _refresh();
+      _pendingOptOutEntryId =
+          feedback == QueueOptOutFeedback.pending ? result.entry.id : null;
       state = state.copyWith(
         optOutFeedback: feedback,
         clearActionError: true,
       );
+      await _refresh();
     } catch (error) {
       state = state.copyWith(actionErrorMessage: error.toString());
     }
@@ -311,16 +319,31 @@ class QueueController extends StateNotifier<QueueControllerState> {
   Future<void> _refresh() async {
     final liveSessionId = _liveSessionId;
     if (liveSessionId == null) return;
+    final generation = ++_refreshGeneration;
     try {
       final queue = await _queue(await _credentials());
-      if (_liveSessionId != liveSessionId) return;
+      if (_liveSessionId != liveSessionId || generation != _refreshGeneration) {
+        return;
+      }
+      var optOutFeedback = state.optOutFeedback;
+      final pendingEntryID = _pendingOptOutEntryId;
+      if (optOutFeedback == QueueOptOutFeedback.pending &&
+          pendingEntryID != null &&
+          queue.entries.any((entry) =>
+              entry.id == pendingEntryID && entry.status == 'opted_out')) {
+        optOutFeedback = QueueOptOutFeedback.approved;
+        _pendingOptOutEntryId = null;
+      }
       state = state.copyWith(
         status: QueueControllerStatus.ready,
         queue: queue,
+        optOutFeedback: optOutFeedback,
         clearError: true,
       );
     } catch (error) {
-      if (_liveSessionId != liveSessionId) return;
+      if (_liveSessionId != liveSessionId || generation != _refreshGeneration) {
+        return;
+      }
       state = state.copyWith(
         status: QueueControllerStatus.error,
         errorMessage: error.toString(),

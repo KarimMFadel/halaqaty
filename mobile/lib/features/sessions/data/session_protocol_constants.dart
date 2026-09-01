@@ -31,6 +31,7 @@ abstract final class SessionJsonKeys {
   static const timestamp = 'timestamp';
   static const eventId = 'event_id';
   static const sessionId = 'session_id';
+  static const roundId = 'round_id';
   static const version = 'version';
   static const queueEntryId = 'queue_entry_id';
   static const entries = 'entries';

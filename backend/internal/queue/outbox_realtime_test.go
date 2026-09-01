@@ -93,6 +93,38 @@ func TestRealtimeOutboxProjector_DeliversVersionedRedactedEventsToAuthorizedReci
 	}
 }
 
+func TestRealtimeOutboxProjector_QueueStateUsesWebSocketEntryIdentifiers(t *testing.T) {
+	ctx := context.Background()
+	repo := newQueueRepository(t)
+	teacherID := qSeedUser(t, repo, "queue-state-teacher")
+	studentID := qSeedUser(t, repo, "queue-state-student")
+	circleID := qSeedCircle(t, repo, teacherID)
+	qSeedMember(t, repo, circleID, teacherID, "teacher", time.Now().UTC())
+	qSeedMember(t, repo, circleID, studentID, "student", time.Now().UTC())
+	sessionID := qInsertSession(t, repo, circleID, teacherID, "managers_and_student")
+	qCreateRound(t, repo, sessionID, teacherID, "active", []string{studentID})
+
+	event, err := NewRealtimeOutboxProjector(repo, nil).QueueState(ctx, teacherID, sessionID)
+	if err != nil {
+		t.Fatalf("project queue state: %v", err)
+	}
+	payload, ok := event["payload"].(map[string]any)
+	if !ok {
+		t.Fatalf("queue state payload = %#v, want object", event["payload"])
+	}
+	entries, ok := payload["entries"].([]map[string]any)
+	if !ok || len(entries) != 1 {
+		t.Fatalf("queue state entries = %#v, want one entry", payload["entries"])
+	}
+	entryID, ok := entries[0]["queue_entry_id"].(string)
+	if !ok || entryID == "" {
+		t.Fatalf("queue state entry = %#v, want queue_entry_id", entries[0])
+	}
+	if _, present := entries[0]["id"]; present {
+		t.Fatalf("queue state entry = %#v, REST id must not leak into WebSocket shape", entries[0])
+	}
+}
+
 func TestPolicyUpdate_CommitsQueuePolicyChangedOutboxEventForActiveRound(t *testing.T) {
 	ctx := context.Background()
 	repo := newQueueRepository(t)

@@ -11,6 +11,7 @@ import (
 
 type fakeOutboxStore struct {
 	claimed    []OutboxEvent
+	due        []OutboxEvent
 	delivered  []string
 	retried    []retryCall
 	parked     []string
@@ -20,6 +21,10 @@ type fakeOutboxStore struct {
 type retryCall struct {
 	eventID     string
 	availableAt time.Time
+}
+
+func (s *fakeOutboxStore) ClaimDueOutboxEvents(_ context.Context, _ int) ([]OutboxEvent, error) {
+	return s.due, s.claimError
 }
 
 func (s *fakeOutboxStore) ClaimReplayOutboxEvents(_ context.Context, _ int) ([]OutboxEvent, error) {
@@ -57,6 +62,18 @@ func TestOutboxDispatcherDeliversAndReplays(t *testing.T) {
 	}
 	if len(store.delivered) != 1 || store.delivered[0] != "event-1" {
 		t.Fatalf("delivered = %v, want [event-1]", store.delivered)
+	}
+}
+
+func TestOutboxDispatcherDeliversDueEvents(t *testing.T) {
+	store := &fakeOutboxStore{due: []OutboxEvent{{EventID: "event-due"}}}
+	dispatcher := NewOutboxDispatcher(store, fakeOutboxProjector{}, nil, nil, nil, nil)
+
+	if err := dispatcher.DispatchDue(context.Background(), 10); err != nil {
+		t.Fatalf("dispatch due: %v", err)
+	}
+	if len(store.delivered) != 1 || store.delivered[0] != "event-due" {
+		t.Fatalf("delivered = %v, want [event-due]", store.delivered)
 	}
 }
 

@@ -148,6 +148,7 @@ class QueueRealtimeEventDecoder {
 
   final String _liveSessionId;
   final Set<String> _seenEventIds = {};
+  String? _roundId;
   int? _roundVersion;
 
   RealtimeSessionEvent? decode(String raw) {
@@ -169,6 +170,7 @@ class QueueRealtimeEventDecoder {
 
       if (type == SessionRealtimeTypes.queueState) {
         final queue = QueueState.fromJson(_queueStatePayload(payload));
+        _roundId = queue.roundId;
         _roundVersion = queue.version;
         return QueueStateEvent(
           sessionId: _liveSessionId,
@@ -190,12 +192,17 @@ class QueueRealtimeEventDecoder {
         );
       }
 
+      final roundId = payload[SessionJsonKeys.roundId];
       final version = payload[SessionJsonKeys.version];
-      if (version is! int ||
-          (_roundVersion != null && version <= _roundVersion!)) {
+      if (roundId is! String || roundId.isEmpty || version is! int) {
         return null;
       }
-      final previousVersion = _roundVersion;
+      final sameRound = _roundId == roundId;
+      if (sameRound && _roundVersion != null && version < _roundVersion!) {
+        return null;
+      }
+      final previousVersion = sameRound ? _roundVersion : null;
+      _roundId = roundId;
       _roundVersion = version;
       if (previousVersion != null && version > previousVersion + 1) {
         return QueueVersionGapEvent(
@@ -410,12 +417,6 @@ class WebSocketRealtimeSessionClient implements RealtimeSessionClient {
       final socket = await WebSocket.connect(url.toString());
       _socket = socket;
       final queueDecoder = QueueRealtimeEventDecoder(liveSessionId);
-      socket
-          .add(jsonEncode(realtimeSubscribeMessage('session.$liveSessionId')));
-      _heartbeat?.cancel();
-      _heartbeat = Timer.periodic(_heartbeatInterval, (_) {
-        if (_socket == socket) socket.add(jsonEncode(realtimePingMessage));
-      });
       socket.listen((data) {
         if (data is! String || sink.isClosed) return;
         final event = parseRealtimeSessionEvent(data, liveSessionId) ??
@@ -431,6 +432,12 @@ class WebSocketRealtimeSessionClient implements RealtimeSessionClient {
         _heartbeat?.cancel();
         unawaited(sink.close());
       }, cancelOnError: true);
+      socket
+          .add(jsonEncode(realtimeSubscribeMessage('session.$liveSessionId')));
+      _heartbeat?.cancel();
+      _heartbeat = Timer.periodic(_heartbeatInterval, (_) {
+        if (_socket == socket) socket.add(jsonEncode(realtimePingMessage));
+      });
     } catch (_) {
       // Ticket or socket setup failure: close the stream; the room stays on
       // media + REST snapshots. Reconnect is US3 (T039+).

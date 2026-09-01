@@ -192,6 +192,57 @@ void main() {
     expect(versionGap.receivedVersion, 3);
   });
 
+  test('accepts distinct queue events at the current round version', () {
+    final decoder = QueueRealtimeEventDecoder('live-1');
+    expect(
+      decoder.decode(_queueStateFrame(eventId: 'queue-state-2', version: 2)),
+      isA<QueueStateEvent>(),
+    );
+
+    final event = decoder.decode(jsonEncode({
+      'type': 'queue.opt_out_requested',
+      'event_id': 'opt-out-request-1',
+      'occurred_at': '2026-01-01T00:00:01Z',
+      'payload': {
+        'session_id': 'live-1',
+        'round_id': 'round-1',
+        'request_id': 'request-1',
+        'queue_entry_id': 'entry-1',
+        'student_id': 'student-1',
+        'version': 2,
+      },
+    }));
+
+    expect(event, isA<QueueChangeEvent>());
+  });
+
+  test('accepts a lower version when an event starts a different round', () {
+    final decoder = QueueRealtimeEventDecoder('live-1');
+    expect(
+      decoder.decode(_queueStateFrame(eventId: 'old-round-state', version: 5)),
+      isA<QueueStateEvent>(),
+    );
+
+    final event = decoder.decode(jsonEncode({
+      'type': 'queue.entry_updated',
+      'event_id': 'new-round-entry-update',
+      'occurred_at': '2026-01-01T00:00:01Z',
+      'payload': {
+        'session_id': 'live-1',
+        'round_id': 'round-2',
+        'queue_entry_id': 'entry-2',
+        'student_id': 'student-1',
+        'old_status': 'waiting',
+        'new_status': 'opted_out',
+        'position': 1,
+        'entry_version': 2,
+        'version': 2,
+      },
+    }));
+
+    expect(event, isA<QueueChangeEvent>());
+  });
+
   test('websocket client emits queue recovery signal only once for a gap',
       () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);

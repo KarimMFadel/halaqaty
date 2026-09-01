@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,11 +17,6 @@ import (
 // TimeoutMiddleware returns the standard JSON timeout envelope when a request exceeds its deadline.
 func TimeoutMiddleware(timeout time.Duration, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
-			next.ServeHTTP(w, r)
-			return
-		}
-
 		ctx, cancel := context.WithTimeout(r.Context(), timeout)
 		defer cancel()
 

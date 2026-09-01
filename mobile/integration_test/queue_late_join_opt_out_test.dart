@@ -130,7 +130,6 @@ void main() {
       // ── Student UI: durable late-join position ────────────────────────────
       final studentRealtime = _TestRealtimeClient(dio);
       final studentControllers = _StudentRoomBinding();
-      addTearDown(studentControllers.dispose);
 
       await tester.pumpWidget(_studentApp(
         liveSessionId: liveSessionId,
@@ -170,10 +169,10 @@ void main() {
           .listen(managerEvents.add);
       addTearDown(managerSub.cancel);
       // Wait for the initial queue.state after subscription.
-      await tester.runAsync(() => _waitFor(
-            () => managerEvents.whereType<QueueStateEvent>().isNotEmpty,
-            timeout: const Duration(seconds: 5),
-          ));
+      await _waitFor(
+        () => managerEvents.whereType<QueueStateEvent>().isNotEmpty,
+        timeout: const Duration(seconds: 5),
+      );
 
       // Also spy on the student realtime stream for targeted-delivery checks.
       final studentEvents = <RealtimeSessionEvent>[];
@@ -202,21 +201,13 @@ void main() {
           .where((e) => e.type == 'queue.opt_out_requested')
           .toList();
       expect(requestedEvents, hasLength(1));
-      expect(
-        studentEvents
-            .whereType<QueueChangeEvent>()
-            .where((e) => e.type == 'queue.opt_out_requested'),
-        isEmpty,
-        reason: 'Students must never receive queue.opt_out_requested',
-      );
-
       // Resolve the pending request id from the REST surface (idempotent).
       final firstOptOutResult = await queue.optOut(
         token: student.token,
         sessionId: student.sessionId,
         liveSessionId: liveSessionId,
       );
-      await _decideOptOut(
+      final declinedResult = await _decideOptOut(
         dio: dio,
         credentials: teacher,
         liveSessionId: liveSessionId,
@@ -224,13 +215,22 @@ void main() {
         decision: 'declined',
         expectedEntryVersion: firstOptOutResult.entry.version,
       );
-
-      await _waitFor(
-        () => find.text('يبقى دورك محفوظًا لك').evaluate().isNotEmpty,
-        timeout: const Duration(seconds: 5),
+      expect(
+        (declinedResult['request'] as Map<String, dynamic>)['status'],
+        'declined',
       );
-      expect(find.text('يبقى دورك محفوظًا لك'), findsOneWidget);
+      expect(
+        (declinedResult['entry'] as Map<String, dynamic>)['status'],
+        'waiting',
+      );
+
+      // A decline does not change queue state and therefore emits no
+      // queue.entry_updated event. Re-fetch the authoritative REST snapshot
+      // before the student submits a new request.
+      await studentQueue.connect(liveSessionId, listenRealtime: false);
+      await tester.pumpAndSettle();
       expect(studentQueue.state.queue?.entries.single.status, 'waiting');
+      expect(find.bySemanticsLabel('الاعتذار عن الدور'), findsOneWidget);
 
       // ── Approval-required opt-out: approved ───────────────────────────────
       await tester.tap(find.bySemanticsLabel('الاعتذار عن الدور'));
@@ -242,6 +242,15 @@ void main() {
 
       // Confirm the second manager-only event arrived, then resolve the
       // request id from the REST surface (idempotent replay).
+      await _waitFor(
+        () =>
+            managerEvents
+                .whereType<QueueChangeEvent>()
+                .where((e) => e.type == 'queue.opt_out_requested')
+                .length >=
+            2,
+        timeout: const Duration(seconds: 5),
+      );
       final requestedEvents2 = managerEvents
           .whereType<QueueChangeEvent>()
           .where((e) => e.type == 'queue.opt_out_requested')
@@ -263,18 +272,35 @@ void main() {
       );
 
       await _waitFor(
-        () => find.text('تم اعتماد الاعتذار').evaluate().isNotEmpty,
+        () =>
+            studentQueue.state.queue?.entries.single.status == 'opted_out' &&
+            studentQueue.state.optOutFeedback == QueueOptOutFeedback.approved,
         timeout: const Duration(seconds: 5),
       );
+      await tester.pumpAndSettle();
       expect(find.text('تم اعتماد الاعتذار'), findsOneWidget);
       expect(studentQueue.state.queue?.entries.single.status, 'opted_out');
 
       // ── Duplicate queue.entry_updated replay is deduplicated ──────────────
+      await _waitFor(
+        () => managerEvents
+            .whereType<QueueChangeEvent>()
+            .where((e) => e.type == 'queue.entry_updated')
+            .isNotEmpty,
+        timeout: const Duration(seconds: 5),
+      );
       final entryUpdatedEvents = managerEvents
           .whereType<QueueChangeEvent>()
           .where((e) => e.type == 'queue.entry_updated')
           .toList();
       expect(entryUpdatedEvents, isNotEmpty);
+      expect(
+        studentEvents
+            .whereType<QueueChangeEvent>()
+            .where((e) => e.type == 'queue.opt_out_requested'),
+        isEmpty,
+        reason: 'Students must never receive queue.opt_out_requested',
+      );
       final approvalEvent = entryUpdatedEvents.last;
       // Replaying the exact same event must not crash or revert state.
       studentRealtime.inject(approvalEvent);
@@ -315,7 +341,7 @@ void main() {
 
       // ── Auto-approve: fresh round, opt-out approved immediately ───────────
       // Reset creates a new active round; the student gets a new waiting entry.
-      await queue.reset(
+      final resetState = await queue.reset(
         token: teacher.token,
         sessionId: teacher.sessionId,
         liveSessionId: liveSessionId,
@@ -326,8 +352,12 @@ void main() {
         gradingRequired: false,
         expectedVersion: studentQueue.state.queue!.version,
       );
+      // Reset is setup for the auto-approve case. Queue versions are scoped to
+      // a round, so replace the completed round with the authoritative new
+      // snapshot before exercising the student command.
+      await studentQueue.connect(liveSessionId, listenRealtime: false);
       await _waitFor(
-        () => studentQueue.state.queue?.entries.isNotEmpty ?? false,
+        () => studentQueue.state.queue?.roundId == resetState.roundId,
         timeout: const Duration(seconds: 5),
       );
       expect(studentQueue.state.queue?.entries.single.status, 'waiting');
@@ -337,12 +367,25 @@ void main() {
           .whereType<QueueChangeEvent>()
           .where((e) => e.type == 'queue.opt_out_requested')
           .length;
+      final entryUpdatedCountBeforeAutoApprove = managerEvents
+          .whereType<QueueChangeEvent>()
+          .where((e) => e.type == 'queue.entry_updated')
+          .length;
 
       await tester.tap(find.bySemanticsLabel('الاعتذار عن الدور'));
       await tester.pumpAndSettle();
 
       await _waitFor(
         () => find.text('تم اعتماد الاعتذار تلقائيًا').evaluate().isNotEmpty,
+        timeout: const Duration(seconds: 5),
+      );
+      await _waitFor(
+        () =>
+            managerEvents
+                .whereType<QueueChangeEvent>()
+                .where((e) => e.type == 'queue.entry_updated')
+                .length >
+            entryUpdatedCountBeforeAutoApprove,
         timeout: const Duration(seconds: 5),
       );
       expect(find.text('تم اعتماد الاعتذار تلقائيًا'), findsOneWidget);
@@ -390,11 +433,6 @@ class _StudentRoomBinding {
     this.room = room;
     this.queue = queue;
   }
-
-  void dispose() {
-    room?.dispose();
-    queue?.dispose();
-  }
 }
 
 /// Builds the student session-room app with real REST/WebSocket clients but
@@ -408,7 +446,7 @@ Widget _studentApp({
 }) {
   final sessionApi = SessionApiClient(dio);
   final queueApi = QueueApiClient(dio);
-  final credentials = () async => (
+  Future<({String token, String sessionId})> credentials() async => (
         token: student.token,
         sessionId: student.sessionId,
       );
@@ -516,11 +554,12 @@ class _TestRealtimeClient extends WebSocketRealtimeSessionClient {
   Future<void> dispose() async {
     await _merged?.close();
     _merged = null;
+    if (!_injections.isClosed) await _injections.close();
     await super.dispose();
   }
 }
 
-Future<void> _decideOptOut({
+Future<Map<String, dynamic>> _decideOptOut({
   required Dio dio,
   required _UserCredentials credentials,
   required String liveSessionId,
@@ -544,6 +583,7 @@ Future<void> _decideOptOut({
   if (response.statusCode != 200) {
     throw StateError('Decide opt-out failed: ${response.statusCode}');
   }
+  return response.data!;
 }
 
 Future<void> _waitFor(

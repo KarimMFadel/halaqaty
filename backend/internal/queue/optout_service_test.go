@@ -375,6 +375,38 @@ func TestOptOutServiceRequestCreatesSinglePendingRequestPerEntry(t *testing.T) {
 	f.assertRedactedOutboxMetadata(t)
 }
 
+func TestOptOutServicePendingEventUsesCurrentRoundVersion(t *testing.T) {
+	f := newOptOutFixture(t, OptOutPolicyApprovalRequired, 1)
+	ctx := context.Background()
+	if err := f.repo.WithTx(ctx, func(tx *Tx) error {
+		if err := tx.BumpRoundVersion(ctx, f.round.ID); err != nil {
+			return err
+		}
+		return tx.BumpRoundVersion(ctx, f.round.ID)
+	}); err != nil {
+		t.Fatalf("advance round version: %v", err)
+	}
+	student := qFirstStudent(t, f)
+	if _, err := NewOptOutService(f.repo).Request(ctx, f.session, student); err != nil {
+		t.Fatalf("request opt-out: %v", err)
+	}
+
+	round, err := f.repo.Round(ctx, f.round.ID)
+	if err != nil {
+		t.Fatalf("load current round: %v", err)
+	}
+	var eventVersion int64
+	if err := f.repo.pool.QueryRow(ctx, `
+		SELECT round_version FROM queue_event_outbox
+		WHERE session_id = $1::uuid AND event_type = 'queue.opt_out_requested'
+	`, f.session).Scan(&eventVersion); err != nil {
+		t.Fatalf("load opt-out event version: %v", err)
+	}
+	if eventVersion != round.Version {
+		t.Fatalf("opt-out event version = %d, want current round version %d", eventVersion, round.Version)
+	}
+}
+
 // TestOptOutServiceRequestRejectsMissingAndTerminalEntries pins the request
 // guards: no resolvable own entry and terminal entries never create requests.
 func TestOptOutServiceRequestRejectsMissingAndTerminalEntries(t *testing.T) {

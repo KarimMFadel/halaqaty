@@ -28,6 +28,27 @@ import (
 	lksdk "github.com/livekit/server-sdk-go/v2"
 )
 
+const (
+	queueOutboxPollInterval = 100 * time.Millisecond
+	queueOutboxBatchSize    = 100
+)
+
+type slogOutboxParkedAlerter struct {
+	logger *slog.Logger
+}
+
+func (a slogOutboxParkedAlerter) AlertOutboxParked(_ context.Context, event queue.OutboxEvent) {
+	if a.logger == nil {
+		return
+	}
+	a.logger.Error(
+		"queue outbox event parked",
+		"event_id", event.EventID,
+		"event_type", event.EventType,
+		"attempt_count", event.AttemptCount,
+	)
+}
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
@@ -144,6 +165,15 @@ func main() {
 
 	realtimeHub := realtime.NewHub(ticketService, sessionTopicAuthorizer)
 	queueProjector := queue.NewRealtimeOutboxProjector(queueRepo, realtimeHub)
+	queueMetrics := new(metrics.QueueMetrics)
+	queueDispatcher := queue.NewOutboxDispatcher(
+		queueRepo,
+		queueProjector,
+		queueMetrics,
+		slogOutboxParkedAlerter{logger: logger},
+		nil,
+		nil,
+	)
 	realtimeHub.RegisterSessionEventProvider(queueProjector.QueueState)
 	if liveSessionService != nil {
 		realtimeHub.SetSessionSnapshotProvider(liveSessionService.RealtimeSnapshot)
@@ -164,6 +194,7 @@ func main() {
 		Timeout:         cfg.RequestTimeout,
 		Logger:          logger,
 		Metrics:         authMetrics,
+		QueueMetrics:    queueMetrics,
 		MetricsToken:    cfg.MetricsToken,
 	}
 
@@ -183,6 +214,20 @@ func main() {
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
 	reconcilerCtx, stopReconciler := context.WithCancel(context.Background())
 	defer stopReconciler()
+	go func() {
+		ticker := time.NewTicker(queueOutboxPollInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-reconcilerCtx.Done():
+				return
+			case <-ticker.C:
+				if err := queueDispatcher.DispatchDue(reconcilerCtx, queueOutboxBatchSize); err != nil {
+					logger.Error("queue outbox dispatch failed", "error", err)
+				}
+			}
+		}
+	}()
 	if sessionReconciler != nil {
 		go func() {
 			if err := sessionReconciler.Run(reconcilerCtx); err != nil && !errors.Is(err, context.Canceled) {

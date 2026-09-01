@@ -257,6 +257,13 @@ class QueueController extends StateNotifier<QueueControllerState> {
         );
       });
 
+  Future<void> completeEntry({
+    required String entryId,
+    String? grade,
+    String? notes,
+  }) =>
+      completeQueueEntry(entryId, grade: grade, notes: notes);
+
   Future<void> correctQueueEntry(
     String entryId, {
     String? grade,
@@ -284,6 +291,19 @@ class QueueController extends StateNotifier<QueueControllerState> {
       state = state.copyWith(actionErrorMessage: error.toString());
     }
   }
+
+  Future<void> correctGrade({
+    required String entryId,
+    String? grade,
+    String? notes,
+    bool clearNotes = false,
+  }) =>
+      correctQueueEntry(
+        entryId,
+        grade: grade,
+        notes: notes,
+        clearNotes: clearNotes,
+      );
 
   Future<void> reset({
     required String roundType,

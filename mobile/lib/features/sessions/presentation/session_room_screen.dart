@@ -99,6 +99,49 @@ class SessionRoomScreen extends ConsumerWidget {
               onAdvance: controller.advanceQueue,
               onStart: controller.startSelectedQueueEntry,
               onSkip: controller.skipSelectedQueueEntry,
+              onComplete: () => _showGradeDialog(
+                context,
+                rtl: rtl,
+                entryId: queueState.queue?.selectedEntryId,
+                title: rtl ? 'تسجيل إتمام التلاوة' : 'Complete recitation',
+                onConfirm: (
+                        {required entryId,
+                        grade,
+                        notes,
+                        required clearNotes}) =>
+                    controller.completeQueueEntry(
+                  entryId: entryId,
+                  grade: grade,
+                  notes: notes,
+                ),
+              ),
+              onCorrect: (entryId) {
+                final entries =
+                    queueState.queue?.entries ?? const <QueueEntry>[];
+                final matching = entries.where((entry) => entry.id == entryId);
+                final entry = matching.isEmpty ? null : matching.first;
+                if (entry != null) {
+                  _showGradeDialog(
+                    context,
+                    rtl: rtl,
+                    entryId: entry.id,
+                    initialGrade: entry.grade,
+                    initialNotes: entry.gradeNotes,
+                    title: rtl ? 'تصحيح التقييم' : 'Correct grade',
+                    onConfirm: (
+                            {required entryId,
+                            grade,
+                            notes,
+                            required clearNotes}) =>
+                        controller.correctQueueGrade(
+                      entryId: entryId,
+                      grade: grade,
+                      notes: notes,
+                      clearNotes: clearNotes,
+                    ),
+                  );
+                }
+              },
               onReset: () => _showRoundDetailsDialog(
                 context,
                 rtl: rtl,
@@ -320,6 +363,89 @@ _RoundValidationMessage? _validateRoundDetails(
     );
   }
   return null;
+}
+
+typedef _GradeAction = Future<void> Function({
+  required String entryId,
+  String? grade,
+  String? notes,
+  required bool clearNotes,
+});
+
+Future<void> _showGradeDialog(
+  BuildContext context, {
+  required bool rtl,
+  required String? entryId,
+  required String title,
+  String? initialGrade,
+  String? initialNotes,
+  required _GradeAction onConfirm,
+}) async {
+  if (entryId == null) return;
+  final gradeController = ValueNotifier<String?>(initialGrade);
+  final notesController = TextEditingController(text: initialNotes ?? '');
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(title),
+        content: ValueListenableBuilder<String?>(
+          valueListenable: gradeController,
+          builder: (context, grade, _) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButton<String>(
+                value: grade,
+                hint: Text(rtl ? 'اختر التقييم' : 'Select grade'),
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(
+                      value: 'excellent', child: Text('excellent')),
+                  DropdownMenuItem(value: 'good', child: Text('good')),
+                  DropdownMenuItem(
+                      value: 'needs_review', child: Text('needs_review')),
+                  DropdownMenuItem(value: 'repeat', child: Text('repeat')),
+                  DropdownMenuItem(
+                      value: 'not_assessed', child: Text('not_assessed')),
+                ],
+                onChanged: (value) => gradeController.value = value,
+              ),
+              TextField(
+                controller: notesController,
+                maxLength: 500,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: rtl ? 'ملاحظات' : 'Notes',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(rtl ? 'إلغاء' : 'Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              onConfirm(
+                entryId: entryId,
+                grade: gradeController.value,
+                notes: notesController.text,
+                clearNotes:
+                    initialGrade != null && notesController.text.isEmpty,
+              );
+            },
+            child: Text(rtl ? 'حفظ' : 'Save'),
+          ),
+        ],
+      ),
+    );
+  } finally {
+    gradeController.dispose();
+    notesController.dispose();
+  }
 }
 
 Future<void> _showRoundDetailsDialog(

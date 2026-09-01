@@ -22,6 +22,8 @@ class QueueManagerPanel extends StatelessWidget {
     required this.onAdvance,
     required this.onStart,
     required this.onSkip,
+    this.onComplete,
+    this.onCorrect,
     required this.onReset,
     required this.onEditPolicy,
   });
@@ -34,6 +36,8 @@ class QueueManagerPanel extends StatelessWidget {
   final VoidCallback onAdvance;
   final VoidCallback onStart;
   final VoidCallback onSkip;
+  final VoidCallback? onComplete;
+  final ValueChanged<String>? onCorrect;
   final VoidCallback onReset;
   final VoidCallback onEditPolicy;
 
@@ -70,7 +74,9 @@ class QueueManagerPanel extends StatelessWidget {
           for (final entry in entries)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
                 children: [
                   Semantics(
                     container: true,
@@ -79,8 +85,19 @@ class QueueManagerPanel extends StatelessWidget {
                       child: Text('${entry.position}. '),
                     ),
                   ),
-                  Expanded(child: Text(entry.studentName)),
-                  const SizedBox(width: 8),
+                  Text(entry.studentName),
+                  if (entry.grade != null)
+                    Semantics(
+                      container: true,
+                      label: labels.grade(entry.grade!),
+                      child: ExcludeSemantics(child: Text(entry.grade!)),
+                    ),
+                  if (entry.status == 'completed' && onCorrect != null)
+                    IconButton(
+                      tooltip: labels.correct,
+                      onPressed: isTerminal ? null : () => onCorrect!(entry.id),
+                      icon: const Icon(Icons.edit_outlined),
+                    ),
                   Semantics(
                     container: true,
                     label: labels.entryStatus(entry.status),
@@ -120,6 +137,10 @@ class QueueManagerPanel extends StatelessWidget {
             _QueueAction(
               label: labels.skip,
               onPressed: isTerminal ? null : onSkip,
+            ),
+            _QueueAction(
+              label: labels.complete,
+              onPressed: isTerminal ? null : onComplete,
             ),
             _QueueAction(
               label: labels.reset,
@@ -212,6 +233,8 @@ class _QueueLabels {
   String get start =>
       rtl ? SessionUiLabels.startRecitation : 'Start recitation';
   String get skip => rtl ? SessionUiLabels.skipTurn : 'Skip turn';
+  String get complete => rtl ? 'تسجيل الإتمام' : 'Complete turn';
+  String get correct => rtl ? 'تصحيح التقييم' : 'Correct grade';
   String get reset => rtl ? SessionUiLabels.resetQueue : 'Reset round';
   String get policy => rtl ? SessionUiLabels.queuePolicy : 'Queue policy';
 
@@ -225,6 +248,8 @@ class _QueueLabels {
         'skipped' => rtl ? SessionUiLabels.skipped : 'Skipped',
         _ => status,
       };
+
+  String grade(String value) => rtl ? 'التقييم $value' : 'Grade $value';
 
   String turnAnnouncement(String studentName) => rtl
       ? 'دور التلاوة الحالي: $studentName'

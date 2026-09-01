@@ -41,6 +41,44 @@ void main() {
     expect(controller.state.actionErrorMessage, contains('advance failed'));
   });
 
+  test('complete sends grade and notes and replaces the snapshot', () async {
+    final queueApi = _FakeQueueApiClient([
+      _queueState(version: 1),
+      _queueState(
+          version: 2, entries: [_entryJson('entry-1', status: 'completed')]),
+    ]);
+    final controller = _queueController(queueApi, _FakeRealtimeClient());
+    addTearDown(controller.dispose);
+    await controller.connect(_liveSessionId);
+
+    await controller.completeEntry(
+        entryId: 'entry-1', grade: 'good', notes: 'Well done');
+
+    expect(queueApi.completeCalls, 1);
+    expect(queueApi.lastGrade, 'good');
+    expect(queueApi.lastNotes, 'Well done');
+    expect(controller.state.queue?.entries.single.status, 'completed');
+  });
+
+  test('correction refreshes the authoritative queue snapshot', () async {
+    final queueApi = _FakeQueueApiClient([
+      _queueState(
+          version: 1, entries: [_entryJson('entry-1', status: 'completed')]),
+      _queueState(
+          version: 2, entries: [_entryJson('entry-1', status: 'completed')]),
+    ]);
+    final controller = _queueController(queueApi, _FakeRealtimeClient());
+    addTearDown(controller.dispose);
+    await controller.connect(_liveSessionId);
+
+    await controller.correctGrade(entryId: 'entry-1', grade: 'excellent');
+
+    expect(queueApi.correctCalls, 1);
+    expect(queueApi.lastGrade, 'excellent');
+    expect(controller.state.status, QueueControllerStatus.ready);
+    expect(queueApi.getQueueCalls, 2);
+  });
+
   test('deduplicates duplicate queue events by event_id', () async {
     final realtime = _FakeRealtimeClient();
     final controller = _queueController(
@@ -750,6 +788,8 @@ class _FakeQueueApiClient extends QueueApiClient {
   }) async {
     correctCalls++;
     if (correctFailure != null) throw correctFailure!;
+    lastGrade = grade;
+    lastNotes = notes;
     lastCorrectGrade = grade;
     lastCorrectNotes = notes;
     return snapshots.last.entries.single;

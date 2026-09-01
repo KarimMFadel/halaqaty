@@ -186,6 +186,7 @@ func rqcMux(h *queue.Handler) *http.ServeMux {
 	mux.HandleFunc("PUT /api/v1/sessions/{sessionId}/queue/order", h.Reorder)
 	mux.HandleFunc("POST /api/v1/sessions/{sessionId}/queue/entries/{entryId}/move", h.MoveEntry)
 	mux.HandleFunc("PUT /api/v1/sessions/{sessionId}/queue/entries/{entryId}/status", h.UpdateEntryStatus)
+	mux.HandleFunc("POST /api/v1/sessions/{sessionId}/queue/entries/{entryId}/grade", h.GradeEntry)
 	mux.HandleFunc("PATCH /api/v1/sessions/{sessionId}/queue/policy", h.UpdatePolicy)
 	return mux
 }

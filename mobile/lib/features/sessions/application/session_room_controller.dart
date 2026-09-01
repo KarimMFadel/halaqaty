@@ -251,6 +251,28 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
     return _queue?.skipEntry(selectedEntryId) ?? Future.value();
   }
 
+  Future<void> completeQueueEntry({
+    required String entryId,
+    String? grade,
+    String? notes,
+  }) =>
+      _queue?.completeEntry(entryId: entryId, grade: grade, notes: notes) ??
+      Future.value();
+
+  Future<void> correctQueueGrade({
+    required String entryId,
+    String? grade,
+    String? notes,
+    bool clearNotes = false,
+  }) =>
+      _queue?.correctGrade(
+        entryId: entryId,
+        grade: grade,
+        notes: notes,
+        clearNotes: clearNotes,
+      ) ??
+      Future.value();
+
   void _applyQueueState(QueueControllerState queueState) {
     state = state.copyWith(queueState: queueState);
   }

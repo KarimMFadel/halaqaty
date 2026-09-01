@@ -146,7 +146,6 @@ func main() {
 			logger.Error("failed to initialize live session service", "error", err)
 			os.Exit(1)
 		}
-		liveSessionService.SetQueueObserver(sessions.NewBoundedQueueObserver(queue.NewSessionObserver(queueRounds), 0))
 		sessionReconciler, err = sessions.NewReconciler(liveSessionRepo, media, roomKey)
 		if err != nil {
 			logger.Error("failed to initialize session reconciler", "error", err)
@@ -166,6 +165,7 @@ func main() {
 	realtimeHub := realtime.NewHub(ticketService, sessionTopicAuthorizer)
 	queueProjector := queue.NewRealtimeOutboxProjector(queueRepo, realtimeHub)
 	queueMetrics := new(metrics.QueueMetrics)
+	queueConvergence := queue.NewConvergence(queueRepo, queueMetrics, logger)
 	queueDispatcher := queue.NewOutboxDispatcher(
 		queueRepo,
 		queueProjector,
@@ -176,6 +176,7 @@ func main() {
 	)
 	realtimeHub.RegisterSessionEventProvider(queueProjector.QueueState)
 	if liveSessionService != nil {
+		liveSessionService.SetQueueObserver(sessions.NewBoundedQueueObserver(queue.NewSessionObserver(queueRounds, queueConvergence), 0))
 		realtimeHub.SetSessionSnapshotProvider(liveSessionService.RealtimeSnapshot)
 		realtimeHub.SetSessionCommandHandler(liveSessionService.HandleRealtimeCommand)
 	}
@@ -214,6 +215,16 @@ func main() {
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
 	reconcilerCtx, stopReconciler := context.WithCancel(context.Background())
 	defer stopReconciler()
+
+	// F-003 startup reconciliation: finalize any rounds left active/prepared
+	// after a previous crash or missed session-end observer callback.
+	if err := queueConvergence.Reconcile(reconcilerCtx); err != nil {
+		logger.Error("queue startup convergence failed", "error", err)
+	}
+	if err := queueDispatcher.Replay(reconcilerCtx, queueOutboxBatchSize); err != nil {
+		logger.Error("queue outbox replay failed", "error", err)
+	}
+
 	go func() {
 		ticker := time.NewTicker(queueOutboxPollInterval)
 		defer ticker.Stop()

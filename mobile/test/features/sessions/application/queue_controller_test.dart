@@ -41,6 +41,44 @@ void main() {
     expect(controller.state.actionErrorMessage, contains('advance failed'));
   });
 
+  test('complete sends grade and notes and replaces the snapshot', () async {
+    final queueApi = _FakeQueueApiClient([
+      _queueState(version: 1),
+      _queueState(
+          version: 2, entries: [_entryJson('entry-1', status: 'completed')]),
+    ]);
+    final controller = _queueController(queueApi, _FakeRealtimeClient());
+    addTearDown(controller.dispose);
+    await controller.connect(_liveSessionId);
+
+    await controller.completeEntry(
+        entryId: 'entry-1', grade: 'good', notes: 'Well done');
+
+    expect(queueApi.completeCalls, 1);
+    expect(queueApi.lastGrade, 'good');
+    expect(queueApi.lastNotes, 'Well done');
+    expect(controller.state.queue?.entries.single.status, 'completed');
+  });
+
+  test('correction refreshes the authoritative queue snapshot', () async {
+    final queueApi = _FakeQueueApiClient([
+      _queueState(
+          version: 1, entries: [_entryJson('entry-1', status: 'completed')]),
+      _queueState(
+          version: 2, entries: [_entryJson('entry-1', status: 'completed')]),
+    ]);
+    final controller = _queueController(queueApi, _FakeRealtimeClient());
+    addTearDown(controller.dispose);
+    await controller.connect(_liveSessionId);
+
+    await controller.correctGrade(entryId: 'entry-1', grade: 'excellent');
+
+    expect(queueApi.correctCalls, 1);
+    expect(queueApi.lastGrade, 'excellent');
+    expect(controller.state.status, QueueControllerStatus.ready);
+    expect(queueApi.getQueueCalls, 2);
+  });
+
   test('deduplicates duplicate queue events by event_id', () async {
     final realtime = _FakeRealtimeClient();
     final controller = _queueController(
@@ -581,6 +619,10 @@ class _FakeQueueApiClient extends QueueApiClient {
   int optOutCalls = 0;
   OptOutResult? optOutResult;
   Object? optOutFailure;
+  int completeCalls = 0;
+  int correctCalls = 0;
+  String? lastGrade;
+  String? lastNotes;
 
   @override
   Future<QueueState> getQueue({
@@ -621,6 +663,41 @@ class _FakeQueueApiClient extends QueueApiClient {
     final failure = advanceFailure;
     if (failure != null) throw failure;
     return snapshots.last;
+  }
+
+  @override
+  Future<QueueState> completeEntry({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+    required String entryId,
+    required int expectedEntryVersion,
+    String? grade,
+    String? notes,
+    String? idempotencyKey,
+  }) async {
+    completeCalls++;
+    lastGrade = grade;
+    lastNotes = notes;
+    return snapshots.last;
+  }
+
+  @override
+  Future<QueueEntry> correctGrade({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+    required String entryId,
+    required int expectedEntryVersion,
+    String? grade,
+    String? notes,
+    bool clearNotes = false,
+    String? idempotencyKey,
+  }) async {
+    correctCalls++;
+    lastGrade = grade;
+    lastNotes = notes;
+    return snapshots.last.entries.single;
   }
 }
 

@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -56,10 +57,46 @@ type moveRequest struct {
 }
 
 type entryStatusRequest struct {
-	Status               EntryStatus `json:"status"`
-	ExpectedEntryVersion int64       `json:"expected_entry_version"`
-	Grade                *Grade      `json:"grade"`
-	Notes                *string     `json:"notes"`
+	Status               EntryStatus  `json:"status"`
+	ExpectedEntryVersion int64        `json:"expected_entry_version"`
+	Grade                *Grade       `json:"grade"`
+	Notes                optionalNote `json:"notes"`
+}
+
+// optionalNote distinguishes an absent notes field from an explicit JSON
+// null: the contract makes null mean "clear the existing note" during an
+// audited correction, while absence means "leave the note unchanged".
+type optionalNote struct {
+	set   bool
+	value *string
+}
+
+// UnmarshalJSON records presence; absent fields never invoke this method.
+func (n *optionalNote) UnmarshalJSON(data []byte) error {
+	n.set = true
+	if string(data) == "null" {
+		n.value = nil
+		return nil
+	}
+	var text string
+	if err := json.Unmarshal(data, &text); err != nil {
+		return err
+	}
+	n.value = &text
+	return nil
+}
+
+// correctionNotes maps the decoded note onto the Correct service contract:
+// absent → nil (unchanged), explicit null → empty string (clear), text → text.
+func (r entryStatusRequest) correctionNotes() *string {
+	if !r.Notes.set {
+		return nil
+	}
+	if r.Notes.value == nil {
+		empty := ""
+		return &empty
+	}
+	return r.Notes.value
 }
 
 type policyPatchRequest struct {
@@ -271,13 +308,24 @@ func (h *Handler) UpdateEntryStatus(w http.ResponseWriter, r *http.Request) {
 	if !phttp.DecodeJSONBody(w, r, &req) || !validateVersion(w, req.ExpectedEntryVersion) {
 		return
 	}
-	if req.Grade != nil || req.Notes != nil || (req.Status != EntryStatusReciting && req.Status != EntryStatusSkipped) {
-		writeQueueValidation(w, httpconst.ErrorCodeQueueInvalidGrade, httpconst.ErrorMessageQueueInvalidGrade, httpconst.FieldGrade)
-		return
-	}
 	roundID, err := h.repo.EntryQueueIDForSession(r.Context(), sessionID, entryID)
 	if err != nil {
 		writeQueueError(w, err)
+		return
+	}
+	switch req.Status {
+	case EntryStatusReciting, EntryStatusSkipped:
+		if req.Grade != nil || req.Notes.set {
+			writeQueueValidation(w, httpconst.ErrorCodeQueueInvalidGrade, httpconst.ErrorMessageQueueInvalidGrade, httpconst.FieldGrade)
+			return
+		}
+	case EntryStatusCompleted:
+		if req.Notes.value != nil && len(*req.Notes.value) > 500 {
+			writeQueueValidation(w, httpconst.ErrorCodeQueueInvalidRange, httpconst.ErrorMessageQueueInvalidRange, httpconst.FieldNote)
+			return
+		}
+	default:
+		writeQueueValidation(w, httpconst.ErrorCodeQueueInvalidEnum, httpconst.ErrorMessageQueueInvalidEnum, httpconst.FieldStatus)
 		return
 	}
 	if receipt, replay := h.receipt(w, r, sessionID, actorID, "queue.update_entry_status"); replay {
@@ -289,6 +337,8 @@ func (h *Handler) UpdateEntryStatus(w http.ResponseWriter, r *http.Request) {
 		_, err = h.turns.Start(r.Context(), entryID, req.ExpectedEntryVersion)
 	case EntryStatusSkipped:
 		_, err = h.turns.Skip(r.Context(), entryID, req.ExpectedEntryVersion, actorID)
+	case EntryStatusCompleted:
+		_, err = h.turns.Complete(r.Context(), entryID, req.ExpectedEntryVersion, actorID, req.Grade, req.Notes.value)
 	}
 	if err != nil {
 		writeQueueError(w, err)
@@ -304,6 +354,74 @@ func (h *Handler) UpdateEntryStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.writeState(w, r, roundID, Viewer{UserID: actorID, IsManager: true}, http.StatusOK)
+}
+
+// GradeEntry corrects the grade and/or note of a completed entry.
+func (h *Handler) GradeEntry(w http.ResponseWriter, r *http.Request) {
+	sessionID, actorID, _, ok := h.authorize(w, r, true)
+	if !ok {
+		return
+	}
+	entryID, ok := pathUUID(w, r, "entryId", httpconst.FieldUserID)
+	if !ok {
+		return
+	}
+	var req entryStatusRequest
+	if !phttp.DecodeJSONBody(w, r, &req) || !validateVersion(w, req.ExpectedEntryVersion) {
+		return
+	}
+	if req.Status != "" {
+		writeQueueValidation(w, httpconst.ErrorCodeQueueInvalidEnum, httpconst.ErrorMessageQueueInvalidEnum, httpconst.FieldStatus)
+		return
+	}
+	if req.Grade == nil && !req.Notes.set {
+		// GradeRequest carries minProperties 2: expected_entry_version plus
+		// at least one of grade or notes.
+		writeQueueValidation(w, httpconst.ErrorCodeQueueInvalidGrade, httpconst.ErrorMessageQueueInvalidGrade, httpconst.FieldGrade)
+		return
+	}
+	if req.Notes.value != nil && len(*req.Notes.value) > 500 {
+		writeQueueValidation(w, httpconst.ErrorCodeQueueInvalidRange, httpconst.ErrorMessageQueueInvalidRange, httpconst.FieldNote)
+		return
+	}
+	correctionNotes := req.correctionNotes()
+	if _, err := h.repo.EntryQueueIDForSession(r.Context(), sessionID, entryID); err != nil {
+		writeQueueError(w, err)
+		return
+	}
+	if receipt, replay := h.receipt(w, r, sessionID, actorID, "queue.grade_entry"); replay {
+		h.replayState(w, r, receipt, actorID)
+		return
+	}
+	entry, err := h.turns.Correct(r.Context(), entryID, req.ExpectedEntryVersion, actorID, req.Grade, correctionNotes)
+	if err != nil {
+		writeQueueError(w, err)
+		return
+	}
+	if err := h.recordReceipt(r, sessionID, actorID, entryID, entry.Version); err != nil {
+		writeQueueError(w, err)
+		return
+	}
+	h.writeQueueEntry(w, r, entry, http.StatusOK)
+}
+
+func (h *Handler) writeQueueEntry(w http.ResponseWriter, r *http.Request, entry QueueEntry, status int) {
+	ctx := r.Context()
+	names, err := h.repo.DisplayNames(ctx, []string{entry.StudentID})
+	if err != nil {
+		writeQueueError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, status, map[string]any{
+		"id":           entry.ID,
+		"student_id":   entry.StudentID,
+		"student_name": names[entry.StudentID],
+		"position":     entry.Position,
+		"status":       entry.Status,
+		"grade":        entry.Grade,
+		"grade_notes":  entry.TeacherNotes,
+		"version":      entry.Version,
+	})
 }
 
 // UpdatePolicy applies the requested policy dimensions and returns QueuePolicy.
@@ -408,7 +526,7 @@ func (h *Handler) RequestOptOut(w http.ResponseWriter, r *http.Request) {
 // DecideOptOutRequest allows a teacher or supervisor to approve or decline one
 // pending opt-out request.
 func (h *Handler) DecideOptOutRequest(w http.ResponseWriter, r *http.Request) {
-	_, actorID, _, ok := h.authorize(w, r, true)
+	sessionID, actorID, _, ok := h.authorize(w, r, true)
 	if !ok {
 		return
 	}
@@ -425,7 +543,7 @@ func (h *Handler) DecideOptOutRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.optOuts.Decide(r.Context(), requestID, actorID, req.Decision, req.ExpectedEntryVersion)
+	result, err := h.optOuts.Decide(r.Context(), sessionID, requestID, actorID, req.Decision, req.ExpectedEntryVersion)
 	if err != nil {
 		writeQueueError(w, err)
 		return

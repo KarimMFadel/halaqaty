@@ -124,6 +124,15 @@ func (t *Tx) LockSessionPolicy(ctx context.Context, sessionID string) (SessionPo
 	return policy, nil
 }
 
+// LockSession takes the sessions row FOR UPDATE to serialize with other
+// transactions that also lock sessions before recitation_queue (e.g. reset).
+func (t *Tx) LockSession(ctx context.Context, sessionID string) error {
+	if _, err := t.tx.Exec(ctx, lockSessionQuery, sessionID); err != nil {
+		return fmt.Errorf("lock session: %w", err)
+	}
+	return nil
+}
+
 // NextRoundNumber returns the next sequential round number under allocation lock.
 func (t *Tx) NextRoundNumber(ctx context.Context, sessionID string) (int, error) {
 	var n int
@@ -211,6 +220,19 @@ func (t *Tx) ClearRoundSelection(ctx context.Context, roundID, entryID string, e
 		return Round{}, fmt.Errorf("clear queue selection: %w", err)
 	}
 	return round, nil
+}
+
+// UpdateEntryGrade replaces the grade and/or note of a completed entry under
+// its optimistic-lock version guard.
+func (t *Tx) UpdateEntryGrade(ctx context.Context, entryID string, expectedVersion int64, grade *Grade, notes *string) (QueueEntry, error) {
+	entry, err := scanEntry(t.tx.QueryRow(ctx, updateEntryGradeQuery, entryID, expectedVersion, gradeOrNil(grade), stringOrNil(notes)))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return QueueEntry{}, staleVersionError()
+	}
+	if err != nil {
+		return QueueEntry{}, fmt.Errorf("update queue entry grade: %w", err)
+	}
+	return entry, nil
 }
 
 // BumpRoundVersion increments the queue-visible round version.
@@ -504,7 +526,13 @@ func (t *Tx) UpsertProgress(ctx context.Context, record NewProgress) error {
 			return fmt.Errorf("derive progress circle: %w", err)
 		}
 	}
-	if _, err := t.tx.Exec(ctx, upsertProgressQuery, record.StudentID, circleID, record.SessionID, record.QueueEntryID, record.SurahID, record.SurahName, record.FromAyah, record.ToAyah, record.Type, gradeOrNil(record.Grade), stringOrNil(record.Notes), record.Date); err != nil {
+	surahName := record.SurahName
+	if surahName == "" {
+		if err := t.tx.QueryRow(ctx, findSurahNameQuery, record.SurahID).Scan(&surahName); err != nil {
+			return fmt.Errorf("derive progress surah name: %w", err)
+		}
+	}
+	if _, err := t.tx.Exec(ctx, upsertProgressQuery, record.StudentID, circleID, record.SessionID, record.QueueEntryID, record.SurahID, surahName, record.FromAyah, record.ToAyah, record.Type, gradeOrNil(record.Grade), stringOrNil(record.Notes), record.Date); err != nil {
 		return fmt.Errorf("upsert queue progress: %w", err)
 	}
 	return nil
@@ -652,6 +680,26 @@ func (r *Repository) EntryQueueIDForSession(ctx context.Context, sessionID, entr
 	return roundID, nil
 }
 
+// EntrySessionID resolves an entry's session before a mutation that must lock
+// the sessions row before the round row (e.g. completion/correction).
+func (r *Repository) EntrySessionID(ctx context.Context, entryID string) (string, error) {
+	var sessionID string
+	if err := r.pool.QueryRow(ctx, findEntrySessionIDQuery, entryID).Scan(&sessionID); err != nil {
+		return "", fmt.Errorf("load queue entry session: %w", err)
+	}
+	return sessionID, nil
+}
+
+// RoundSessionID resolves a round's session before a mutation that must lock
+// the sessions row before the round row (e.g. advance).
+func (r *Repository) RoundSessionID(ctx context.Context, roundID string) (string, error) {
+	var sessionID string
+	if err := r.pool.QueryRow(ctx, findRoundSessionIDQuery, roundID).Scan(&sessionID); err != nil {
+		return "", fmt.Errorf("load queue round session: %w", err)
+	}
+	return sessionID, nil
+}
+
 func canViewEntryDetails(policy GradeVisibility, viewer Viewer, studentID string) bool {
 	return viewer.IsManager || policy == GradeVisibilityAllParticipants || (policy == GradeVisibilityManagersAndStudent && viewer.UserID == studentID)
 }
@@ -694,6 +742,49 @@ func (r *Repository) SessionPolicy(ctx context.Context, sessionID string) (Sessi
 		return SessionPolicyContext{}, fmt.Errorf("load session queue policy: %w", err)
 	}
 	return result, nil
+}
+
+// SessionsNeedingConvergence returns ended sessions with unfinalized rounds.
+func (r *Repository) SessionsNeedingConvergence(ctx context.Context) ([]string, error) {
+	rows, err := r.pool.Query(ctx, findSessionsNeedingConvergenceQuery)
+	if err != nil {
+		return nil, fmt.Errorf("list sessions needing convergence: %w", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan session needing convergence: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate sessions needing convergence: %w", err)
+	}
+	return ids, nil
+}
+
+// SessionRoundsToFinalize returns all active/prepared rounds for a session in
+// finalization order.
+func (r *Repository) SessionRoundsToFinalize(ctx context.Context, sessionID string) ([]Round, error) {
+	rows, err := r.pool.Query(ctx, listSessionRoundsToFinalizeQuery, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("list session rounds to finalize: %w", err)
+	}
+	defer rows.Close()
+	var rounds []Round
+	for rows.Next() {
+		round, err := scanRound(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan round to finalize: %w", err)
+		}
+		rounds = append(rounds, round)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate rounds to finalize: %w", err)
+	}
+	return rounds, nil
 }
 
 // UpdateSessionPolicy applies an effective policy change with an optimistic guard.

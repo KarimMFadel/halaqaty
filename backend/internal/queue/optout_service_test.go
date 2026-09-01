@@ -23,7 +23,7 @@ package queue
 //	func NewOptOutServiceWithAudit(repo *Repository, audit OptOutAuditSink) *OptOutService
 //
 //	func (s *OptOutService) Request(ctx context.Context, sessionID, studentID string) (OptOutResult, error)
-//	func (s *OptOutService) Decide(ctx context.Context, requestID, managerID string, decision OptOutRequestStatus, expectedEntryVersion int64) (OptOutResult, error)
+//	func (s *OptOutService) Decide(ctx context.Context, sessionID, requestID, managerID string, decision OptOutRequestStatus, expectedEntryVersion int64) (OptOutResult, error)
 //
 // Request resolves the caller's own entry in the session's active round (the
 // REST surface carries no entry identifier), so student-self is structural.
@@ -41,6 +41,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -243,7 +244,7 @@ func TestOptOutServiceLateJoinAppendsOnceAtEndUnderBothPolicies(t *testing.T) {
 		}
 		late := qSeedUser(t, f.repo, "oo-late-present")
 		qSeedMember(t, f.repo, circleID, late, "student", time.Now().UTC())
-		observer := NewSessionObserver(NewRoundService(f.repo))
+		observer := NewSessionObserver(NewRoundService(f.repo), nil)
 
 		var beforeVersion int64
 		var beforeCount int
@@ -289,7 +290,7 @@ func TestOptOutServiceLateJoinAppendsOnceAtEndUnderBothPolicies(t *testing.T) {
 		if _, err := f.repo.pool.Exec(ctx, `UPDATE sessions SET queue_population_policy = $2 WHERE id = $1::uuid`, f.session, PopulationPolicyAllActiveStudents); err != nil {
 			t.Fatalf("set population policy: %v", err)
 		}
-		observer := NewSessionObserver(NewRoundService(f.repo))
+		observer := NewSessionObserver(NewRoundService(f.repo), nil)
 		early := f.entryFor(t, qFirstStudent(t, f))
 
 		// The early member was active at activation and already materialized;
@@ -464,7 +465,7 @@ func TestOptOutServiceApproveTransitionsToOptedOutWithAuditAndNoProgress(t *test
 	}
 	entryBefore := f.entryFor(t, student)
 
-	decided, err := service.Decide(ctx, requested.Request.ID, f.teacher, OptOutRequestStatusApproved, entryBefore.Version)
+	decided, err := service.Decide(ctx, f.session, requested.Request.ID, f.teacher, OptOutRequestStatusApproved, entryBefore.Version)
 	if err != nil {
 		t.Fatalf("approve opt-out: %v", err)
 	}
@@ -508,6 +509,27 @@ func TestOptOutServiceApproveTransitionsToOptedOutWithAuditAndNoProgress(t *test
 	f.assertRedactedOutboxMetadata(t)
 }
 
+func TestOptOutServiceRejectsDecisionForDifferentSession(t *testing.T) {
+	f := newOptOutFixture(t, OptOutPolicyApprovalRequired, 1)
+	ctx := context.Background()
+	service := NewOptOutService(f.repo)
+	student := qFirstStudent(t, f)
+	requested, err := service.Request(ctx, f.session, student)
+	if err != nil {
+		t.Fatalf("opt-out request: %v", err)
+	}
+	entry := f.entryFor(t, student)
+
+	_, err = service.Decide(ctx, uuid.NewString(), requested.Request.ID, f.teacher, OptOutRequestStatusApproved, entry.Version)
+	f.mustErrCode(t, err, QueueErrorCodeInvalidTransition)
+	if got := f.requestByID(t, requested.Request.ID); got.Status != OptOutRequestStatusPending {
+		t.Fatalf("request after wrong-session decision = %s, want pending", got.Status)
+	}
+	if got := f.entryFor(t, student); got.Status != EntryStatusWaiting {
+		t.Fatalf("entry after wrong-session decision = %s, want waiting", got.Status)
+	}
+}
+
 // TestOptOutServiceDeclineTerminallyClosesRequestAndKeepsEntryWaiting pins
 // CHK005: decline closes the request terminally; the entry remains waiting.
 func TestOptOutServiceDeclineTerminallyClosesRequestAndKeepsEntryWaiting(t *testing.T) {
@@ -523,7 +545,7 @@ func TestOptOutServiceDeclineTerminallyClosesRequestAndKeepsEntryWaiting(t *test
 	}
 	entry := f.entryFor(t, student)
 
-	decided, err := service.Decide(ctx, requested.Request.ID, f.supervisor, OptOutRequestStatusDeclined, entry.Version)
+	decided, err := service.Decide(ctx, f.session, requested.Request.ID, f.supervisor, OptOutRequestStatusDeclined, entry.Version)
 	if err != nil {
 		t.Fatalf("decline opt-out: %v", err)
 	}
@@ -540,7 +562,7 @@ func TestOptOutServiceDeclineTerminallyClosesRequestAndKeepsEntryWaiting(t *test
 	}
 
 	// Deciding an already-decided request is a clean conflict with no mutation.
-	_, err = service.Decide(ctx, requested.Request.ID, f.teacher, OptOutRequestStatusApproved, entry.Version)
+	_, err = service.Decide(ctx, f.session, requested.Request.ID, f.teacher, OptOutRequestStatusApproved, entry.Version)
 	f.mustErrCode(t, err, QueueErrorCodeInvalidTransition)
 	after := f.requestByID(t, requested.Request.ID)
 	if after.Status != OptOutRequestStatusDeclined || after.DecidedBy == nil || *after.DecidedBy != f.supervisor {
@@ -616,7 +638,7 @@ func TestOptOutServiceDecideStaleVersionConflicts(t *testing.T) {
 	}
 	entry := f.entryFor(t, student)
 
-	_, err = service.Decide(ctx, requested.Request.ID, f.teacher, OptOutRequestStatusApproved, entry.Version+100)
+	_, err = service.Decide(ctx, f.session, requested.Request.ID, f.teacher, OptOutRequestStatusApproved, entry.Version+100)
 	f.mustErrCode(t, err, QueueErrorCodeStaleVersion)
 	if got := f.pendingRequestCount(t, entry.ID); got != 1 {
 		t.Fatalf("pending requests after stale decision = %d, want still 1", got)
@@ -657,7 +679,7 @@ func TestOptOutServicePendingAtFinalizationBecomesNonActionable(t *testing.T) {
 		t.Fatalf("finalize round: %v", err)
 	}
 
-	_, err = service.Decide(ctx, requested.Request.ID, f.teacher, OptOutRequestStatusApproved, entry.Version)
+	_, err = service.Decide(ctx, f.session, requested.Request.ID, f.teacher, OptOutRequestStatusApproved, entry.Version)
 	f.mustErrCode(t, err, QueueErrorCodeRoundFinalized)
 
 	persisted := f.requestByID(t, requested.Request.ID)

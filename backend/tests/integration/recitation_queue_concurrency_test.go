@@ -297,6 +297,9 @@ func cqAssertContiguousPositions(t *testing.T, state queue.QueueState) {
 
 func cqCompleteRecitingEntry(ctx context.Context, f *recitationQueueConcurrencyFixture, roundID, entryID string, grade queue.Grade) error {
 	return f.repo.WithTx(ctx, func(tx *queue.Tx) error {
+		if err := tx.LockSession(ctx, f.session); err != nil {
+			return err
+		}
 		round, err := tx.LockRound(ctx, roundID)
 		if err != nil {
 			return err

@@ -4,11 +4,14 @@ import "context"
 
 // SessionObserver applies committed F-005 lifecycle facts to the display-only
 // queue. It intentionally has no media dependency or audio operation.
-type SessionObserver struct{ rounds *RoundService }
+type SessionObserver struct {
+	rounds      *RoundService
+	convergence *Convergence
+}
 
 // NewSessionObserver constructs the F-003 observer consumed by sessions.
-func NewSessionObserver(rounds *RoundService) *SessionObserver {
-	return &SessionObserver{rounds: rounds}
+func NewSessionObserver(rounds *RoundService, convergence *Convergence) *SessionObserver {
+	return &SessionObserver{rounds: rounds, convergence: convergence}
 }
 
 // OnSessionStarted restores the active-round invariant after F-005 commits.
@@ -21,5 +24,11 @@ func (o *SessionObserver) OnParticipantJoined(ctx context.Context, sessionID, us
 	return o.rounds.AppendLateJoiner(ctx, sessionID, userID)
 }
 
-// OnSessionEnded is reserved for the later queue finalization task.
-func (o *SessionObserver) OnSessionEnded(context.Context, string) error { return nil }
+// OnSessionEnded hands the end fact to the convergence driver so F-005 returns
+// immediately while queue finalization retries idempotently in the background.
+func (o *SessionObserver) OnSessionEnded(ctx context.Context, sessionID string) error {
+	if o.convergence != nil {
+		o.convergence.OnSessionEnded(ctx, sessionID)
+	}
+	return nil
+}

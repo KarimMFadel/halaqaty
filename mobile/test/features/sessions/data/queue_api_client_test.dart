@@ -68,6 +68,63 @@ void main() {
   });
 
   group('QueueApiClient', () {
+    test('sends completion and correction payloads per the queue contract',
+        () async {
+      final requests = <RequestOptions>[];
+      final client = QueueApiClient(
+        Dio()
+          ..httpClientAdapter = _QueueAdapter(
+            requests,
+            [
+              _QueuedResponse.ok(_queueStateJson()),
+              _QueuedResponse.ok(_queueStateJson()['entries'][0]),
+            ],
+          ),
+      );
+
+      await client.completeEntry(
+        token: _token,
+        sessionId: _backendSessionId,
+        liveSessionId: _liveSessionId,
+        entryId: _entryId,
+        expectedEntryVersion: 3,
+        grade: 'good',
+        notes: 'Strong recitation',
+        idempotencyKey: 'complete-retry',
+      );
+      await client.correctGrade(
+        token: _token,
+        sessionId: _backendSessionId,
+        liveSessionId: _liveSessionId,
+        entryId: _entryId,
+        expectedEntryVersion: 4,
+        notes: '',
+        clearNotes: true,
+        idempotencyKey: 'correct-retry',
+      );
+
+      expect(_request(requests, 0), {
+        'path': '/sessions/$_liveSessionId/queue/entries/$_entryId/status',
+        'method': 'PUT',
+        'data': {
+          'status': 'completed',
+          'expected_entry_version': 3,
+          'grade': 'good',
+          'notes': 'Strong recitation',
+        },
+        'idempotencyKey': 'complete-retry',
+      });
+      expect(_request(requests, 1), {
+        'path': '/sessions/$_liveSessionId/queue/entries/$_entryId/grade',
+        'method': 'POST',
+        'data': {
+          'expected_entry_version': 4,
+          'notes': '',
+        },
+        'idempotencyKey': 'correct-retry',
+      });
+    });
+
     test('manager commands send documented payloads and idempotency keys',
         () async {
       final requests = <RequestOptions>[];

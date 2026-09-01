@@ -138,6 +138,56 @@ void main() {
       expect(student.media.microphoneCommands, isZero);
     },
   );
+
+  testWidgets('T062: complete, correct, reset, and end keeps session usable',
+      (tester) async {
+    final backend = _QueueFlowBackend();
+    final realtime = _StreamingRealtimeClient();
+    final queueController = QueueController(
+      backend,
+      () async => (token: 'token', sessionId: 'backend-session'),
+      realtime: realtime,
+      isManager: true,
+    );
+    final room = SessionRoomController(
+      _QueueFlowSessionApi(),
+      () async => (token: 'token', sessionId: 'backend-session'),
+      _RecordingMediaSession(),
+      realtime: realtime,
+      isModerator: true,
+      queue: queueController,
+    );
+    addTearDown(room.dispose);
+
+    await room.join(_liveSessionId);
+    await queueController.prepareRound(
+      roundType: 'revision',
+      surahId: 2,
+      fromAyah: 1,
+      toAyah: 5,
+      gradingRequired: false,
+    );
+    await queueController.advance();
+    await queueController.startEntry('entry-1');
+    await queueController.completeEntry(entryId: 'entry-1');
+    expect(queueController.state.queue!.entries.single.status, 'completed');
+
+    await queueController.correctGrade(
+        entryId: 'entry-1', grade: 'good', notes: 'Review tajweed');
+    expect(backend.correctedGrade, 'good');
+    expect(backend.correctedNotes, 'Review tajweed');
+
+    await queueController.reset(
+      roundType: 'revision',
+      surahId: 2,
+      fromAyah: 1,
+      toAyah: 5,
+      gradingRequired: false,
+    );
+    expect(queueController.state.queue!.roundNumber, 2);
+    await room.endSession();
+    expect(room.state.status, SessionRoomStatus.ended);
+  });
 }
 
 Future<void> _pumpUntil(
@@ -170,6 +220,8 @@ class _QueueFlowBackend extends QueueApiClient {
   int _queueVersion = 0;
   String? _selectedEntryId;
   List<_BackendEntry> _entries = const [];
+  String? correctedGrade;
+  String? correctedNotes;
 
   void replaceAuthoritativeSnapshot({required int roundNumber}) {
     _roundNumber = roundNumber;
@@ -260,13 +312,65 @@ class _QueueFlowBackend extends QueueApiClient {
     _entries = _entries
         .map((entry) => entry.id == entryId
             ? entry.copyWith(
-                status: status == 'start' ? 'reciting' : 'skipped',
+                status: status == 'start'
+                    ? 'reciting'
+                    : status == 'completed'
+                        ? 'completed'
+                        : 'skipped',
                 version: entry.version + 1,
               )
             : entry)
         .toList(growable: false);
     if (status == 'skip') _selectedEntryId = null;
     return _snapshot();
+  }
+
+  @override
+  Future<QueueState> completeEntry({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+    required String entryId,
+    required int expectedEntryVersion,
+    String? grade,
+    String? notes,
+    String? idempotencyKey,
+  }) =>
+      updateEntryStatus(
+        token: token,
+        sessionId: sessionId,
+        liveSessionId: liveSessionId,
+        entryId: entryId,
+        status: 'completed',
+        expectedEntryVersion: expectedEntryVersion,
+        idempotencyKey: idempotencyKey,
+      );
+
+  @override
+  Future<QueueEntry> correctGrade({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+    required String entryId,
+    required int expectedEntryVersion,
+    String? grade,
+    String? notes,
+    bool clearNotes = false,
+    String? idempotencyKey,
+  }) async {
+    correctedGrade = grade;
+    correctedNotes = notes;
+    final entry = _entries.singleWhere((entry) => entry.id == entryId);
+    return QueueEntry.fromJson({
+      'id': entry.id,
+      'student_id': entry.studentId,
+      'student_name': entry.studentName,
+      'position': entry.position,
+      'status': entry.status,
+      'grade': grade,
+      'grade_notes': notes,
+      'version': entry.version + 1,
+    });
   }
 
   @override
@@ -324,6 +428,8 @@ class _QueueFlowBackend extends QueueApiClient {
                   'student_name': entry.studentName,
                   'position': entry.position,
                   'status': entry.status,
+                  'grade': entry.grade,
+                  'grade_notes': entry.gradeNotes,
                   'version': entry.version,
                 })
             .toList(growable: false),
@@ -337,8 +443,10 @@ class _BackendEntry {
     this.studentName,
     this.position,
     this.status,
-    this.version,
-  );
+    this.version, {
+    this.grade,
+    this.gradeNotes,
+  });
 
   final String id;
   final String studentId;
@@ -346,8 +454,16 @@ class _BackendEntry {
   final int position;
   final String status;
   final int version;
+  final String? grade;
+  final String? gradeNotes;
 
-  _BackendEntry copyWith({String? status, int? position, int? version}) =>
+  _BackendEntry copyWith({
+    String? status,
+    int? position,
+    int? version,
+    String? grade,
+    String? gradeNotes,
+  }) =>
       _BackendEntry(
         id,
         studentId,
@@ -355,6 +471,8 @@ class _BackendEntry {
         position ?? this.position,
         status ?? this.status,
         version ?? this.version,
+        grade: grade ?? this.grade,
+        gradeNotes: gradeNotes ?? this.gradeNotes,
       );
 }
 
@@ -387,6 +505,21 @@ class _QueueFlowSessionApi extends SessionApiClient {
       ),
     ];
   }
+
+  @override
+  Future<SessionModel> end({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+  }) async =>
+      const SessionModel(
+        id: _liveSessionId,
+        circleId: 'circle-1',
+        status: 'ended',
+        mediaMode: 'audio',
+        participantCount: 0,
+        isLocked: false,
+      );
 }
 
 final _connection = SessionConnection(

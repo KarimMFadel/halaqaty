@@ -152,6 +152,25 @@ FROM recitation_queue_entries e
 JOIN recitation_queue q ON q.id = e.queue_id
 WHERE e.id = $1::uuid AND q.session_id = $2::uuid`
 
+const findEntrySessionIDQuery = `
+SELECT q.session_id::text
+FROM recitation_queue_entries e
+JOIN recitation_queue q ON q.id = e.queue_id
+WHERE e.id = $1::uuid`
+
+const findRoundSessionIDQuery = `
+SELECT session_id::text
+FROM recitation_queue
+WHERE id = $1::uuid`
+
+// lockSessionQuery locks the sessions row without reading policy columns.
+// Use it when the only goal is to establish the session→round→entry lock order.
+const lockSessionQuery = `
+SELECT 1
+FROM sessions
+WHERE id = $1::uuid
+FOR UPDATE`
+
 // nextRoundNumberQuery allocates the next sequential round number as
 // MAX+1; it must run under lockRoundAllocationQuery (CHK036 — no reuse,
 // stable under retries and concurrent creation).
@@ -209,7 +228,7 @@ RETURNING ` + roundColumns
 // durable manager attribution. Runs in the finalization transaction.
 const markUnfinishedEntriesSkippedQuery = `
 UPDATE recitation_queue_entries
-SET status = 'skipped', resolved_by = $2::uuid, version = version + 1, updated_at = NOW()
+SET status = 'skipped', resolved_by = NULLIF($2, '')::uuid, version = version + 1, updated_at = NOW()
 WHERE queue_id = $1::uuid AND status IN ('waiting', 'reciting')`
 
 // selectNextWaitingEntryQuery claims the next waiting entry of a round in
@@ -240,6 +259,15 @@ UPDATE recitation_queue_entries
 SET status = $4, grade = $5, teacher_notes = $6, started_at = $7, completed_at = $8,
     resolved_by = $9::uuid, version = version + 1, updated_at = NOW()
 WHERE id = $1::uuid AND version = $2 AND status = $3
+RETURNING ` + entryColumns
+
+// updateEntryGradeQuery replaces the grade and/or note of a completed entry
+// for the audited correction flow (FR-013). Either grade or notes may be NULL;
+// an explicit NULL note clears the existing note.
+const updateEntryGradeQuery = `
+UPDATE recitation_queue_entries
+SET grade = $3, teacher_notes = $4, version = version + 1, updated_at = NOW()
+WHERE id = $1::uuid AND version = $2 AND status = 'completed'
 RETURNING ` + entryColumns
 
 // updateEntryPositionQuery moves one entry to a new slot; the caller holds
@@ -553,3 +581,23 @@ SELECT queue_id::text, student_id::text, position, added_by::text, created_at
 FROM recitation_queue_preorder
 WHERE queue_id = $1::uuid
 ORDER BY position`
+
+// --- Session-end convergence ------------------------------------------------
+
+// findSessionsNeedingConvergence returns ended sessions that still have at
+// least one active or prepared recitation round awaiting finalization.
+const findSessionsNeedingConvergenceQuery = `
+SELECT DISTINCT s.id::text
+FROM sessions s
+JOIN recitation_queue q ON q.session_id = s.id
+WHERE s.status = 'ended'
+  AND q.lifecycle IN ('active', 'prepared')`
+
+// listSessionRoundsToFinalize returns every active or prepared round for a
+// session, ordered so the active round (if any) is finalized first and any
+// prepared rounds follow in round-number order.
+const listSessionRoundsToFinalizeQuery = `
+SELECT ` + roundColumns + `
+FROM recitation_queue
+WHERE session_id = $1::uuid AND lifecycle IN ('active', 'prepared')
+ORDER BY CASE lifecycle WHEN 'active' THEN 0 ELSE 1 END, round_number`

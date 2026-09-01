@@ -238,6 +238,47 @@ class QueueController extends StateNotifier<QueueControllerState> {
 
   Future<void> skipEntry(String entryId) => _updateEntryStatus(entryId, 'skip');
 
+  Future<void> completeEntry({
+    required String entryId,
+    String? grade,
+    String? notes,
+  }) =>
+      _runManager((credentials, queue) {
+        final entry = _entry(queue, entryId);
+        return _api.completeEntry(
+          token: credentials.token,
+          sessionId: credentials.sessionId,
+          liveSessionId: _liveSessionId!,
+          entryId: entryId,
+          expectedEntryVersion: entry.version,
+          grade: grade,
+          notes: notes,
+          idempotencyKey: _newIdempotencyKey(),
+        );
+      });
+
+  Future<void> correctGrade({
+    required String entryId,
+    String? grade,
+    String? notes,
+    bool clearNotes = false,
+  }) =>
+      _runManager((credentials, queue) async {
+        final entry = _entry(queue, entryId);
+        await _api.correctGrade(
+          token: credentials.token,
+          sessionId: credentials.sessionId,
+          liveSessionId: _liveSessionId!,
+          entryId: entryId,
+          expectedEntryVersion: entry.version,
+          grade: grade,
+          notes: notes,
+          clearNotes: clearNotes,
+          idempotencyKey: _newIdempotencyKey(),
+        );
+        return _queue(credentials);
+      });
+
   Future<void> reset({
     required String roundType,
     required int surahId,
@@ -283,17 +324,23 @@ class QueueController extends StateNotifier<QueueControllerState> {
 
   Future<void> _updateEntryStatus(String entryId, String status) =>
       _runManager((credentials, queue) {
-        final entry = queue.entries.where((entry) => entry.id == entryId);
-        if (entry.isEmpty) throw StateError('Queue entry is unavailable');
+        final entry = _entry(queue, entryId);
         return _api.updateEntryStatus(
           token: credentials.token,
           sessionId: credentials.sessionId,
           liveSessionId: _liveSessionId!,
           entryId: entryId,
           status: status,
-          expectedEntryVersion: entry.single.version,
+          expectedEntryVersion: entry.version,
         );
       });
+
+  QueueEntry _entry(QueueState queue, String entryId) {
+    for (final entry in queue.entries) {
+      if (entry.id == entryId) return entry;
+    }
+    throw StateError('Queue entry is unavailable');
+  }
 
   Future<void> _runManager(
     Future<QueueState> Function(

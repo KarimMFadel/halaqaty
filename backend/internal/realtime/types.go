@@ -21,15 +21,17 @@ const TicketTTL = 60 * time.Second
 
 // Queue event names registered on the shared session-topic transport.
 const (
-	EventQueueState         = "queue.state"
-	EventQueueRoundStarted  = "queue.round_started"
-	EventQueueReordered     = "queue.reordered"
-	EventQueueAdvanced      = "queue.advanced"
-	EventQueueEntryUpdated  = "queue.entry_updated"
-	EventQueuePolicyChanged = "queue.policy_changed"
+	EventQueueState           = "queue.state"
+	EventQueueRoundStarted    = "queue.round_started"
+	EventQueueReordered       = "queue.reordered"
+	EventQueueAdvanced        = "queue.advanced"
+	EventQueueEntryUpdated    = "queue.entry_updated"
+	EventQueuePolicyChanged   = "queue.policy_changed"
 	EventQueueYourTurn        = "queue.your_turn"
 	EventQueueNextSoon        = "queue.next_soon"
 	EventQueueOptOutRequested = "queue.opt_out_requested"
+	EventQueueGradeSubmitted  = "queue.grade_submitted"
+	EventQueueRoundFinalized  = "queue.round_finalized"
 )
 
 // SessionEventProvider supplies one already-authorized event after a session

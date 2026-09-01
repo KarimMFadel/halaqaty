@@ -151,7 +151,7 @@ func TestRecitationQueueOptOutAcceptanceMatrix(t *testing.T) {
 		}
 		entry := cqEntry(t, f.state(t), f.students[0])
 
-		decided, err := f.service.Decide(ctx, requested.Request.ID, f.teacher, queue.OptOutRequestStatusApproved, entry.Version)
+		decided, err := f.service.Decide(ctx, f.session, requested.Request.ID, f.teacher, queue.OptOutRequestStatusApproved, entry.Version)
 		if err != nil {
 			t.Fatalf("approve: %v", err)
 		}
@@ -180,7 +180,7 @@ func TestRecitationQueueOptOutAcceptanceMatrix(t *testing.T) {
 		requested := f.requestOptOut(t, f.students[0])
 		entry := cqEntry(t, f.state(t), f.students[0])
 
-		decided, err := f.service.Decide(ctx, requested.Request.ID, f.teacher, queue.OptOutRequestStatusDeclined, entry.Version)
+		decided, err := f.service.Decide(ctx, f.session, requested.Request.ID, f.teacher, queue.OptOutRequestStatusDeclined, entry.Version)
 		if err != nil {
 			t.Fatalf("decline: %v", err)
 		}
@@ -244,7 +244,7 @@ func TestRecitationQueueOptOutNeverCreatesPenaltyRecords(t *testing.T) {
 			f := newOptOutIntegrationFixture(t, queue.OptOutPolicyApprovalRequired, 1)
 			requested := f.requestOptOut(t, f.students[0])
 			entry := cqEntry(t, f.state(t), f.students[0])
-			if _, err := f.service.Decide(context.Background(), requested.Request.ID, f.teacher, queue.OptOutRequestStatusApproved, entry.Version); err != nil {
+			if _, err := f.service.Decide(context.Background(), f.session, requested.Request.ID, f.teacher, queue.OptOutRequestStatusApproved, entry.Version); err != nil {
 				t.Fatalf("approve: %v", err)
 			}
 			return f
@@ -253,7 +253,7 @@ func TestRecitationQueueOptOutNeverCreatesPenaltyRecords(t *testing.T) {
 			f := newOptOutIntegrationFixture(t, queue.OptOutPolicyApprovalRequired, 1)
 			requested := f.requestOptOut(t, f.students[0])
 			entry := cqEntry(t, f.state(t), f.students[0])
-			if _, err := f.service.Decide(context.Background(), requested.Request.ID, f.teacher, queue.OptOutRequestStatusDeclined, entry.Version); err != nil {
+			if _, err := f.service.Decide(context.Background(), f.session, requested.Request.ID, f.teacher, queue.OptOutRequestStatusDeclined, entry.Version); err != nil {
 				t.Fatalf("decline: %v", err)
 			}
 			return f

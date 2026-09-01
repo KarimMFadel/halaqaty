@@ -1,0 +1,7 @@
+title = "Halaqaty gitleaks config"
+
+[allowlist]
+description = "FlutterFire-generated Firebase client options contain public API keys by design"
+paths = [
+    '''mobile/lib/firebase_options.dart''',
+]

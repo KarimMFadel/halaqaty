@@ -442,7 +442,9 @@ final sessionRoomControllerProvider = StateNotifierProvider.family<
     if (token == null ||
         token.isEmpty ||
         sessionId == null ||
-        sessionId.isEmpty) throw StateError('User not authenticated');
+        sessionId.isEmpty) {
+      throw StateError('User not authenticated');
+    }
     final tokenValue = token;
     final sessionValue = sessionId;
     return (token: tokenValue, sessionId: sessionValue);

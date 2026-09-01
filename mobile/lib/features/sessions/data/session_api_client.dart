@@ -139,7 +139,7 @@ class SessionApiClient {
 
 /// Shared auth headers for session-scoped REST calls.
 Map<String, String> sessionRequestHeaders(String token, String sessionId) => {
-      '${SessionHeaders.authorization}': 'Bearer $token',
+      SessionHeaders.authorization: 'Bearer $token',
       SessionHeaders.sessionId: sessionId
     };
 

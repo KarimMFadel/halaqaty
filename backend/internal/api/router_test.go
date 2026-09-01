@@ -21,7 +21,7 @@ func TestRouter_OnlyRealtimeWebSocketBypassesTimeout(t *testing.T) {
 			t.Errorf("upgrade websocket: %v", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 	}))
 
 	server := httptest.NewServer(router.Handler())
@@ -37,7 +37,7 @@ func TestRouter_OnlyRealtimeWebSocketBypassesTimeout(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusServiceUnavailable {
 			t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusServiceUnavailable)
 		}
@@ -48,6 +48,6 @@ func TestRouter_OnlyRealtimeWebSocketBypassesTimeout(t *testing.T) {
 		if err != nil {
 			t.Fatalf("dial websocket: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 	})
 }

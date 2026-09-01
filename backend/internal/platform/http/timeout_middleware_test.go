@@ -44,7 +44,7 @@ func TestWebSocketUpgradeThroughResponseRecorder(t *testing.T) {
 			t.Errorf("upgrade websocket: %v", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 	})
 	wrapped := RecoveryMiddleware(logger,
 		RequestIDMiddleware(LoggerMiddleware(logger, handler)),
@@ -56,7 +56,7 @@ func TestWebSocketUpgradeThroughResponseRecorder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial websocket through shared middleware: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 }
 
 type testWriter struct{ t *testing.T }

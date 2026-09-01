@@ -264,14 +264,16 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
     final results = await ref
         .read(createCircleControllerProvider.notifier)
         .searchUsers(query);
-    if (mounted && _userSearch.text == query)
+    if (mounted && _userSearch.text == query) {
       setState(() => _results = results);
+    }
   }
 
   void _addTeacher(CircleUser user) {
     setState(() {
-      if (!_teachers.any((teacher) => teacher.id == user.id))
+      if (!_teachers.any((teacher) => teacher.id == user.id)) {
         _teachers.add(user);
+      }
       if (_backupSupervisor?.id == user.id) _backupSupervisor = null;
     });
   }

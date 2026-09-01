@@ -50,10 +50,10 @@ func newRecitationQueueConcurrencyFixture(t *testing.T) *recitationQueueConcurre
 	}
 
 	conn := acquireConn(t, pool, ctx)
+	defer conn.Release()
 	for _, migration := range recitationQueueHeadMigrations {
 		runMigrationFile(t, conn, ctx, migration)
 	}
-	conn.Release()
 
 	teacher := cqSeedUser(t, pool, "teacher")
 	circle := cqSeedCircle(t, pool, teacher)

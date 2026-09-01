@@ -15,7 +15,7 @@ void main() {
   testWidgets(
       'moderator sees lock, mute-all, remove and end controls in RTL with hand state',
       (tester) async {
-    final semantics = await tester.ensureSemantics();
+    final semantics = tester.ensureSemantics();
     final realtime = RecordingRealtimeClient();
     await tester.pumpWidget(_app(ModerationSessionApi(),
         realtime: realtime,
@@ -61,7 +61,7 @@ void main() {
 
   testWidgets('renders moderator controls and hand state in LTR',
       (tester) async {
-    final semantics = await tester.ensureSemantics();
+    final semantics = tester.ensureSemantics();
     final realtime = RecordingRealtimeClient();
     await tester.pumpWidget(_app(ModerationSessionApi(),
         realtime: realtime,

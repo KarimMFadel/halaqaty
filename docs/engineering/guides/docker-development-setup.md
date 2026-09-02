@@ -28,4 +28,4 @@ The optional local LiveKit server can be started with:
 docker compose --profile media up -d livekit
 ```
 
-The backend currently requires a trusted `https`/`wss` LiveKit endpoint when media is enabled, so the local `--dev` LiveKit service is useful for provider-level development but does not replace a TLS LiveKit environment for the real T048 journey.
+LiveKit endpoint validation is TLS-only for remote hosts (`https`/`wss`); plain `http`/`ws` is accepted only on loopback hosts (`localhost` or a loopback IP) for local development. The compose `--dev` LiveKit service is therefore sufficient for the real integration journeys run locally — for example `LIVEKIT_ENDPOINT=ws://localhost:7880` with `devkey`/`secret` when the API runs on the host. The real T048 journey was verified this way on 2026-09-01; see the [Firebase and LiveKit testing setup guide](firebase-livekit-testing-setup.md).

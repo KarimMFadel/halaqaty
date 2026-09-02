@@ -107,7 +107,7 @@ After each test user signs in and obtains a Firebase ID token:
    provisions the local Halaqaty user and returns a backend session.
 2. For an already-provisioned user, call `POST /api/v1/auth/sessions` with the
    Firebase bearer token. This creates a new current-device backend session.
-3. Save the response's local `user.id` and backend `session.id` for the test.
+3. Save the response's local `user.id` and backend `session_id` for the test.
 
 The backend session is an opaque PostgreSQL record used for revocation,
 expiry, device ownership, and activity tracking. It is different from:
@@ -169,6 +169,63 @@ Windows host. For a fresh machine, the fallback image
 `ghcr.io/cirruslabs/flutter:stable` can run ordinary Flutter commands, but the
 project Compose image is preferred for T048 because it also provides Xvfb and
 the Firebase tooling.
+
+### Refresh Firebase ID tokens and backend sessions
+
+Step 4 above says to sign in each test identity and create backend sessions.
+The exact commands, run from PowerShell on the host, are:
+
+1. Mint a fresh Firebase ID token for a test identity through the Identity
+   Toolkit REST API:
+
+   ```powershell
+   $signIn = Invoke-RestMethod -Method Post -Uri `
+     "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$env:FIREBASE_WEB_API_KEY" `
+     -ContentType "application/json" `
+     -Body (@{ email = "teacher.test@example.com"; password = "<teacher-test-password>"; returnSecureToken = $true } | ConvertTo-Json)
+   $teacherToken = $signIn.idToken
+   ```
+
+   `FIREBASE_WEB_API_KEY` and the test passwords live only in the ignored
+   `.env` file. Repeat with the student identity for `$studentToken`. Firebase
+   ID tokens expire after roughly one hour; mint fresh ones before each run,
+   and never paste tokens or passwords into documentation, logs, or commits.
+
+2. Create the backend session for each identity:
+
+   ```powershell
+   $session = Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/v1/auth/sessions" `
+     -Headers @{ Authorization = "Bearer $teacherToken" } `
+     -ContentType "application/json" `
+     -Body '{"device_name":"integration-test"}'
+   $session.session_id   # backend session ID -> X-Halaqaty-Session-ID / T048_TEACHER_SESSION
+   $session.user.id      # local Halaqaty user ID -> T048_TEACHER_USER_ID
+   ```
+
+   `POST /api/v1/auth/register` (body requires `display_name`) is only for
+   never-provisioned identities and is idempotent, so replaying it for an
+   already-provisioned identity is safe.
+
+3. Check readiness with `GET http://localhost:8080/health`, which returns
+   `200` when the API is up (there is no `/healthz`). From inside Docker, the
+   API base is `http://host.docker.internal:8080/api/v1`.
+
+The Go backend does not auto-load `.env`; export the values into the process
+environment before starting it: `DATABASE_URL`, `FIREBASE_PROJECT_ID`,
+`GOOGLE_APPLICATION_CREDENTIALS` (pointing at the ignored
+`.firebase/service-account.json`), `LIVEKIT_ENDPOINT` / `LIVEKIT_API_KEY` /
+`LIVEKIT_API_SECRET`, and `SESSION_MEDIA_ROOM_HMAC_KEY`.
+
+The minted tokens and sessions map to the integration-journey environment
+variables:
+
+| Journey | Environment variables |
+|---|---|
+| T048 (queue late-join / opt-out) | `T048_API_BASE_URL`, `T048_TEACHER_TOKEN`, `T048_TEACHER_SESSION`, `T048_TEACHER_USER_ID`, `T048_STUDENT_TOKEN`, `T048_STUDENT_SESSION`, `T048_STUDENT_USER_ID` |
+| T062 (queue grading history) | `T062_API_BASE_URL`, `T062_TEACHER_TOKEN`, `T062_TEACHER_SESSION`, `T062_STUDENT_TOKEN`, `T062_STUDENT_SESSION` |
+
+T062 follows the identical token-plus-session pattern; only the variable
+names differ.
 
 ## Firebase files and CLI configuration
 

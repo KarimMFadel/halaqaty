@@ -170,7 +170,12 @@ void main() {
     await queueController.advance();
     await queueController.startEntry('entry-1');
     await queueController.completeEntry(entryId: 'entry-1');
-    expect(queueController.state.queue!.entries.single.status, 'completed');
+    expect(
+      queueController.state.queue!.entries
+          .firstWhere((entry) => entry.id == 'entry-1')
+          .status,
+      'completed',
+    );
 
     await queueController.correctGrade(
         entryId: 'entry-1', grade: 'good', notes: 'Review tajweed');
@@ -346,7 +351,6 @@ class _QueueFlowBackend extends QueueApiClient {
         idempotencyKey: idempotencyKey,
       );
 
-  @override
   Future<QueueEntry> correctGrade({
     required String token,
     required String sessionId,

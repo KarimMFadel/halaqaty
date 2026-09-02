@@ -351,7 +351,8 @@ class _QueueFlowBackend extends QueueApiClient {
         idempotencyKey: idempotencyKey,
       );
 
-  Future<QueueEntry> correctGrade({
+  @override
+  Future<QueueEntry> correctEntry({
     required String token,
     required String sessionId,
     required String liveSessionId,
@@ -359,11 +360,11 @@ class _QueueFlowBackend extends QueueApiClient {
     required int expectedEntryVersion,
     String? grade,
     String? notes,
-    bool clearNotes = false,
+    bool includeNotes = false,
     String? idempotencyKey,
   }) async {
     correctedGrade = grade;
-    correctedNotes = notes;
+    correctedNotes = includeNotes ? notes : null;
     final entry = _entries.singleWhere((entry) => entry.id == entryId);
     return QueueEntry.fromJson({
       'id': entry.id,

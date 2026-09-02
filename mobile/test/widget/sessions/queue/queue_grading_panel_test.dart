@@ -53,6 +53,42 @@ void main() {
     expect(find.text('Round finalized; grading is read-only'), findsOneWidget);
     expect(find.bySemanticsLabel('Save correction'), findsNothing);
   });
+
+  testWidgets('correction allows a note without a grade', (tester) async {
+    final corrections = <String>[];
+    await tester.pumpWidget(_panel(
+      direction: TextDirection.ltr,
+      entryStatus: 'completed',
+      entryGrade: null,
+      gradingRequired: false,
+      onComplete: (_, __) {},
+      onCorrect: (grade, note, clear) => corrections.add('$grade:$note:$clear'),
+    ));
+
+    await tester.enterText(
+        find.bySemanticsLabel('Teacher notes'), 'Needs another listen');
+    await tester.pump();
+    await tester.tap(find.bySemanticsLabel('Save correction'));
+
+    expect(corrections, ['null:Needs another listen:false']);
+  });
+
+  testWidgets('correction sends explicit note clearing', (tester) async {
+    final corrections = <String>[];
+    await tester.pumpWidget(_panel(
+      direction: TextDirection.ltr,
+      entryStatus: 'completed',
+      entryNotes: 'Old note',
+      onComplete: (_, __) {},
+      onCorrect: (grade, note, clear) => corrections.add('$grade:$note:$clear'),
+    ));
+
+    await tester.enterText(find.bySemanticsLabel('Teacher notes'), '');
+    await tester.pump();
+    await tester.tap(find.bySemanticsLabel('Save correction'));
+
+    expect(corrections, ['good:null:true']);
+  });
 }
 
 Widget _panel({
@@ -62,6 +98,9 @@ Widget _panel({
       onCorrect,
   String lifecycle = 'active',
   String entryStatus = 'reciting',
+  String? entryGrade = 'good',
+  String? entryNotes,
+  bool gradingRequired = true,
 }) =>
     MaterialApp(
       home: Directionality(
@@ -74,11 +113,11 @@ Widget _panel({
               'student_name': 'Maryam',
               'position': 1,
               'status': entryStatus,
-              'grade': entryStatus == 'completed' ? 'good' : null,
-              'grade_notes': null,
+              'grade': entryStatus == 'completed' ? entryGrade : null,
+              'grade_notes': entryStatus == 'completed' ? entryNotes : null,
               'version': 2,
             }),
-            gradingRequired: true,
+            gradingRequired: gradingRequired,
             lifecycle: lifecycle,
             onComplete: onComplete,
             onCorrect: onCorrect,

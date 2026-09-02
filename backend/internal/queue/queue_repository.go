@@ -23,12 +23,28 @@ type Tx struct{ tx pgx.Tx }
 
 type queueTxRunner func(context.Context, func(*Tx) error) error
 
+type queueTxContextKey struct{}
+
 // NewQueueRepository constructs a queue repository from a PostgreSQL pool.
 func NewQueueRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
 
 // WithTx runs fn atomically and leaves domain errors unwrapped.
 func (r *Repository) WithTx(ctx context.Context, fn func(*Tx) error) error {
+	if tx, ok := ctx.Value(queueTxContextKey{}).(*Tx); ok {
+		return fn(tx)
+	}
 	return withQueueTx(ctx, r.pool.Begin, fn)
+}
+
+func contextWithQueueTx(ctx context.Context, tx *Tx) context.Context {
+	return context.WithValue(ctx, queueTxContextKey{}, tx)
+}
+
+func (r *Repository) queryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	if tx, ok := ctx.Value(queueTxContextKey{}).(*Tx); ok {
+		return tx.tx.QueryRow(ctx, sql, args...)
+	}
+	return r.pool.QueryRow(ctx, sql, args...)
 }
 
 func withQueueTx(ctx context.Context, begin func(context.Context) (pgx.Tx, error), fn func(*Tx) error) error {
@@ -47,6 +63,12 @@ func withQueueTx(ctx context.Context, begin func(context.Context) (pgx.Tx, error
 }
 
 func (r *Repository) withSessionRoundLock(ctx context.Context, sessionID string, fn func(queueTxRunner) error) error {
+	if tx, ok := ctx.Value(queueTxContextKey{}).(*Tx); ok {
+		if err := tx.LockRoundAllocation(ctx, sessionID); err != nil {
+			return err
+		}
+		return fn(func(_ context.Context, txFn func(*Tx) error) error { return txFn(tx) })
+	}
 	conn, err := r.pool.Acquire(ctx)
 	if err != nil {
 		return fmt.Errorf("acquire queue session lock connection: %w", err)
@@ -601,7 +623,7 @@ func (r *Repository) LoadQueueState(ctx context.Context, roundID string, viewer 
 // CurrentRound returns the displayed active round, or the lowest prepared
 // round while the session is scheduled.
 func (r *Repository) CurrentRound(ctx context.Context, sessionID string) (Round, error) {
-	round, err := scanRound(r.pool.QueryRow(ctx, findCurrentQueueRoundQuery, sessionID))
+	round, err := scanRound(r.queryRow(ctx, findCurrentQueueRoundQuery, sessionID))
 	if err != nil {
 		return Round{}, fmt.Errorf("load current queue round: %w", err)
 	}
@@ -610,7 +632,7 @@ func (r *Repository) CurrentRound(ctx context.Context, sessionID string) (Round,
 
 // LowestPreparedRound returns the next prepared round for pre-activation edits.
 func (r *Repository) LowestPreparedRound(ctx context.Context, sessionID string) (Round, error) {
-	round, err := scanRound(r.pool.QueryRow(ctx, findLowestPreparedQueueRoundQuery, sessionID))
+	round, err := scanRound(r.queryRow(ctx, findLowestPreparedQueueRoundQuery, sessionID))
 	if err != nil {
 		return Round{}, fmt.Errorf("load lowest prepared queue round: %w", err)
 	}
@@ -619,7 +641,7 @@ func (r *Repository) LowestPreparedRound(ctx context.Context, sessionID string) 
 
 // Round loads one queue round by its immutable identifier.
 func (r *Repository) Round(ctx context.Context, roundID string) (Round, error) {
-	round, err := scanRound(r.pool.QueryRow(ctx, findQueueRoundQuery, roundID))
+	round, err := scanRound(r.queryRow(ctx, findQueueRoundQuery, roundID))
 	if err != nil {
 		return Round{}, fmt.Errorf("load queue round: %w", err)
 	}

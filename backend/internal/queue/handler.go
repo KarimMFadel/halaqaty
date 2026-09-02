@@ -137,7 +137,16 @@ func (h *Handler) CreateRound(w http.ResponseWriter, r *http.Request) {
 	if !phttp.DecodeJSONBody(w, r, &req) || !validateRoundRequest(w, req) {
 		return
 	}
-	if receipt, replay := h.receipt(w, r, sessionID, actorID, "queue.create_round"); replay {
+	var round Round
+	receipt, replay, ok := h.runCommand(w, r, sessionID, actorID, "queue.create_round", func(ctx context.Context) (string, int64, error) {
+		var err error
+		round, err = h.rounds.Prepare(ctx, prepareInput(sessionID, actorID, req))
+		return round.ID, round.Version, err
+	})
+	if !ok {
+		return
+	}
+	if replay {
 		if receipt != nil && receipt.ResourceID != nil {
 			round, err := h.repo.Round(r.Context(), *receipt.ResourceID)
 			if err != nil {
@@ -150,15 +159,6 @@ func (h *Handler) CreateRound(w http.ResponseWriter, r *http.Request) {
 			}
 			h.writeState(w, r, *receipt.ResourceID, Viewer{UserID: actorID, IsManager: true}, http.StatusOK)
 		}
-		return
-	}
-	round, err := h.rounds.Prepare(r.Context(), prepareInput(sessionID, actorID, req))
-	if err != nil {
-		writeQueueError(w, err)
-		return
-	}
-	if err := h.recordReceipt(r, sessionID, actorID, round.ID, round.Version); err != nil {
-		writeQueueError(w, err)
 		return
 	}
 	h.writeState(w, r, round.ID, Viewer{UserID: actorID, IsManager: true}, http.StatusCreated)
@@ -174,17 +174,17 @@ func (h *Handler) ResetQueue(w http.ResponseWriter, r *http.Request) {
 	if !phttp.DecodeJSONBody(w, r, &req) || !validateRoundRequest(w, req) || !validateVersion(w, req.ExpectedVersion) {
 		return
 	}
-	if receipt, replay := h.receipt(w, r, sessionID, actorID, "queue.reset"); replay {
+	var round Round
+	receipt, replay, ok := h.runCommand(w, r, sessionID, actorID, "queue.reset", func(ctx context.Context) (string, int64, error) {
+		var err error
+		round, err = h.rounds.Reset(ctx, prepareInput(sessionID, actorID, req))
+		return round.ID, round.Version, err
+	})
+	if !ok {
+		return
+	}
+	if replay {
 		h.replayState(w, r, receipt, actorID)
-		return
-	}
-	round, err := h.rounds.Reset(r.Context(), prepareInput(sessionID, actorID, req))
-	if err != nil {
-		writeQueueError(w, err)
-		return
-	}
-	if err := h.recordReceipt(r, sessionID, actorID, round.ID, round.Version); err != nil {
-		writeQueueError(w, err)
 		return
 	}
 	h.writeState(w, r, round.ID, Viewer{UserID: actorID, IsManager: true}, http.StatusCreated)
@@ -200,20 +200,20 @@ func (h *Handler) Advance(w http.ResponseWriter, r *http.Request) {
 	if !phttp.DecodeJSONBody(w, r, &req) || !validateVersion(w, req.ExpectedVersion) {
 		return
 	}
-	if receipt, replay := h.receipt(w, r, sessionID, actorID, "queue.advance"); replay {
+	var round Round
+	receipt, replay, ok := h.runCommand(w, r, sessionID, actorID, "queue.advance", func(ctx context.Context) (string, int64, error) {
+		var err error
+		round, err = h.repo.CurrentRound(ctx, sessionID)
+		if err == nil {
+			round, err = h.turns.Advance(ctx, round.ID, req.ExpectedVersion)
+		}
+		return round.ID, round.Version, err
+	})
+	if !ok {
+		return
+	}
+	if replay {
 		h.replayState(w, r, receipt, actorID)
-		return
-	}
-	round, err := h.repo.CurrentRound(r.Context(), sessionID)
-	if err == nil {
-		round, err = h.turns.Advance(r.Context(), round.ID, req.ExpectedVersion)
-	}
-	if err != nil {
-		writeQueueError(w, err)
-		return
-	}
-	if err := h.recordReceipt(r, sessionID, actorID, round.ID, round.Version); err != nil {
-		writeQueueError(w, err)
 		return
 	}
 	h.writeState(w, r, round.ID, Viewer{UserID: actorID, IsManager: true}, http.StatusOK)
@@ -229,23 +229,23 @@ func (h *Handler) Reorder(w http.ResponseWriter, r *http.Request) {
 	if !phttp.DecodeJSONBody(w, r, &req) || !validateVersion(w, req.ExpectedVersion) {
 		return
 	}
-	if receipt, replay := h.receipt(w, r, sessionID, actorID, "queue.reorder"); replay {
+	var round Round
+	receipt, replay, ok := h.runCommand(w, r, sessionID, actorID, "queue.reorder", func(ctx context.Context) (string, int64, error) {
+		var err error
+		round, err = h.repo.LowestPreparedRound(ctx, sessionID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = &QueueError{Code: QueueErrorCodeInvalidTransition, Message: "queue order is no longer editable"}
+		}
+		if err == nil {
+			round, err = h.rounds.Reorder(ctx, round.ID, actorID, req.ExpectedVersion, req.OrderedIDs)
+		}
+		return round.ID, round.Version, err
+	})
+	if !ok {
+		return
+	}
+	if replay {
 		h.replayState(w, r, receipt, actorID)
-		return
-	}
-	round, err := h.repo.LowestPreparedRound(r.Context(), sessionID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		err = &QueueError{Code: QueueErrorCodeInvalidTransition, Message: "queue order is no longer editable"}
-	}
-	if err == nil {
-		round, err = h.rounds.Reorder(r.Context(), round.ID, actorID, req.ExpectedVersion, req.OrderedIDs)
-	}
-	if err != nil {
-		writeQueueError(w, err)
-		return
-	}
-	if err := h.recordReceipt(r, sessionID, actorID, round.ID, round.Version); err != nil {
-		writeQueueError(w, err)
 		return
 	}
 	h.writeState(w, r, round.ID, Viewer{UserID: actorID, IsManager: true}, http.StatusOK)
@@ -273,22 +273,20 @@ func (h *Handler) MoveEntry(w http.ResponseWriter, r *http.Request) {
 		writeQueueError(w, err)
 		return
 	}
-	if receipt, replay := h.receipt(w, r, sessionID, actorID, "queue.move"); replay {
+	var round Round
+	receipt, replay, ok := h.runCommand(w, r, sessionID, actorID, "queue.move", func(ctx context.Context) (string, int64, error) {
+		if _, err := h.rounds.Move(ctx, entryID, req.ExpectedVersion, req.NewPosition); err != nil {
+			return "", 0, err
+		}
+		var err error
+		round, err = h.repo.Round(ctx, roundID)
+		return roundID, round.Version, err
+	})
+	if !ok {
+		return
+	}
+	if replay {
 		h.replayState(w, r, receipt, actorID)
-		return
-	}
-	_, err = h.rounds.Move(r.Context(), entryID, req.ExpectedVersion, req.NewPosition)
-	if err != nil {
-		writeQueueError(w, err)
-		return
-	}
-	round, err := h.repo.Round(r.Context(), roundID)
-	if err != nil {
-		writeQueueError(w, err)
-		return
-	}
-	if err := h.recordReceipt(r, sessionID, actorID, roundID, round.Version); err != nil {
-		writeQueueError(w, err)
 		return
 	}
 	h.writeState(w, r, roundID, Viewer{UserID: actorID, IsManager: true}, http.StatusOK)
@@ -328,29 +326,28 @@ func (h *Handler) UpdateEntryStatus(w http.ResponseWriter, r *http.Request) {
 		writeQueueValidation(w, httpconst.ErrorCodeQueueInvalidEnum, httpconst.ErrorMessageQueueInvalidEnum, httpconst.FieldStatus)
 		return
 	}
-	if receipt, replay := h.receipt(w, r, sessionID, actorID, "queue.update_entry_status"); replay {
+	var round Round
+	receipt, replay, ok := h.runCommand(w, r, sessionID, actorID, "queue.update_entry_status", func(ctx context.Context) (string, int64, error) {
+		var err error
+		switch req.Status {
+		case EntryStatusReciting:
+			_, err = h.turns.Start(ctx, entryID, req.ExpectedEntryVersion)
+		case EntryStatusSkipped:
+			_, err = h.turns.Skip(ctx, entryID, req.ExpectedEntryVersion, actorID)
+		case EntryStatusCompleted:
+			_, err = h.turns.Complete(ctx, entryID, req.ExpectedEntryVersion, actorID, req.Grade, req.Notes.value)
+		}
+		if err != nil {
+			return "", 0, err
+		}
+		round, err = h.repo.Round(ctx, roundID)
+		return roundID, round.Version, err
+	})
+	if !ok {
+		return
+	}
+	if replay {
 		h.replayState(w, r, receipt, actorID)
-		return
-	}
-	switch req.Status {
-	case EntryStatusReciting:
-		_, err = h.turns.Start(r.Context(), entryID, req.ExpectedEntryVersion)
-	case EntryStatusSkipped:
-		_, err = h.turns.Skip(r.Context(), entryID, req.ExpectedEntryVersion, actorID)
-	case EntryStatusCompleted:
-		_, err = h.turns.Complete(r.Context(), entryID, req.ExpectedEntryVersion, actorID, req.Grade, req.Notes.value)
-	}
-	if err != nil {
-		writeQueueError(w, err)
-		return
-	}
-	round, err := h.repo.Round(r.Context(), roundID)
-	if err != nil {
-		writeQueueError(w, err)
-		return
-	}
-	if err := h.recordReceipt(r, sessionID, actorID, roundID, round.Version); err != nil {
-		writeQueueError(w, err)
 		return
 	}
 	h.writeState(w, r, roundID, Viewer{UserID: actorID, IsManager: true}, http.StatusOK)
@@ -385,21 +382,37 @@ func (h *Handler) GradeEntry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	correctionNotes := req.correctionNotes()
-	if _, err := h.repo.EntryQueueIDForSession(r.Context(), sessionID, entryID); err != nil {
-		writeQueueError(w, err)
-		return
-	}
-	if receipt, replay := h.receipt(w, r, sessionID, actorID, "queue.grade_entry"); replay {
-		h.replayState(w, r, receipt, actorID)
-		return
-	}
-	entry, err := h.turns.Correct(r.Context(), entryID, req.ExpectedEntryVersion, actorID, req.Grade, correctionNotes)
+	roundID, err := h.repo.EntryQueueIDForSession(r.Context(), sessionID, entryID)
 	if err != nil {
 		writeQueueError(w, err)
 		return
 	}
-	if err := h.recordReceipt(r, sessionID, actorID, entryID, entry.Version); err != nil {
-		writeQueueError(w, err)
+	var entry QueueEntry
+	receipt, replay, ok := h.runCommand(w, r, sessionID, actorID, "queue.grade_entry", func(ctx context.Context) (string, int64, error) {
+		var err error
+		entry, err = h.turns.Correct(ctx, entryID, req.ExpectedEntryVersion, actorID, req.Grade, correctionNotes)
+		return entryID, entry.Version, err
+	})
+	if !ok {
+		return
+	}
+	if replay {
+		if receipt == nil || receipt.ResourceID == nil {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
+			return
+		}
+		state, err := h.repo.LoadQueueState(r.Context(), roundID, Viewer{UserID: actorID, IsManager: true})
+		if err != nil {
+			writeQueueError(w, err)
+			return
+		}
+		for _, candidate := range state.Entries {
+			if candidate.ID == *receipt.ResourceID {
+				h.writeQueueEntry(w, r, candidate, http.StatusOK)
+				return
+			}
+		}
+		writeQueueError(w, pgx.ErrNoRows)
 		return
 	}
 	h.writeQueueEntry(w, r, entry, http.StatusOK)
@@ -434,7 +447,35 @@ func (h *Handler) UpdatePolicy(w http.ResponseWriter, r *http.Request) {
 	if !phttp.DecodeJSONBody(w, r, &req) || !validateVersion(w, req.ExpectedVersion) {
 		return
 	}
-	if receipt, replay := h.receipt(w, r, sessionID, actorID, "queue.update_policy"); replay {
+	var updated QueuePolicy
+	receipt, replay, ok := h.runCommand(w, r, sessionID, actorID, "queue.update_policy", func(ctx context.Context) (string, int64, error) {
+		current, err := h.repo.SessionPolicy(ctx, sessionID)
+		if err != nil {
+			return "", 0, err
+		}
+		next := current.Policy
+		if req.Population != nil {
+			next.Population = *req.Population
+		}
+		if req.Finalization != nil {
+			next.Finalization = *req.Finalization
+		}
+		if req.OptOut != nil {
+			next.OptOut = *req.OptOut
+		}
+		if req.GradeVisibility != nil {
+			next.GradeVisibility = *req.GradeVisibility
+		}
+		if req.GradeCorrection != nil {
+			next.GradeCorrection = *req.GradeCorrection
+		}
+		updated, err = h.policies.Update(ctx, sessionID, actorID, req.ExpectedVersion, next)
+		return sessionID, updated.Version, err
+	})
+	if !ok {
+		return
+	}
+	if replay {
 		if receipt != nil && receipt.ResourceID != nil {
 			policy, err := h.repo.SessionPolicy(r.Context(), *receipt.ResourceID)
 			if err != nil {
@@ -443,36 +484,6 @@ func (h *Handler) UpdatePolicy(w http.ResponseWriter, r *http.Request) {
 			}
 			phttp.WriteJSON(w, http.StatusOK, policyResponse(policy.Policy))
 		}
-		return
-	}
-	current, err := h.repo.SessionPolicy(r.Context(), sessionID)
-	if err != nil {
-		writeQueueError(w, err)
-		return
-	}
-	next := current.Policy
-	if req.Population != nil {
-		next.Population = *req.Population
-	}
-	if req.Finalization != nil {
-		next.Finalization = *req.Finalization
-	}
-	if req.OptOut != nil {
-		next.OptOut = *req.OptOut
-	}
-	if req.GradeVisibility != nil {
-		next.GradeVisibility = *req.GradeVisibility
-	}
-	if req.GradeCorrection != nil {
-		next.GradeCorrection = *req.GradeCorrection
-	}
-	updated, err := h.policies.Update(r.Context(), sessionID, actorID, req.ExpectedVersion, next)
-	if err != nil {
-		writeQueueError(w, err)
-		return
-	}
-	if err := h.recordReceipt(r, sessionID, actorID, sessionID, updated.Version); err != nil {
-		writeQueueError(w, err)
 		return
 	}
 	phttp.WriteJSON(w, http.StatusOK, policyResponse(updated))
@@ -501,23 +512,22 @@ func (h *Handler) RequestOptOut(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusOK
 	}
 
-	if _, replay := h.receipt(w, r, sessionID, actorID, "queue.request_opt_out"); replay {
+	var result OptOutResult
+	_, replay, ok := h.runCommand(w, r, sessionID, actorID, "queue.request_opt_out", func(ctx context.Context) (string, int64, error) {
+		var err error
+		result, err = h.optOuts.Request(ctx, sessionID, actorID)
+		return result.Request.ID, result.Entry.Version, err
+	})
+	if !ok {
+		return
+	}
+	if replay {
 		result, err := h.optOuts.Request(r.Context(), sessionID, actorID)
 		if err != nil {
 			writeQueueError(w, err)
 			return
 		}
 		h.writeOptOutResult(w, r, result, http.StatusOK)
-		return
-	}
-
-	result, err := h.optOuts.Request(r.Context(), sessionID, actorID)
-	if err != nil {
-		writeQueueError(w, err)
-		return
-	}
-	if err := h.recordReceipt(r, sessionID, actorID, result.Request.ID, result.Entry.Version); err != nil {
-		writeQueueError(w, err)
 		return
 	}
 	h.writeOptOutResult(w, r, result, status)
@@ -659,40 +669,50 @@ func policyResponse(policy QueuePolicy) map[string]any {
 	return map[string]any{"population": policy.Population, "unfinished_finalization": policy.Finalization, "opt_out": policy.OptOut, "grade_visibility": policy.GradeVisibility, "grade_correction": policy.GradeCorrection, "version": policy.Version}
 }
 
-func (h *Handler) receipt(w http.ResponseWriter, r *http.Request, sessionID, actorID, command string) (*CommandReceipt, bool) {
+func (h *Handler) runCommand(w http.ResponseWriter, r *http.Request, sessionID, actorID, command string, operation func(context.Context) (string, int64, error)) (*CommandReceipt, bool, bool) {
 	key := r.Header.Get(idempotencyKeyHeader)
 	if key == "" {
-		return nil, false
+		_, _, err := operation(r.Context())
+		if err != nil {
+			writeQueueError(w, err)
+			return nil, false, false
+		}
+		return nil, false, true
 	}
 	if err := ValidateIdempotencyKey(key); err != nil {
 		writeQueueValidation(w, httpconst.ErrorCodeQueueInvalidRange, httpconst.ErrorMessageQueueInvalidRange, httpconst.FieldIdempotencyKey)
-		return nil, true
+		return nil, false, false
 	}
 	var receipt *CommandReceipt
-	var inserted bool
+	var replay bool
 	err := h.repo.WithTx(r.Context(), func(tx *Tx) error {
-		var err error
-		receipt, inserted, err = tx.ReserveCommandReceipt(r.Context(), sessionID, actorID, key, command)
-		return err
+		existing, inserted, err := tx.ReserveCommandReceipt(r.Context(), sessionID, actorID, key, command)
+		if err != nil {
+			return err
+		}
+		if !inserted {
+			if existing.ResourceID == nil || existing.ResultVersion == nil {
+				return &QueueError{Code: QueueErrorCodeDuplicateCommand, Message: "idempotency key has no committed result"}
+			}
+			receipt = existing
+			replay = true
+			return nil
+		}
+		resourceID, version, err := operation(contextWithQueueTx(r.Context(), tx))
+		if err != nil {
+			return err
+		}
+		if err := tx.UpdateCommandReceiptResult(r.Context(), sessionID, actorID, key, &resourceID, &version); err != nil {
+			return err
+		}
+		receipt = &CommandReceipt{SessionID: sessionID, ActorID: actorID, IdempotencyKey: key, Command: command, ResourceID: &resourceID, ResultVersion: &version}
+		return nil
 	})
 	if err != nil {
 		writeQueueError(w, err)
-		return nil, true
+		return nil, false, false
 	}
-	if receipt != nil && receipt.ResourceID == nil {
-		return nil, false
-	}
-	return receipt, !inserted
-}
-
-func (h *Handler) recordReceipt(r *http.Request, sessionID, actorID, resourceID string, version int64) error {
-	key := r.Header.Get(idempotencyKeyHeader)
-	if key == "" {
-		return nil
-	}
-	return h.repo.WithTx(r.Context(), func(tx *Tx) error {
-		return tx.UpdateCommandReceiptResult(r.Context(), sessionID, actorID, key, &resourceID, &version)
-	})
+	return receipt, replay, true
 }
 
 func sameRoundRequest(round Round, req roundRequest) bool {

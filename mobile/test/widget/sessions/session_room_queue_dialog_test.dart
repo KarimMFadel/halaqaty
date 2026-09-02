@@ -128,6 +128,19 @@ void main() {
     expect(tester.widget<FilledButton>(confirm).onPressed, isNotNull);
     semantics.dispose();
   });
+
+  testWidgets('completion dialog offers only contract grades', (tester) async {
+    final fixture = await _pumpManagerRoom(tester);
+    addTearDown(fixture.queue.dispose);
+
+    await tester.tap(find.bySemanticsLabel('Complete turn'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.pumpAndSettle();
+
+    expect(find.text('acceptable'), findsOneWidget);
+    expect(find.text('not_assessed'), findsNothing);
+  });
 }
 
 Finder _editableWithin(String label) => find.descendant(

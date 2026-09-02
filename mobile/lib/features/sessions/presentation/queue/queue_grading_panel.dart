@@ -63,6 +63,11 @@ class _QueueGradingPanelState extends State<QueueGradingPanel> {
       return const SizedBox.shrink();
     }
     final title = _completion ? labels.title : labels.correction;
+    final hasNoteChange = _notes.text.isNotEmpty ||
+        (widget.entry.gradeNotes?.isNotEmpty ?? false);
+    final canSave = _completion
+        ? !widget.gradingRequired || _grade != null
+        : _grade != null || hasNoteChange;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -93,6 +98,7 @@ class _QueueGradingPanelState extends State<QueueGradingPanel> {
         TextField(
           controller: _notes,
           maxLength: 500,
+          onChanged: (_) => setState(() {}),
           decoration: InputDecoration(labelText: labels.notes),
         ),
         Align(
@@ -103,17 +109,18 @@ class _QueueGradingPanelState extends State<QueueGradingPanel> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               child: FilledButton(
-                onPressed: (_grade == null &&
-                        (widget.gradingRequired || !_completion))
-                    ? null
-                    : () {
+                onPressed: canSave
+                    ? () {
                         final note = _notes.text.isEmpty ? null : _notes.text;
                         if (_completion) {
                           widget.onComplete(_grade, note);
                         } else {
-                          widget.onCorrect(_grade, note, false);
+                          final clearNotes = note == null &&
+                              (widget.entry.gradeNotes?.isNotEmpty ?? false);
+                          widget.onCorrect(_grade, note, clearNotes);
                         }
-                      },
+                      }
+                    : null,
                 child: ExcludeSemantics(child: Text(labels.save)),
               ),
             ),

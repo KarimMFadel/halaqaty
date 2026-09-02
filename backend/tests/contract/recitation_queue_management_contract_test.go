@@ -907,6 +907,76 @@ func TestRecitationQueueManagement_IdempotencyReplay(t *testing.T) {
 	}
 }
 
+func TestRecitationQueueManagement_ConcurrentIdempotencyReplay(t *testing.T) {
+	env := setupRqcEnv(t)
+	sessionID := env.newSession(t, true)
+	const key = "rqc-concurrent-replay-1"
+	body := `{"round_type":"revision","surah_id":1,"from_ayah":1,"to_ayah":7,"grading_required":false}`
+	target := "/api/v1/sessions/" + sessionID + "/queue/rounds"
+
+	lockTx, err := env.pool.Begin(context.Background())
+	if err != nil {
+		t.Fatalf("begin session lock: %v", err)
+	}
+	t.Cleanup(func() { _ = lockTx.Rollback(context.Background()) })
+	if _, err := lockTx.Exec(context.Background(), `SELECT 1 FROM sessions WHERE id = $1::uuid FOR UPDATE`, sessionID); err != nil {
+		t.Fatalf("lock session: %v", err)
+	}
+
+	responses := make(chan *httptest.ResponseRecorder, 2)
+	go func() { responses <- env.req(t, env.teacherID, http.MethodPost, target, body, key) }()
+
+	rqcWaitForBlockedQueueRequests(t, env.pool, 1)
+	go func() { responses <- env.req(t, env.teacherID, http.MethodPost, target, body, key) }()
+	rqcWaitForBlockedQueueRequests(t, env.pool, 2)
+	if err := lockTx.Commit(context.Background()); err != nil {
+		t.Fatalf("release session lock: %v", err)
+	}
+
+	first, second := <-responses, <-responses
+	for i, rec := range []*httptest.ResponseRecorder{first, second} {
+		if rec.Code != http.StatusCreated && rec.Code != http.StatusOK {
+			t.Fatalf("response %d: got %d want 200 or 201 body=%s", i+1, rec.Code, rec.Body.String())
+		}
+	}
+	if got, want := rqcStr(t, rqcDecode(t, first), "round_id"), rqcStr(t, rqcDecode(t, second), "round_id"); got != want {
+		t.Fatalf("concurrent replay round ids differ: %q != %q", got, want)
+	}
+
+	var rounds int
+	if err := env.pool.QueryRow(context.Background(),
+		`SELECT COUNT(*) FROM recitation_queue WHERE session_id = $1::uuid`, sessionID).Scan(&rounds); err != nil {
+		t.Fatalf("count rounds: %v", err)
+	}
+	if rounds != 1 {
+		t.Fatalf("committed rounds after concurrent replay = %d, want 1", rounds)
+	}
+}
+
+func rqcWaitForBlockedQueueRequests(t *testing.T, pool *pgxpool.Pool, want int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var blocked int
+		if err := pool.QueryRow(context.Background(), `
+			SELECT COUNT(*)
+			FROM pg_stat_activity
+			WHERE datname = current_database()
+			  AND wait_event_type = 'Lock'
+			  AND (query LIKE '%pg_advisory_xact_lock%' OR query LIKE '%queue_command_receipts%')
+		`).Scan(&blocked); err != nil {
+			t.Fatalf("count blocked queue requests: %v", err)
+		}
+		if blocked >= want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("blocked queue requests = %d, want at least %d", blocked, want)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestRecitationQueueManagement_IdempotencyReplayAdvance(t *testing.T) {
 	env := setupRqcEnv(t)
 	sessionID, state := env.liveRound(t)

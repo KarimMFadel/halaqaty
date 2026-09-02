@@ -403,10 +403,10 @@ Future<void> _showGradeDialog(
                       value: 'excellent', child: Text('excellent')),
                   DropdownMenuItem(value: 'good', child: Text('good')),
                   DropdownMenuItem(
+                      value: 'acceptable', child: Text('acceptable')),
+                  DropdownMenuItem(
                       value: 'needs_review', child: Text('needs_review')),
                   DropdownMenuItem(value: 'repeat', child: Text('repeat')),
-                  DropdownMenuItem(
-                      value: 'not_assessed', child: Text('not_assessed')),
                 ],
                 onChanged: (value) => gradeController.value = value,
               ),

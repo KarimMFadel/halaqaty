@@ -61,6 +61,17 @@ func TestSessionEnd_FinalizesActiveQueueRound(t *testing.T) {
 	if lifecycle != "finalized" {
 		t.Fatalf("round lifecycle = %q, want finalized", lifecycle)
 	}
+
+	// Contract regression (getSessionQueue): after session end the snapshot
+	// resolves to the latest finalized round instead of 404, so late readers
+	// still receive the read-only terminal surface.
+	current, err := f.repo.CurrentRound(ctx, f.session)
+	if err != nil {
+		t.Fatalf("current round after end: %v", err)
+	}
+	if current.ID != roundID || current.Lifecycle != queue.RoundLifecycleFinalized {
+		t.Fatalf("current round = %s/%s, want %s/finalized", current.ID, current.Lifecycle, roundID)
+	}
 }
 
 type sessionQueueConvergenceFixture struct {

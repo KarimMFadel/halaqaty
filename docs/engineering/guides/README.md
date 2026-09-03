@@ -8,14 +8,14 @@ How-to guides, troubleshooting, common workflows, and technical walkthroughs.
 
 ### RB-01: Go backend fails to start
 
-**Symptom:** `go run ./backend/cmd/api` exits with an error immediately.
+**Symptom:** `go run ./cmd/api` (run from `backend/`) exits with an error immediately.
 
 **Check 1 — Missing environment variables:**
 ```bash
 # Required vars (copy from .env.example)
 DATABASE_URL=postgres://halaqaty:password@localhost:5432/halaqaty?sslmode=disable
 FIREBASE_PROJECT_ID=your-project-id
-FIREBASE_SERVICE_ACCOUNT_JSON=<base64 encoded service account JSON>
+GOOGLE_APPLICATION_CREDENTIALS=<repo>/.firebase/service-account.json
 LIVEKIT_API_KEY=...
 LIVEKIT_API_SECRET=...
 MINIO_ENDPOINT=localhost:9000
@@ -49,11 +49,11 @@ netstat -an | grep 8080     # find conflicting process
 
 **Check 1 — Service account misconfigured:**
 - Verify `FIREBASE_PROJECT_ID` matches the project in Firebase Console
-- Verify `FIREBASE_SERVICE_ACCOUNT_JSON` is valid base64-encoded JSON (not the file path)
+- Verify `GOOGLE_APPLICATION_CREDENTIALS` points to the service account file (e.g. `<repo>/.firebase/service-account.json`, git-ignored)
 
 ```bash
-# Decode and inspect the service account
-echo $FIREBASE_SERVICE_ACCOUNT_JSON | base64 -d | python3 -m json.tool | head -5
+# Inspect the service account file
+python3 -m json.tool "$GOOGLE_APPLICATION_CREDENTIALS" | head -5
 # Expected: { "type": "service_account", "project_id": "your-project-id", ... }
 ```
 

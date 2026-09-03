@@ -178,20 +178,24 @@ void main() {
         liveSessionId: session.id,
         expectedVersion: reset.version - 1,
       );
-    } on DioException catch (error) {
+    } on QueueApiException catch (error) {
       forcedQueueFailure = error;
     }
+    // QueueApiClient wraps transport errors as QueueApiException, so the
+    // forced failure is asserted on the wrapped status/code contract.
+    final conflict = forcedQueueFailure as QueueApiException?;
     expect(
-      forcedQueueFailure,
-      isA<DioException>(),
+      conflict,
+      isNotNull,
       reason: 'a stale expectedVersion must be rejected by the queue',
     );
     expect(
-      (forcedQueueFailure as DioException).response?.statusCode,
+      conflict!.statusCode,
       409,
       reason: 'docs/contracts/openapi.yaml maps a stale expected_version to '
           '409 Conflict',
     );
+    expect(conflict.code, 'ERR_QUEUE_VERSION_CONFLICT');
 
     final ended = await sessions.end(
       token: teacher.token,
@@ -204,7 +208,9 @@ void main() {
       sessionId: teacher.sessionId,
       liveSessionId: session.id,
     );
-    expect(terminal.lifecycle, anyOf('ended', 'finalized'));
+    // The contract's read-only terminal surface: the latest round stays
+    // readable with lifecycle 'finalized' (never 404) after session end.
+    expect(terminal.lifecycle, 'finalized');
   });
 }
 

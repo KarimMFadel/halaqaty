@@ -398,7 +398,8 @@ WHERE session_id = $1::uuid AND actor_id = $2::uuid AND idempotency_key = $3`
 const insertOutboxEventQuery = `
 INSERT INTO queue_event_outbox (event_id, session_id, round_id, event_type, resource_id,
                                 round_version, event_metadata, available_at, attempt_count)
-VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5::uuid, $6, $7, $8, $9)`
+VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5::uuid, $6, $7,
+        COALESCE($8::timestamptz, NOW()), $9)`
 
 // claimDueOutboxEventsQuery claims due, undelivered, unparked events in due
 // order. SKIP LOCKED lets parallel dispatchers partition the backlog without
@@ -549,8 +550,9 @@ const findSurahNameQuery = `SELECT name_transliterated FROM quran_surahs WHERE i
 const findCurrentQueueRoundQuery = `
 SELECT ` + roundColumns + `
 FROM recitation_queue
-WHERE session_id = $1::uuid AND lifecycle IN ('active', 'prepared')
-ORDER BY CASE lifecycle WHEN 'active' THEN 0 ELSE 1 END, round_number
+WHERE session_id = $1::uuid
+ORDER BY CASE lifecycle WHEN 'active' THEN 0 WHEN 'prepared' THEN 1 ELSE 2 END,
+         CASE WHEN lifecycle = 'finalized' THEN -round_number ELSE round_number END
 LIMIT 1`
 
 const findLowestPreparedQueueRoundQuery = `

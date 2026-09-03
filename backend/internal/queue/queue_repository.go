@@ -530,9 +530,9 @@ func (t *Tx) InsertOutboxEvent(ctx context.Context, event OutboxEvent) error {
 	if err := validateOutboxMetadata(event.EventMetadata); err != nil {
 		return err
 	}
-	availableAt := event.AvailableAt
-	if availableAt.IsZero() {
-		availableAt = time.Now().UTC()
+	var availableAt any
+	if !event.AvailableAt.IsZero() {
+		availableAt = event.AvailableAt
 	}
 	if _, err := t.tx.Exec(ctx, insertOutboxEventQuery, event.EventID, event.SessionID, event.RoundID, event.EventType, stringOrNil(event.ResourceID), event.RoundVersion, event.EventMetadata, availableAt, event.AttemptCount); err != nil {
 		return fmt.Errorf("insert queue outbox event: %w", err)
@@ -620,8 +620,9 @@ func (r *Repository) LoadQueueState(ctx context.Context, roundID string, viewer 
 	return state, nil
 }
 
-// CurrentRound returns the displayed active round, or the lowest prepared
-// round while the session is scheduled.
+// CurrentRound returns the displayed active round, the lowest prepared round
+// while the session is scheduled, or — per the getSessionQueue contract — the
+// latest finalized round after reset/session end (read-only surface).
 func (r *Repository) CurrentRound(ctx context.Context, sessionID string) (Round, error) {
 	round, err := scanRound(r.queryRow(ctx, findCurrentQueueRoundQuery, sessionID))
 	if err != nil {

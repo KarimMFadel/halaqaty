@@ -1,0 +1,62 @@
+name: halaqaty-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: halaqaty-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-halaqaty}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - halaqaty-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  livekit:
+    image: livekit/livekit-server:v1.8.3
+    container_name: halaqaty-livekit
+    restart: unless-stopped
+    profiles: ["media"]
+    command: ["--dev", "--bind", "0.0.0.0"]
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+
+  flutter-tools:
+    build:
+      context: .
+      dockerfile: docker/flutter-tools.Dockerfile
+    image: halaqaty-flutter-tools:local
+    container_name: halaqaty-dev-tools
+    restart: unless-stopped
+    working_dir: /workspace/mobile
+    command: ["tail", "-f", "/dev/null"]
+    environment:
+      FLUTTER_SUPPRESS_ANALYTICS: "true"
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      T048_API_BASE_URL: ${T048_API_BASE_URL:-http://host.docker.internal:8080/api/v1}
+      T048_TEACHER_TOKEN: ${T048_TEACHER_TOKEN:-}
+      T048_TEACHER_SESSION: ${T048_TEACHER_SESSION:-}
+      T048_TEACHER_USER_ID: ${T048_TEACHER_USER_ID:-}
+      T048_STUDENT_TOKEN: ${T048_STUDENT_TOKEN:-}
+      T048_STUDENT_SESSION: ${T048_STUDENT_SESSION:-}
+      T048_STUDENT_USER_ID: ${T048_STUDENT_USER_ID:-}
+    volumes:
+      - .:/workspace
+      - halaqaty-pub-cache:/root/.pub-cache
+      - halaqaty-firebase-cli:/root/.config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  halaqaty-postgres-data:
+  halaqaty-pub-cache:
+  halaqaty-firebase-cli:

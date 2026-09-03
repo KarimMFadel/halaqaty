@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:halaqaty_mobile/features/sessions/data/queue_api_client.dart';
 import 'package:halaqaty_mobile/features/sessions/data/realtime_session_client.dart';
 
 void main() {
@@ -149,6 +150,149 @@ void main() {
         isA<ParticipantRemovedEvent>());
   });
 
+  test('decodes a queue state event with its REST entry identifiers', () {
+    final event = QueueRealtimeEventDecoder('live-1')
+        .decode(_queueStateFrame(eventId: 'queue-state-1', version: 1));
+
+    expect(event, isA<QueueStateEvent>());
+    final state = event! as QueueStateEvent;
+    expect(state.eventId, 'queue-state-1');
+    expect(state.queue, isA<QueueState>());
+    expect(state.queue.entries.single.id, 'entry-1');
+    expect(state.queue.version, 1);
+  });
+
+  test('drops duplicate queue event ids and signals a round version gap', () {
+    final decoder = QueueRealtimeEventDecoder('live-1');
+
+    expect(
+      decoder.decode(_queueStateFrame(eventId: 'queue-state-1', version: 1)),
+      isA<QueueStateEvent>(),
+    );
+    expect(
+      decoder.decode(_queueStateFrame(eventId: 'queue-state-1', version: 1)),
+      isNull,
+    );
+
+    final gap = decoder.decode(jsonEncode({
+      'type': 'queue.advanced',
+      'event_id': 'queue-advance-3',
+      'occurred_at': '2026-01-01T00:00:03Z',
+      'payload': {
+        'session_id': 'live-1',
+        'round_id': 'round-1',
+        'selected_entry_id': 'entry-1',
+        'version': 3,
+      },
+    }));
+
+    expect(gap, isA<QueueVersionGapEvent>());
+    final versionGap = gap! as QueueVersionGapEvent;
+    expect(versionGap.previousVersion, 1);
+    expect(versionGap.receivedVersion, 3);
+  });
+
+  test('accepts distinct queue events at the current round version', () {
+    final decoder = QueueRealtimeEventDecoder('live-1');
+    expect(
+      decoder.decode(_queueStateFrame(eventId: 'queue-state-2', version: 2)),
+      isA<QueueStateEvent>(),
+    );
+
+    final event = decoder.decode(jsonEncode({
+      'type': 'queue.opt_out_requested',
+      'event_id': 'opt-out-request-1',
+      'occurred_at': '2026-01-01T00:00:01Z',
+      'payload': {
+        'session_id': 'live-1',
+        'round_id': 'round-1',
+        'request_id': 'request-1',
+        'queue_entry_id': 'entry-1',
+        'student_id': 'student-1',
+        'version': 2,
+      },
+    }));
+
+    expect(event, isA<QueueChangeEvent>());
+  });
+
+  test('accepts a lower version when an event starts a different round', () {
+    final decoder = QueueRealtimeEventDecoder('live-1');
+    expect(
+      decoder.decode(_queueStateFrame(eventId: 'old-round-state', version: 5)),
+      isA<QueueStateEvent>(),
+    );
+
+    final event = decoder.decode(jsonEncode({
+      'type': 'queue.entry_updated',
+      'event_id': 'new-round-entry-update',
+      'occurred_at': '2026-01-01T00:00:01Z',
+      'payload': {
+        'session_id': 'live-1',
+        'round_id': 'round-2',
+        'queue_entry_id': 'entry-2',
+        'student_id': 'student-1',
+        'old_status': 'waiting',
+        'new_status': 'opted_out',
+        'position': 1,
+        'entry_version': 2,
+        'version': 2,
+      },
+    }));
+
+    expect(event, isA<QueueChangeEvent>());
+  });
+
+  test('websocket client emits queue recovery signal only once for a gap',
+      () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((request) async {
+      if (request.method == 'POST' &&
+          request.uri.path == '/api/v1/realtime/tickets') {
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(jsonEncode({'token': 'ticket'}));
+        await request.response.close();
+        return;
+      }
+      if (!WebSocketTransformer.isUpgradeRequest(request)) return;
+      final socket = await WebSocketTransformer.upgrade(request);
+      socket.listen((raw) {
+        final frame = jsonDecode(raw as String) as Map<String, dynamic>;
+        if (frame['action'] != 'subscribe') return;
+        socket.add(_queueStateFrame(eventId: 'queue-state-1', version: 1));
+        socket.add(_queueStateFrame(eventId: 'queue-state-1', version: 1));
+        socket.add(jsonEncode({
+          'type': 'queue.advanced',
+          'event_id': 'queue-advance-3',
+          'occurred_at': '2026-01-01T00:00:03Z',
+          'payload': {
+            'session_id': 'live-1',
+            'round_id': 'round-1',
+            'selected_entry_id': 'entry-1',
+            'version': 3,
+          },
+        }));
+      });
+    });
+
+    final client = WebSocketRealtimeSessionClient(
+      Dio(BaseOptions(baseUrl: 'http://127.0.0.1:${server.port}/api/v1')),
+    );
+    addTearDown(() async {
+      await client.dispose();
+      await server.close(force: true);
+    });
+
+    final events = await client
+        .sessionEvents('live-1', token: 'firebase', backendSessionId: 'session')
+        .take(2)
+        .toList()
+        .timeout(const Duration(seconds: 2));
+
+    expect(events.first, isA<QueueStateEvent>());
+    expect(events.last, isA<QueueVersionGapEvent>());
+  });
+
   test('ignores malformed frames', () {
     expect(parseRealtimeSessionEvent('not json', 'live-1'), isNull);
     expect(parseRealtimeSessionEvent('{"type": 42}', 'live-1'), isNull);
@@ -163,3 +307,42 @@ void main() {
         'ws://localhost:8080/api/v1/ws');
   });
 }
+
+String _queueStateFrame({required String eventId, required int version}) =>
+    jsonEncode({
+      'type': 'queue.state',
+      'event_id': eventId,
+      'occurred_at': '2026-01-01T00:00:00Z',
+      'payload': {
+        'session_id': 'live-1',
+        'round_id': 'round-1',
+        'round_number': 1,
+        'round_type': 'revision',
+        'lifecycle': 'active',
+        'surah_id': 2,
+        'from_ayah': 1,
+        'to_ayah': 5,
+        'grading_required': false,
+        'selected_entry_id': null,
+        'version': version,
+        'policy': {
+          'population': 'present_at_activation',
+          'unfinished_finalization': 'mark_unfinished_skipped',
+          'opt_out': 'approval_required',
+          'grade_visibility': 'managers_and_student',
+          'grade_correction': 'audited_any_time',
+          'version': 1,
+        },
+        'preorder': [],
+        'entries': [
+          {
+            'queue_entry_id': 'entry-1',
+            'student_id': 'student-1',
+            'student_name': 'مريم',
+            'position': 1,
+            'status': 'waiting',
+            'version': 1,
+          },
+        ],
+      },
+    });

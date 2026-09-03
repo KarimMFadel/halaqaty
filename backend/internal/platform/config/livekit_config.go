@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 )
@@ -52,8 +53,8 @@ func DefaultAudioPolicy() AudioPolicy {
 // LoadLiveKitConfig reads and validates the LiveKit endpoint and credentials
 // from the environment. The three values are optional as a set: when none is
 // set the zero config is returned (live sessions disabled). When any value is
-// set, all three are required, and the endpoint must be a trusted TLS URL
-// (https or wss scheme).
+// set, all three are required. Remote endpoints must use TLS; plain HTTP or
+// WebSocket endpoints are accepted only on loopback for local development.
 func LoadLiveKitConfig() (LiveKitConfig, error) {
 	return loadLiveKitConfig(os.Getenv)
 }
@@ -82,20 +83,30 @@ func loadLiveKitConfig(getenv func(string) string) (LiveKitConfig, error) {
 	return cfg, nil
 }
 
-// validateLiveKitEndpoint enforces a parseable TLS-only (https/wss) endpoint
-// with a host, per the trusted-TLS-endpoint assumption in the F-005 spec.
+// validateLiveKitEndpoint enforces a parseable endpoint with a host. Remote
+// endpoints are TLS-only per F-005; loopback may use HTTP/WS for local tests.
 func validateLiveKitEndpoint(raw string) error {
 	parsed, err := url.Parse(raw)
 	if err != nil {
 		return fmt.Errorf("LIVEKIT_ENDPOINT invalid URL %q: %w", raw, err)
 	}
-	if parsed.Scheme != "https" && parsed.Scheme != "wss" {
+	secure := parsed.Scheme == "https" || parsed.Scheme == "wss"
+	insecure := parsed.Scheme == "http" || parsed.Scheme == "ws"
+	if !secure && !insecure {
 		return fmt.Errorf("LIVEKIT_ENDPOINT must use https or wss scheme, got %q", parsed.Scheme)
 	}
 	if parsed.Host == "" {
 		return fmt.Errorf("LIVEKIT_ENDPOINT must include a host")
 	}
-	return nil
+	if secure {
+		return nil
+	}
+	host := parsed.Hostname()
+	ip := net.ParseIP(host)
+	if host == "localhost" || ip != nil && ip.IsLoopback() {
+		return nil
+	}
+	return fmt.Errorf("LIVEKIT_ENDPOINT must use https or wss scheme, got %q", parsed.Scheme)
 }
 
 // LoadAudioPolicy reads the Opus bitrate override. The audio-processing

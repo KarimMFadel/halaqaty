@@ -13,18 +13,41 @@ import (
 	firebaseAdmin "firebase.google.com/go/v4"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	apirouter "github.com/KarimMFadel/halaqaty/backend/internal/api"
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/config"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/logging"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
 	"github.com/KarimMFadel/halaqaty/backend/internal/profile"
+	"github.com/KarimMFadel/halaqaty/backend/internal/queue"
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
 	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions/livekit"
 	lksdk "github.com/livekit/server-sdk-go/v2"
 )
+
+const (
+	queueOutboxPollInterval = 100 * time.Millisecond
+	queueOutboxBatchSize    = 100
+)
+
+type slogOutboxParkedAlerter struct {
+	logger *slog.Logger
+}
+
+func (a slogOutboxParkedAlerter) AlertOutboxParked(_ context.Context, event queue.OutboxEvent) {
+	if a.logger == nil {
+		return
+	}
+	a.logger.Error(
+		"queue outbox event parked",
+		"event_id", event.EventID,
+		"event_type", event.EventType,
+		"attempt_count", event.AttemptCount,
+	)
+}
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -87,6 +110,10 @@ func main() {
 	rbacRepo := rbac.NewRepository(pool)
 	rbacService := rbac.NewService(rbacRepo, auditLogger)
 	rbacHandler := rbac.NewHandler(rbacService)
+	queueRepo := queue.NewQueueRepository(pool)
+	queueRounds := queue.NewRoundService(queueRepo)
+	queueOptOuts := queue.NewOptOutService(queueRepo)
+	queueHandler := queue.NewHandler(queueRepo, queueRounds, queue.NewTurnService(queueRepo), queue.NewPolicyService(queueRepo), queueOptOuts)
 
 	var sessionHandler *sessions.Handler
 	var liveSessionService *sessions.Service
@@ -136,12 +163,25 @@ func main() {
 	rateLimitMW := middleware.NewRateLimitMiddleware(cfg.RateLimitPerIPPerMin, cfg.RateLimitPerUserPerMin)
 
 	realtimeHub := realtime.NewHub(ticketService, sessionTopicAuthorizer)
+	queueProjector := queue.NewRealtimeOutboxProjector(queueRepo, realtimeHub)
+	queueMetrics := new(metrics.QueueMetrics)
+	queueConvergence := queue.NewConvergence(queueRepo, queueMetrics, logger)
+	queueDispatcher := queue.NewOutboxDispatcher(
+		queueRepo,
+		queueProjector,
+		queueMetrics,
+		slogOutboxParkedAlerter{logger: logger},
+		nil,
+		nil,
+	)
+	realtimeHub.RegisterSessionEventProvider(queueProjector.QueueState)
 	if liveSessionService != nil {
+		liveSessionService.SetQueueObserver(sessions.NewBoundedQueueObserver(queue.NewSessionObserver(queueRounds, queueConvergence), 0))
 		realtimeHub.SetSessionSnapshotProvider(liveSessionService.RealtimeSnapshot)
 		realtimeHub.SetSessionCommandHandler(liveSessionService.HandleRealtimeCommand)
 	}
 
-	mwSet := MiddlewareSet{
+	mwSet := apirouter.MiddlewareSet{
 		Auth:            authMW,
 		Role:            roleMW,
 		RateLimit:       rateLimitMW,
@@ -151,14 +191,16 @@ func main() {
 		SessionHandler:  sessionHandler,
 		RealtimeHandler: realtimeHandler,
 		RealtimeHub:     realtimeHub,
+		QueueHandler:    queueHandler,
 		Timeout:         cfg.RequestTimeout,
 		Logger:          logger,
 		Metrics:         authMetrics,
+		QueueMetrics:    queueMetrics,
 		MetricsToken:    cfg.MetricsToken,
 	}
 
 	// ── Router ────────────────────────────────────────────────────────────────
-	router := NewRouter(mwSet)
+	router := apirouter.NewRouter(mwSet)
 
 	// ── Server ────────────────────────────────────────────────────────────────
 	srv := &http.Server{
@@ -173,6 +215,30 @@ func main() {
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
 	reconcilerCtx, stopReconciler := context.WithCancel(context.Background())
 	defer stopReconciler()
+
+	// F-003 startup reconciliation: finalize any rounds left active/prepared
+	// after a previous crash or missed session-end observer callback.
+	if err := queueConvergence.Reconcile(reconcilerCtx); err != nil {
+		logger.Error("queue startup convergence failed", "error", err)
+	}
+	if err := queueDispatcher.Replay(reconcilerCtx, queueOutboxBatchSize); err != nil {
+		logger.Error("queue outbox replay failed", "error", err)
+	}
+
+	go func() {
+		ticker := time.NewTicker(queueOutboxPollInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-reconcilerCtx.Done():
+				return
+			case <-ticker.C:
+				if err := queueDispatcher.DispatchDue(reconcilerCtx, queueOutboxBatchSize); err != nil {
+					logger.Error("queue outbox dispatch failed", "error", err)
+				}
+			}
+		}
+	}()
 	if sessionReconciler != nil {
 		go func() {
 			if err := sessionReconciler.Run(reconcilerCtx); err != nil && !errors.Is(err, context.Canceled) {

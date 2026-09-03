@@ -40,7 +40,7 @@ These rules are never broken, in any environment, under any circumstances:
 1. **LiveKit tokens are generated exclusively by the Go backend**. The Flutter client never calls LiveKit APIs directly and never generates tokens.
 2. **Firebase Auth is for identity only**. All authorization checks query PostgreSQL `circle_members`. A valid Firebase JWT does not grant any action without a matching role record.
 3. **Roles are per-circle**. A user can be teacher in one circle and student in another simultaneously.
-4. **Student publish scope is turn-based**. `CanPublish: true` is granted only to the active reciter and revoked immediately after their turn ends.
+4. **Student audio publishing is open within authorized live sessions**. Authorized students receive audio-publish permission for the session; F-003 queue actions never grant, revoke, mute, or otherwise change it. Teachers and supervisors retain explicit F-005 moderation controls, and video publishing remains disabled ([ADR-020](../../docs/engineering/architecture/adr/ADR-020-voluntary-recitation-queue.md)).
 5. **Recording is DISABLED in MVP**. The `FEATURE_RECORDING_ENABLED` flag must stay `false` until a privacy/legal framework is formally documented and approved. This is not negotiable.
 6. **All input is validated server-side**. The Flutter client is never trusted. Ayah numbers, file types, MIME types, and sizes are re-validated on the Go backend.
 7. **Parameterized queries only**. No string-interpolated SQL. Use `pgx` named or positional parameters exclusively.
@@ -59,7 +59,7 @@ Quran recitation demands pristine, unprocessed audio. Every LiveKit room configu
 - Integration tests are required for every API endpoint and every WebSocket event handler.
 - No PR is merged with any failing test.
 - Every database migration must be tested against a fresh schema before merging.
-- Go test coverage target: ≥80% for `backend/internal/` packages.
+- Go test coverage target: ≥80% aggregate for `backend/internal/` packages, measured from the combined unit + contract + integration profile (`make coverage` in `backend/`). A bare unit-only profile undercounts because contract/integration tests are behind build tags.
 
 ### VII. MVP Scope Discipline (YAGNI)
 - Scale target: **50 concurrent users, ≤10 simultaneous live sessions** in the first 6 months.
@@ -126,6 +126,7 @@ Quran recitation demands pristine, unprocessed audio. Every LiveKit room configu
 |---|---|
 | All unit tests pass | `go test ./...` / `flutter test` |
 | All integration tests pass | `go test -tags=integration ./...` |
+| Go coverage floor | `make coverage` (from `backend/`) | ≥80% aggregate over `backend/internal/`, combined profile |
 | DB migration tested on fresh schema | CI step with `golang-migrate` |
 | No linter violations | `golangci-lint` (Go) / `flutter analyze` (Dart) |
 | Formatter clean | `gofmt` / `dart format` |
@@ -175,4 +176,4 @@ This constitution supersedes all other practices, preferences, or conventions in
 
 All Copilot agents must verify constitutional compliance before generating code. When uncertain, do less and ask. Complexity must be justified. Simplicity is the default.
 
-**Version**: 1.0.0 | **Ratified**: 2026-04-26 | **Last Amended**: 2026-04-26
+**Version**: 1.1.0 | **Ratified**: 2026-04-26 | **Last Amended**: 2026-08-30

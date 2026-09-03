@@ -98,7 +98,9 @@ make migrate-up          # apply pending migrations (needs DATABASE_URL)
 make migrate-fresh       # ⚠️ drop schema + re-run all migrations (destroys data)
 make migrate-create NAME=create_foo   # new migration pair
 make test                # Go unit (-short) + Flutter unit/widget
+make test-contract       # Go contract tests, unfiltered (from backend/; full contract gate)
 make test-integration    # Go integration tests (needs DATABASE_URL + running Postgres)
+make coverage            # Go project-wide coverage gate (backend/; needs DATABASE_URL) — ≥80% aggregate over internal/
 make lint                # golangci-lint + flutter analyze + spectral + gitleaks
 make api-lint            # spectral lint docs/contracts/openapi.yaml (config: .spectral.yaml)
 make secrets             # gitleaks detect across repo
@@ -114,7 +116,8 @@ flutter run              # run mobile app (from mobile/, after `flutter pub get`
 ```
 # Backend: one package
 cd backend && go test -short ./internal/auth
-# Backend: feature-001 scoped targets (unit / contract / integration)
+# Backend: feature-001 scoped targets — FOCUSED dev subsets only (they apply a -run
+# filter and are NOT gates); the full gates are make test / test-contract / test-integration / coverage
 cd backend && make test-feature-001-unit
 cd backend && make test-feature-001-contract
 cd backend && make test-feature-001-integration   # needs DATABASE_URL
@@ -126,14 +129,18 @@ cd mobile && flutter test test/widget/auth
 cd mobile && flutter test test/widget/auth/some_test.dart
 ```
 
-Contract tests run with `-tags=contract` and a `-run` regex filter (`Auth|Profile|CircleAssignRole|ResponseSafety`); integration tests use `-tags=integration` with `AuthFlow|ProfileFlow|CircleRoleAccess|RateLimitPolicy|PasswordStorageSafety`. Mirror these filters when adding features.
+Contract tests run with `-tags=contract`; integration tests use `-tags=integration`. The feature-001 targets above add a `-run` regex filter (`Auth|Profile|CircleAssignRole|ResponseSafety` / `AuthFlow|ProfileFlow|CircleRoleAccess|RateLimitPolicy|PasswordStorageSafety`) for fast iteration only — do **not** mirror filtered subsets as gates, and do not use them as coverage evidence: they execute only a fraction of the suite. Gates run unfiltered.
+
+**Coverage measurement rule:** coverage is only meaningful from the combined profile — `make coverage` (from `backend/`, needs `DATABASE_URL`), which runs unit + contract + integration together with `-coverpkg=./internal/...` and enforces the ≥80% aggregate floor (constitution §VI). A bare `go test -short -coverprofile` reads ~24% because the contract/integration suites sit behind build tags and contribute nothing to a unit-only profile — never quote that number.
 
 ## Quality gates (all must be green before PR)
 
 | Gate | Command |
 |---|---|
 | Go unit | `go test -short ./...` (run in `backend/`) |
+| Go contract | `make test-contract` (in `backend/`; runs ALL contract tests unfiltered) |
 | Go integration | `go test -tags=integration ./...` (needs `DATABASE_URL`) |
+| Go coverage floor | `make coverage` (in `backend/`; needs `DATABASE_URL`) — ≥80% aggregate over `internal/`, measured from the combined unit+contract+integration profile |
 | Go lint | `golangci-lint run ./...` (v1.64.x, zero violations) |
 | Go fmt | `gofmt -l .` (empty output) |
 | Flutter test | `flutter test test` (in `mobile/`) |

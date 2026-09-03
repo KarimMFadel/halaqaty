@@ -3,10 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:halaqaty_mobile/features/sessions/data/session_api_client.dart';
 
 void main() {
-  test('session-card discovery reuses the canonical circle sessions path', () async {
+  test('session-card discovery reuses the canonical circle sessions path',
+      () async {
     final requests = <RequestOptions>[];
-    final dio = Dio()
-      ..httpClientAdapter = _DiscoveryAdapter(requests);
+    final dio = Dio()..httpClientAdapter = _DiscoveryAdapter(requests);
     final client = SessionApiClient(dio);
 
     final sessions = await client.list(
@@ -31,7 +31,7 @@ class _DiscoveryAdapter implements HttpClientAdapter {
 
   @override
   Future<ResponseBody> fetch(RequestOptions options,
-      Stream< List<int> >? requestStream, Future? cancelFuture) async {
+      Stream<List<int>>? requestStream, Future? cancelFuture) async {
     requests.add(options);
     return ResponseBody.fromString(
       '{"data":[{"id":"session-1","circle_id":"circle-1","status":"scheduled","media_mode":"audio_only","participant_count":0,"is_locked":false}]}',

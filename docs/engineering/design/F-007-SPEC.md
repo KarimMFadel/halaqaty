@@ -247,6 +247,9 @@ Powers `GET /students/me/progress` (global Quran Map). Refreshed async after eve
 
 **Status derivation rules (fixed globally):**
 
+Completed `test` records remain part of practice/session history but do not
+participate in Quran-map status ranking or status derivation.
+
 | Condition on most recent record | Status |
 |---|---|
 | Latest grade = `needs_review` or `repeat` | `needs_recap` |
@@ -276,6 +279,7 @@ WITH ranked AS (
     ) AS rn
   FROM memorization_progress mp
   WHERE mp.surah_id IS NOT NULL
+    AND mp.type <> 'test'
 )
 SELECT
   r.student_id,
@@ -531,11 +535,13 @@ Query params: days (int, default 30)
 
 ---
 
-## 5. Auto-population on Grade Submit
+## 5. Auto-population on F-003 Completion
 
-### Where: `internal/service/queue.go` → `SubmitGrade()`
+### Where: F-003 queue service atomic completion/correction transaction
 
-The service owns the transaction. After updating the queue entry grade, it upserts `memorization_progress`, then fires an async mat-view refresh.
+The F-003 service owns the transaction. Completion updates the queue entry and
+inserts `memorization_progress` atomically; an allowed correction updates the
+same row. F-007 then fires an async materialized-view refresh.
 
 **Decision table for edge cases:**
 
@@ -545,6 +551,7 @@ The service owns the transaction. After updating the queue entry grade, it upser
 | Entry `status = 'skipped'` | ❌ Return early — no progress record |
 | Entry `status = 'opted_out'` | ❌ Return early — no progress record |
 | `grading_required = false` | ✅ Insert with `grade = NULL` |
+| Completed round `type = 'test'` | ✅ Insert/upsert for practice history; exclude from Quran-map status derivation |
 | Re-grade (teacher corrects) | ✅ `ON CONFLICT (queue_entry_id) DO UPDATE grade, notes, updated_at` |
 | Mat-view refresh fails | ⚠️ Log warning, never fail the HTTP response |
 

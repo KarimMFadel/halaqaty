@@ -183,9 +183,15 @@ Standard HTTP semantics: `400` bad input · `401` unauthenticated · `403` forbi
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `GET` | `/sessions/{sessionId}/queue` | Bearer + Session ID | Get current queue state (full snapshot) |
-| `POST` | `/sessions/{sessionId}/queue/rounds` | Bearer (teacher/supervisor) | Start a new recitation round (populates queue) |
-| `POST` | `/sessions/{sessionId}/queue/entries/{entryId}/grade` | Bearer (teacher/supervisor) | Submit grade for a completed recitation turn |
-| `POST` | `/sessions/{sessionId}/queue/opt-out` | Bearer (student) | Opt out of the current round (requires teacher/supervisor approval) |
+| `POST` | `/sessions/{sessionId}/queue/rounds` | Bearer (teacher/supervisor) | Prepare or activate a round |
+| `POST` | `/sessions/{sessionId}/queue/reset` | Bearer (teacher/supervisor) | Finalize current history and create the next round |
+| `POST` | `/sessions/{sessionId}/queue/advance` | Bearer (teacher/supervisor) | Select the next waiting entry without starting it |
+| `PUT` | `/sessions/{sessionId}/queue/entries/{entryId}/status` | Bearer (teacher/supervisor) | Start, skip, or atomically complete an entry |
+| `PUT` | `/sessions/{sessionId}/queue/order` | Bearer (teacher/supervisor) | Reorder prepared candidates or waiting entries |
+| `POST` | `/sessions/{sessionId}/queue/entries/{entryId}/grade` | Bearer (teacher/supervisor) | Correct a completed grade/note when policy permits |
+| `POST` | `/sessions/{sessionId}/queue/opt-out` | Bearer (student) | Request or automatically receive opt-out under session policy |
+| `POST` | `/sessions/{sessionId}/queue/opt-out-requests/{requestId}/decision` | Bearer (teacher/supervisor) | Approve or decline a pending request |
+| `PATCH` | `/sessions/{sessionId}/queue/policy` | Bearer (teacher/supervisor) | Change closed policy values prospectively |
 
 ### Chat
 

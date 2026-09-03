@@ -23,6 +23,11 @@ Every PR is fully traceable: user story → contract → implementation → test
 
 ## Prerequisites
 
+For the Firebase/LiveKit credentials, Docker images, and the verified T048
+real-backend integration run, see the [Firebase and LiveKit testing setup
+guide](docs/engineering/guides/firebase-livekit-testing-setup.md). Keep all
+tokens, passwords, and Firebase Admin service-account files local and ignored.
+
 | Tool | Version | Install |
 |---|---|---|
 | `uv` | 0.11+ | See below |
@@ -269,6 +274,7 @@ All of these must be **green** before opening a PR:
 | Go unit tests | `go test ./...` | 100% pass |
 | Flutter tests | `flutter test` | 100% pass |
 | Go integration tests | `go test -tags=integration ./...` | 100% pass |
+| Go coverage floor | `make coverage` (from `backend/`) | ≥80% aggregate over `backend/internal/` |
 | DB migration (fresh schema) | `make migrate-fresh` | No errors |
 | Go linter | `golangci-lint run` | Zero violations |
 | Dart analyzer | `flutter analyze` | Zero issues |

@@ -19,6 +19,13 @@ const (
 	ActionInviteRefresh = "circle.invite_refresh"
 	ActionMemberRemoval = "circle.member_remove"
 	ActionCircleArchive = "circle.archive"
+
+	// Queue audit actions carry redacted metadata only: no note text, no grade
+	// values, no student display names, no media/room references.
+	ActionQueuePolicyChange    = "queue.policy_change"
+	ActionQueueOptOutRequest   = "queue.opt_out_request"
+	ActionQueueOptOutDecision  = "queue.opt_out_decision"
+	ActionQueueGradeCorrection = "queue.grade_correction"
 )
 
 // AuditEvent captures security-relevant state transitions.
@@ -27,7 +34,11 @@ type AuditEvent struct {
 	ActorUserID string
 	TargetUser  string
 	CircleID    string
-	Metadata    map[string]any
+	// SessionID is the live-session (halaqah) resource ID for queue events.
+	// It is distinct from auth-session identifiers, which stay on the
+	// metadata deny-list as credential material.
+	SessionID string
+	Metadata  map[string]any
 }
 
 // AuditLogger emits structured logs for auth/profile/role-change events.
@@ -57,6 +68,7 @@ func (l *AuditLogger) Log(ctx context.Context, event AuditEvent) {
 		slog.String("actor_user_id", event.ActorUserID),
 		slog.String("target_user_id", event.TargetUser),
 		slog.String("circle_id", event.CircleID),
+		slog.String("session_id", event.SessionID),
 		slog.Any("metadata", event.Metadata),
 		slog.Time("at", l.nowFn().UTC()),
 	)
@@ -69,7 +81,10 @@ func sanitizeAuditMetadata(metadata map[string]any) map[string]any {
 	clean := make(map[string]any, len(metadata))
 	for key, value := range metadata {
 		switch strings.ToLower(key) {
-		case "invite_code", "token", "access_token", "authorization", "session_id", "password":
+		case "invite_code", "token", "access_token", "authorization", "session_id", "password",
+			"note", "notes", "teacher_notes", "note_text", "grade", "grades", "grade_value",
+			"media", "room", "room_ref", "media_room_ref", "credential", "media_credential",
+			"endpoint", "provider", "provider_id", "provider_identifier", "url":
 			continue
 		default:
 			clean[key] = sanitizeAuditValue(value)
@@ -181,4 +196,70 @@ func MemberRemovalEvent(actorUserID, targetUserID, circleID string) AuditEvent {
 // CircleArchiveEvent builds a circle-archive audit event.
 func CircleArchiveEvent(actorUserID, circleID string) AuditEvent {
 	return AuditEvent{Action: ActionCircleArchive, ActorUserID: actorUserID, CircleID: circleID}
+}
+
+// QueuePolicyChangeEvent builds a queue policy-change audit event. Each
+// changes entry maps a policy dimension to its {prior, current} values; values
+// must be manager-controlled closed enums (never free text).
+func QueuePolicyChangeEvent(actorUserID, sessionID string, changes map[string][2]string) AuditEvent {
+	return AuditEvent{
+		Action:      ActionQueuePolicyChange,
+		ActorUserID: actorUserID,
+		SessionID:   sessionID,
+		Metadata:    map[string]any{"changes": changes},
+	}
+}
+
+// QueueOptOutRequestEvent builds a queue opt-out request audit event.
+func QueueOptOutRequestEvent(actorUserID, sessionID, entryID string) AuditEvent {
+	return AuditEvent{
+		Action:      ActionQueueOptOutRequest,
+		ActorUserID: actorUserID,
+		SessionID:   sessionID,
+		Metadata:    map[string]any{"entry_id": entryID},
+	}
+}
+
+// QueueOptOutDecisionEvent builds a queue opt-out decision audit event.
+// decision must be a closed status enum (e.g. approved/declined/auto).
+func QueueOptOutDecisionEvent(actorUserID, sessionID, requestID, decision string) AuditEvent {
+	return AuditEvent{
+		Action:      ActionQueueOptOutDecision,
+		ActorUserID: actorUserID,
+		SessionID:   sessionID,
+		Metadata:    map[string]any{"request_id": requestID, "decision": decision},
+	}
+}
+
+// GradeCorrectionShape records only the change shape of a grade/note
+// correction — never note text or grade values.
+type GradeCorrectionShape struct {
+	// FieldsChanged names the corrected fields ("grade" and/or "note").
+	FieldsChanged []string
+	// GradeChanged reports whether the grade value was replaced.
+	GradeChanged bool
+	// NoteChanged reports whether the note was set or replaced.
+	NoteChanged bool
+	// NoteCleared reports whether the note was cleared to null.
+	NoteCleared bool
+	// PriorGradePresent reports whether a grade existed before the correction.
+	PriorGradePresent bool
+}
+
+// QueueGradeCorrectionEvent builds a redacted grade/note correction audit
+// event carrying only the change shape.
+func QueueGradeCorrectionEvent(actorUserID, sessionID, entryID string, shape GradeCorrectionShape) AuditEvent {
+	return AuditEvent{
+		Action:      ActionQueueGradeCorrection,
+		ActorUserID: actorUserID,
+		SessionID:   sessionID,
+		Metadata: map[string]any{
+			"entry_id":            entryID,
+			"fields_changed":      shape.FieldsChanged,
+			"grade_changed":       shape.GradeChanged,
+			"note_changed":        shape.NoteChanged,
+			"note_cleared":        shape.NoteCleared,
+			"prior_grade_present": shape.PriorGradePresent,
+		},
+	}
 }

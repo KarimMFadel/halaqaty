@@ -1,9 +1,11 @@
 package http
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -140,6 +142,15 @@ type responseRecorder struct {
 func (rr *responseRecorder) WriteHeader(code int) {
 	rr.statusCode = code
 	rr.ResponseWriter.WriteHeader(code)
+}
+
+func (rr *responseRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := rr.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, http.ErrNotSupported
+	}
+	rr.statusCode = http.StatusSwitchingProtocols
+	return hijacker.Hijack()
 }
 
 // MaxBytesMiddleware wraps each request body with an http.MaxBytesReader so

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -63,10 +65,13 @@ class NoopMediaSession implements MediaSession {
 }
 
 class EmptyRealtimeClient implements RealtimeSessionClient {
+  final StreamController<RealtimeSessionEvent> _events =
+      StreamController<RealtimeSessionEvent>.broadcast();
+
   @override
   Stream<RealtimeSessionEvent> sessionEvents(String liveSessionId,
           {required String token, required String backendSessionId}) =>
-      const Stream.empty();
+      _events.stream;
 
   @override
   Future<void> raiseHand(String liveSessionId) async {}
@@ -75,7 +80,7 @@ class EmptyRealtimeClient implements RealtimeSessionClient {
   Future<void> lowerHand(String liveSessionId) async {}
 
   @override
-  Future<void> dispose() async {}
+  Future<void> dispose() => _events.close();
 }
 
 class WidgetSessionApi extends SessionApiClient {

@@ -177,10 +177,10 @@ Cross-Cutting: Offline Behavior
 **Entry:** Upcoming session card → "Prepare Queue" (available up to 30 min before session start)
 
 1. Teacher sees student list with drag handles.
-2. Drag to reorder → saves order automatically.
+2. Drag to reorder → saves the pre-set relative order automatically.
 3. Long-press a student → options: "Remove from queue", "Move to top".
 4. Tap **"Save Queue"**.
-5. **System:** `PUT /api/v1/sessions/:id/queue` → saves ordered list → queue locked until teacher opens the session.
+5. **System:** Saves the ordered list and the session's queue-policy defaults. Canonical F-003 REST operations are finalized during contract planning.
 
 **Decision from MVP Register:** Pre-set queue allowed before session starts (OQ-009). One position per student per round (OQ-011).
 
@@ -224,13 +224,13 @@ Cross-Cutting: Offline Behavior
 **Entry:** Session Room → Queue panel → Tap student name → "Start Recitation"
 
 1. **System:**
-   - `POST /api/v1/sessions/:id/queue/:studentId/start`
+   - Executes the canonical F-003 start-turn operation defined during contract planning
    - Calls the sessions-owned reciter-audio control to set effective audio publishing; the LiveKit MVP adapter maps it to `CanPublishAudio: true`
    - Broadcasts queue state update to all session participants
-   - Creates `recitation_sessions` row with `started_at`
+   - Persists the queue entry's recitation start
 2. Student's microphone becomes active automatically.
 3. All other students' microphones remain disabled.
-4. Timer visible to teacher only (informational — no auto-stop).
+4. No per-student timer is shown or enforced; the teacher manages timing verbally.
 
 ---
 
@@ -245,8 +245,8 @@ Cross-Cutting: Offline Behavior
    - **Notes** (optional, free text, max 500 chars)
 2. Tap **"Save & Advance"**.
 3. **System:**
-   - `POST /api/v1/sessions/:id/queue/:studentId/complete` with rating payload
-   - Creates `progress_records` row
+   - Executes the canonical F-003 grade-and-complete operation defined during contract planning
+   - Creates or idempotently updates the completed turn's progress/practice record
    - Revokes student's `CanPublishAudio` permission
    - Advances queue pointer to next student
    - Notifies next student: "You're next — get ready"
@@ -260,15 +260,15 @@ Cross-Cutting: Offline Behavior
 **Actor:** Teacher or Supervisor  
 **Entry:** Queue panel → swipe student row → "Skip" or student requests to opt out
 
-1. Tap **"Skip"** (teacher decision) or receive student opt-out request via chat.
-2. If opt-out: teacher approves or declines.
+1. Tap **"Skip"** (manager decision) or receive a durable student opt-out request through the queue UI.
+2. If the session uses `approval_required`, a teacher or supervisor approves or declines. Under `auto_approve`, the request is accepted immediately.
 3. **System:**
-   - `POST /api/v1/sessions/:id/queue/:studentId/skip`
-   - Logs skip reason (timeout / opt-out / absent)
+   - Executes the canonical F-003 skip or opt-out operation defined during contract planning
+   - Logs the action and actor without creating a practice record
    - Advances queue to next student
-4. Skipped student moves to end of current round (not removed from queue).
+4. `skipped` and `opted_out` are terminal for that round; neither student is moved back into its active order.
 
-**Decision from MVP Register:** Opt-out allowed with teacher approval, logged not penalized (OQ-007). No per-student timer (OQ-008).
+**Decision from MVP Register:** Opt-out approval is session-configurable with approval required by default, and every outcome is logged without penalty (OQ-007/OQ-053). No per-student timer (OQ-008).
 
 ---
 

@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-`specs/001-auth-roles-profile/plan.md`
+`specs/003-recitation-queue-system/plan.md`
 <!-- SPECKIT END -->
 
 ## Agentic workflow harness
@@ -25,3 +25,4 @@ second specification, plan, task list, or review hierarchy.
 - When asked to handle review findings, implement every actionable finding in one bounded fix wave, add the smallest regression coverage, and rerun affected checks. Do not merely repeat the findings.
 - Mark Spec-Kit tasks `[X]` only after their deliverables exist and current verification evidence supports completion; report unavailable tools or skipped environment-dependent tests explicitly.
 - Before committing Flutter changes, run from `mobile/`: `flutter test test`, `flutter test integration_test/`, `flutter analyze`, and `dart format --set-exit-if-changed .`. Missing Flutter/device/backend prerequisites block the commit; do not report unrun suites as passing.
+- Before committing Go backend changes, run `make coverage` from `backend/` and confirm aggregate `backend/internal/` coverage is ≥80%. Do not report a unit-only profile as coverage evidence — contract and integration tests are behind build tags and do not count toward it.

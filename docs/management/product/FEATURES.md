@@ -209,7 +209,7 @@ The following **5-grade scale** applies to all recitation entries. This is the c
 | Good | `good` | جيد | Minor errors, good tajweed |
 | Acceptable | `acceptable` | مقبول | Notable errors, basic tajweed |
 | Needs Review | `needs_review` | يحتاج مراجعة | Significant errors; review required before advancing |
-| Repeat | `repeat` | إعادة | Must fully repeat; cannot advance |
+| Repeat | `repeat` | إعادة | Teacher indicates that a full repeat is needed; this grade does not block manager controls |
 
 #### Real-Time Sync Requirements
 
@@ -227,13 +227,15 @@ The following **5-grade scale** applies to all recitation entries. This is the c
 - [ ] Queue can be reset unlimited times per session
 - [ ] When student's turn starts: in-app and push notification sent immediately
 - [ ] Teacher can mute all → unmute only current reciter when their turn starts
-- [ ] Grading mode configurable per circle (required or optional per completed turn)
+- [ ] Grading requirement remains configurable per round, with the circle policy as its default
 - [ ] Student audio publish permission is teacher-controlled per turn (grant on turn start, revoke after turn)
 - [ ] Teacher notes field per grading entry (free text, max 500 chars)
 - [ ] Full session log persisted after session ends
-- [ ] Queue handles students who join the session late (added to end of current round queue)
+- [ ] Queue handles students who join late using the session policy; default is append to the active round
 - [ ] Queue handles network disconnections gracefully (state preserved server-side)
-- [ ] Student can request a temporary skip/opt-out for current turn (e.g., mic issue, permission break), approved by teacher/supervisor
+- [ ] Student can request a temporary opt-out for the current turn; default requires teacher/supervisor approval and a session may enable automatic approval
+- [ ] Teachers/supervisors can change the session's closed queue-policy settings prospectively, with defaults and audit history
+- [ ] Queue processing and cleanup never block an authorized or automatic F-005 session end
 
 
 
@@ -243,10 +245,12 @@ The following **5-grade scale** applies to all recitation entries. This is the c
 
 - **DD-020:** Queue state is stored server-side in PostgreSQL (not just in-memory). This ensures history is preserved and reconnecting clients can recover state.
 - **DD-021:** WebSocket events are the delivery mechanism, but PostgreSQL is the source of truth.
-- **DD-022:** Grading mode is configured per circle (required vs optional per completed turn).
-- **DD-023:** Temporary student opt-out is allowed for operational issues and is logged in queue history.
-- **DD-024:** Late-joining students are appended to the end of the current active round.
+- **DD-022:** Circle grading policy supplies the default; each round records whether grading is required.
+- **DD-023:** Temporary student opt-out is allowed for operational issues and is logged in queue history. Approval is required by default; a session manager may configure automatic approval.
+- **DD-024:** Late-joining students append to the active round by default. Session managers may instead pre-populate all active students and preserve their pre-set positions.
 - **DD-025:** A **5-grade** recitation scale was chosen to reflect the nuanced evaluation used in traditional Quranic teaching: `excellent / good / acceptable / needs_review / repeat`. The distinction between "needs targeted revision" (`needs_review`) and "must fully repeat" (`repeat`) is pedagogically significant in tajweed assessment, and aligns with established practice in Quran circles and the ijazah tradition. *(Updated from original 6-grade proposal — `very_good` was merged into `good` to reduce cognitive overhead for teachers while preserving all meaningful distinctions. Decision locked 2026-06-30.)*
+- **DD-026:** Queue population, unfinished-entry finalization, opt-out approval, grade/note visibility, and grade/note correction use closed per-session policies with safe defaults. Changes are prospective and audited; safety and data-integrity invariants are not configurable. See ADR-018.
+- **DD-027:** F-003 never blocks F-005 session end. Queue finalization and reciter-audio revocation are idempotent post-end convergence work.
 
 #### Dependencies
 
@@ -394,7 +398,7 @@ Step 5: Media Routing
 - [ ] Token generation exclusively on Go backend (never client-side)
 - [ ] Audio-only in MVP (no video toggle in app)
 - [ ] Maximum session duration is 4 hours; idle room timeout is 30 minutes after the final participant leaves
-- [ ] Teacher and supervisor controls: start/end, mute all, mute/unmute an existing audio publisher, remove participant, lock/unlock room (no new joiners); unmute never grants student publishing
+- [ ] Teacher and supervisor controls: start/end, mute all, mute/unmute an existing authorized audio publisher, remove participant, lock/unlock room (no new joiners); F-003 queue actions never change publishing permission
 - [ ] Hand raise: any active participant taps 🤚 → appears in moderator UI as standalone F-005 session state; F-003 may consume it later without changing F-005 ownership
 - [ ] Screen sharing is deferred to post-MVP (same feature-flag family as video)
 - [ ] Session recording is disabled in MVP and deferred until a privacy consent/retention framework is approved
@@ -492,10 +496,10 @@ Full student progress intelligence layer built on top of the existing session an
 #### Acceptance Criteria
 
 **Data Layer**
-- [ ] **AC-001** `memorization_progress` auto-created on every `recitation_queue_entries` transition to `completed` (in `QueueService.SubmitGrade` transaction)
+- [ ] **AC-001** `memorization_progress` auto-created on every `recitation_queue_entries` transition to `completed` (in the F-003 atomic completion transaction)
 - [ ] **AC-002** Only `completed` turns generate a progress record — `skipped` and `opted_out` do NOT
-- [ ] **AC-003** `memorization_progress` stores: `student_id`, `circle_id`, `session_id`, `queue_entry_id`, `surah_id` (FK), `from_ayah`, `to_ayah`, `type`, `grade` (nullable), `notes`, `date`
-- [ ] **AC-004** `mv_student_surah_status` materialized view is refreshed (async, fire-and-forget) after each grade submission
+- [ ] **AC-003** `memorization_progress` stores: `student_id`, `circle_id`, `session_id`, `queue_entry_id`, `surah_id` (FK), `from_ayah`, `to_ayah`, `type` (including `test`), `grade` (nullable), `notes`, `date`; `test` remains practice history but is excluded from Quran-map status derivation
+- [ ] **AC-004** `mv_student_surah_status` materialized view is refreshed (async, fire-and-forget) after each completed-turn write or allowed grade correction
 - [ ] **AC-005** Grade enum updated to 5 values: `excellent / good / acceptable / needs_review / repeat` across all tables and the OpenAPI contract
 
 **Student APIs**

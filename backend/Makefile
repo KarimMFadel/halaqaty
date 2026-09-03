@@ -10,7 +10,7 @@
 
 .DEFAULT_GOAL := help
 
-.PHONY: help test test-integration \
+.PHONY: help test test-contract test-integration coverage test-feature-003-coverage \
         test-feature-001-auth-roles-profile test-feature-001-unit test-feature-001-contract test-feature-001-integration \
         lint build \
         migrate-up migrate-down migrate-fresh migrate-status migrate-create
@@ -31,6 +31,16 @@ test: ## Run unit tests (no database required)
 test-integration: ## Run integration tests (requires DATABASE_URL and a running PostgreSQL)
 	@test -n "$$DATABASE_URL" || { echo "❌  DATABASE_URL is not set"; exit 1; }
 	go test -tags=integration ./...
+
+test-contract: ## Run ALL contract tests, unfiltered (the contract gate; focused subsets: test-feature-001-contract)
+	go test -tags=contract ./tests/contract/...
+
+coverage: ## Project-wide coverage gate: unit+contract+integration combined profile, >=80% aggregate floor over internal/ (requires DATABASE_URL)
+	powershell -NoProfile -Command "if (-not $$env:DATABASE_URL) { Write-Error 'DATABASE_URL is not set'; exit 1 }"
+	go test -count=1 -short -tags='contract integration' '-coverpkg=./internal/...' '-coverprofile=coverage.out' ./internal/... ./tests/contract ./tests/integration ./tests/performance
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_coverage.ps1 coverage.out
+
+test-feature-003-coverage: coverage ## Feature 003 coverage gate (delegates to the project-wide coverage target)
 
 FEATURE_001_UNIT_DIRS := ./internal/auth ./internal/profile ./internal/rbac ./internal/middleware
 FEATURE_001_CONTRACT_DIRS := ./tests/contract
@@ -53,7 +63,12 @@ test-feature-001-unit: ## Run feature 001 unit tests (auth/profile/rbac/middlewa
 		echo "ℹ️  No feature 001 unit test packages found"; \
 	fi
 
-test-feature-001-contract: ## Run feature 001 contract tests (if present)
+# FOCUSED dev-only subsets — kept for reference/fast iteration while debugging a
+# feature. They run ONLY the tests matching the -run filter below, so they are
+# NOT coverage or merge gates. Gates: make test, make test-contract,
+# make test-integration, make coverage.
+
+test-feature-001-contract: ## FOCUSED dev only — feature 001 contract subset; full gate is `make test-contract`
 	@set -e; \
 	found=0; \
 	for dir in $(FEATURE_001_CONTRACT_DIRS); do \
@@ -66,7 +81,7 @@ test-feature-001-contract: ## Run feature 001 contract tests (if present)
 		echo "ℹ️  No feature 001 contract test packages found"; \
 	fi
 
-test-feature-001-integration: ## Run feature 001 integration tests (if present)
+test-feature-001-integration: ## FOCUSED dev only — feature 001 integration subset; full gate is `make test-integration` (needs DATABASE_URL)
 	@set -e; \
 	found=0; \
 	for dir in $(FEATURE_001_INTEGRATION_DIRS); do \

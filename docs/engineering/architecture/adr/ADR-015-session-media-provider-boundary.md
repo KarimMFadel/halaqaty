@@ -45,9 +45,9 @@ LiveKit remains the sole MVP session-media implementation.
   provider registry, resolver, or selection flag while only LiveKit exists.
 - Provider webhook signatures are verified inside the LiveKit adapter before
   payloads are translated into neutral, idempotently processed session events.
-- F-003 never imports LiveKit or `SessionMediaGateway`. It calls a sessions-owned
-  `ReciterAudioControl` application boundary; sessions maps the authoritative
-  reciter entitlement to provider permission changes.
+- F-003 never imports LiveKit, `SessionMediaGateway`, or a media-control
+  boundary. Per ADR-020 it is a voluntary queue and displayed-turn tracker;
+  F-005 owns open participant audio and explicit moderation.
 - `mobile/lib/features/sessions/application` owns a provider-neutral
   `MediaSession` contract and safe connection/lifecycle states.
   `mobile/lib/features/sessions/data/livekit_media_session.dart` is the only

@@ -29,7 +29,13 @@ abstract final class SessionJsonKeys {
   static const type = 'type';
   static const payload = 'payload';
   static const timestamp = 'timestamp';
+  static const eventId = 'event_id';
   static const sessionId = 'session_id';
+  static const roundId = 'round_id';
+  static const version = 'version';
+  static const queueEntryId = 'queue_entry_id';
+  static const entries = 'entries';
+  static const policy = 'policy';
   static const participantId = 'participant_id';
   static const participantName = 'participant_name';
   static const locked = 'locked';
@@ -44,6 +50,17 @@ abstract final class SessionRealtimeTypes {
   static const handLowered = 'session.hand_lowered';
   static const lockChanged = 'session.lock_changed';
   static const ended = 'session.ended';
+  static const queueState = 'queue.state';
+  static const queueEntryUpdated = 'queue.entry_updated';
+  static const queueYourTurn = 'queue.your_turn';
+  static const queueNextSoon = 'queue.next_soon';
+  static const queueReordered = 'queue.reordered';
+  static const queueRoundStarted = 'queue.round_started';
+  static const queueGradeSubmitted = 'queue.grade_submitted';
+  static const queueAdvanced = 'queue.advanced';
+  static const queueRoundFinalized = 'queue.round_finalized';
+  static const queuePolicyChanged = 'queue.policy_changed';
+  static const queueOptOutRequested = 'queue.opt_out_requested';
   static const ping = 'ping';
 }
 

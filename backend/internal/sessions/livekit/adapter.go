@@ -20,6 +20,11 @@ import (
 // credential the backend issues (F-005 spec, constitution §IV).
 const maxCredentialLifetime = time.Hour
 
+// audioPublishSources is the single definition of audio-only publishing
+// (constitution §V): microphone only, so video is never publishable. It backs
+// connection tokens.
+var audioPublishSources = []lkmodel.TrackSource{lkmodel.TrackSource_MICROPHONE}
+
 // roomIdleTimeoutSeconds implements the frozen MVP rule "30-minute idle room
 // timeout after last participant leaves" (constitution, key business rules).
 const roomIdleTimeoutSeconds uint32 = 30 * 60
@@ -94,7 +99,7 @@ func (a *Adapter) IssueConnection(_ context.Context, roomRef sessions.MediaRoomR
 	grant.SetCanSubscribe(true)
 	if grants.CanPublishAudio {
 		grant.SetCanPublish(true)
-		grant.SetCanPublishSources([]lkmodel.TrackSource{lkmodel.TrackSource_MICROPHONE})
+		grant.SetCanPublishSources(audioPublishSources)
 	} else {
 		grant.SetCanPublish(false)
 	}

@@ -49,10 +49,11 @@ type CircleRoleReader interface {
 // lifecycle compare-and-set, capacity, and least-privilege media connection
 // issuance (US1). LiveKit specifics stay behind SessionMediaGateway (ADR-015).
 type Service struct {
-	store   Store
-	gateway SessionMediaGateway
-	roles   CircleRoleReader
-	roomKey []byte
+	store         Store
+	gateway       SessionMediaGateway
+	roles         CircleRoleReader
+	roomKey       []byte
+	queueObserver QueueObserver
 }
 
 type moderationStore interface {
@@ -73,6 +74,14 @@ type connectionAdmissionStore interface {
 // gateway, and circle-role ports.
 func NewService(store Store, gateway SessionMediaGateway, roles CircleRoleReader) *Service {
 	return &Service{store: store, gateway: gateway, roles: roles}
+}
+
+// SetQueueObserver registers an optional post-commit F-003 lifecycle observer.
+// Observer failure never changes the authoritative F-005 result.
+func (s *Service) SetQueueObserver(observer QueueObserver) {
+	if s != nil {
+		s.queueObserver = observer
+	}
 }
 
 // NewServiceWithRoomKey constructs a service with the backend-only HMAC key
@@ -180,29 +189,39 @@ func (s *Service) StartSession(ctx context.Context, actorID, sessionID string) (
 	if err != nil {
 		return Session{}, MediaConnection{}, fmt.Errorf("start session: %w", err)
 	}
+	if s.queueObserver != nil {
+		_ = s.queueObserver.OnSessionStarted(ctx, sessionID)
+	}
 	return started, conn, nil
 }
 
 // JoinSession admits any active circle member to an active session and issues
-// their least-privilege connection: students never receive audio publishing
-// outside an F-003 reciter turn (constitution §IV.4).
+// their least-privilege connection: authorized participants may publish audio,
+// while F-003 queue state remains independent of media permission (ADR-020).
 func (s *Service) JoinSession(ctx context.Context, actorID, sessionID string) (Session, MediaConnection, error) {
 	sess, err := s.store.GetSession(ctx, sessionID)
 	if err != nil {
 		return Session{}, MediaConnection{}, err
 	}
-	role, err := s.authorize(ctx, sess.CircleID, actorID, false)
+	_, err = s.authorize(ctx, sess.CircleID, actorID, false)
 	if err != nil {
 		return Session{}, MediaConnection{}, err
 	}
 	if admission, ok := s.store.(connectionAdmissionStore); ok {
-		return admission.JoinSessionWithConnection(ctx, sessionID, actorID, MediaGrants{CanPublishAudio: moderatorRole(role)}, func(issueCtx context.Context, roomRef MediaRoomRef, grants MediaGrants) (MediaConnection, error) {
+		joined, conn, err := admission.JoinSessionWithConnection(ctx, sessionID, actorID, MediaGrants{CanPublishAudio: true}, func(issueCtx context.Context, roomRef MediaRoomRef, grants MediaGrants) (MediaConnection, error) {
 			conn, err := s.gateway.IssueConnection(issueCtx, roomRef, actorID, grants)
 			if err != nil {
 				return MediaConnection{}, fmt.Errorf("%w: %v", ErrMediaUnavailable, err)
 			}
 			return conn, nil
 		})
+		if err != nil {
+			return Session{}, MediaConnection{}, err
+		}
+		if s.queueObserver != nil {
+			_ = s.queueObserver.OnParticipantJoined(ctx, sessionID, actorID)
+		}
+		return joined, conn, nil
 	}
 	joined, err := s.store.JoinSession(ctx, sessionID, actorID)
 	if errors.Is(err, ErrSessionLocked) {
@@ -219,7 +238,7 @@ func (s *Service) JoinSession(ctx context.Context, actorID, sessionID string) (S
 	if err != nil {
 		return Session{}, MediaConnection{}, err
 	}
-	conn, err := s.gateway.IssueConnection(ctx, joined.MediaRoomRef, actorID, MediaGrants{CanPublishAudio: moderatorRole(role)})
+	conn, err := s.gateway.IssueConnection(ctx, joined.MediaRoomRef, actorID, MediaGrants{CanPublishAudio: true})
 	if err != nil {
 		if leaver, ok := s.store.(interface {
 			LeaveSession(context.Context, string, string) (Session, error)
@@ -227,6 +246,9 @@ func (s *Service) JoinSession(ctx context.Context, actorID, sessionID string) (S
 			_, _ = leaver.LeaveSession(ctx, sessionID, actorID)
 		}
 		return Session{}, MediaConnection{}, fmt.Errorf("join session: issue connection: %w: %v", ErrMediaUnavailable, err)
+	}
+	if s.queueObserver != nil {
+		_ = s.queueObserver.OnParticipantJoined(ctx, sessionID, actorID)
 	}
 	return joined, conn, nil
 }
@@ -277,6 +299,12 @@ func (s *Service) EndSession(ctx context.Context, actorID, sessionID string, rea
 		// The ended transition is authoritative. Cleanup is idempotently retried
 		// by the reconciler, so a provider close failure must not undo success.
 		_ = s.gateway.CloseRoom(ctx, sess.MediaRoomRef)
+	}
+	if s.queueObserver != nil {
+		// Best-effort notification to the queue observer; the bounded observer
+		// enforces the convergence timeout and swallows errors so that session
+		// end cannot be undone by a slow queue finalization.
+		_ = s.queueObserver.OnSessionEnded(ctx, sessionID)
 	}
 	return ended, nil
 }

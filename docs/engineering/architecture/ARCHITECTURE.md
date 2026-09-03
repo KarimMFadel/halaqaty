@@ -116,7 +116,8 @@ sequenceDiagram
 
 ### 2.5 Real-Time Data Flow — End-to-End Example
 
-How a teacher starting a new queue round propagates from REST call to every connected client:
+How a teacher prepares a queue round, then automatic activation propagates when
+the F-005 session becomes live:
 
 ```mermaid
 sequenceDiagram
@@ -128,16 +129,17 @@ sequenceDiagram
         participant O as Other Students
 
         rect rgb(230,245,255)
-            Note over T,O: Teacher starts a new recitation round
+            Note over T,O: Teacher prepares a new recitation round
             T->>+API: POST /sessions/{id}/queue/rounds\n{ surah_id:2, from_ayah:1, to_ayah:10 }
-            API->>DB: INSERT recitation_queue (round 1, surah_id=2)
-            API->>DB: INSERT recitation_queue_entries for all members
-            DB-->>API: queue_id, entries[]
+            API->>DB: INSERT prepared recitation_queue (round 1, surah_id=2)
+            DB-->>API: prepared QueueState
+            API-->>-T: 201 QueueState { lifecycle: prepared }
+            Note over API,DB: F-005 session becomes live; no active round exists
+            API->>DB: Activate lowest prepared round and materialize entries per policy
             API->>Hub: emit queue.round_started to session room
             Hub-->>T: queue.round_started { round_number:1, surah_id:2, ... }
             Hub-->>O: queue.round_started { round_number:1, surah_id:2, ... }
             Hub-->>S: queue.round_started { round_number:1, surah_id:2, ... }
-            API-->>-T: 201 QueueState { entries: [...] }
         end
 
         rect rgb(230,255,230)
@@ -179,7 +181,11 @@ sequenceDiagram
 | `queue.next_soon` | Targeted: notifies the student who is next (position 2) |
 | `queue.reordered` | Teacher manually reordered the queue |
 | `queue.round_started` | New recitation round started |
-| `queue.grade_submitted` | Grade recorded for a completed turn (teacher/supervisor only) |
+| `queue.advanced` | Manager selected the next waiting entry without starting it |
+| `queue.round_finalized` | Prior round became immutable after reset/session end |
+| `queue.policy_changed` | Closed session queue policy changed prospectively |
+| `queue.opt_out_requested` | Targeted to managers for a pending approval |
+| `queue.grade_submitted` | Grade recorded for a completed turn; visibility follows session queue policy (default: managers and graded student) |
 | `session.started` | Session went live; contains session metadata only (credentials come from authorized start/join REST responses) |
 | `session.ended` | Session ended by teacher or supervisor, or automatically by duration/idle policy |
 | `session.participant_joined` | A participant joined the session |
@@ -249,8 +255,9 @@ compile-time adapters:
 - `backend/internal/sessions` owns `SessionMediaGateway` and neutral session/media
   types; `backend/internal/sessions/livekit` owns all LiveKit SDK, credential, room,
   track, and webhook details.
-- F-003 calls a sessions-owned `ReciterAudioControl`; queue code never imports or
-  calls the provider gateway directly.
+- F-003 imports no media-control or provider type; it records voluntary queue
+  order and displayed turn state only. F-005 owns participant audio and explicit
+  moderation.
 - `mobile/lib/features/sessions/application` owns `MediaSession`; only
   `mobile/lib/features/sessions/data/livekit_media_session.dart` imports
   `livekit_client`.
@@ -297,28 +304,26 @@ sequenceDiagram
     Note over T,S: Step 2 — Student joins
     S->>API: POST /sessions/{id}/join
     API->>DB: verify circle membership
-    API->>Media: IssueConnection(participant, listen-only)
-    Media->>LK: GenerateToken(uid, CanPublish=false, CanPublishVideo=false)
+    API->>Media: IssueConnection(participant, audio publish enabled)
+    Media->>LK: GenerateToken(uid, CanPublish=true, CanPublishVideo=false)
     LK-->>Media: identity-scoped credential
     Media-->>API: MediaConnection
     API-->>S: { session, media_connection }
     S->>LK: LiveKitMediaSession.connect(endpoint, credential)
-    LK-->>S: Connected ✓ (subscribes to audio streams)
+    LK-->>S: Connected ✓ (publishes/subscribes to audio streams)
 
-    Note over T,S: Step 3 — Student's turn (teacher starts round)
-    T->>API: POST /sessions/{id}/queue/rounds\n{ surah_id, from_ayah, to_ayah }
+    Note over T,S: Step 3 — Student's turn (manager advances then starts)
+    T->>API: POST /sessions/{id}/queue/rounds\n{ round_type, surah_id, from_ayah, to_ayah, grading_required }
     API->>DB: INSERT recitation_queue + entries
+    T->>API: POST /sessions/{id}/queue/advance
+    T->>API: PUT /sessions/{id}/queue/entries/{id}/status\n{ status: "reciting", expected_entry_version }
     API--)S: WS queue.your_turn { queue_entry_id, surah_id, from_ayah, to_ayah }
-    API->>Media: SetAudioPublishing(studentUID, true)
-    Media->>LK: UpdateParticipantPermissions(CanPublish=true)
     S->>LK: publishAudioTrack() [48kbps Opus]
     LK-->>T: receives student audio stream ✓
 
-    Note over T,S: Step 4 — Turn ends, grade recorded
-    T->>API: POST /sessions/{id}/queue/entries/{id}/grade\n{ grade: "excellent" }
-    API->>Media: SetAudioPublishing(studentUID, false)
-    Media->>LK: UpdateParticipantPermissions(CanPublish=false)
-    API->>DB: UPDATE entry status=completed, grade=excellent
+    Note over T,S: Step 4 — Turn ends and completion is recorded atomically
+    T->>API: PUT /sessions/{id}/queue/entries/{id}/status\n{ status: "completed", grade: "excellent", expected_entry_version }
+    API->>DB: UPDATE entry + INSERT one memorization_progress
     API--)S: WS queue.entry_updated { new_status: completed }
     API--)T: WS queue.grade_submitted { grade, student_id }
 ```
@@ -359,21 +364,16 @@ sequenceDiagram
     Note over App,LK: Student token — issued on session join
     App->>API: POST /sessions/{id}/join
     API->>DB: verify role = student/supervisor in circle_members
-    API->>Adapter: IssueConnection(listen-only permissions)
-    Adapter->>LK: GenerateToken(uid, RoomAdmin=false,\nCanPublish=false, CanPublishVideo=false)
+    API->>Adapter: IssueConnection(student audio permissions)
+    Adapter->>LK: GenerateToken(uid, RoomAdmin=false,\nCanPublish=true, CanPublishVideo=false)
     LK-->>Adapter: identity-specific token
     Adapter-->>API: MediaConnection
     API-->>App: { media_connection }
     App->>Mobile: connect(media_connection)
-    Mobile->>LK: room.connect(endpoint, credential) — listen-only ✓
+    Mobile->>LK: room.connect(endpoint, credential) — audio publish enabled ✓
 
-    Note over App,LK: Turn grant — student publish enabled for one turn only
-    API->>Adapter: SetAudioPublishing(studentUID, true)
-    Adapter->>LK: UpdateParticipantPermissions(studentUID, CanPublish=true)
-    Note right of LK: Student can now publish audio
-    API->>Adapter: SetAudioPublishing(studentUID, false)
-    Adapter->>LK: UpdateParticipantPermissions(studentUID, CanPublish=false)
-    Note right of LK: Publish revoked immediately after turn
+    Note over App,LK: F-003 queue states communicate voluntary order only;
+    Note over App,LK: explicit F-005 moderator actions handle exceptional cases
 ```
 
 > **Security invariant:** `CanPublishVideo` is **always** `false` in MVP. The token generation function enforces this unconditionally — no code path can produce a video-enabled token until `FEATURE_VIDEO_ENABLED=true` and an ADR approves the change.
@@ -547,7 +547,7 @@ These are the canonical enum values used in PostgreSQL CHECK constraints and Go 
 | `good` | Good | جيد | Minor errors, good tajweed |
 | `acceptable` | Acceptable | مقبول | Notable errors, basic tajweed |
 | `needs_review` | Needs Review | يحتاج مراجعة | Significant errors; review required before advancing |
-| `repeat` | Repeat | إعادة | Must fully repeat; cannot advance |
+| `repeat` | Repeat | إعادة | Teacher indicates that a full repeat is needed; the value does not block manager controls |
 
 Used in: `recitation_queue_entries.grade`, `memorization_progress.grade`
 
@@ -560,10 +560,12 @@ stateDiagram-v2
     direction LR
     [*] --> waiting : Student added to round
 
-    waiting --> reciting : Teacher calls student's turn\n(LiveKit CanPublish → true)
-    reciting --> completed : Grade submitted\n(LiveKit CanPublish → false)
-    reciting --> skipped : Teacher skips student\n(LiveKit CanPublish → false)
-    waiting --> opted_out : Student opts out\n(requires teacher approval)
+    waiting --> reciting : Teacher records student's current turn
+    reciting --> completed : Grade submitted
+    waiting --> skipped : Manager skips student
+    reciting --> skipped : Manager skips student
+    waiting --> opted_out : Student opts out\n(per session approval policy)
+    reciting --> opted_out : Student opts out
 
     completed --> [*]
     skipped --> [*]
@@ -707,7 +709,7 @@ erDiagram
         int to_ayah
         varchar type
         varchar grade
-        text notes
+        varchar notes
         date date
         timestamptz created_at
         timestamptz updated_at
@@ -850,6 +852,12 @@ The F-005 migration creates the circle/creator keys, `scheduled_at` boundary,
 `media_mode`, unique opaque `media_room_ref`, `is_locked`, `end_reason`,
 `participant_count`, and audit timestamps. F-003 and F-006 extend this table
 only through later paired migrations for queue and attendance concerns.
+
+F-003 extends the session with the closed queue-policy values defined by
+[ADR-018](adr/ADR-018-configurable-session-queue-policy.md) using five closed
+policy columns and a monotonic policy version, as detailed in the F-003 table
+section below. It does not alter F-005 lifecycle or make session end depend on
+queue cleanup.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | UUID | PK | |
@@ -897,9 +905,26 @@ from F-005 participant-presence facts and must not alter them.
 | surah_id | INTEGER | FK → quran_surahs.id NOT NULL | Surah number (1–114); name derived via JOIN |
 | from_ayah | INTEGER | NOT NULL | Starting Ayah number (validated ≥ 1) |
 | to_ayah | INTEGER | NOT NULL | Ending Ayah number (validated ≤ quran_surahs.ayah_count) |
-| grading_required | BOOLEAN | NOT NULL | Overrides circle grading_policy for this round |
-| is_active | BOOLEAN | DEFAULT TRUE | Only one active queue per session |
+| grading_required | BOOLEAN | NOT NULL | Required for this round |
+| lifecycle | VARCHAR(16) | CHECK IN ('prepared','active','finalized') | Separate from queue-entry state |
+| selected_entry_id | UUID | FK → recitation_queue_entries.id NULL | Manager selection; does not start recitation |
+| version | BIGINT | NOT NULL DEFAULT 1 CHECK > 0 | Optimistic/realtime version |
+| created_by | UUID | FK → users.id NOT NULL | Audit attribution |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+| activated_at | TIMESTAMPTZ | NULL | |
+| finalized_at | TIMESTAMPTZ | NULL | |
+| UNIQUE | (session_id, round_number) | | Sequential numbering |
+| PARTIAL UNIQUE | (session_id) WHERE lifecycle = 'active' | | One active round |
+
+#### `recitation_queue_preorder`
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| queue_id | UUID | FK → recitation_queue.id NOT NULL | Prepared round |
+| student_id | UUID | FK → users.id NOT NULL | Active student candidate |
+| position | INTEGER | NOT NULL CHECK > 0 | Durable pre-set relative order |
+| added_by | UUID | FK → users.id NOT NULL | Manager attribution |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+| UNIQUE | (queue_id, student_id), (queue_id, position) | | No duplicate candidate/order |
 
 #### `recitation_queue_entries`
 | Column | Type | Constraints | Description |
@@ -910,9 +935,52 @@ from F-005 participant-presence facts and must not alter them.
 | position | INTEGER | NOT NULL | Order in queue (1, 2, 3...) |
 | status | VARCHAR(20) | CHECK IN ('waiting','reciting','completed','skipped','opted_out') | |
 | grade | VARCHAR(30) | CHECK IN ('excellent','good','acceptable','needs_review','repeat') | Nullable until teacher submits grade |
-| teacher_notes | TEXT | | Free-form notes from teacher |
+| teacher_notes | VARCHAR(500) | | Optional teacher note |
+| version | BIGINT | NOT NULL DEFAULT 1 CHECK > 0 | Optimistic mutation version |
 | started_at | TIMESTAMPTZ | | When recitation began |
 | completed_at | TIMESTAMPTZ | | When recitation ended / was graded |
+| resolved_by | UUID | FK → users.id NULL | Manager responsible for terminal transition |
+| created_at, updated_at | TIMESTAMPTZ | NOT NULL | UTC timestamps |
+| UNIQUE | (queue_id, student_id), (queue_id, position) | | One position/student and contiguous order target |
+| PARTIAL UNIQUE | (queue_id) WHERE status = 'reciting' | | One active reciter |
+
+#### `queue_opt_out_requests`
+
+Durable request records use `pending`, `approved`, or `declined`; these are
+request outcomes, not queue-entry states. Each row references one entry and
+stores requester/decider attribution and UTC timestamps. A partial unique index
+allows at most one pending request per entry.
+
+#### `queue_command_receipts`
+
+Optional client idempotency keys are stored by `(session_id, actor_id,
+idempotency_key)` with a closed command name, resulting resource ID/version, and
+timestamp. Receipts never store request bodies, grades, notes, media values, or
+response secrets.
+
+#### `queue_event_outbox`
+
+Each committed queue mutation inserts a redacted-metadata event intent containing
+a stable event ID, session/round/resource IDs, closed event type, round version,
+non-sensitive transition/order facts, retry schedule, and delivery timestamp.
+The worker reconstructs visibility-sensitive fields from PostgreSQL; the outbox
+stores no grades, notes, names, media values, URLs, credentials, or provider
+identifiers.
+
+#### F-003 session queue policy
+
+F-003 adds five CHECK-constrained columns to `sessions`:
+`queue_population_policy`, `queue_finalization_policy`,
+`queue_opt_out_policy`, `queue_grade_visibility`, and
+`queue_grade_correction`, plus positive `queue_policy_version`. Defaults and
+allowed values are defined by ADR-018.
+Policy changes are prospective, do not rewrite history, and are authorized by
+current active teacher/supervisor circle roles. Session creation is audit
+attribution rather than a permanent authorization grant.
+
+F-005 end commits independently. F-003 finalizes the round idempotently after
+end; a queue failure cannot delay or roll back the
+ended session.
 
 #### `messages`
 | Column | Type | Constraints | Description |
@@ -945,17 +1013,17 @@ from F-005 participant-presence facts and must not alter them.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | UUID | PK | |
-| student_id | UUID | FK → users.id NOT NULL ON DELETE CASCADE | |
+| student_id | UUID | FK → users.id NOT NULL | No cascade; progress history survives unless explicitly erased (ADR-019) |
 | circle_id | UUID | FK → circles.id NOT NULL | |
-| session_id | UUID | FK → sessions.id | Source session |
-| queue_entry_id | UUID | FK → recitation_queue_entries.id UNIQUE | Source queue entry; UNIQUE enables idempotent re-grade upsert |
+| session_id | UUID | FK → sessions.id NOT NULL | Source session; always known — only the completion transaction inserts |
+| queue_entry_id | UUID | FK → recitation_queue_entries.id NOT NULL UNIQUE | Source queue entry; NOT NULL UNIQUE enables idempotent re-grade upsert |
 | surah_id | INTEGER | FK → quran_surahs.id NOT NULL | Normalized surah reference (replaces deprecated `surah_name`) |
-| surah_name | VARCHAR(100) | DEPRECATED | Use `surah_id`; retained until v1.1 for in-flight client compat |
+| surah_name | VARCHAR(100) | DEPRECATED | Use `surah_id`; retained until v1.1 for in-flight client compat (F-007-SPEC OQ-032) |
 | from_ayah | INTEGER | NOT NULL | Starting Ayah of the recited range |
 | to_ayah | INTEGER | NOT NULL | Ending Ayah of the recited range |
-| type | VARCHAR(30) | CHECK IN ('new_memorization','revision','old_revision') | |
+| type | VARCHAR(30) | CHECK IN ('new_memorization','revision','old_revision','test') | Completed `test` records remain practice history but do not change Quran-map memorization/revision status |
 | grade | VARCHAR(30) | CHECK IN ('excellent','good','acceptable','needs_review','repeat') NULLABLE | NULL when `grading_required = false` on the round |
-| notes | TEXT | | Teacher notes |
+| notes | VARCHAR(500) | | Teacher notes — same bound as `recitation_queue_entries.teacher_notes` |
 | date | DATE | NOT NULL | Session date |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
 | updated_at | TIMESTAMPTZ | | Set on re-grade |
@@ -1109,14 +1177,18 @@ token remains valid.
 | Method | Path | Status | Description |
 |--------|------|--------|-------------|
 | GET | `/sessions/{id}/queue` | ✅ | Get current queue state |
-| POST | `/sessions/{id}/queue/rounds` | ✅ | Start a new round (Surah, Ayah range) |
-| POST | `/sessions/{id}/queue/entries/{entryId}/grade` | ✅ | Grade a student's recitation (teacher/supervisor only) |
-| POST | `/sessions/{id}/queue/opt-out` | ✅ | Student opts out of current round |
-| POST | `/sessions/{id}/queue/reset` | 🔲 | Reset queue (creates new round) |
-| PUT | `/sessions/{id}/queue/entries/{entryId}/status` | 🔲 | Update student status in queue |
-| PUT | `/sessions/{id}/queue/order` | 🔲 | Reorder queue `{ ordered_entry_ids: [...] }` |
-| POST | `/sessions/{id}/queue/entries` | 🔲 | Add a student to queue (late-joiner) |
-| DELETE | `/sessions/{id}/queue/entries/{entryId}` | 🔲 | Remove student from queue |
+| POST | `/sessions/{id}/queue/rounds` | ✅ | Prepare or activate a round |
+| POST | `/sessions/{id}/queue/reset` | ✅ | Finalize current history and create next round |
+| POST | `/sessions/{id}/queue/advance` | ✅ | Select next waiting entry without starting it |
+| PUT | `/sessions/{id}/queue/entries/{entryId}/status` | ✅ | Start, skip, or atomically complete |
+| PUT | `/sessions/{id}/queue/order` | ✅ | Reorder waiting entries/pre-set candidates |
+| POST | `/sessions/{id}/queue/entries/{entryId}/grade` | ✅ | Audited completed-entry correction |
+| POST | `/sessions/{id}/queue/opt-out` | ✅ | Request or auto-approve student opt-out |
+| POST | `/sessions/{id}/queue/opt-out-requests/{requestId}/decision` | ✅ | Approve/decline pending opt-out |
+| PATCH | `/sessions/{id}/queue/policy` | ✅ | Change closed policy values prospectively |
+
+Late-join append is driven by the committed F-005 participant join fact; F-003
+does not expose separate add/delete entry controls.
 
 ### `/messages`
 | Method | Path | Status | Description |
@@ -1184,7 +1256,7 @@ token remains valid.
 - **Authorization:** Role-based per circle. After JWT validation, Go backend checks `circle_members` table for user's role in the requested circle
 - **Firebase token lifecycle:** Firebase ID tokens expire after 1 hour; the Flutter Firebase SDK refreshes them silently. Firebase owns refresh-token rotation and reuse detection.
 - **Backend session lifecycle:** The backend creates one opaque session per device after a verified Firebase sign-in. Every protected request includes its session ID; session activity extends the 30-day inactivity window. Current-device logout revokes only that session. A future logout-all-devices operation must revoke every session for the authenticated user. Backend sessions do not mint access or refresh tokens.
-- **Media credentials:** Generated exclusively by the Go backend through the LiveKit MVP adapter; never by the Flutter client, persisted client-side, logged, or broadcast. Student publish scope is turn-based and non-admin.
+- **Media credentials:** Generated exclusively by the Go backend through the LiveKit MVP adapter; never by the Flutter client, persisted client-side, logged, or broadcast. Authorized students receive non-admin audio-publish scope; video remains disabled. F-003 does not alter that scope.
 - **Circle role lifecycle:** Roles are stored only in `circle_members`. On creation, the creator may assign existing registered users as one or more teachers and one optional backup supervisor; if no teacher is selected, the creator becomes teacher, otherwise the creator is supervisor. Invite acceptance creates `student`. Any teacher or supervisor may change another member's role among `student`, `supervisor`, and `teacher`, but cannot change their own role or leave the circle without a teacher. See ADR-010.
 
 #### Circle permission matrix
@@ -1237,8 +1309,8 @@ sequenceDiagram
 - Room names are not publicly guessable
 - Each participant needs a JWT from Go backend to join — no anonymous access
 - Teacher's JWT includes `RoomAdmin: true` (can mute, remove)
-- Student's JWT defaults to `CanPublish: false`, `CanPublishVideo: false`, and never includes `RoomAdmin`
-- Backend grants `CanPublish: true` only for the active reciter turn, then revokes after the turn (audio-only in MVP)
+- Student's JWT includes `CanPublish: true`, `CanPublishVideo: false`, and never includes `RoomAdmin`
+- F-003 records voluntary recitation order only; teachers/supervisors retain explicit F-005 mute, mute-all, remove, lock, and end controls
 - Room is deleted from LiveKit server when session ends
 
 ### Rate Limiting

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,7 +15,7 @@ void main() {
   testWidgets(
       'moderator sees lock, mute-all, remove and end controls in RTL with hand state',
       (tester) async {
-    final semantics = await tester.ensureSemantics();
+    final semantics = tester.ensureSemantics();
     final realtime = RecordingRealtimeClient();
     await tester.pumpWidget(_app(ModerationSessionApi(),
         realtime: realtime,
@@ -59,7 +61,7 @@ void main() {
 
   testWidgets('renders moderator controls and hand state in LTR',
       (tester) async {
-    final semantics = await tester.ensureSemantics();
+    final semantics = tester.ensureSemantics();
     final realtime = RecordingRealtimeClient();
     await tester.pumpWidget(_app(ModerationSessionApi(),
         realtime: realtime,
@@ -117,11 +119,13 @@ class NoopMediaSession implements MediaSession {
 class RecordingRealtimeClient implements RealtimeSessionClient {
   int raiseCalls = 0;
   int lowerCalls = 0;
+  final StreamController<RealtimeSessionEvent> _events =
+      StreamController<RealtimeSessionEvent>.broadcast();
 
   @override
   Stream<RealtimeSessionEvent> sessionEvents(String liveSessionId,
           {required String token, required String backendSessionId}) =>
-      const Stream.empty();
+      _events.stream;
 
   @override
   Future<void> raiseHand(String liveSessionId) async {
@@ -134,7 +138,7 @@ class RecordingRealtimeClient implements RealtimeSessionClient {
   }
 
   @override
-  Future<void> dispose() async {}
+  Future<void> dispose() => _events.close();
 }
 
 class ModerationSessionApi extends SessionApiClient {

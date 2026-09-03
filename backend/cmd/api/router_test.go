@@ -1,18 +1,45 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
+	"github.com/KarimMFadel/halaqaty/backend/internal/queue"
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
 )
+
+func TestOutboxParkedAlerterEmitsRedactedErrorLog(t *testing.T) {
+	var output bytes.Buffer
+	alerter := slogOutboxParkedAlerter{
+		logger: slog.New(slog.NewJSONHandler(&output, nil)),
+	}
+	alerter.AlertOutboxParked(context.Background(), queue.OutboxEvent{
+		EventID:      "event-1",
+		SessionID:    "private-session-id",
+		EventType:    "queue.entry_updated",
+		AttemptCount: 5,
+	})
+
+	logLine := output.String()
+	for _, want := range []string{"queue outbox event parked", "event-1", "queue.entry_updated", `"attempt_count":5`} {
+		if !strings.Contains(logLine, want) {
+			t.Fatalf("parked-event log %q does not contain %q", logLine, want)
+		}
+	}
+	if strings.Contains(logLine, "private-session-id") {
+		t.Fatalf("parked-event log leaks session id: %q", logLine)
+	}
+}
 
 func TestRouter_F005ProtectedRoutesRequireAuth(t *testing.T) {
 	router := NewRouter(MiddlewareSet{Auth: middlewareForRouteTest(), SessionHandler: sessions.NewHandler(nil)})
@@ -21,6 +48,59 @@ func TestRouter_F005ProtectedRoutesRequireAuth(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("F-005 route status = %d, want 401 from auth middleware", rec.Code)
 	}
+}
+
+func TestRouter_QueueRoutesRequireAuth(t *testing.T) {
+	router := NewRouter(MiddlewareSet{
+		Auth:         middlewareForRouteTest(),
+		QueueHandler: queue.NewHandler(nil, nil, nil, nil, nil),
+	})
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/sessions/00000000-0000-0000-0000-000000000001/queue", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("queue route status = %d, want 401 from production auth middleware", rec.Code)
+	}
+}
+
+func TestRouter_QueueRoutesUseProductionRateLimits(t *testing.T) {
+	path := "/api/v1/sessions/00000000-0000-0000-0000-000000000001/queue"
+
+	t.Run("per IP applies before authentication", func(t *testing.T) {
+		router := NewRouter(MiddlewareSet{
+			Auth:         middlewareForRouteTest(),
+			QueueHandler: queue.NewHandler(nil, nil, nil, nil, nil),
+			RateLimit:    middleware.NewRateLimitMiddleware(1, 0),
+		})
+		for attempt, want := range []int{http.StatusUnauthorized, http.StatusTooManyRequests} {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.RemoteAddr = "198.51.100.17:4321"
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+			if rec.Code != want {
+				t.Fatalf("attempt %d: got %d, want %d", attempt+1, rec.Code, want)
+			}
+		}
+	})
+
+	t.Run("per user applies after authentication", func(t *testing.T) {
+		router := NewRouter(MiddlewareSet{
+			Auth: middleware.NewAuthMiddleware(
+				authenticatedRouteVerifier{}, auth.NewSessionService(time.Hour), authenticatedRouteSessionRepo{},
+			),
+			QueueHandler: queue.NewHandler(nil, nil, nil, nil, nil),
+			RateLimit:    middleware.NewRateLimitMiddleware(0, 1),
+		})
+		for attempt, want := range []int{http.StatusInternalServerError, http.StatusTooManyRequests} {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.Header.Set("Authorization", "Bearer valid-token")
+			req.Header.Set("X-Halaqaty-Session-ID", "session-1")
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+			if rec.Code != want {
+				t.Fatalf("attempt %d: got %d, want %d", attempt+1, rec.Code, want)
+			}
+		}
+	})
 }
 
 func TestRouter_RegistersVersionedAuthRoutes(t *testing.T) {
@@ -81,8 +161,11 @@ func TestRouter_InviteRefreshRejectsSupervisor(t *testing.T) {
 func TestRouter_MetricsRequiresToken(t *testing.T) {
 	metricStore := new(metrics.AuthMetrics)
 	metricStore.RecordRequest(time.Millisecond)
+	queueMetricStore := new(metrics.QueueMetrics)
+	queueMetricStore.RecordOutboxParked()
 	router := NewRouter(MiddlewareSet{
 		Metrics:      metricStore,
+		QueueMetrics: queueMetricStore,
 		MetricsToken: "metrics-secret",
 	})
 
@@ -99,12 +182,18 @@ func TestRouter_MetricsRequiresToken(t *testing.T) {
 	if authorized.Code != http.StatusOK {
 		t.Fatalf("authorized status: got %d, want %d", authorized.Code, http.StatusOK)
 	}
-	var summary metrics.MetricsSummary
+	var summary struct {
+		metrics.MetricsSummary
+		Queue metrics.QueueMetricsSummary `json:"queue"`
+	}
 	if err := json.NewDecoder(authorized.Body).Decode(&summary); err != nil {
 		t.Fatalf("decode metrics response: %v", err)
 	}
 	if summary.RequestsTotal != 1 {
 		t.Fatalf("request count: got %d, want 1", summary.RequestsTotal)
+	}
+	if summary.Queue.OutboxParkedTotal != 1 {
+		t.Fatalf("parked outbox count: got %d, want 1", summary.Queue.OutboxParkedTotal)
 	}
 }
 

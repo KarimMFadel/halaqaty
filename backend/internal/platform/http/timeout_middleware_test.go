@@ -2,10 +2,13 @@ package http
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 )
@@ -31,4 +34,34 @@ func TestTimeoutMiddleware_ReturnsJSONErrorEnvelope(t *testing.T) {
 	if envelope.Error.Code != httpconst.ErrorCodeRequestTimeout {
 		t.Fatalf("error code: got %q, want %q", envelope.Error.Code, httpconst.ErrorCodeRequestTimeout)
 	}
+}
+
+func TestWebSocketUpgradeThroughResponseRecorder(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(testWriter{t}, nil))
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
+		if err != nil {
+			t.Errorf("upgrade websocket: %v", err)
+			return
+		}
+		defer func() { _ = conn.Close() }()
+	})
+	wrapped := RecoveryMiddleware(logger,
+		RequestIDMiddleware(LoggerMiddleware(logger, handler)),
+	)
+	server := httptest.NewServer(wrapped)
+	defer server.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+server.URL[len("http"):], nil)
+	if err != nil {
+		t.Fatalf("dial websocket through shared middleware: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+}
+
+type testWriter struct{ t *testing.T }
+
+func (w testWriter) Write(p []byte) (int, error) {
+	w.t.Log(string(p))
+	return len(p), nil
 }

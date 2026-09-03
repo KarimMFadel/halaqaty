@@ -43,6 +43,32 @@ void main() {
     expect(media.connections, 0);
   });
 
+  test('retry retains the first attempted session when credentials fail early',
+      () async {
+    var credentialAttempts = 0;
+    final api = FakeSessionApi();
+    final controller = SessionRoomController(
+      api,
+      () async {
+        if (credentialAttempts++ == 0) {
+          throw StateError('temporary credential failure');
+        }
+        return (token: 'token', sessionId: 'session');
+      },
+      FakeMediaSession(),
+      realtime: FakeRealtimeClient(),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.join('live-session-1');
+    expect(controller.state.status, SessionRoomStatus.error);
+    expect(controller.state.recovery, SessionRoomRecovery.retryable);
+
+    await controller.retry();
+
+    expect(controller.state.status, SessionRoomStatus.connected);
+  });
+
   test('connect loads the authoritative participants snapshot', () async {
     final api = FakeSessionApi();
     final controller = SessionRoomController(api,

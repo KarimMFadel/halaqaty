@@ -1,0 +1,628 @@
+openapi: 3.0.3
+info:
+  title: Halaqaty F-003 Recitation Queue Contract
+  version: 1.1.0
+  description: |
+    Additive `/api/v1` queue surface. Canonical source is `docs/contracts/openapi.yaml`;
+    this feature-local contract is the F-003 overlay regenerated 2026-08-23 from the
+    approved spec clarifications (advance/start split, automatic round activation in
+    round-number order, single-entry move, grading-optional completion, no history
+    surface, no FCM). Schema names mirror the canonical file; canonical sync is
+    complete as recorded in `specs/003-recitation-queue-system/plan.md` §Canonical sync.
+  contact:
+    name: Halaqaty
+    url: https://halaqaty.app
+servers:
+  - url: https://api.halaqaty.app/api/v1
+security:
+  - BearerAuth: []
+    SessionId: []
+tags:
+  - name: Queue
+paths:
+  /sessions/{sessionId}/queue:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      operationId: getSessionQueue
+      tags: [Queue]
+      summary: Get the authoritative current queue snapshot
+      description: |
+        Returns the PostgreSQL-authoritative, visibility-filtered snapshot of the
+        session's latest round (a finalized round after reset/session end, read-only).
+        Grade/note fields follow `queue_grade_visibility`; the `preorder` projection is
+        manager-surface only (non-managers receive an empty array). This is the sole
+        F-003 read surface — no history-listing endpoints exist in F-003 (F-007 scope).
+      responses:
+        '200':
+          description: Visibility-filtered queue snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueState'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /sessions/{sessionId}/queue/rounds:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      operationId: createQueueRound
+      tags: [Queue]
+      summary: Prepare a sequential round
+      description: |
+        Prepares a round while the session is scheduled or live (teacher/supervisor
+        only). Several prepared rounds may stack with sequential round numbers.
+        Activation is automatic in round-number order — the first prepared round
+        activates when the session is live and no round is active, and each subsequent
+        prepared round activates when the previous round finalizes. There is no
+        activate-round endpoint, command, or UI. Never-activated prepared rounds become
+        permanently inert at session end.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StartRoundRequest' }
+      responses:
+        '201':
+          description: Round prepared (and activated when the activation invariant fires)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueState' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /sessions/{sessionId}/queue/reset:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      operationId: resetSessionQueue
+      tags: [Queue]
+      summary: Finalize the current round and create the next round
+      description: |
+        Requires the session's active round on a live session. Finalizes it under the
+        session finalization policy (history retained), creates the next sequential
+        round from the request. If the prior round has a reciting entry, the
+        response returns the successor as `prepared` while a durable private audio
+        revoke intent retries; it activates automatically in round-number order
+        only after that revoke succeeds. Otherwise the automatic activation rule
+        activates the next prepared round immediately.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResetQueueRequest' }
+      responses:
+        '201':
+          description: Prior round finalized and successor created; it activates under the normal round-number rule without changing participant audio permission
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueState' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /sessions/{sessionId}/queue/advance:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      operationId: advanceSessionQueue
+      tags: [Queue]
+      summary: Select the next waiting entry without starting it
+      description: |
+        Durably selects the next waiting entry; the separate start transition makes it
+        `reciting` as the displayed current turn without changing audio permission. Advance while another entry is already
+        selected replaces that selection without creating a duplicate; advance with zero
+        waiting entries is rejected cleanly with no state mutation; advance while an
+        entry is `reciting` is rejected until the turn ends.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VersionRequest' }
+      responses:
+        '200':
+          description: Next waiting entry selected
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueState' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /sessions/{sessionId}/queue/order:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    put:
+      operationId: reorderSessionQueue
+      tags: [Queue]
+      summary: Replace the complete pre-set candidate order (pre-activation only)
+      description: |
+        Full-list reorder of pre-set candidates; valid only while the round is
+        `prepared` (before activation). After activation the only order mutation is the
+        single-entry move operation. Manager-surface only.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReorderQueueRequest' }
+      responses:
+        '200':
+          description: Prepared order replaced
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueState' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /sessions/{sessionId}/queue/entries/{entryId}/move:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - $ref: '#/components/parameters/EntryId'
+    post:
+      operationId: moveQueueEntry
+      tags: [Queue]
+      summary: Move one waiting entry to an arbitrary position
+      description: |
+        Repositions exactly one `waiting` entry to an arbitrary slot in the durable
+        order of the active round; intervening entries shift. Permitted while another
+        entry is `reciting`; the `reciting` entry itself and terminal entries are
+        immovable (409). This is the only post-activation order mutation.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MoveEntryRequest' }
+      responses:
+        '200':
+          description: Entry moved and queue snapshot returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueState' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /sessions/{sessionId}/queue/entries/{entryId}/status:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - $ref: '#/components/parameters/EntryId'
+    put:
+      operationId: updateQueueEntryStatus
+      tags: [Queue]
+      summary: Start, skip, or complete an entry using an allowed transition
+      description: |
+        Applies an allowed transition and atomically writes completed-only progress.
+        `reciting` applies only to the round's currently selected waiting entry and is
+        rejected while another entry is displayed as reciting. It records queue state
+        only and never changes student audio permission. For a grading-required round,
+        `completed` must carry the grade (note optional, ≤ 500 chars) in the same atomic
+        action; for a grading-optional round, `completed` carries neither grade nor note
+        — both may be added or changed afterwards only through the audited correction
+        path (`POST .../grade`).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EntryStatusRequest' }
+      responses:
+        '200':
+          description: Entry transitioned and queue snapshot returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueState' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /sessions/{sessionId}/queue/entries/{entryId}/grade:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - $ref: '#/components/parameters/EntryId'
+    post:
+      operationId: gradeQueueEntry
+      tags: [Queue]
+      summary: Correct the grade or note of a completed entry when policy permits
+      description: |
+        The one audited correction flow (FR-013): replaces the grade and/or clears/sets
+        the note (optional note may be cleared), updates the existing completed entry
+        and its single progress record atomically, emits a redacted audit event, and
+        never creates another progress record. Boundaries follow
+        `queue_grade_correction` (`audited_any_time` default,
+        `before_round_finalization`, `immutable`). Repeated identical corrections
+        converge idempotently to one record state.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GradeRequest' }
+      responses:
+        '200':
+          description: Existing entry and its single progress record updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueEntry' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /sessions/{sessionId}/queue/opt-out:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      operationId: optOutOfQueue
+      tags: [Queue]
+      summary: Request or automatically receive opt-out under session policy
+      description: |
+        Student-only. Under `approval_required`, creates one idempotent pending request
+        (managers decide it); under `auto_approve`, transitions the entry directly to
+        `opted_out` without a pending queue-entry state. Creates no penalty and no
+        progress/practice record.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Existing idempotent request/outcome
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OptOutResult' }
+        '201':
+          description: Request/outcome created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OptOutResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /sessions/{sessionId}/queue/opt-out-requests/{requestId}/decision:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      operationId: decideQueueOptOutRequest
+      tags: [Queue]
+      summary: Approve or decline a pending student opt-out request
+      description: |
+        Any current teacher or supervisor decides one pending request. Approve
+        transitions the entry to `opted_out`; decline
+        terminally closes and durably logs the request while the entry remains
+        `waiting`. Requests pending when the round finalizes are non-actionable (409).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OptOutDecisionRequest' }
+      responses:
+        '200':
+          description: Request decided and queue outcome returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OptOutResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /sessions/{sessionId}/queue/policy:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    patch:
+      operationId: updateSessionQueuePolicy
+      tags: [Queue]
+      summary: Change closed queue policy values prospectively
+      description: |
+        Teacher/supervisor only, while the session is scheduled or active; every change
+        is audited. Workflow-policy changes apply to subsequent actions only;
+        grade/note visibility changes apply immediately and prospectively to new
+        snapshots and events — delivered history is never rewritten, and clients
+        re-fetch the current queue state on the policy-change event.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QueuePolicyPatch' }
+      responses:
+        '200':
+          description: Current policy
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueuePolicy' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase JWT
+    SessionId:
+      type: apiKey
+      in: header
+      name: X-Halaqaty-Session-ID
+  parameters:
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    EntryId:
+      name: entryId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Optional opaque key (1-128 characters); reuse with another command is a conflict.
+      schema: { type: string, minLength: 1, maxLength: 128 }
+  responses:
+    BadRequest: { description: Malformed request, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    Unauthorized: { description: Missing or invalid current credentials, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    Forbidden: { description: Current membership or role is insufficient, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    NotFound: { description: 'Session, round, entry, or request not found', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    Conflict: { description: 'Stale version, invalid state transition, no waiting entry, entry reciting/terminal, finalized/inert round, duplicate command conflict, or invariant conflict', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    ValidationError: { description: 'Invalid Quran range, enum, order, position, grade, or note', content: { application/json: { schema: { $ref: '#/components/schemas/ValidationError' } } } }
+    RateLimited: { description: REST rate limit exceeded, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+  schemas:
+    StartRoundRequest:
+      type: object
+      additionalProperties: false
+      required: [round_type, surah_id, from_ayah, to_ayah, grading_required]
+      properties:
+        round_type: { type: string, enum: [new_memorization, revision, old_revision, test] }
+        surah_id: { type: integer, minimum: 1, maximum: 114 }
+        from_ayah: { type: integer, minimum: 1 }
+        to_ayah: { type: integer, minimum: 1 }
+        grading_required: { type: boolean }
+        student_order:
+          type: array
+          uniqueItems: true
+          maxItems: 50
+          items: { type: string, format: uuid }
+          description: Optional durable pre-set order; all IDs must be active student members.
+    ResetQueueRequest:
+      type: object
+      additionalProperties: false
+      required: [round_type, surah_id, from_ayah, to_ayah, grading_required, expected_version]
+      properties:
+        round_type: { type: string, enum: [new_memorization, revision, old_revision, test] }
+        surah_id: { type: integer, minimum: 1, maximum: 114 }
+        from_ayah: { type: integer, minimum: 1 }
+        to_ayah: { type: integer, minimum: 1 }
+        grading_required: { type: boolean }
+        student_order:
+          type: array
+          uniqueItems: true
+          maxItems: 50
+          items: { type: string, format: uuid }
+        expected_version: { type: integer, format: int64, minimum: 1 }
+    VersionRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_version]
+      properties:
+        expected_version: { type: integer, format: int64, minimum: 1 }
+    ReorderQueueRequest:
+      type: object
+      additionalProperties: false
+      required: [ordered_ids, expected_version]
+      properties:
+        ordered_ids:
+          type: array
+          uniqueItems: true
+          maxItems: 50
+          items: { type: string, format: uuid }
+          description: Complete new pre-set candidate order; must contain exactly the current candidates.
+        expected_version: { type: integer, format: int64, minimum: 1 }
+    MoveEntryRequest:
+      type: object
+      additionalProperties: false
+      required: [new_position, expected_version]
+      properties:
+        new_position: { type: integer, minimum: 1, description: Target slot in the round's durable order (1..entry count). }
+        expected_version: { type: integer, format: int64, minimum: 1, description: Expected current round version. }
+    EntryStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status, expected_entry_version]
+      properties:
+        status: { type: string, enum: [reciting, skipped, completed] }
+        expected_entry_version: { type: integer, format: int64, minimum: 1 }
+        grade: { $ref: '#/components/schemas/Grade' }
+        notes: { type: string, maxLength: 500, nullable: true }
+      description: |
+        Grade is required with `completed` when the round requires grading, and invalid
+        otherwise (grading-optional completion carries no grade and no note; add later
+        via the correction path). `reciting` applies only to the selected entry and
+        records the displayed turn without changing media permission.
+        Grade/notes are invalid for `reciting` or `skipped`.
+    GradeRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_entry_version]
+      properties:
+        grade: { $ref: '#/components/schemas/Grade' }
+        notes: { type: string, maxLength: 500, nullable: true, description: Optional note; explicit null clears an existing note. }
+        expected_entry_version: { type: integer, format: int64, minimum: 1 }
+      minProperties: 2
+    OptOutDecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [decision, expected_entry_version]
+      properties:
+        decision: { type: string, enum: [approved, declined] }
+        expected_entry_version: { type: integer, format: int64, minimum: 1 }
+    QueuePolicyPatch:
+      type: object
+      additionalProperties: false
+      required: [expected_version]
+      properties:
+        population: { type: string, enum: [present_at_activation, all_active_students] }
+        unfinished_finalization: { type: string, enum: [mark_unfinished_skipped, preserve_last_state] }
+        opt_out: { type: string, enum: [approval_required, auto_approve] }
+        grade_visibility: { type: string, enum: [managers_and_student, managers_only, all_participants] }
+        grade_correction: { type: string, enum: [audited_any_time, before_round_finalization, immutable] }
+        expected_version: { type: integer, format: int64, minimum: 1 }
+      minProperties: 2
+    QueuePolicy:
+      type: object
+      required: [population, unfinished_finalization, opt_out, grade_visibility, grade_correction, version]
+      properties:
+        population: { type: string, enum: [present_at_activation, all_active_students] }
+        unfinished_finalization: { type: string, enum: [mark_unfinished_skipped, preserve_last_state] }
+        opt_out: { type: string, enum: [approval_required, auto_approve] }
+        grade_visibility: { type: string, enum: [managers_and_student, managers_only, all_participants] }
+        grade_correction: { type: string, enum: [audited_any_time, before_round_finalization, immutable] }
+        version: { type: integer, format: int64, minimum: 1 }
+    Grade:
+      type: string
+      enum: [excellent, good, acceptable, needs_review, repeat]
+      nullable: true
+    QueueEntry:
+      type: object
+      required: [id, student_id, student_name, position, status, version]
+      properties:
+        id: { type: string, format: uuid }
+        student_id: { type: string, format: uuid }
+        student_name: { type: string }
+        position: { type: integer, minimum: 1 }
+        status: { type: string, enum: [waiting, reciting, completed, skipped, opted_out] }
+        grade: { $ref: '#/components/schemas/Grade' }
+        grade_notes: { type: string, maxLength: 500, nullable: true }
+        version: { type: integer, format: int64, minimum: 1 }
+    QueuePreorderItem:
+      type: object
+      required: [student_id, student_name, position]
+      properties:
+        student_id: { type: string, format: uuid }
+        student_name: { type: string }
+        position: { type: integer, minimum: 1 }
+    QueueState:
+      type: object
+      required: [session_id, round_id, round_number, round_type, lifecycle, surah_id, from_ayah, to_ayah, grading_required, version, policy, preorder, entries]
+      properties:
+        session_id: { type: string, format: uuid }
+        round_id: { type: string, format: uuid }
+        round_number: { type: integer, minimum: 1 }
+        round_type: { type: string, enum: [new_memorization, revision, old_revision, test] }
+        lifecycle: { type: string, enum: [prepared, active, finalized] }
+        surah_id: { type: integer, minimum: 1, maximum: 114 }
+        from_ayah: { type: integer, minimum: 1 }
+        to_ayah: { type: integer, minimum: 1 }
+        grading_required: { type: boolean }
+        selected_entry_id: { type: string, format: uuid, nullable: true }
+        version: { type: integer, format: int64, minimum: 1 }
+        policy: { $ref: '#/components/schemas/QueuePolicy' }
+        preorder:
+          type: array
+          maxItems: 50
+          description: Prepared-order projection; manager-surface only — non-managers receive an empty array.
+          items: { $ref: '#/components/schemas/QueuePreorderItem' }
+        entries:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/QueueEntry' }
+    OptOutRequest:
+      type: object
+      required: [id, queue_entry_id, status, requested_at]
+      properties:
+        id: { type: string, format: uuid }
+        queue_entry_id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, approved, declined] }
+        requested_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time, nullable: true }
+    OptOutResult:
+      type: object
+      required: [request, entry]
+      properties:
+        request: { $ref: '#/components/schemas/OptOutRequest' }
+        entry: { $ref: '#/components/schemas/QueueEntry' }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+    ValidationError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            fields:
+              type: object
+              additionalProperties: { type: string }

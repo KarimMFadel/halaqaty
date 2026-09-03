@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/logging"
 )
 
 const (
@@ -791,4 +793,12 @@ func TestArchiveCircle_NonTeacherIsForbidden(t *testing.T) {
 
 func strPtr(value string) *string {
 	return &value
+}
+
+func TestNoopAuditLogger_Log_DoesNotPanic(t *testing.T) {
+	// The noop logger is selected by NewService when no audit logger is
+	// supplied. This guards against a future change that accidentally adds
+	// side effects (or a panic) to the discard implementation.
+	var audit noopAuditLogger
+	audit.Log(context.Background(), logging.CircleCreateEvent(unitCreatorID, unitCircleID, 1, false))
 }

@@ -59,7 +59,7 @@ Quran recitation demands pristine, unprocessed audio. Every LiveKit room configu
 - Integration tests are required for every API endpoint and every WebSocket event handler.
 - No PR is merged with any failing test.
 - Every database migration must be tested against a fresh schema before merging.
-- Go test coverage target: ≥80% for `backend/internal/` packages.
+- Go test coverage target: ≥80% aggregate for `backend/internal/` packages, measured from the combined unit + contract + integration profile (`make coverage` in `backend/`). A bare unit-only profile undercounts because contract/integration tests are behind build tags.
 
 ### VII. MVP Scope Discipline (YAGNI)
 - Scale target: **50 concurrent users, ≤10 simultaneous live sessions** in the first 6 months.
@@ -126,6 +126,7 @@ Quran recitation demands pristine, unprocessed audio. Every LiveKit room configu
 |---|---|
 | All unit tests pass | `go test ./...` / `flutter test` |
 | All integration tests pass | `go test -tags=integration ./...` |
+| Go coverage floor | `make coverage` (from `backend/`) | ≥80% aggregate over `backend/internal/`, combined profile |
 | DB migration tested on fresh schema | CI step with `golang-migrate` |
 | No linter violations | `golangci-lint` (Go) / `flutter analyze` (Dart) |
 | Formatter clean | `gofmt` / `dart format` |

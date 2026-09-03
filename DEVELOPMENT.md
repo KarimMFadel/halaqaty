@@ -274,6 +274,7 @@ All of these must be **green** before opening a PR:
 | Go unit tests | `go test ./...` | 100% pass |
 | Flutter tests | `flutter test` | 100% pass |
 | Go integration tests | `go test -tags=integration ./...` | 100% pass |
+| Go coverage floor | `make coverage` (from `backend/`) | ≥80% aggregate over `backend/internal/` |
 | DB migration (fresh schema) | `make migrate-fresh` | No errors |
 | Go linter | `golangci-lint run` | Zero violations |
 | Dart analyzer | `flutter analyze` | Zero issues |

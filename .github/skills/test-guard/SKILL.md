@@ -176,7 +176,7 @@ If Flutter, a required target device, or the integration environment is unavaila
 
 ## What this skill does NOT do
 
-- Replace test execution. Use `make test` (unit) or `make test-integration` (integration with `DATABASE_URL`). For Flutter changes, satisfy the full pre-commit execution gate above.
+- Replace test execution. Use `make coverage` (combined unit+contract+integration profile that enforces ≥80% aggregate over `backend/internal/`). For focused development only, use `make test` (unit) or `make test-integration` (integration with `DATABASE_URL`); never quote a unit-only profile as coverage evidence, because contract/integration suites sit behind build tags. For Flutter changes, satisfy the full pre-commit execution gate above.
 - Enforce code style — that is `make lint` and `dart format`.
 - Decide *what* to test — only *how* to test it.
 - Flag pre-existing violations in files you are not touching, unless asked to audit.

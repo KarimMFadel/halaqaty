@@ -141,6 +141,64 @@ void main() {
     expect(find.text('acceptable'), findsOneWidget);
     expect(find.text('not_assessed'), findsNothing);
   });
+
+  testWidgets('end-session control stays available when the round finalizes',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    final fixture = await _pumpManagerRoom(tester);
+    addTearDown(fixture.queue.dispose);
+    expect(find.bySemanticsLabel('End session'), findsOneWidget);
+
+    fixture.realtime.emit(QueueStateEvent(
+      sessionId: _sessionId,
+      eventId: 'finalized-state',
+      queue: QueueState.fromJson({
+        'session_id': _sessionId,
+        'round_id': 'round-1',
+        'round_number': 1,
+        'round_type': 'revision',
+        'lifecycle': 'finalized',
+        'surah_id': 2,
+        'from_ayah': 1,
+        'to_ayah': 5,
+        'grading_required': false,
+        'selected_entry_id': null,
+        'version': 2,
+        'policy': const {
+          'population': 'present_at_activation',
+          'unfinished_finalization': 'mark_unfinished_skipped',
+          'opt_out': 'approval_required',
+          'grade_visibility': 'managers_and_student',
+          'grade_correction': 'audited_any_time',
+          'version': 1,
+        },
+        'preorder': const [],
+        'entries': const [
+          {
+            'id': 'reciting-entry',
+            'student_id': 'student-1',
+            'student_name': 'Reciting student',
+            'position': 1,
+            'status': 'completed',
+            'grade': 'good',
+            'version': 2,
+          },
+        ],
+      }),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    // The terminal queue state is rendered read-only...
+    expect(find.text('Round finalized; grading is read-only'), findsOneWidget);
+    // ...and the manager can still end the session.
+    final endSession = find.descendant(
+      of: find.bySemanticsLabel('End session'),
+      matching: find.byType(FilledButton),
+    );
+    expect(tester.widget<FilledButton>(endSession).onPressed, isNotNull);
+    semantics.dispose();
+  });
 }
 
 Finder _editableWithin(String label) => find.descendant(
@@ -192,14 +250,15 @@ Future<_ManagerRoomFixture> _pumpManagerRoom(
   );
   await room.join(_sessionId);
   await tester.pump();
-  return _ManagerRoomFixture(room, queue);
+  return _ManagerRoomFixture(room, queue, realtime);
 }
 
 class _ManagerRoomFixture {
-  const _ManagerRoomFixture(this.room, this.queue);
+  const _ManagerRoomFixture(this.room, this.queue, this.realtime);
 
   final SessionRoomController room;
   final QueueController queue;
+  final _EmptyRealtimeClient realtime;
 }
 
 class _DialogQueueApi extends QueueApiClient {
@@ -310,6 +369,8 @@ class _NoopMediaSession implements MediaSession {
 class _EmptyRealtimeClient implements RealtimeSessionClient {
   final StreamController<RealtimeSessionEvent> _events =
       StreamController<RealtimeSessionEvent>.broadcast();
+
+  void emit(RealtimeSessionEvent event) => _events.add(event);
 
   @override
   Future<void> dispose() => _events.close();

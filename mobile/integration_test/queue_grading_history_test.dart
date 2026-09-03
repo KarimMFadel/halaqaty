@@ -165,6 +165,34 @@ void main() {
     expect(reset.roundId, isNot(state.roundId));
     expect(reset.entries, isNotEmpty);
 
+    // Forced queue failure: a deliberately stale expectedVersion must be
+    // rejected with the contract's 409 version conflict, and the session end
+    // below must still succeed. reset.version - 1 (never 0 — versions below 1
+    // are rejected as 422 validation) is always stale because a reset round
+    // is born at version 1 and bumps to >= 2 on activation.
+    Object? forcedQueueFailure;
+    try {
+      await queue.advance(
+        token: teacher.token,
+        sessionId: teacher.sessionId,
+        liveSessionId: session.id,
+        expectedVersion: reset.version - 1,
+      );
+    } on DioException catch (error) {
+      forcedQueueFailure = error;
+    }
+    expect(
+      forcedQueueFailure,
+      isA<DioException>(),
+      reason: 'a stale expectedVersion must be rejected by the queue',
+    );
+    expect(
+      (forcedQueueFailure as DioException).response?.statusCode,
+      409,
+      reason: 'docs/contracts/openapi.yaml maps a stale expected_version to '
+          '409 Conflict',
+    );
+
     final ended = await sessions.end(
       token: teacher.token,
       sessionId: teacher.sessionId,

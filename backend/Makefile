@@ -10,7 +10,7 @@
 
 .DEFAULT_GOAL := help
 
-.PHONY: help test test-integration \
+.PHONY: help test test-integration test-feature-003-coverage \
         test-feature-001-auth-roles-profile test-feature-001-unit test-feature-001-contract test-feature-001-integration \
         lint build \
         migrate-up migrate-down migrate-fresh migrate-status migrate-create
@@ -31,6 +31,10 @@ test: ## Run unit tests (no database required)
 test-integration: ## Run integration tests (requires DATABASE_URL and a running PostgreSQL)
 	@test -n "$$DATABASE_URL" || { echo "❌  DATABASE_URL is not set"; exit 1; }
 	go test -tags=integration ./...
+
+test-feature-003-coverage: ## Run Feature 003 unit coverage and enforce the 80% aggregate floor
+	go test -short -coverprofile=feature003.coverage.out ./internal/...
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_feature_003_coverage.ps1 feature003.coverage.out
 
 FEATURE_001_UNIT_DIRS := ./internal/auth ./internal/profile ./internal/rbac ./internal/middleware
 FEATURE_001_CONTRACT_DIRS := ./tests/contract

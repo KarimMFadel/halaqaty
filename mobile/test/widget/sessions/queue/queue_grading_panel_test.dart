@@ -89,6 +89,58 @@ void main() {
 
     expect(corrections, ['good:null:true']);
   });
+
+  testWidgets('caps the teacher note at 500 characters', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(_panel(
+      direction: TextDirection.rtl,
+      onComplete: (_, __) {},
+      onCorrect: (_, __, ___) {},
+    ));
+
+    await tester.enterText(find.bySemanticsLabel('ملاحظات المعلم'), 'م' * 501);
+    await tester.pump();
+
+    final notes =
+        tester.widget<EditableText>(find.byType(EditableText)).controller;
+    expect(notes.text.length, 500);
+    expect(find.text('500/500'), findsOneWidget);
+    semantics.dispose();
+  });
+
+  testWidgets(
+      'renders only the grade fields the payload carries '
+      '(visibility-filtered)', (tester) async {
+    final semantics = tester.ensureSemantics();
+    // Redacted payload (e.g. managers_only projection of another student):
+    // correction controls render with no current-grade or note line.
+    await tester.pumpWidget(_panel(
+      direction: TextDirection.ltr,
+      entryStatus: 'completed',
+      entryGrade: null,
+      entryNotes: null,
+      onComplete: (_, __) {},
+      onCorrect: (_, __, ___) {},
+    ));
+
+    expect(find.bySemanticsLabel('Correct grade or note'), findsOneWidget);
+    expect(find.textContaining('Current grade'), findsNothing);
+    expect(find.textContaining('Current teacher note'), findsNothing);
+
+    // A full payload shows the current grade and note (Arabic rendering).
+    await tester.pumpWidget(_panel(
+      direction: TextDirection.rtl,
+      entryStatus: 'completed',
+      entryGrade: 'good',
+      entryNotes: 'أحسنت',
+      onComplete: (_, __) {},
+      onCorrect: (_, __, ___) {},
+    ));
+
+    expect(find.text('التقييم الحالي: جيد'), findsOneWidget);
+    expect(find.text('ملاحظة المعلم الحالية: أحسنت'), findsOneWidget);
+    semantics.dispose();
+  });
 }
 
 Widget _panel({

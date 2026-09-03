@@ -401,27 +401,40 @@ INSERT INTO queue_event_outbox (event_id, session_id, round_id, event_type, reso
 VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5::uuid, $6, $7,
         COALESCE($8::timestamptz, NOW()), $9)`
 
-// claimDueOutboxEventsQuery claims due, undelivered, unparked events in due
-// order. SKIP LOCKED lets parallel dispatchers partition the backlog without
-// blocking each other.
+// claimDueOutboxEventsQuery atomically leases due, undelivered, unparked
+// events. The lease prevents another dispatcher from selecting the same row
+// after this statement commits; a crashed worker becomes retryable later.
 const claimDueOutboxEventsQuery = `
-SELECT ` + outboxColumns + `
-FROM queue_event_outbox
-WHERE available_at <= NOW() AND delivered_at IS NULL AND parked_at IS NULL
-ORDER BY session_id, round_id, round_version, available_at, event_id
-LIMIT $1
-FOR UPDATE SKIP LOCKED`
+WITH claimed AS (
+    SELECT event_id AS claimed_event_id
+    FROM queue_event_outbox
+    WHERE available_at <= NOW() AND delivered_at IS NULL AND parked_at IS NULL
+    ORDER BY session_id, round_id, round_version, available_at, event_id
+    LIMIT $1
+    FOR UPDATE SKIP LOCKED
+)
+UPDATE queue_event_outbox AS outbox
+SET available_at = NOW() + INTERVAL '30 seconds'
+FROM claimed
+WHERE outbox.event_id = claimed.claimed_event_id
+RETURNING ` + outboxColumns
 
-// claimReplayOutboxEventsQuery is used at client dispatcher startup. It
-// includes parked rows so restart recovery makes every undelivered event
-// observable to the projector.
+// claimReplayOutboxEventsQuery leases due pending and parked rows during
+// startup/operator replay. A claimed parked row is re-parked if delivery fails.
 const claimReplayOutboxEventsQuery = `
-SELECT ` + outboxColumns + `
-FROM queue_event_outbox
-WHERE delivered_at IS NULL
-ORDER BY session_id, round_id, round_version, parked_at NULLS FIRST, available_at, event_id
-LIMIT $1
-FOR UPDATE SKIP LOCKED`
+WITH claimed AS (
+    SELECT event_id AS claimed_event_id
+    FROM queue_event_outbox
+    WHERE delivered_at IS NULL AND (parked_at IS NOT NULL OR available_at <= NOW())
+    ORDER BY session_id, round_id, round_version, parked_at NULLS FIRST, available_at, event_id
+    LIMIT $1
+    FOR UPDATE SKIP LOCKED
+)
+UPDATE queue_event_outbox AS outbox
+SET available_at = NOW() + INTERVAL '30 seconds', parked_at = NULL
+FROM claimed
+WHERE outbox.event_id = claimed.claimed_event_id
+RETURNING ` + outboxColumns
 
 // markOutboxEventDeliveredQuery completes an event; the delivered guard makes
 // duplicate marks converge and also permits successful operator replay of a

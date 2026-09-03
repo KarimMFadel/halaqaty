@@ -23,6 +23,7 @@ type fakeStore struct {
 	createErr error
 	startErr  error
 	joinErr   error
+	listErr   error
 }
 
 func newFakeStore() *fakeStore {

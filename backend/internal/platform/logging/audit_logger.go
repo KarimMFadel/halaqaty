@@ -83,7 +83,8 @@ func sanitizeAuditMetadata(metadata map[string]any) map[string]any {
 		switch strings.ToLower(key) {
 		case "invite_code", "token", "access_token", "authorization", "session_id", "password",
 			"note", "notes", "teacher_notes", "note_text", "grade", "grades", "grade_value",
-			"media", "room", "media_room_ref":
+			"media", "room", "room_ref", "media_room_ref", "credential", "media_credential",
+			"endpoint", "provider", "provider_id", "provider_identifier", "url":
 			continue
 		default:
 			clean[key] = sanitizeAuditValue(value)

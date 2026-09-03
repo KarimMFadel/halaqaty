@@ -125,6 +125,73 @@ func TestRealtimeOutboxProjector_QueueStateUsesWebSocketEntryIdentifiers(t *test
 	}
 }
 
+func TestRealtimeOutboxProjector_QueueStateReloadsVisibleFieldsAtSendTime(t *testing.T) {
+	ctx := context.Background()
+	repo := newQueueRepository(t)
+	teacherID := qSeedUser(t, repo, "projection-teacher")
+	studentID := qSeedUserWithDisplayName(t, repo, "projection-student", "Before")
+	circleID := qSeedCircle(t, repo, teacherID)
+	qSeedMember(t, repo, circleID, teacherID, "teacher", time.Now().UTC())
+	qSeedMember(t, repo, circleID, studentID, "student", time.Now().UTC())
+	sessionID := qInsertSession(t, repo, circleID, teacherID, "managers_and_student")
+	round := qCreateRound(t, repo, sessionID, teacherID, "active", []string{studentID})
+	projector := NewRealtimeOutboxProjector(repo, nil)
+
+	before, err := projector.QueueState(ctx, studentID, sessionID)
+	if err != nil {
+		t.Fatalf("project initial queue state: %v", err)
+	}
+	beforeEntry := outboxRealtimeClientEntry(t, before)
+	if beforeEntry["student_name"] != "Before" || beforeEntry["grade"] != nil || beforeEntry["grade_notes"] != nil {
+		t.Fatalf("initial projection = %#v", beforeEntry)
+	}
+
+	if _, err := repo.pool.Exec(ctx, `
+		UPDATE recitation_queue_entries
+		SET status = 'completed', grade = 'excellent', teacher_notes = 'Latest note', version = version + 1
+		WHERE queue_id = $1::uuid AND student_id = $2::uuid
+	`, round.ID, studentID); err != nil {
+		t.Fatalf("update committed queue details: %v", err)
+	}
+	if _, err := repo.pool.Exec(ctx, `UPDATE profiles SET display_name = 'After' WHERE user_id = $1::uuid`, studentID); err != nil {
+		t.Fatalf("update committed display name: %v", err)
+	}
+
+	after, err := projector.QueueState(ctx, studentID, sessionID)
+	if err != nil {
+		t.Fatalf("project refreshed queue state: %v", err)
+	}
+	afterEntry := outboxRealtimeClientEntry(t, after)
+	if afterEntry["student_name"] != "After" || afterEntry["grade"] != string(GradeExcellent) || afterEntry["grade_notes"] != "Latest note" {
+		t.Fatalf("send-time projection did not reload committed visibility fields: %#v", afterEntry)
+	}
+}
+
+func outboxRealtimeClientEntry(t *testing.T, event map[string]any) map[string]any {
+	t.Helper()
+	raw, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("encode queue state: %v", err)
+	}
+	var clientEvent map[string]any
+	if err := json.Unmarshal(raw, &clientEvent); err != nil {
+		t.Fatalf("decode queue state: %v", err)
+	}
+	payload, ok := clientEvent["payload"].(map[string]any)
+	if !ok {
+		t.Fatalf("queue state payload = %#v, want object", clientEvent["payload"])
+	}
+	entries, ok := payload["entries"].([]any)
+	if !ok || len(entries) != 1 {
+		t.Fatalf("queue state entries = %#v, want one entry", payload["entries"])
+	}
+	entry, ok := entries[0].(map[string]any)
+	if !ok {
+		t.Fatalf("queue state entry = %#v, want object", entries[0])
+	}
+	return entry
+}
+
 func TestPolicyUpdate_CommitsQueuePolicyChangedOutboxEventForActiveRound(t *testing.T) {
 	ctx := context.Background()
 	repo := newQueueRepository(t)

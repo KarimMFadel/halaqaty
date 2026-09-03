@@ -5,6 +5,7 @@ package integration
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
@@ -12,48 +13,69 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 )
 
-func newQueueRateLimitRequest(authorization, remoteIP string) *http.Request {
-	req := httptest.NewRequest(http.MethodGet, "/queue", nil)
-	req.Header.Set(httpconst.HeaderAuthorization, authorization)
-	req.RemoteAddr = remoteIP + ":1234"
-	return req
-}
-
-func doQueueRateLimitRequest(handler http.Handler, req *http.Request) *httptest.ResponseRecorder {
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-	return rec
-}
-
 func TestRecitationQueueRateLimit_PerIPAndUserReturn429WithoutMutation(t *testing.T) {
-	limiter := middleware.NewRateLimitMiddleware(2, 2)
-	called := 0
-	next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called++ })
-	handler := limiter.LimitByIP(limiter.Limit(next))
-	for attempt := 0; attempt < 2; attempt++ {
-		req := newQueueRateLimitRequest("Bearer user-1", "203.0.113.10")
-		rec := doQueueRateLimitRequest(handler, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("allowed request %d status=%d", attempt, rec.Code)
+	env := setupQueueRBACEnv(t)
+	newHandler := func(limit int) http.Handler {
+		limiter := middleware.NewRateLimitMiddleware(limit, limit)
+		return limiter.LimitByIP(limiter.Limit(env.mux))
+	}
+	baseHeaders := func(actor string) map[string]string {
+		return map[string]string{
+			httpconst.HeaderAuthorization: env.tokens[actor],
+			httpconst.HeaderSessionID:     env.backendSessions[actor],
+			httpconst.HeaderContentType:   httpconst.ContentTypeApplicationJSON,
 		}
 	}
-	rec := doQueueRateLimitRequest(handler, newQueueRateLimitRequest("Bearer user-1", "203.0.113.10"))
-	if rec.Code != http.StatusTooManyRequests || called != 2 {
-		t.Fatalf("limited request status=%d called=%d, want 429/2", rec.Code, called)
-	}
-	for attempt := 0; attempt < 2; attempt++ {
-		req := newQueueRateLimitRequest("Bearer user-1", "203.0.113.11")
-		req = req.WithContext(auth.WithPrincipal(req.Context(), auth.AuthPrincipal{UserID: "user-1"}))
-		if rec := doQueueRateLimitRequest(handler, req); rec.Code != http.StatusOK {
-			t.Fatalf("user-allowed request %d status=%d", attempt, rec.Code)
+
+	t.Run("per-IP queue reads reject before queue handler", func(t *testing.T) {
+		handler := newHandler(2)
+		for _, actor := range []string{"teacher", "student"} {
+			response := doQueueRateLimitedRequest(t, handler, http.MethodGet, "/api/v1/sessions/"+env.sessionID+"/queue", "", baseHeaders(actor), "203.0.113.10", env.userIDs[actor])
+			if response.Code != http.StatusOK {
+				t.Fatalf("allowed queue read status=%d: %s", response.Code, response.Body.String())
+			}
 		}
+		before := env.queueTablesSnapshot(t, env.sessionID)
+		response := doQueueRateLimitedRequest(t, handler, http.MethodGet, "/api/v1/sessions/"+env.sessionID+"/queue", "", baseHeaders("teacher"), "203.0.113.10", env.userIDs["teacher"])
+		assertQueueRateLimitedWithoutMutation(t, response, before, env)
+	})
+
+	t.Run("per-user queue mutation rejects before persistence", func(t *testing.T) {
+		handler := newHandler(1)
+		path := "/api/v1/sessions/" + env.sessionID + "/queue/rounds"
+		body := `{"round_type":"test","surah_id":2,"from_ayah":1,"to_ayah":3,"grading_required":false}`
+		first := doQueueRateLimitedRequest(t, handler, http.MethodPost, path, body, baseHeaders("teacher"), "203.0.113.11", env.userIDs["teacher"])
+		if first.Code != http.StatusCreated {
+			t.Fatalf("allowed queue mutation status=%d: %s", first.Code, first.Body.String())
+		}
+		before := env.queueTablesSnapshot(t, env.sessionID)
+		response := doQueueRateLimitedRequest(t, handler, http.MethodPost, path, body, baseHeaders("teacher"), "203.0.113.12", env.userIDs["teacher"])
+		assertQueueRateLimitedWithoutMutation(t, response, before, env)
+	})
+}
+
+func doQueueRateLimitedRequest(t *testing.T, handler http.Handler, method, target, body string, headers map[string]string, remoteIP, userID string) *httptest.ResponseRecorder {
+	t.Helper()
+	request := httptest.NewRequest(method, target, strings.NewReader(body))
+	request.RemoteAddr = remoteIP + ":1234"
+	for name, value := range headers {
+		request.Header.Set(name, value)
 	}
-	req := newQueueRateLimitRequest("Bearer user-1", "203.0.113.12")
-	req = req.WithContext(auth.WithPrincipal(req.Context(), auth.AuthPrincipal{UserID: "user-1"}))
-	if rec := doQueueRateLimitRequest(handler, req); rec.Code != http.StatusTooManyRequests {
-		t.Fatal("per-user budget did not return 429")
+	request = request.WithContext(auth.WithPrincipal(request.Context(), auth.AuthPrincipal{UserID: userID}))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	return response
+}
+
+func assertQueueRateLimitedWithoutMutation(t *testing.T, response *httptest.ResponseRecorder, before [5]int, env *queueRBACEnv) {
+	t.Helper()
+	if response.Code != http.StatusTooManyRequests {
+		t.Fatalf("limited request status=%d, want 429: %s", response.Code, response.Body.String())
 	}
-	if rec.Header().Get(httpconst.HeaderContentType) == "" {
+	if response.Header().Get(httpconst.HeaderContentType) == "" {
 		t.Fatal("rate-limit response omitted content type")
+	}
+	if after := env.queueTablesSnapshot(t, env.sessionID); after != before {
+		t.Fatalf("rate-limited request mutated queue tables: before=%v after=%v", before, after)
 	}
 }

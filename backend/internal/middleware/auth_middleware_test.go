@@ -13,6 +13,7 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	phttp "github.com/KarimMFadel/halaqaty/backend/internal/platform/http"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
 )
 
 const (
@@ -159,6 +160,40 @@ func TestAuthMiddleware_RequireBearer_ResolvesExistingUser(t *testing.T) {
 			t.Fatalf("status: got %d, want %d", rec.Code, http.StatusUnauthorized)
 		}
 	})
+}
+
+func TestAuthMiddleware_SetMetrics_RecordsRejectionsAndRequests(t *testing.T) {
+	verifier := &stubVerifier{token: testValidToken, decoded: testDecodedToken}
+	repo := &stubSessionRepo{userID: testLocalUserID}
+	mw := NewAuthMiddleware(verifier, auth.NewSessionService(30*24*time.Hour), repo)
+
+	authMetrics := new(metrics.AuthMetrics)
+	mw.SetMetrics(authMetrics)
+
+	protected := mw.RequireVerifiedFirebase(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	rejected := httptest.NewRequest(http.MethodPost, "/auth/register", nil) // no bearer token
+	rec := httptest.NewRecorder()
+	protected.ServeHTTP(rec, rejected)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated status: got %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+	if summary := authMetrics.Summary(); summary.RejectionsTotal != 1 || summary.RequestsTotal != 0 {
+		t.Fatalf("after rejection: summary=%+v, want rejections=1 requests=0", summary)
+	}
+
+	accepted := httptest.NewRequest(http.MethodPost, "/auth/register", nil)
+	accepted.Header.Set(httpconst.HeaderAuthorization, "Bearer "+testValidToken)
+	rec = httptest.NewRecorder()
+	protected.ServeHTTP(rec, accepted)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("authenticated status: got %d, want %d", rec.Code, http.StatusOK)
+	}
+	if summary := authMetrics.Summary(); summary.RejectionsTotal != 1 || summary.RequestsTotal != 1 {
+		t.Fatalf("after acceptance: summary=%+v, want rejections=1 requests=1", summary)
+	}
 }
 
 type stubVerifier struct {

@@ -732,7 +732,8 @@ func TestRecitationQueueOptOut_TargetedManagerEventDelivery(t *testing.T) {
 		return claimed
 	}
 	var optOutEvents []queue.OutboxEvent
-	for _, event := range events() {
+	claimed := events()
+	for _, event := range claimed {
 		if event.EventType == "queue.opt_out_requested" {
 			optOutEvents = append(optOutEvents, event)
 		}
@@ -740,7 +741,11 @@ func TestRecitationQueueOptOut_TargetedManagerEventDelivery(t *testing.T) {
 	if len(optOutEvents) != 1 {
 		t.Fatalf("queue.opt_out_requested outbox rows = %d, want exactly 1", len(optOutEvents))
 	}
-	drain()
+	for _, event := range claimed {
+		if err := dispatcher.Dispatch(ctx, event); err != nil {
+			t.Fatalf("dispatch %s: %v", event.EventType, err)
+		}
+	}
 
 	for _, manager := range []struct {
 		name string

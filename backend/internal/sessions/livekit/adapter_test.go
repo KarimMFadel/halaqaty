@@ -28,6 +28,7 @@ type fakeRoomClient struct {
 	listErr   error
 	createE2  error
 	deleteErr error
+	removeErr error
 }
 
 func (f *fakeRoomClient) CreateRoom(_ context.Context, req *lkmodel.CreateRoomRequest) (*lkmodel.Room, error) {
@@ -56,6 +57,9 @@ func (f *fakeRoomClient) ListParticipants(_ context.Context, _ *lkmodel.ListPart
 
 func (f *fakeRoomClient) RemoveParticipant(_ context.Context, req *lkmodel.RoomParticipantIdentity) (*lkmodel.RemoveParticipantResponse, error) {
 	f.removed = append(f.removed, req)
+	if f.removeErr != nil {
+		return nil, f.removeErr
+	}
 	return &lkmodel.RemoveParticipantResponse{}, nil
 }
 

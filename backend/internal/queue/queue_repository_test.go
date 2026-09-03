@@ -836,7 +836,7 @@ func TestQueueRepository_OutboxClaimRetryParkLifecycle(t *testing.T) {
 		availableAt time.Time
 	}{
 		{dueA, time.Now().UTC().Add(-time.Minute)},
-		{dueB, time.Now().UTC()},
+		{dueB, time.Now().UTC().Add(-time.Minute)},
 		{futureC, time.Now().UTC().Add(time.Hour)},
 	} {
 		err := repo.WithTx(ctx, func(tx *Tx) error {
@@ -900,6 +900,43 @@ func TestQueueRepository_OutboxClaimRetryParkLifecycle(t *testing.T) {
 	}
 	if pending != 1 || parked != 1 {
 		t.Fatalf("counts: pending=%d parked=%d, want 1/1", pending, parked)
+	}
+}
+
+func TestQueueRepository_OutboxDefaultAvailabilityUsesDatabaseClock(t *testing.T) {
+	repo := newQueueRepository(t)
+	ctx := context.Background()
+	teacher := qSeedUser(t, repo, "outbox-db-clock-teacher")
+	circle := qSeedCircle(t, repo, teacher)
+	session := qInsertSession(t, repo, circle, teacher, "managers_and_student")
+	round := qCreateRound(t, repo, session, teacher, "prepared", nil)
+
+	const eventID = "88888888-8888-4888-8888-888888888888"
+	var databaseNow time.Time
+	if err := repo.WithTx(ctx, func(tx *Tx) error {
+		if err := tx.tx.QueryRow(ctx, `SELECT NOW()`).Scan(&databaseNow); err != nil {
+			return err
+		}
+		time.Sleep(25 * time.Millisecond)
+		return tx.InsertOutboxEvent(ctx, OutboxEvent{
+			EventID:       eventID,
+			SessionID:     session,
+			RoundID:       round.ID,
+			EventType:     "queue.round_started",
+			RoundVersion:  1,
+			EventMetadata: []byte(`{"clock":"database"}`),
+		})
+	}); err != nil {
+		t.Fatalf("insert outbox event with default availability: %v", err)
+	}
+
+	var availableAt time.Time
+	if err := repo.pool.QueryRow(ctx,
+		`SELECT available_at FROM queue_event_outbox WHERE event_id = $1::uuid`, eventID).Scan(&availableAt); err != nil {
+		t.Fatalf("read default outbox availability: %v", err)
+	}
+	if !availableAt.Equal(databaseNow) {
+		t.Fatalf("available_at = %v, want transaction database clock %v", availableAt, databaseNow)
 	}
 }
 

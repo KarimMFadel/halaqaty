@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/base64"
-	"errors"
 	"testing"
 	"time"
 )
@@ -286,7 +285,7 @@ func TestLoadSessionRoomKey_PublicWrapperUsesOSEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadSessionRoomKey: %v", err)
 	}
-	if !errors.Is(nil, nil) || string(got) != string(key) {
+	if string(got) != string(key) {
 		t.Fatalf("key mismatch")
 	}
 }

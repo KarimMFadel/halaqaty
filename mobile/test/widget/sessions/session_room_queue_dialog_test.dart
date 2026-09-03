@@ -192,10 +192,7 @@ void main() {
     // The terminal queue state is rendered read-only...
     expect(find.text('Round finalized; grading is read-only'), findsOneWidget);
     // ...and the manager can still end the session.
-    final endSession = find.descendant(
-      of: find.bySemanticsLabel('End session'),
-      matching: find.byType(FilledButton),
-    );
+    final endSession = find.widgetWithText(FilledButton, 'End session');
     expect(tester.widget<FilledButton>(endSession).onPressed, isNotNull);
     semantics.dispose();
   });

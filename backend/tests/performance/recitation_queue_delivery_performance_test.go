@@ -37,14 +37,12 @@ func TestRecitationQueueDeliveryPerformance_SC008(t *testing.T) {
 	store := new(queuePerformanceStore)
 	queueMetrics := new(metrics.QueueMetrics)
 	dispatcher := queue.NewOutboxDispatcher(store, queuePerformanceProjector{}, queueMetrics, nil, time.Now, func(delay time.Duration) time.Duration { return delay })
-	latencies := make([]time.Duration, 0, actions)
 	for i := 0; i < actions; i++ {
 		started := time.Now()
 		if err := dispatcher.Dispatch(context.Background(), queue.OutboxEvent{EventID: "perf-event"}); err != nil {
 			t.Fatalf("dispatch action %d: %v", i, err)
 		}
 		latency := time.Since(started)
-		latencies = append(latencies, latency)
 		queueMetrics.RecordEventDeliveryLag(latency)
 	}
 	if store.delivered != actions {

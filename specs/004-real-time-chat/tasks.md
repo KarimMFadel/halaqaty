@@ -10,9 +10,9 @@
 **Purpose**: Freeze the approved architecture and prove the additive contracts before implementation.
 
 - [x] T001 Record Karim's 2026-09-06 acceptance and Constitution 1.2.0 authorization in `docs/engineering/architecture/adr/ADR-021-chat-persistence-media-and-delivery.md` and `.specify/memory/constitution.md`
-- [ ] T002 [P] Add canonical-to-feature OpenAPI operation, schema, and response-code parity coverage including pinned retrieval, sender-only read receipts, active-circle read denial, `delivered/read`, and `415` in `backend/tests/contract/chat_openapi_contract_test.go`
+- [X] T002 [P] Add canonical-to-feature OpenAPI operation, schema, and response-code parity coverage including pinned retrieval, sender-only read receipts, active-circle read denial, `delivered/read`, and `415` in `backend/tests/contract/chat_openapi_contract_test.go`
 - [x] T003 Run the OpenAPI/docs guard and resolve any contract mismatch in `docs/contracts/openapi.yaml`, `docs/contracts/ws_events.md`, `specs/004-real-time-chat/contracts/chat.openapi.yaml`, and `specs/004-real-time-chat/contracts/chat.ws_events.md`
-- [ ] T004 [P] Add dependency-boundary coverage proving F-004 consumes active F-001/F-002 memberships and F-005 realtime tickets without implementing ADR-010 invitations, LiveKit chat, or F-008 notifications in `backend/tests/contract/chat_dependency_boundaries_test.go`
+- [X] T004 [P] Add dependency-boundary coverage proving F-004 consumes active F-001/F-002 memberships and F-005 realtime tickets without implementing ADR-010 invitations, LiveKit chat, or F-008 notifications in `backend/tests/contract/chat_dependency_boundaries_test.go`
 
 **Gate**: T001–T004 are complete; the additive REST and WebSocket contracts are authoritative, dependency boundaries are proven, and docs are lint-clean.
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -49,6 +50,7 @@ type Hub struct {
 	upgrader websocket.Upgrader
 	snapshot SessionSnapshotProvider
 	command  SessionCommandHandler
+	chat     ChatCommandHandler
 	events   []SessionEventProvider
 
 	mu         sync.Mutex
@@ -83,6 +85,13 @@ func (h *Hub) SetSessionSnapshotProvider(provider SessionSnapshotProvider) {
 func (h *Hub) SetSessionCommandHandler(handler SessionCommandHandler) {
 	if h != nil {
 		h.command = handler
+	}
+}
+
+// SetChatCommandHandler configures the chat-owned ephemeral command callback.
+func (h *Hub) SetChatCommandHandler(handler ChatCommandHandler) {
+	if h != nil {
+		h.chat = handler
 	}
 }
 
@@ -138,10 +147,11 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		var msg struct {
-			Action  string         `json:"action"`
-			Type    string         `json:"type"`
-			Topic   string         `json:"topic"`
-			Payload map[string]any `json:"payload"`
+			Action    string         `json:"action"`
+			Type      string         `json:"type"`
+			Topic     string         `json:"topic"`
+			RequestID string         `json:"request_id"`
+			Payload   map[string]any `json:"payload"`
 		}
 		if err := json.Unmarshal(raw, &msg); err != nil {
 			writeRealtimeError(client, realtimeErrorInvalid, "invalid message")
@@ -150,6 +160,10 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if msg.Action == realtimeTypePing || msg.Type == realtimeTypePing {
 			_ = conn.SetReadDeadline(time.Now().Add(90 * time.Second))
 			_ = client.writeJSON(map[string]any{"type": realtimeTypePong, "server_time": time.Now().UTC().Format(time.RFC3339)})
+			continue
+		}
+		if msg.Type == CommandChatTyping {
+			h.handleChatCommand(r.Context(), client, msg.RequestID, msg.Payload)
 			continue
 		}
 		if strings.HasPrefix(msg.Type, "cmd.") {
@@ -202,6 +216,21 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Hub) handleChatCommand(ctx context.Context, client *hubClient, requestID string, payload map[string]any) {
+	if h.chat == nil {
+		writeRealtimeError(client, realtimeErrorInvalid, "invalid chat command")
+		return
+	}
+	command := ChatCommand{
+		Connection: client.identity(),
+		RequestID:  requestID,
+		Payload:    payload,
+	}
+	if err := h.chat(ctx, command); err != nil {
+		writeRealtimeError(client, realtimeErrorInvalid, "chat command rejected")
+	}
+}
+
 func (h *Hub) handleCommand(ctx context.Context, client *hubClient, command string, payload map[string]any) {
 	sessionID, _ := payload["session_id"].(string)
 	topic, err := NewSessionTopic(sessionID)
@@ -247,6 +276,23 @@ func (c *hubClient) writeText(data []byte) error {
 	return c.conn.WriteMessage(websocket.TextMessage, data)
 }
 
+func (c *hubClient) writeTextAuthorized(ctx context.Context, data []byte, authorize DeliveryAuthorizer) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	allowed, err := authorize(ctx, c.identity())
+	if err != nil {
+		return fmt.Errorf("authorize realtime delivery: %w", err)
+	}
+	if !allowed {
+		return nil
+	}
+	return c.conn.WriteMessage(websocket.TextMessage, data)
+}
+
+func (c *hubClient) identity() ConnectionIdentity {
+	return ConnectionIdentity{UserID: c.userID, RealtimeTicket: c.token}
+}
+
 func (h *Hub) authorized(ctx context.Context, ticket Ticket, userID string, topic Topic) bool {
 	if topic.Kind() == TopicCircle {
 		return ticket.Covers(topic)
@@ -279,6 +325,19 @@ func (h *Hub) remove(client *hubClient) {
 // Broadcast sends one redacted event to subscribed clients. Duplicate event
 // IDs are ignored per topic; empty IDs disable deduplication.
 func (h *Hub) Broadcast(topic Topic, eventID string, payload any) error {
+	return h.broadcast(context.Background(), topic, eventID, payload, nil)
+}
+
+// BroadcastAuthorized sends one redacted event to currently subscribed
+// clients that pass the injected authorization immediately before write.
+func (h *Hub) BroadcastAuthorized(ctx context.Context, topic Topic, delivery AuthorizedDelivery) error {
+	if delivery.Authorize == nil {
+		return errors.New("realtime delivery authorizer is not configured")
+	}
+	return h.broadcast(ctx, topic, delivery.EventID, delivery.Payload, delivery.Authorize)
+}
+
+func (h *Hub) broadcast(ctx context.Context, topic Topic, eventID string, payload any, authorize DeliveryAuthorizer) error {
 	if h == nil {
 		return errors.New("realtime hub is not configured")
 	}
@@ -306,7 +365,61 @@ func (h *Hub) Broadcast(topic Topic, eventID string, payload any) error {
 		if !subscribed {
 			continue
 		}
-		if err := client.writeText(encoded); err != nil {
+		var err error
+		if authorize == nil {
+			err = client.writeText(encoded)
+		} else {
+			err = client.writeTextAuthorized(ctx, encoded, authorize)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SendToUsers sends one redacted event directly to every authenticated
+// connection of the listed users, independent of circle subscriptions. Each
+// connection must pass the injected authorization immediately before write.
+func (h *Hub) SendToUsers(ctx context.Context, userIDs []string, delivery AuthorizedDelivery) error {
+	if h == nil {
+		return errors.New("realtime hub is not configured")
+	}
+	if delivery.Authorize == nil {
+		return errors.New("realtime delivery authorizer is not configured")
+	}
+	encoded, err := json.Marshal(delivery.Payload)
+	if err != nil {
+		return fmt.Errorf("marshal realtime delivery: %w", err)
+	}
+	targets := make(map[string]struct{}, len(userIDs))
+	for _, userID := range userIDs {
+		if userID != "" {
+			targets[userID] = struct{}{}
+		}
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if delivery.EventID != "" {
+		for userID := range targets {
+			key := "direct:" + userID
+			seen := h.seenEvents[key]
+			if seen == nil {
+				seen = map[string]struct{}{}
+				h.seenEvents[key] = seen
+			}
+			if _, ok := seen[delivery.EventID]; ok {
+				delete(targets, userID)
+				continue
+			}
+			seen[delivery.EventID] = struct{}{}
+		}
+	}
+	for client := range h.clients {
+		if _, ok := targets[client.userID]; !ok {
+			continue
+		}
+		if err := client.writeTextAuthorized(ctx, encoded, delivery.Authorize); err != nil {
 			return err
 		}
 	}

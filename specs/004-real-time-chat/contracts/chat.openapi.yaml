@@ -1,0 +1,435 @@
+openapi: 3.0.3
+info:
+  title: Halaqaty F-004 Chat Contract
+  version: 1.0.0
+  description: Additive v1 contract overlay. Canonical definitions live in docs/contracts/openapi.yaml.
+  contact:
+    name: Halaqaty
+servers:
+  - url: /api/v1
+security:
+  - BearerAuth: []
+    SessionId: []
+tags:
+  - name: Chat
+  - name: Uploads
+paths:
+  /circles/{circleId}/messages:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    get:
+      tags: [Chat]
+      operationId: listCircleMessages
+      description: List non-deleted messages visible in the caller's current retained membership period.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Before'
+      responses:
+        '200': { $ref: '#/components/responses/Messages' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Chat]
+      operationId: sendCircleMessage
+      description: Durably send one idempotent group message after current membership validation.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        $ref: '#/components/requestBodies/SendMessage'
+      responses:
+        '201': { $ref: '#/components/responses/Message' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /circles/{circleId}/messages/search:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    get:
+      tags: [Chat]
+      operationId: searchCircleMessages
+      description: Search non-deleted group text visible in the caller's current retained membership period.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 200 }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Before'
+      responses:
+        '200': { $ref: '#/components/responses/Messages' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /circles/{circleId}/messages/pinned:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    get:
+      tags: [Chat]
+      operationId: listPinnedCircleMessages
+      description: List at most five non-deleted pinned messages visible in the caller's retained membership period, ordered by pinned_at DESC then id DESC.
+      responses:
+        '200': { $ref: '#/components/responses/PinnedMessages' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /circles/{circleId}/messages/{messageId}:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+      - $ref: '#/components/parameters/MessageId'
+    delete:
+      tags: [Chat]
+      operationId: deleteCircleMessage
+      description: Soft-delete an own recent message or moderate as the current teacher.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Message soft-deleted }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /circles/{circleId}/messages/{messageId}/pin:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+      - $ref: '#/components/parameters/MessageId'
+    post:
+      tags: [Chat]
+      operationId: pinCircleMessage
+      description: Pin an eligible group message as teacher or supervisor, enforcing the five-pin limit.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [Chat]
+      operationId: unpinCircleMessage
+      description: Remove the pin from an eligible group message as teacher or supervisor.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Message unpinned }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /circles/{circleId}/messages/{messageId}/read:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+      - $ref: '#/components/parameters/MessageId'
+    post:
+      tags: [Chat]
+      operationId: markCircleMessageRead
+      description: Store one caller read fact only for a visible message in an active circle; archived-circle history is read-only and cannot create read facts.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Read fact recorded idempotently }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /dm/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Chat]
+      operationId: listDirectMessages
+      description: List the complete pair history only while current DM eligibility exists.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Before'
+      responses:
+        '200': { $ref: '#/components/responses/Messages' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Chat]
+      operationId: sendDirectMessage
+      description: Durably send one idempotent direct message after rechecking pair eligibility.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        $ref: '#/components/requestBodies/SendMessage'
+      responses:
+        '201': { $ref: '#/components/responses/Message' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /dm/{userId}/messages/{messageId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+      - $ref: '#/components/parameters/MessageId'
+    delete:
+      tags: [Chat]
+      operationId: deleteDirectMessage
+      description: Soft-delete the caller's recent direct message and revoke its media access.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Own direct message soft-deleted }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /dm/{userId}/messages/{messageId}/read:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+      - $ref: '#/components/parameters/MessageId'
+    post:
+      tags: [Chat]
+      operationId: markDirectMessageRead
+      description: Store one recipient read fact after current pair eligibility validation.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Read fact recorded idempotently }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /messages/{messageId}/media-url:
+    parameters:
+      - $ref: '#/components/parameters/MessageId'
+    post:
+      tags: [Chat]
+      operationId: renewMessageMediaUrl
+      description: Return a fresh versionless URL only while message access remains authorized.
+      responses:
+        '200': { $ref: '#/components/responses/MediaAccess' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /uploads/voice:
+    post:
+      tags: [Uploads]
+      operationId: uploadVoice
+      description: OGG, MPEG, MP4, or WebM voice note; maximum 20 MB and 300 seconds.
+      requestBody: { $ref: '#/components/requestBodies/ChatUpload' }
+      responses:
+        '200': { $ref: '#/components/responses/Upload' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '415': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /uploads/image:
+    post:
+      tags: [Uploads]
+      operationId: uploadImage
+      description: JPEG or PNG image; maximum 5 MB.
+      requestBody: { $ref: '#/components/requestBodies/ChatUpload' }
+      responses:
+        '200': { $ref: '#/components/responses/Upload' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '415': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /uploads/file:
+    post:
+      tags: [Uploads]
+      operationId: uploadFile
+      description: PDF attachment; maximum 10 MB.
+      requestBody: { $ref: '#/components/requestBodies/ChatUpload' }
+      responses:
+        '200': { $ref: '#/components/responses/Upload' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '415': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    BearerAuth: { type: http, scheme: bearer, bearerFormat: Firebase-ID-Token }
+    SessionId: { type: apiKey, in: header, name: X-Halaqaty-Session-ID }
+  parameters:
+    CircleId: { name: circleId, in: path, required: true, schema: { type: string, format: uuid } }
+    UserId: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
+    MessageId: { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+    Limit: { name: limit, in: query, schema: { type: integer, default: 50, minimum: 1, maximum: 100 } }
+    Before: { name: before, in: query, description: Existing UUID cursor retained for v1 compatibility., schema: { type: string, format: uuid } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 1, maxLength: 128 } }
+  requestBodies:
+    SendMessage:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/SendMessageRequest' }
+    ChatUpload:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required: [file]
+            properties:
+              file: { type: string, format: binary }
+              circle_id: { type: string, format: uuid, description: Required for a group target; optional only for legacy unbound uploads. }
+              dm_peer_id: { type: string, format: uuid, description: Required for a DM target and mutually exclusive with circle_id. }
+  responses:
+    Message:
+      description: Message accepted or idempotently replayed
+      content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } }
+    Messages:
+      description: Authorized page of messages
+      content: { application/json: { schema: { $ref: '#/components/schemas/PaginatedMessages' } } }
+    PinnedMessages:
+      description: Authorized active pinned-message projection
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data:
+                type: array
+                maxItems: 5
+                items: { $ref: '#/components/schemas/Message' }
+    MediaAccess:
+      description: Short-lived media access URL
+      content: { application/json: { schema: { $ref: '#/components/schemas/MediaAccess' } } }
+    Upload:
+      description: Upload accepted
+      content: { application/json: { schema: { $ref: '#/components/schemas/UploadResponse' } } }
+    Error:
+      description: Contract-defined error
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+  schemas:
+    SendMessageRequest:
+      type: object
+      required: [message_type]
+      properties:
+        message_type: { type: string, enum: [text, image, file, voice] }
+        content: { type: string, maxLength: 4000, nullable: true }
+        upload_id: { type: string, format: uuid, nullable: true }
+        media_key: { type: string, nullable: true, deprecated: true, description: Legacy upload key; new clients use upload_id. }
+        reply_to_id: { type: string, format: uuid, nullable: true }
+    Message:
+      type: object
+      required: [id, sender_id, message_type, sent_at, delivery_status]
+      properties:
+        id: { type: string, format: uuid }
+        circle_id: { type: string, format: uuid, nullable: true }
+        dm_recipient_id: { type: string, format: uuid, nullable: true }
+        sender_id: { type: string, format: uuid }
+        sender_name: { type: string }
+        message_type: { type: string, enum: [text, image, file, voice] }
+        content: { type: string, nullable: true }
+        media_url: { type: string, format: uri, nullable: true, description: Short-lived projection; never persisted. }
+        media_url_expires_at: { type: string, format: date-time, nullable: true }
+        file_name: { type: string, nullable: true }
+        media_type: { type: string, nullable: true }
+        media_size: { type: integer, format: int64, nullable: true }
+        voice_duration_seconds: { type: integer, nullable: true, maximum: 300 }
+        reply_to_id: { type: string, format: uuid, nullable: true }
+        reply_preview: { $ref: '#/components/schemas/ReplyPreview' }
+        pinned_at: { type: string, format: date-time, nullable: true }
+        pinned_by: { type: string, format: uuid, nullable: true }
+        deleted_at: { type: string, format: date-time, nullable: true }
+        read_receipts:
+          type: array
+          description: Present only when the caller is the sender; includes currently authorized non-sender readers.
+          items: { $ref: '#/components/schemas/ReadReceipt' }
+        delivery_status: { type: string, enum: [delivered, read], description: Server-authoritative state; pending and sent are local client states only. }
+        sent_at: { type: string, format: date-time }
+    ReadReceipt:
+      type: object
+      required: [reader_id, read_at]
+      properties:
+        reader_id: { type: string, format: uuid }
+        read_at: { type: string, format: date-time }
+    ReplyPreview:
+      type: object
+      nullable: true
+      properties:
+        id: { type: string, format: uuid }
+        sender_name: { type: string }
+        preview: { type: string, maxLength: 160 }
+        deleted: { type: boolean }
+    PaginatedMessages:
+      type: object
+      required: [data, has_more]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/Message' } }
+        has_more: { type: boolean }
+        next_before: { type: string, format: uuid, nullable: true }
+    UploadResponse:
+      type: object
+      required: [object_key, url]
+      properties:
+        object_key: { type: string, description: Legacy field retained for compatibility. }
+        url: { type: string, format: uri, description: Short-lived preview URL. }
+        upload_id: { type: string, format: uuid }
+        url_expires_at: { type: string, format: date-time, description: Seven-day expiry for chat media. }
+    MediaAccess:
+      type: object
+      description: Versionless presigned access valid for seven days unless deletion revokes it earlier.
+      required: [url, expires_at]
+      properties:
+        url: { type: string, format: uri }
+        expires_at: { type: string, format: date-time }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, example: ERR_FORBIDDEN }
+            message: { type: string }

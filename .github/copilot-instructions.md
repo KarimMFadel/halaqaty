@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-`specs/003-recitation-queue-system/plan.md`
+`specs/004-real-time-chat/plan.md`
 <!-- SPECKIT END -->
 
 ## Agentic workflow harness

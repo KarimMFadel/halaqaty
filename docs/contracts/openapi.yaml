@@ -1364,7 +1364,7 @@ paths:
       - $ref: '#/components/parameters/CircleId'
     get:
       operationId: listCircleMessages
-      description: List recent messages in a circle chat
+      description: List non-deleted messages visible in the caller's current retained membership period.
       tags: [Chat]
       summary: List recent messages in a circle chat
       parameters:
@@ -1373,6 +1373,7 @@ paths:
           schema:
             type: integer
             default: 50
+            minimum: 1
             maximum: 100
         - name: before
           in: query
@@ -1387,15 +1388,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedMessages'
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
     post:
       operationId: sendCircleMessage
       description: Send a text, image, or file message to circle chat
       tags: [Chat]
       summary: Send a text, image, or file message to circle chat
+      parameters:
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1415,6 +1422,73 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+
+  /circles/{circleId}/messages/search:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    get:
+      operationId: searchCircleMessages
+      tags: [Chat]
+      summary: Search visible circle-message history
+      description: Full-text search over non-deleted messages visible in the caller's current retained membership period.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 200
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, minimum: 1, maximum: 100 }
+        - name: before
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Matching visible messages
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginatedMessages' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+
+  /circles/{circleId}/messages/pinned:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    get:
+      operationId: listPinnedCircleMessages
+      tags: [Chat]
+      summary: List active pinned circle messages
+      description: List at most five non-deleted pinned messages visible in the caller's retained membership period, ordered by pinned_at DESC then id DESC.
+      responses:
+        '200':
+          description: Visible pinned messages
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    maxItems: 5
+                    items: { $ref: '#/components/schemas/Message' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /circles/{circleId}/messages/{messageId}:
     parameters:
@@ -1430,9 +1504,12 @@ paths:
       description: Delete a message (own messages within 10 min; teacher can delete any)
       tags: [Chat]
       summary: Delete a message (own messages within 10 min; teacher can delete any)
+      parameters:
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
       responses:
         '204':
           description: Message deleted
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1440,7 +1517,210 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: Message is older than 10 minutes (for non-teacher users)
+          $ref: '#/components/responses/Conflict'
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+
+  /circles/{circleId}/messages/{messageId}/pin:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: pinCircleMessage
+      tags: [Chat]
+      summary: Pin a circle message as teacher or supervisor
+      description: Pin an eligible group message, enforcing the five-pin circle limit.
+      parameters:
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      responses:
+        '200':
+          description: Pinned message
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+    delete:
+      operationId: unpinCircleMessage
+      tags: [Chat]
+      summary: Unpin a circle message as teacher or supervisor
+      description: Remove the pin from an eligible group message.
+      parameters:
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      responses:
+        '204': { description: Message unpinned }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+
+  /circles/{circleId}/messages/{messageId}/read:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: markCircleMessageRead
+      tags: [Chat]
+      summary: Record the caller's read fact idempotently
+      description: Store one read fact only for a visible message in an active circle; archived-circle history is read-only and cannot create read facts.
+      parameters:
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      responses:
+        '204': { description: Read fact recorded }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+
+  /dm/{userId}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: listDirectMessages
+      tags: [Chat]
+      summary: List the complete eligible direct conversation with a peer
+      description: List the retained pair history only while a qualifying active-circle role relationship exists.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, minimum: 1, maximum: 100 }
+        - name: before
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Direct messages
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginatedMessages' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+    post:
+      operationId: sendDirectMessage
+      tags: [Chat]
+      summary: Send to an eligible teacher-student or supervisor-student peer
+      description: Durably send one idempotent direct message after rechecking the current pair relationship.
+      parameters:
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SendMessageRequest' }
+      responses:
+        '201':
+          description: Message accepted or idempotently replayed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+
+  /dm/{userId}/messages/{messageId}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      operationId: deleteDirectMessage
+      tags: [Chat]
+      summary: Soft-delete an own direct message within 10 minutes
+      description: Soft-delete the caller's direct message within the allowed window and revoke its media access.
+      parameters:
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      responses:
+        '204': { description: Message soft-deleted }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+
+  /dm/{userId}/messages/{messageId}/read:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: markDirectMessageRead
+      tags: [Chat]
+      summary: Record an eligible recipient's read fact idempotently
+      description: Store one recipient read fact after rechecking current direct-message eligibility.
+      parameters:
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      responses:
+        '204': { description: Read fact recorded }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+
+  /messages/{messageId}/media-url:
+    parameters:
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: renewMessageMediaUrl
+      tags: [Chat]
+      summary: Reauthorize and renew short-lived message media access
+      description: Return a fresh versionless signed URL only when the caller can still access the non-deleted message.
+      responses:
+        '200':
+          description: Short-lived media access
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MediaAccess' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   # ── Schedules ─────────────────────────────────────────────
   /circles/{circleId}/schedules:
@@ -1760,10 +2040,10 @@ paths:
       tags: [Uploads]
       summary: Upload a voice note attachment
       description: |
-        Accepts `multipart/form-data` with a single `file` field. Stores the
-        audio in MinIO and returns the object key. Pass the key as `media_key`
-        when calling `POST /circles/{circleId}/messages` with
-        `message_type: voice`.
+        Accepts `multipart/form-data`. New chat clients provide exactly one of
+        `circle_id` or `dm_peer_id`; the server validates current target access
+        and returns an upload handle. Legacy unbound uploads remain accepted for
+        backward compatibility but cannot be attached to a new F-004 message.
 
         Accepted MIME types: `audio/ogg`, `audio/mpeg`, `audio/mp4`, `audio/webm`.
         Maximum duration: 5 minutes (300 s). Maximum file size: 20 MB.
@@ -1778,6 +2058,12 @@ paths:
                 file:
                   type: string
                   format: binary
+                circle_id:
+                  type: string
+                  format: uuid
+                dm_peer_id:
+                  type: string
+                  format: uuid
       responses:
         '200':
           description: Upload successful
@@ -1789,18 +2075,27 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403': { $ref: '#/components/responses/Forbidden' }
         '413':
           description: File exceeds the 20 MB size limit
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '415':
+          description: Detected media type is not supported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
-          description: MIME type not accepted or duration exceeds 5 minutes
+          description: Supported voice data is malformed or duration exceeds 5 minutes
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /uploads/image:
     post:
@@ -1808,12 +2103,11 @@ paths:
       tags: [Uploads]
       summary: Upload an image attachment for circle chat
       description: |
-        Accepts `multipart/form-data`. Returns the MinIO object key to pass as
-        `media_key` in `POST /circles/{circleId}/messages` with
-        `message_type: image`.
+        Accepts `multipart/form-data`. New chat clients provide exactly one of
+        `circle_id` or `dm_peer_id`; legacy unbound uploads remain accepted but
+        cannot be attached to a new F-004 message.
 
-        Accepted MIME types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`.
-        Maximum file size: 20 MB.
+        Accepted MIME types: `image/jpeg`, `image/png`. Maximum file size: 5 MB.
       requestBody:
         required: true
         content:
@@ -1825,6 +2119,12 @@ paths:
                 file:
                   type: string
                   format: binary
+                circle_id:
+                  type: string
+                  format: uuid
+                dm_peer_id:
+                  type: string
+                  format: uuid
       responses:
         '200':
           description: Upload successful
@@ -1836,18 +2136,27 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403': { $ref: '#/components/responses/Forbidden' }
         '413':
-          description: File exceeds the 20 MB size limit
+          description: File exceeds the 5 MB size limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '415':
+          description: Detected media type is not JPEG or PNG
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '422':
-          description: MIME type not accepted
+          description: Supported image data is malformed
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /uploads/file:
     post:
@@ -1855,12 +2164,11 @@ paths:
       tags: [Uploads]
       summary: Upload a file attachment (PDF) for circle chat
       description: |
-        Accepts `multipart/form-data`. Returns the MinIO object key to pass as
-        `media_key` in `POST /circles/{circleId}/messages` with
-        `message_type: file`.
+        Accepts `multipart/form-data`. New chat clients provide exactly one of
+        `circle_id` or `dm_peer_id`; legacy unbound uploads remain accepted but
+        cannot be attached to a new F-004 message.
 
-        Accepted MIME types: `application/pdf`.
-        Maximum file size: 20 MB.
+        Accepted MIME types: `application/pdf`. Maximum file size: 10 MB.
       requestBody:
         required: true
         content:
@@ -1872,6 +2180,12 @@ paths:
                 file:
                   type: string
                   format: binary
+                circle_id:
+                  type: string
+                  format: uuid
+                dm_peer_id:
+                  type: string
+                  format: uuid
       responses:
         '200':
           description: Upload successful
@@ -1883,18 +2197,27 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403': { $ref: '#/components/responses/Forbidden' }
         '413':
-          description: File exceeds the 20 MB size limit
+          description: File exceeds the 10 MB size limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '415':
+          description: Detected media type is not PDF
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '422':
-          description: MIME type not accepted
+          description: PDF data is malformed
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   # ── Config ────────────────────────────────────────────────
   /config/features:
@@ -2047,6 +2370,15 @@ components:
       in: header
       required: false
       description: Optional opaque retry key; reuse for a different command returns a conflict.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+    RequiredIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Opaque retry key required for F-004 chat mutations; replaying different input returns 409.
       schema:
         type: string
         minLength: 1
@@ -2909,7 +3241,13 @@ components:
           description: Required for message_type=text
         media_key:
           type: string
-          description: Required for image/file/voice — MinIO object key from upload endpoint
+          deprecated: true
+          description: Legacy upload key retained for compatibility; new clients use upload_id
+        upload_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Required for new image/file/voice messages
         reply_to_id:
           type: string
           format: uuid
@@ -2917,6 +3255,7 @@ components:
 
     Message:
       type: object
+      required: [id, sender_id, message_type, delivery_status, sent_at]
       properties:
         id:
           type: string
@@ -2942,18 +3281,63 @@ components:
           nullable: true
         media_url:
           type: string
+          format: uri
           nullable: true
-          description: Pre-signed MinIO URL (expires in 7 days)
+          description: Short-lived response projection; never persisted
+        media_url_expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        file_name:
+          type: string
+          nullable: true
+        media_type:
+          type: string
+          nullable: true
+        media_size:
+          type: integer
+          format: int64
+          nullable: true
+        voice_duration_seconds:
+          type: integer
+          maximum: 300
+          nullable: true
         reply_to_id:
           type: string
           format: uuid
           nullable: true
+        reply_preview:
+          allOf:
+            - $ref: '#/components/schemas/ReplyPreview'
+          nullable: true
+        pinned_at:
+          type: string
+          format: date-time
+          nullable: true
+        pinned_by:
+          type: string
+          format: uuid
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        read_receipts:
+          type: array
+          description: Present only when the caller is the sender; includes currently authorized non-sender readers.
+          items:
+            $ref: '#/components/schemas/ReadReceipt'
+        delivery_status:
+          type: string
+          enum: [delivered, read]
+          description: Server-authoritative state; pending and sent are local client states only.
         sent_at:
           type: string
           format: date-time
 
     PaginatedMessages:
       type: object
+      required: [data, has_more]
       properties:
         data:
           type: array
@@ -2961,6 +3345,37 @@ components:
             $ref: '#/components/schemas/Message'
         has_more:
           type: boolean
+        next_before:
+          type: string
+          format: uuid
+          nullable: true
+
+    ReadReceipt:
+      type: object
+      required: [reader_id, read_at]
+      properties:
+        reader_id:
+          type: string
+          format: uuid
+        read_at:
+          type: string
+          format: date-time
+
+    ReplyPreview:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        sender_name: { type: string }
+        preview: { type: string, maxLength: 160 }
+        deleted: { type: boolean }
+
+    MediaAccess:
+      type: object
+      description: Versionless presigned access valid for seven days unless a delete marker revokes it earlier.
+      required: [url, expires_at]
+      properties:
+        url: { type: string, format: uri }
+        expires_at: { type: string, format: date-time }
 
     # ── Schedules ──────────────────────────────────────────
     CreateScheduleRequest:
@@ -3466,8 +3881,16 @@ components:
       properties:
         object_key:
           type: string
-          description: MinIO object key — pass as `media_key` in message requests
+          description: Legacy field retained for backward compatibility; new chat clients use upload_id
         url:
           type: string
           format: uri
-          description: Pre-signed MinIO URL (expires in 7 days) — use directly for display or as `avatar_url`
+          description: Short-lived preview or display URL; chat access is reauthorized through the message
+        upload_id:
+          type: string
+          format: uuid
+          description: Opaque handle used by new F-004 message requests
+        url_expires_at:
+          type: string
+          format: date-time
+          description: Seven-day expiry for chat media; callers must use the returned timestamp.

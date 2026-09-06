@@ -2,7 +2,7 @@
 
 > All frozen decisions for the Halaqaty MVP. Binding on all implementation. To change a decision, create an ADR in [`../../engineering/architecture/adr/`](../../engineering/architecture/adr/) and update this file with an entry in the Amendment Log.
 
-**Last updated:** 2026-08-28
+**Last updated:** 2026-09-03
 
 ---
 
@@ -14,7 +14,7 @@
 | OQ-002 | Teacher identity verification? | **Optional.** Not required in MVP. | Trust built organically in pilot; formal verification adds friction without benefit at this scale. |
 | OQ-003 | Session token expiry? | **Firebase default: 1hr auto-refresh.** Backend enforces 30-day inactivity logout. | Firebase handles silent refresh; 30-day rule protects abandoned devices. |
 | OQ-035 | Authentication, device sessions, and logout ownership? | **Flutter Firebase Auth owns password validation, identity creation, sign-in, and Firebase token refresh.** The Go API verifies Firebase ID tokens and owns durable per-device sessions. The backend never accepts passwords or returns Firebase tokens. Current-device logout revokes one backend session; logout-all-devices is a later explicit endpoint that revokes all sessions. | Preserves the Firebase identity boundary while allowing immediate server-side revocation and 30-day inactivity enforcement. |
-| OQ-036 | Initial circle roles and supervisor management? | Roles are per-circle only. At creation, the creator may assign existing registered users as one or more teachers and one optional backup supervisor; if no teacher is selected, the creator becomes teacher, otherwise the creator is supervisor. Invite acceptance creates a student membership. Any teacher or supervisor may change another member's teacher/supervisor/student role, but cannot change their own role or leave the circle with no teacher. | Supports shared teaching while preventing global-role escalation, self-lockout, and teacherless circles. |
+| OQ-036 | Initial circle roles, invitations, and supervisor management? | Roles are per-circle only. At creation, the creator may assign existing registered users as one or more teachers and one optional backup supervisor; if no teacher is selected, the creator becomes teacher, otherwise the creator is supervisor. For an active circle, a teacher or supervisor may issue a role-bound invitation for a teacher or student, while a student may issue a student-only invitation. Acceptance creates the bound circle membership and cannot change the assigned role. Any teacher or supervisor may change another member's teacher/supervisor/student role, but cannot change their own role or leave the circle with no teacher. | Supports shared teaching and member referrals while preventing invitation-based role escalation, global roles, self-lockout, and teacherless circles. |
 | PRD-4 | Co-teacher model (distinct role vs supervisor)? | **Deferred post-pilot.** MVP: teacher + supervisor only. No co-teacher role. | Adds role complexity without proven need; supervisor covers 95% of pilot use cases. |
 
 ---
@@ -50,6 +50,7 @@
 | OQ-012 | Announcement-only channels? | **No.** Use pinned messages for circle-wide announcements. | Reduces schema complexity; pinning serves the same purpose at MVP scale. |
 | OQ-013 | Voice message maximum length? | **5 minutes (300 seconds).** Max file size: 20 MB. | Covers all practical recitation feedback; prevents storage abuse. |
 | OQ-014 | Emoji reactions? | **Deferred to P2.** Not in MVP scope. | Nice-to-have; adds implementation complexity without core value at launch. |
+| OQ-055 | Which feature owns background chat notifications? | **F-008 owns trigger creation, preferences, FCM transport, and all background/closed-state delivery.** F-004 owns durable chat messages and foreground WebSocket delivery only. | Keeps chat independently usable and avoids building a partial notification pipeline twice. |
 
 ---
 
@@ -162,5 +163,7 @@ provider registry, job framework, or new lifecycle end reason.
 | 2026-08-16 | OQ-041–OQ-046 | Open F-005 scope, lock, hand, automatic-end, and realtime-topic questions | Ad-hoc-only F-005, pre-lock reconnect, all-participant hand raise, truthful automatic end, and joined-participant session topics | Resolves F-005 behavior while preserving F-004/F-006 boundaries and session privacy. | ADR-016 |
 | 2026-08-23 | OQ-007, OQ-010, OQ-053 | Fixed opt-out approval and late-join append behavior; other queue policies unspecified | Per-session queue policy with safe defaults, prospective audited manager changes, immutable safety invariants, and non-blocking F-005 session end | Lets managers adapt each circle session without weakening authorization, queue consistency, progress truth, or media safety. Approved by Karim 2026-08-23. | ADR-018 |
 | 2026-08-28 | OQ-038, OQ-054 | F-003 owned turn-based student publishing; students joined listen-only | Students publish audio freely in authorized live sessions; F-003 is a voluntary ordered queue and displayed-turn tracker, while F-005 retains explicit moderator controls | Matches the intended Zoom-like halaqa experience without removing teacher/supervisor safety controls. Approved by Karim 2026-08-28. | ADR-020 |
+| 2026-09-03 | OQ-036 / F-002 | Invite acceptance always created a student membership and only teachers shared circle invites | Active teachers and supervisors may invite a teacher or student; active students may invite a student only; the selected role is bound to the invitation and cannot be altered during acceptance | Approved by Karim while starting F-004 so chat eligibility can rely on explicit, active, circle-scoped memberships without introducing global roles. | ADR-010 |
+| 2026-09-03 | OQ-055 / F-004 | F-004 created a background-notification trigger for later F-008 delivery | F-008 owns the complete background notification pipeline; F-004 retains durable messages and foreground realtime delivery only | Approved by Karim during F-004 clarification to minimize changes and keep notification ownership cohesive. | ADR-021 |
 
 *Any change requires: (1) a new or updated ADR in `../../engineering/architecture/adr/`, (2) an entry in the Amendment Log above, (3) approval from Karim.*

@@ -73,6 +73,19 @@ func scanOutboxEvent(row pgx.Row) (OutboxEvent, error) {
 	return e, err
 }
 
+// scanReplayOutboxEvent scans the nine-column replay-claim row: the shared
+// outbox columns plus was_parked, which carries the pre-claim parked state
+// that the post-update RETURNING values can no longer express.
+func scanReplayOutboxEvent(row pgx.Row) (OutboxEvent, error) {
+	var e OutboxEvent
+	err := row.Scan(&e.EventID, &e.MessageID, &e.EventType, &e.RecipientID,
+		&e.AvailableAt, &e.DeliveredAt, &e.AttemptCount, &e.ParkedAt, &e.WasParked)
+	if err == nil {
+		e.State = outboxState(e.DeliveredAt, e.ParkedAt)
+	}
+	return e, err
+}
+
 func outboxState(deliveredAt, parkedAt *time.Time) OutboxState {
 	switch {
 	case deliveredAt != nil:

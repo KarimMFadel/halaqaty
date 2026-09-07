@@ -77,3 +77,18 @@ const (
 	routeSessionQueueOptOut         = "POST /api/v1/sessions/{sessionId}/queue/opt-out"
 	routeSessionQueueOptOutDecision = "POST /api/v1/sessions/{sessionId}/queue/opt-out-requests/{requestId}/decision"
 )
+
+// F-004 chat route patterns (US1 group list/send). The remaining F-004
+// operations arrive with their own stories; these constants are the single
+// source for the route strings.
+const (
+	routeCircleMessagesGet  = "GET /api/v1/circles/{circleId}/messages"
+	routeCircleMessagesSend = "POST /api/v1/circles/{circleId}/messages"
+)
+
+// Exported F-004 chat route aliases consumed by the cmd/api route-parity
+// composition tests.
+const (
+	RouteCircleMessagesGet  = routeCircleMessagesGet
+	RouteCircleMessagesSend = routeCircleMessagesSend
+)

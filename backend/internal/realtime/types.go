@@ -151,6 +151,7 @@ type Ticket struct {
 	UserID    string
 	CircleIDs []string
 	ExpiresAt time.Time
+	SessionID string
 }
 
 // ExpiredAt reports whether the ticket is no longer valid at the given time.

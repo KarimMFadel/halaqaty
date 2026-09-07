@@ -49,22 +49,22 @@
 
 **Independent test**: With no live session, load paginated history, send one valid text message, observe it once on another authorized client, and reject invalid or unauthorized requests without enumeration.
 
-- [ ] T021 [US1] Add service tests for active-circle membership-period history, deterministic `(sent_at,id)` pagination, plain-text validation, idempotent sends, and no-session independence in `backend/internal/chat/group_service_test.go`
-- [ ] T022 [US1] Implement group history and text-send authorization/business behavior in `backend/internal/chat/group_service.go`
-- [ ] T023 [P] [US1] Add REST contract tests for group list/send, required idempotency, `400/401/403/404/409/422/429` semantics, RBAC denial, rate limits, and response safety in `backend/tests/contract/chat_group_contract_test.go`
-- [ ] T024 [US1] Implement response-safe group list/send handlers using centralized HTTP constants in `backend/internal/chat/group_handler.go`
-- [ ] T025 [P] [US1] Add tests for atomic message/outbox insertion, five-attempt bounded delivery, audience rebuild plus per-client/session reauthorization, redacted projection, and parked-event replay in `backend/internal/chat/outbox_test.go`
-- [ ] T026 [US1] Implement chat outbox creation, claim, retry/backoff/jitter, parking, startup replay, and payload reload in `backend/internal/chat/outbox.go` and `backend/internal/chat/outbox_queries.go`
-- [ ] T027 [US1] Add effective-once `chat.message` projection tests for duplicate event IDs and currently authorized circle subscribers in `backend/internal/chat/realtime_projector_test.go`
-- [ ] T028 [US1] Implement group `chat.message` projection through the shared circle topic in `backend/internal/chat/realtime_projector.go`
-- [ ] T029 [US1] Define group route strings/wiring, dependencies, outbox lifecycle, and 30-per-minute user-and-circle limiter in `backend/internal/api/routes.go` and `backend/internal/api/router.go`; expose only composition-required aliases in `backend/cmd/api/routes.go` and wire them in `backend/cmd/api/main.go`
-- [ ] T030 [P] [US1] Add model/parser/API-client tests for safe text, cursor pagination, message-ID deduplication, and authenticated group list/send in `mobile/test/features/chat/data/chat_api_client_test.dart` and `mobile/test/features/chat/domain/chat_models_test.dart`
-- [ ] T031 [US1] Implement feature-local message models, protocol constants, and Dio group list/send calls in `mobile/lib/features/chat/domain/chat_models.dart`, `mobile/lib/features/chat/data/chat_protocol_constants.dart`, and `mobile/lib/features/chat/data/chat_api_client.dart`
-- [ ] T032 [US1] Add Riverpod controller tests for initial history, pagination, optimistic item replacement, duplicate realtime events, and safe unknown-event reconciliation in `mobile/test/features/chat/application/group_chat_controller_test.dart`
-- [ ] T033 [US1] Implement authoritative group history state, pagination, send confirmation, and message-ID deduplication in `mobile/lib/features/chat/application/group_chat_controller.dart` and `mobile/lib/features/chat/data/chat_realtime_client.dart`
-- [ ] T034 [US1] Add Arabic/English widget tests for escaped text, empty/overlong validation, deterministic message ordering, accessible error/status labels, and no-session operation in `mobile/test/widget/chat/group_chat_screen_test.dart`
-- [ ] T035 [US1] Implement the Arabic-first RTL-aware group thread, composer, message bubble, pagination, and circle navigation entry in `mobile/lib/features/chat/presentation/group_chat_screen.dart`, `mobile/lib/features/chat/presentation/chat_widgets.dart`, and `mobile/lib/features/circles/presentation/circle_detail_screen.dart`
-- [ ] T036 [US1] Add the no-live-session group history/send/realtime/deduplication acceptance flow in `mobile/integration_test/chat_group_flow_test.dart`
+- [X] T021 [US1] Add service tests for active-circle membership-period history, deterministic `(sent_at,id)` pagination, plain-text validation, idempotent sends, and no-session independence in `backend/internal/chat/group_service_test.go`
+- [X] T022 [US1] Implement group history and text-send authorization/business behavior in `backend/internal/chat/group_service.go`
+- [X] T023 [P] [US1] Add REST contract tests for group list/send, required idempotency, `400/401/403/404/409/422/429` semantics, RBAC denial, rate limits, and response safety in `backend/tests/contract/chat_group_contract_test.go`
+- [X] T024 [US1] Implement response-safe group list/send handlers using centralized HTTP constants in `backend/internal/chat/group_handler.go`
+- [X] T025 [P] [US1] Add tests for atomic message/outbox insertion, five-attempt bounded delivery, audience rebuild plus per-client/session reauthorization, redacted projection, and parked-event replay in `backend/internal/chat/outbox_test.go`
+- [X] T026 [US1] Implement chat outbox creation, claim, retry/backoff/jitter, parking, startup replay, and payload reload in `backend/internal/chat/outbox.go` and `backend/internal/chat/outbox_queries.go`
+- [X] T027 [US1] Add effective-once `chat.message` projection tests for duplicate event IDs and currently authorized circle subscribers in `backend/internal/chat/realtime_projector_test.go`
+- [X] T028 [US1] Implement group `chat.message` projection through the shared circle topic in `backend/internal/chat/realtime_projector.go`
+- [X] T029 [US1] Define group route strings/wiring, dependencies, outbox lifecycle, and 30-per-minute user-and-circle limiter in `backend/internal/api/routes.go` and `backend/internal/api/router.go`; expose only composition-required aliases in `backend/cmd/api/routes.go` and wire them in `backend/cmd/api/main.go`
+- [X] T030 [P] [US1] Add model/parser/API-client tests for safe text, cursor pagination, message-ID deduplication, and authenticated group list/send in `mobile/test/features/chat/data/chat_api_client_test.dart` and `mobile/test/features/chat/domain/chat_models_test.dart`
+- [X] T031 [US1] Implement feature-local message models, protocol constants, and Dio group list/send calls in `mobile/lib/features/chat/domain/chat_models.dart`, `mobile/lib/features/chat/data/chat_protocol_constants.dart`, and `mobile/lib/features/chat/data/chat_api_client.dart`
+- [X] T032 [US1] Add Riverpod controller tests for initial history, pagination, optimistic item replacement, duplicate realtime events, and safe unknown-event reconciliation in `mobile/test/features/chat/application/group_chat_controller_test.dart`
+- [X] T033 [US1] Implement authoritative group history state, pagination, send confirmation, and message-ID deduplication in `mobile/lib/features/chat/application/group_chat_controller.dart` and `mobile/lib/features/chat/data/chat_realtime_client.dart`
+- [X] T034 [US1] Add Arabic/English widget tests for escaped text, empty/overlong validation, deterministic message ordering, accessible error/status labels, and no-session operation in `mobile/test/widget/chat/group_chat_screen_test.dart`
+- [X] T035 [US1] Implement the Arabic-first RTL-aware group thread, composer, message bubble, pagination, and circle navigation entry in `mobile/lib/features/chat/presentation/group_chat_screen.dart`, `mobile/lib/features/chat/presentation/chat_widgets.dart`, and `mobile/lib/features/circles/presentation/circle_detail_screen.dart`
+- [X] T036 [US1] Add the no-live-session group history/send/realtime/deduplication acceptance flow in `mobile/integration_test/chat_group_flow_test.dart`
 
 **Core checkpoint**: T001–T036 deliver the first independently usable slice. Continue through every remaining P1/P2 story for the approved F-004 MVP.
 

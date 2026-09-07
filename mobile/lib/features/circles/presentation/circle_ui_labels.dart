@@ -1,2 +1,41 @@
 const circleCancelLabel = 'إلغاء';
 const circleMutationErrorLabel = 'تعذر إكمال الطلب. حاول مرة أخرى';
+
+abstract final class CircleDetailLabels {
+  static const titleAr = 'تفاصيل الحلقة';
+  static const titleEn = 'Circle details';
+  static const archivedAr = 'هذه الحلقة مؤرشفة ومتاحة للقراءة فقط';
+  static const archivedEn = 'This circle is archived and read-only.';
+  static const capacityAr = 'السعة القصوى';
+  static const capacityEn = 'Maximum capacity';
+  static const visibilityAr = 'نوع الحلقة';
+  static const visibilityEn = 'Circle visibility';
+  static const audienceAr = 'الفئة المستهدفة';
+  static const audienceEn = 'Audience';
+  static const languageAr = 'اللغة';
+  static const languageEn = 'Language';
+  static const rulesAr = 'قواعد الحلقة';
+  static const rulesEn = 'Circle rules';
+  static const membersAr = 'الأعضاء';
+  static const membersEn = 'Members';
+  static const chatAr = 'المحادثة';
+  static const chatEn = 'Chat';
+  static const manageAr = 'إدارة الحلقة';
+  static const manageEn = 'Manage circle';
+  static const archiveAr = 'أرشفة الحلقة';
+  static const archiveEn = 'Archive circle';
+  static const loadErrorAr = 'تعذر تحميل تفاصيل الحلقة';
+  static const loadErrorEn = 'Could not load circle details';
+  static const privateAr = 'خاصة';
+  static const privateEn = 'Private';
+  static const publicAr = 'عامة';
+  static const publicEn = 'Public';
+  static const maleAr = 'ذكور';
+  static const maleEn = 'Male';
+  static const femaleAr = 'إناث';
+  static const femaleEn = 'Female';
+  static const mixedAr = 'مختلطة';
+  static const mixedEn = 'Mixed';
+  static const unspecifiedAr = 'غير محدد';
+  static const unspecifiedEn = 'Unspecified';
+}

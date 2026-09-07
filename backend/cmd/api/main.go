@@ -15,6 +15,7 @@ import (
 
 	apirouter "github.com/KarimMFadel/halaqaty/backend/internal/api"
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
+	"github.com/KarimMFadel/halaqaty/backend/internal/chat"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/config"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/logging"
@@ -31,6 +32,9 @@ import (
 const (
 	queueOutboxPollInterval = 100 * time.Millisecond
 	queueOutboxBatchSize    = 100
+
+	chatOutboxDispatchInterval = 100 * time.Millisecond
+	chatOutboxBatchSize        = 100
 )
 
 type slogOutboxParkedAlerter struct {
@@ -181,6 +185,30 @@ func main() {
 		realtimeHub.SetSessionCommandHandler(liveSessionService.HandleRealtimeCommand)
 	}
 
+	// ── Chat (F-004 US1) ──────────────────────────────────────────────────────
+	// Group chat reuses F-002 memberships (rbacRepo) and the F-005 realtime
+	// transport; the outbox dispatcher projects committed chat events with
+	// bounded retry and parking.
+	chatRepo := chat.NewRepository(pool)
+	chatMetrics := new(metrics.ChatMetrics)
+	chatService := chat.NewGroupService(chatRepo, rbacRepo, chatMetrics, auditLogger)
+	chatProjector := chat.NewRealtimeProjector(rbacRepo, realtimeHub, ticketService, func(ctx context.Context, sessionID, userID string) (bool, error) {
+		session, err := sessionRepo.GetByIDAndUserID(ctx, sessionID, userID)
+		if err != nil {
+			return false, err
+		}
+		return session.RevokedAt == nil && time.Now().Before(session.ExpiresAt), nil
+	})
+	chatDispatcher := chat.NewOutboxDispatcher(
+		chat.NewPGOutboxStore(chatRepo),
+		chatProjector,
+		chatMetrics,
+		auditLogger,
+		nil,
+		nil,
+	)
+	chatHandler := chat.NewGroupHandler(chatService)
+
 	mwSet := apirouter.MiddlewareSet{
 		Auth:            authMW,
 		Role:            roleMW,
@@ -192,10 +220,13 @@ func main() {
 		RealtimeHandler: realtimeHandler,
 		RealtimeHub:     realtimeHub,
 		QueueHandler:    queueHandler,
+		ChatHandler:     chatHandler,
+		ChatSendLimiter: chat.NewChatSendLimiter(chat.MaxSendsPerMinute),
 		Timeout:         cfg.RequestTimeout,
 		Logger:          logger,
 		Metrics:         authMetrics,
 		QueueMetrics:    queueMetrics,
+		ChatMetrics:     chatMetrics,
 		MetricsToken:    cfg.MetricsToken,
 	}
 
@@ -246,6 +277,13 @@ func main() {
 			}
 		}()
 	}
+	// Chat outbox lifecycle: startup replay of pending and parked events, then
+	// periodic dispatch until shutdown; Run honors reconcilerCtx cancellation.
+	go func() {
+		if err := chatDispatcher.Run(reconcilerCtx, chatOutboxBatchSize, chatOutboxDispatchInterval); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Error("chat outbox dispatch stopped", "error", err)
+		}
+	}()
 
 	go func() {
 		logger.Info("server starting", "addr", srv.Addr)

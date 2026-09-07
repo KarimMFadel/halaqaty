@@ -31,6 +31,15 @@ func NewTicketService(reader CircleTopicReader) *TicketService {
 
 // Issue creates a 60-second ticket for the user's current circles.
 func (s *TicketService) Issue(ctx context.Context, userID string) (Ticket, error) {
+	return s.issue(ctx, userID, "")
+}
+
+// IssueForSession creates a ticket bound to one backend session.
+func (s *TicketService) IssueForSession(ctx context.Context, userID, sessionID string) (Ticket, error) {
+	return s.issue(ctx, userID, sessionID)
+}
+
+func (s *TicketService) issue(ctx context.Context, userID, sessionID string) (Ticket, error) {
 	if s == nil || s.reader == nil {
 		return Ticket{}, errors.New("realtime ticket service is not configured")
 	}
@@ -41,7 +50,7 @@ func (s *TicketService) Issue(ctx context.Context, userID string) (Ticket, error
 	if err != nil {
 		return Ticket{}, fmt.Errorf("list realtime circles: %w", err)
 	}
-	ticket := Ticket{Token: uuid.NewString(), UserID: userID, CircleIDs: circles, ExpiresAt: s.now().UTC().Add(TicketTTL)}
+	ticket := Ticket{Token: uuid.NewString(), UserID: userID, SessionID: sessionID, CircleIDs: circles, ExpiresAt: s.now().UTC().Add(TicketTTL)}
 	s.mu.Lock()
 	s.tokens[ticket.Token] = ticket
 	s.mu.Unlock()

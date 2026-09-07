@@ -347,16 +347,17 @@ func (h *Hub) broadcast(ctx context.Context, topic Topic, eventID string, payloa
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	alreadySeen := false
 	if eventID != "" {
 		seen := h.seenEvents[topic.String()]
 		if seen == nil {
 			seen = map[string]struct{}{}
 			h.seenEvents[topic.String()] = seen
 		}
-		if _, ok := seen[eventID]; ok {
+		_, alreadySeen = seen[eventID]
+		if alreadySeen {
 			return nil
 		}
-		seen[eventID] = struct{}{}
 	}
 	for client := range h.clients {
 		client.mu.Lock()
@@ -374,6 +375,9 @@ func (h *Hub) broadcast(ctx context.Context, topic Topic, eventID string, payloa
 		if err != nil {
 			return err
 		}
+	}
+	if eventID != "" {
+		h.seenEvents[topic.String()][eventID] = struct{}{}
 	}
 	return nil
 }
@@ -412,7 +416,6 @@ func (h *Hub) SendToUsers(ctx context.Context, userIDs []string, delivery Author
 				delete(targets, userID)
 				continue
 			}
-			seen[delivery.EventID] = struct{}{}
 		}
 	}
 	for client := range h.clients {
@@ -421,6 +424,11 @@ func (h *Hub) SendToUsers(ctx context.Context, userIDs []string, delivery Author
 		}
 		if err := client.writeTextAuthorized(ctx, encoded, delivery.Authorize); err != nil {
 			return err
+		}
+	}
+	if delivery.EventID != "" {
+		for userID := range targets {
+			h.seenEvents["direct:"+userID][delivery.EventID] = struct{}{}
 		}
 	}
 	return nil

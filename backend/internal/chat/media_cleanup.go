@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -21,6 +22,8 @@ type StagedUploadSource interface {
 	// and liveness-safe: a claimed row is never reprocessed even when its
 	// object deletion fails.
 	ClaimExpiredStaged(ctx context.Context, cutoff time.Time, limit int) ([]Upload, error)
+	ReleaseExpiredStaged(ctx context.Context, uploadID uuid.UUID) error
+	FinalizeExpiredStaged(ctx context.Context, uploadID uuid.UUID) error
 }
 
 // Cleaner revokes staged chat upload objects past retention and removes the
@@ -56,7 +59,12 @@ func (c *Cleaner) CleanStaged(ctx context.Context, limit int) error {
 	var failures []error
 	for _, upload := range claimed {
 		if err := c.store.ApplyDeleteMarker(ctx, upload.ObjectKey); err != nil {
+			_ = c.source.ReleaseExpiredStaged(ctx, upload.ID)
 			failures = append(failures, fmt.Errorf("delete staged chat upload object %s: %w", upload.ObjectKey, err))
+			continue
+		}
+		if err := c.source.FinalizeExpiredStaged(ctx, upload.ID); err != nil {
+			failures = append(failures, err)
 		}
 	}
 	return errors.Join(failures...)
@@ -106,4 +114,20 @@ func (s *PoolStagedUploadSource) ClaimExpiredStaged(ctx context.Context, cutoff 
 		return nil, fmt.Errorf("iterate claimed staged chat uploads: %w", err)
 	}
 	return uploads, nil
+}
+
+// ReleaseExpiredStaged makes a failed object deletion retryable.
+func (s *PoolStagedUploadSource) ReleaseExpiredStaged(ctx context.Context, uploadID uuid.UUID) error {
+	if _, err := s.pool.Exec(ctx, releaseExpiredStagedUploadQuery, uploadID); err != nil {
+		return fmt.Errorf("release staged chat upload: %w", err)
+	}
+	return nil
+}
+
+// FinalizeExpiredStaged removes metadata after the object is revoked.
+func (s *PoolStagedUploadSource) FinalizeExpiredStaged(ctx context.Context, uploadID uuid.UUID) error {
+	if _, err := s.pool.Exec(ctx, finalizeExpiredStagedUploadQuery, uploadID); err != nil {
+		return fmt.Errorf("finalize staged chat upload cleanup: %w", err)
+	}
+	return nil
 }

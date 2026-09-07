@@ -81,4 +81,14 @@ const (
 	ErrorMessageQueueInvalidOrder      = "ordered_ids must list every candidate exactly once"
 	ErrorMessageQueueInvalidGrade      = "grade must be one of the five accepted grades"
 	ErrorMessageQueueInvalidNote       = "note must be at most 500 characters"
+
+	// Chat messages (F-004 US1). User-safe: no content, keys, URLs, or
+	// identifiers appear in these strings.
+	ErrorMessageChatIdempotencyKeyInvalid = "Idempotency-Key header is required and must be at most 128 characters"
+	ErrorMessageChatTextInvalid           = "content must be between 1 and 4000 characters"
+	ErrorMessageChatMessageTypeTextOnly   = "message_type must be text"
+	ErrorMessageChatUploadIDNotAllowed    = "text messages must not include upload_id"
+	ErrorMessageChatMediaKeyUnsupported   = "media_key is not supported"
+	ErrorMessageChatReplyUnsupported      = "reply_to_id is not supported yet"
+	ErrorMessageChatLimitInvalid          = "limit must be between 1 and 100"
 )

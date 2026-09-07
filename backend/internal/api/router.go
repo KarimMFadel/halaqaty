@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
+	"github.com/KarimMFadel/halaqaty/backend/internal/chat"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
 	phttp "github.com/KarimMFadel/halaqaty/backend/internal/platform/http"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
@@ -31,10 +32,13 @@ type MiddlewareSet struct {
 	RealtimeHandler *realtime.Handler
 	RealtimeHub     *realtime.Hub
 	QueueHandler    *queue.Handler
+	ChatHandler     *chat.GroupHandler
+	ChatSendLimiter *chat.ChatSendLimiter
 	Timeout         time.Duration
 	Logger          *slog.Logger
 	Metrics         *metrics.AuthMetrics
 	QueueMetrics    *metrics.QueueMetrics
+	ChatMetrics     *metrics.ChatMetrics
 	MetricsToken    string
 }
 
@@ -284,6 +288,17 @@ func (r *Router) registerRoutes() {
 			r.mux.Handle(routeSessionQueueOptOut, r.requireWithUserLimit(http.HandlerFunc(queueHandler.RequestOptOut)))
 			r.mux.Handle(routeSessionQueueOptOutDecision, r.requireWithUserLimit(http.HandlerFunc(queueHandler.DecideOptOutRequest)))
 		}
+		if r.mw.ChatHandler != nil {
+			chatH := r.mw.ChatHandler
+			r.mux.Handle(routeCircleMessagesGet, r.requireWithUserLimit(http.HandlerFunc(chatH.ListCircleMessages)))
+			// Chat sends stack the FR-006 30-per-minute per-user-and-circle
+			// fixed window on top of the generic per-user budget.
+			var chatSend http.Handler = http.HandlerFunc(chatH.SendCircleMessage)
+			if r.mw.ChatSendLimiter != nil {
+				chatSend = r.mw.ChatSendLimiter.Limit(chatSend)
+			}
+			r.mux.Handle(routeCircleMessagesSend, r.requireWithUserLimit(chatSend))
+		}
 	}
 	if r.mw.SessionHandler != nil {
 		r.mux.Handle(routeWebhookLiveKit, r.mw.SessionHandler)
@@ -304,6 +319,7 @@ func (r *Router) metricsHandler() http.Handler {
 		phttp.WriteJSON(w, http.StatusOK, metricsResponse{
 			MetricsSummary: r.mw.Metrics.Summary(),
 			Queue:          r.mw.QueueMetrics.Summary(),
+			Chat:           r.mw.ChatMetrics.Summary(),
 		})
 	})
 }
@@ -311,6 +327,7 @@ func (r *Router) metricsHandler() http.Handler {
 type metricsResponse struct {
 	metrics.MetricsSummary
 	Queue metrics.QueueMetricsSummary `json:"queue"`
+	Chat  metrics.ChatMetricsSummary  `json:"chat"`
 }
 
 func validationMiddleware(next http.Handler) http.Handler {

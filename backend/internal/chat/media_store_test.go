@@ -466,6 +466,9 @@ func (s *fakeStagedSource) ClaimExpiredStaged(ctx context.Context, cutoff time.T
 	return s.rows, s.err
 }
 
+func (s *fakeStagedSource) ReleaseExpiredStaged(context.Context, uuid.UUID) error  { return nil }
+func (s *fakeStagedSource) FinalizeExpiredStaged(context.Context, uuid.UUID) error { return nil }
+
 func newTestCleaner(source StagedUploadSource, fake *fakeObjectClient, now time.Time) *Cleaner {
 	cleaner := NewCleaner(source, newTestMediaStore(fake))
 	cleaner.now = func() time.Time { return now }

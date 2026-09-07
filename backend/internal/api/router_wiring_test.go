@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
+	"github.com/KarimMFadel/halaqaty/backend/internal/chat"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
 	phttp "github.com/KarimMFadel/halaqaty/backend/internal/platform/http"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
@@ -141,6 +142,8 @@ func fullWiringMiddlewareSet(authMW *middleware.AuthMiddleware, extras ...func(*
 		RealtimeHandler: realtime.NewHandler(nil),
 		RealtimeHub:     realtime.NewHub(nil, nil),
 		QueueHandler:    queue.NewHandler(nil, nil, nil, nil, nil),
+		ChatHandler:     chat.NewGroupHandler(nil),
+		ChatSendLimiter: chat.NewChatSendLimiter(30),
 	}
 	for _, apply := range extras {
 		apply(&mw)
@@ -190,6 +193,8 @@ func TestRegisterRoutes_EveryProtectedRouteRejectsUnauthenticatedRequests(t *tes
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/participants/" + wiringOtherUserID + "/unmute"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/participants/" + wiringOtherUserID + "/remove"},
 		{http.MethodPost, "/api/v1/realtime/tickets"},
+		{http.MethodGet, "/api/v1/circles/" + wiringCircleID + "/messages"},
+		{http.MethodPost, "/api/v1/circles/" + wiringCircleID + "/messages"},
 		{http.MethodGet, "/api/v1/sessions/" + wiringSessionIDPath + "/queue"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/queue/rounds"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/queue/reset"},
@@ -267,6 +272,12 @@ func TestRegisterRoutes_UnconfiguredHandlersReturnTypedInternalErrors(t *testing
 			path:        "/api/v1/circles",
 			body:        `{"name":"Wiring Circle"}`,
 			wantMessage: httpconst.ErrorMessageRBACHandlerNotConfigured,
+		},
+		{
+			name:        "chat list without service reports internal server error",
+			method:      http.MethodGet,
+			path:        "/api/v1/circles/" + wiringCircleID + "/messages",
+			wantMessage: httpconst.ErrorMessageInternalServerError,
 		},
 	}
 
@@ -395,9 +406,12 @@ func TestRouter_MetricsHandler_RequiresBearerToken(t *testing.T) {
 	authMetrics.RecordRequest(time.Millisecond)
 	queueMetrics := new(metrics.QueueMetrics)
 	queueMetrics.RecordOutboxParked()
+	chatMetrics := new(metrics.ChatMetrics)
+	chatMetrics.RecordOutbox(metrics.ChatOutboxDelivered)
 	router := NewRouter(MiddlewareSet{
 		Metrics:      authMetrics,
 		QueueMetrics: queueMetrics,
+		ChatMetrics:  chatMetrics,
 		MetricsToken: "wiring-metrics-token",
 	})
 
@@ -423,7 +437,7 @@ func TestRouter_MetricsHandler_RequiresBearerToken(t *testing.T) {
 		}
 	})
 
-	t.Run("valid token returns auth and queue summaries", func(t *testing.T) {
+	t.Run("valid token returns auth, queue, and chat summaries", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 		req.Header.Set(httpconst.HeaderAuthorization, "Bearer wiring-metrics-token")
 		rec := httptest.NewRecorder()
@@ -435,6 +449,7 @@ func TestRouter_MetricsHandler_RequiresBearerToken(t *testing.T) {
 		var summary struct {
 			metrics.MetricsSummary
 			Queue metrics.QueueMetricsSummary `json:"queue"`
+			Chat  metrics.ChatMetricsSummary  `json:"chat"`
 		}
 		if err := json.Unmarshal(rec.Body.Bytes(), &summary); err != nil {
 			t.Fatalf("decode metrics response: %v", err)
@@ -444,6 +459,25 @@ func TestRouter_MetricsHandler_RequiresBearerToken(t *testing.T) {
 		}
 		if summary.Queue.OutboxParkedTotal != 1 {
 			t.Fatalf("queue parked total: got %d, want 1", summary.Queue.OutboxParkedTotal)
+		}
+		if summary.Chat.Outbox[metrics.ChatOutboxDelivered] != 1 {
+			t.Fatalf("chat delivered total: got %d, want 1", summary.Chat.Outbox[metrics.ChatOutboxDelivered])
+		}
+	})
+
+	t.Run("nil chat metrics set does not panic", func(t *testing.T) {
+		nilChatRouter := NewRouter(MiddlewareSet{
+			Metrics:      new(metrics.AuthMetrics),
+			QueueMetrics: new(metrics.QueueMetrics),
+			MetricsToken: "wiring-metrics-token",
+		})
+		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		req.Header.Set(httpconst.HeaderAuthorization, "Bearer wiring-metrics-token")
+		rec := httptest.NewRecorder()
+		nilChatRouter.Handler().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status: got %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
 		}
 	})
 }

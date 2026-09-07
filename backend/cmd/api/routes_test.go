@@ -41,3 +41,32 @@ func TestF005RouteConstantsMatchContract(t *testing.T) {
 		t.Fatalf("contract coverage: got %d F-005 operations, want 13", len(tests))
 	}
 }
+
+// TestF004RouteConstantsMatchContract pins every wired F-004 US1 route
+// constant to the method and path of its operation in the canonical OpenAPI
+// contract (docs/contracts/openapi.yaml, server base /api/v1). Remaining
+// F-004 operations are wired with their own stories.
+func TestF004RouteConstantsMatchContract(t *testing.T) {
+	tests := []struct {
+		operationID string
+		route       string
+		want        string
+	}{
+		{operationID: "listCircleMessages", route: routeCircleMessagesGet, want: "GET /api/v1/circles/{circleId}/messages"},
+		{operationID: "sendCircleMessage", route: routeCircleMessagesSend, want: "POST /api/v1/circles/{circleId}/messages"},
+	}
+
+	seen := make(map[string]string, len(tests))
+	for _, tt := range tests {
+		if tt.route != tt.want {
+			t.Errorf("%s: got %q, want %q", tt.operationID, tt.route, tt.want)
+		}
+		if prev, dup := seen[tt.route]; dup {
+			t.Errorf("duplicate route constant %q used by %s and %s", tt.route, prev, tt.operationID)
+		}
+		seen[tt.route] = tt.operationID
+	}
+	if len(tests) != 2 {
+		t.Fatalf("contract coverage: got %d F-004 US1 operations, want 2", len(tests))
+	}
+}

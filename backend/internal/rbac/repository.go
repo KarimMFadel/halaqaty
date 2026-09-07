@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -165,6 +166,15 @@ func (r *Repository) IsMember(ctx context.Context, circleID, userID string) (boo
 		return false, fmt.Errorf("check circle membership: %w", err)
 	}
 	return true, nil
+}
+
+// MembershipStartedAt returns the current membership period start.
+func (r *Repository) MembershipStartedAt(ctx context.Context, circleID, userID string) (time.Time, error) {
+	var joined time.Time
+	if err := r.q.QueryRow(ctx, membershipStartedAtQuery, circleID, userID).Scan(&joined); err != nil {
+		return time.Time{}, fmt.Errorf("load membership period: %w", err)
+	}
+	return joined, nil
 }
 
 // ListMembers returns all members of a circle with their display names and roles.

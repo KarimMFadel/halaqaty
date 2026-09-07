@@ -85,7 +85,7 @@ Deliver one PostgreSQL-authoritative group chat per circle and role-restricted p
 
 1. Add chat event constants and a chat command handler to the existing hub without changing F-005 session-topic semantics. Group events use circle topics; DM events use direct authenticated-user delivery and never choose a qualifying circle topic.
 2. Insert outbox rows atomically with message/read/delete mutations. Rebuild payloads from PostgreSQL and revalidate each target user/session immediately before socket write; revoked sessions and removed/newly unauthorized group or DM recipients receive nothing.
-3. Run a bounded dispatcher with startup replay, `SKIP LOCKED`, five attempts, 1/2/4/8/16-second jittered delays capped at 30 seconds, parked rows, backlog/age/parked metrics, and redacted structured logs.
+3. Run a bounded dispatcher with startup replay, `SKIP LOCKED`, five attempts, 1/2/4/8-second jittered delays (hard cap 30 seconds), parked rows, backlog/age/parked metrics, and redacted structured logs.
 4. Treat WebSocket delivery as optional projection: REST success is based only on committed PostgreSQL state, and reconnect always reconciles through paginated REST history.
 
 ## Phase 3 — Flutter chat feature

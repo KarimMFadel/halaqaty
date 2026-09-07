@@ -148,6 +148,11 @@ type OutboxEvent struct {
 	AvailableAt  time.Time
 	DeliveredAt  *time.Time
 	ParkedAt     *time.Time
+	// WasParked carries the pre-claim parked state of a replay-claimed event:
+	// Postgres RETURNING yields post-update values (parked_at is already
+	// NULL), so the replay claim selects this flag from the pre-update row.
+	// Only ClaimReplayEvents populates it.
+	WasParked bool
 }
 
 // ModerationAudit records a content-free teacher moderation action.

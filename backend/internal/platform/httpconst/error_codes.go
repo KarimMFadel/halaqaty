@@ -112,4 +112,13 @@ const (
 	FieldQueueOptOut          = "opt_out"
 	FieldQueueGradeVisibility = "grade_visibility"
 	FieldQueueGradeCorrection = "grade_correction"
+
+	// Chat request fields (F-004), named as in the canonical chat contracts.
+	FieldLimit       = "limit"
+	FieldBefore      = "before"
+	FieldMessageType = "message_type"
+	FieldContent     = "content"
+	FieldUploadID    = "upload_id"
+	FieldMediaKey    = "media_key"
+	FieldReplyToID   = "reply_to_id"
 )

@@ -114,6 +114,8 @@ WHERE circle_id = $1::uuid AND user_id = $2::uuid
 LIMIT 1
 `
 
+const membershipStartedAtQuery = `SELECT joined_at FROM circle_members WHERE circle_id = $1::uuid AND user_id = $2::uuid LIMIT 1`
+
 const listCircleMembersQuery = `
 SELECT
     cm.user_id::text,

@@ -16,4 +16,7 @@ const (
 	routeSessionParticipantRemove = apirouter.RouteSessionParticipantRemove
 	routeRealtimeTicketsCreate    = apirouter.RouteRealtimeTicketsCreate
 	routeWebhookLiveKit           = apirouter.RouteWebhookLiveKit
+
+	routeCircleMessagesGet  = apirouter.RouteCircleMessagesGet
+	routeCircleMessagesSend = apirouter.RouteCircleMessagesSend
 )

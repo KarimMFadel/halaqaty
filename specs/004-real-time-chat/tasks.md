@@ -22,22 +22,22 @@
 
 **Purpose**: Establish shared persistence, validation, media, observability, and realtime seams required by every story.
 
-- [ ] T005 Add fresh, upgrade, down, and reapply migration tests that preserve prior-feature data in `backend/tests/integration/real_time_chat_migration_test.go`
-- [ ] T006 Implement the five F-004 tables, constraints, Arabic normalization function, GIN/index support, and idempotency uniqueness in `backend/migrations/000018_real_time_chat.up.sql`
-- [ ] T007 Implement dependency-safe rollback of only F-004-owned objects in `backend/migrations/000018_real_time_chat.down.sql`
-- [ ] T008 [P] Add table-driven tests for exact-one-context, payload compatibility, text length, cursor, MIME, size, duration, and idempotency validation in `backend/internal/chat/validation_test.go`
-- [ ] T009 Define chat domain types, stable errors, state values, limits, and validation in `backend/internal/chat/models.go` and `backend/internal/chat/validation.go`
-- [ ] T010 Add repository integration tests for transactions, keyset ordering, current membership-period filtering, unordered DM pairs, and unique read/idempotency facts in `backend/internal/chat/repository_integration_test.go`
-- [ ] T011 Define all chat SQL as package-level constants, including authorization joins and `FOR UPDATE SKIP LOCKED` claims, in `backend/internal/chat/queries.go`
-- [ ] T012 Implement transaction-safe chat persistence and query methods in `backend/internal/chat/repository.go`
-- [ ] T013 [P] Add configuration/Compose tests for official-source MinIO `RELEASE.2025-10-15T17-29-55Z`, secret-free credentials, healthcheck, persistent volume, private chat bucket, required versioning, and bounded timeouts in `backend/internal/platform/config/chat_media_config_test.go` and `backend/tests/integration/chat_minio_compose_test.go`
-- [ ] T014 Build MinIO from its pinned official source tag in `docker/minio.Dockerfile`; add the service/volume/healthcheck to `docker-compose.yml`, secret-free variables to `.env.example`, chat media configuration to `backend/internal/platform/config/chat_media_config.go`, and approved `github.com/minio/minio-go/v7` dependency to `backend/go.mod` and `backend/go.sum`
-- [ ] T015 Add adapter tests for private object keys, sanitized metadata, versionless presigning, bucket-versioning enforcement, timeout propagation, 24-hour staged cleanup, and best-effort failed-finalization cleanup in `backend/internal/chat/media_store_test.go`
-- [ ] T016 Implement the narrow MinIO-backed media store, fail-fast versioned-bucket startup check, and 24-hour unattached cleanup in `backend/internal/chat/media_store.go` and `backend/internal/chat/media_cleanup.go`
-- [ ] T017 [P] Add tests that chat metrics and audit logs expose identifiers/outcomes but never bodies, filenames, keys, URLs, tokens, or session IDs in `backend/internal/platform/metrics/chat_metrics_test.go` and `backend/internal/platform/logging/chat_audit_test.go`
-- [ ] T018 Implement chat latency/outcome, denial, upload, outbox, reconnect, and search metrics plus redacted audit events in `backend/internal/platform/metrics/chat_metrics.go` and `backend/internal/platform/logging/chat_audit.go`
-- [ ] T019 [P] Add regression tests for per-client/session authorization immediately before write, circle-topic group delivery, direct authenticated-user DM delivery across different subscribed circles, revoked-session suppression, chat commands, and unchanged session-topic behavior in `backend/internal/realtime/hub_chat_test.go` and `backend/internal/realtime/types_test.go`
-- [ ] T020 Extend the generic hub with chat event constants, injectable per-write authorization, and direct eligible-user delivery seams without LiveKit or chat-domain imports in `backend/internal/realtime/types.go` and `backend/internal/realtime/hub.go`
+- [X] T005 Add fresh, upgrade, down, and reapply migration tests that preserve prior-feature data in `backend/tests/integration/real_time_chat_migration_test.go`
+- [X] T006 Implement the five F-004 tables, constraints, Arabic normalization function, GIN/index support, and idempotency uniqueness in `backend/migrations/000018_real_time_chat.up.sql`
+- [X] T007 Implement dependency-safe rollback of only F-004-owned objects in `backend/migrations/000018_real_time_chat.down.sql`
+- [X] T008 [P] Add table-driven tests for exact-one-context, payload compatibility, text length, cursor, MIME, size, duration, and idempotency validation in `backend/internal/chat/validation_test.go`
+- [X] T009 Define chat domain types, stable errors, state values, limits, and validation in `backend/internal/chat/models.go` and `backend/internal/chat/validation.go`
+- [X] T010 Add repository integration tests for transactions, keyset ordering, current membership-period filtering, unordered DM pairs, and unique read/idempotency facts in `backend/internal/chat/repository_integration_test.go`
+- [X] T011 Define all chat SQL as package-level constants, including authorization joins and `FOR UPDATE SKIP LOCKED` claims, in `backend/internal/chat/queries.go`
+- [X] T012 Implement transaction-safe chat persistence and query methods in `backend/internal/chat/repository.go`
+- [X] T013 [P] Add configuration/Compose tests for official-source MinIO `RELEASE.2025-10-15T17-29-55Z`, secret-free credentials, healthcheck, persistent volume, private chat bucket, required versioning, and bounded timeouts in `backend/internal/platform/config/chat_media_config_test.go` and `backend/tests/integration/chat_minio_compose_test.go`
+- [X] T014 Build MinIO from its pinned official source tag in `docker/minio.Dockerfile`; add the service/volume/healthcheck to `docker-compose.yml`, secret-free variables to `.env.example`, chat media configuration to `backend/internal/platform/config/chat_media_config.go`, and approved `github.com/minio/minio-go/v7` dependency to `backend/go.mod` and `backend/go.sum`
+- [X] T015 Add adapter tests for private object keys, sanitized metadata, versionless presigning, bucket-versioning enforcement, timeout propagation, 24-hour staged cleanup, and best-effort failed-finalization cleanup in `backend/internal/chat/media_store_test.go`
+- [X] T016 Implement the narrow MinIO-backed media store, fail-fast versioned-bucket startup check, and 24-hour unattached cleanup in `backend/internal/chat/media_store.go` and `backend/internal/chat/media_cleanup.go`
+- [X] T017 [P] Add tests that chat metrics and audit logs expose identifiers/outcomes but never bodies, filenames, keys, URLs, tokens, or session IDs in `backend/internal/platform/metrics/chat_metrics_test.go` and `backend/internal/platform/logging/chat_audit_test.go`
+- [X] T018 Implement chat latency/outcome, denial, upload, outbox, reconnect, and search metrics plus redacted audit events in `backend/internal/platform/metrics/chat_metrics.go` and `backend/internal/platform/logging/chat_audit.go`
+- [X] T019 [P] Add regression tests for per-client/session authorization immediately before write, circle-topic group delivery, direct authenticated-user DM delivery across different subscribed circles, revoked-session suppression, chat commands, and unchanged session-topic behavior in `backend/internal/realtime/hub_chat_test.go` and `backend/internal/realtime/types_test.go`
+- [X] T020 Extend the generic hub with chat event constants, injectable per-write authorization, and direct eligible-user delivery seams without LiveKit or chat-domain imports in `backend/internal/realtime/types.go` and `backend/internal/realtime/hub.go`
 
 **Gate**: Foundation tests pass; migration rollback is proven; no user story starts before this phase completes.
 

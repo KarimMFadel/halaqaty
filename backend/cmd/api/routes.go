@@ -19,4 +19,9 @@ const (
 
 	routeCircleMessagesGet  = apirouter.RouteCircleMessagesGet
 	routeCircleMessagesSend = apirouter.RouteCircleMessagesSend
+
+	routeUploadsVoice    = apirouter.RouteUploadsVoice
+	routeUploadsImage    = apirouter.RouteUploadsImage
+	routeUploadsFile     = apirouter.RouteUploadsFile
+	routeMessageMediaURL = apirouter.RouteMessageMediaURL
 )

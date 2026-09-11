@@ -11,6 +11,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+func sameUUID(a, b *uuid.UUID) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
 // ErrUploadNotStaged indicates an attach targeted an upload that is no longer
 // staged (already attached or revoked), making the transition single-use.
 var ErrUploadNotStaged = errors.New("chat: upload is not staged")
@@ -109,14 +116,39 @@ func (t *Tx) InsertMessage(ctx context.Context, in MessageInput) (Message, bool,
 	msg, err := scanMessage(t.tx.QueryRow(ctx, insertMessageQuery, in.CircleID, in.DMRecipientID,
 		in.SenderID, in.IdempotencyKey, in.Type, content, in.UploadID, in.ReplyToID))
 	if errors.Is(err, pgx.ErrNoRows) {
-		existing, err := scanMessage(t.tx.QueryRow(ctx, findMessageByIdempotencyQuery, in.SenderID, in.IdempotencyKey))
+		existing, found, err := t.FindMessageByIdempotency(ctx, in.SenderID, in.IdempotencyKey)
 		if err != nil {
-			return Message{}, false, fmt.Errorf("load existing chat message: %w", err)
+			return Message{}, false, err
+		}
+		if !found {
+			// The insert already reported this (sender, key) as replayed, so
+			// the committed row must exist; report the anomaly instead of
+			// returning a zero message as a successful replay.
+			return Message{}, false, fmt.Errorf("resolve chat message replay for sender %s: %w", in.SenderID, ErrIdempotencyConflict)
+		}
+		if !sameUUID(existing.CircleID, in.CircleID) || !sameUUID(existing.DMRecipientID, in.DMRecipientID) || existing.Type != in.Type ||
+			existing.Content != in.Content || !sameUUID(existing.UploadID, in.UploadID) ||
+			!sameUUID(existing.ReplyToID, in.ReplyToID) {
+			return Message{}, false, ErrIdempotencyConflict
 		}
 		return existing, false, nil
 	}
 	if err != nil {
 		return Message{}, false, fmt.Errorf("insert chat message: %w", err)
+	}
+	return msg, true, nil
+}
+
+// FindMessageByIdempotency loads the committed message for one (sender,
+// idempotency key) pair without inserting; found is false when no committed
+// message exists for the pair.
+func (t *Tx) FindMessageByIdempotency(ctx context.Context, senderID uuid.UUID, idempotencyKey string) (Message, bool, error) {
+	msg, err := scanMessage(t.tx.QueryRow(ctx, findMessageByIdempotencyQuery, senderID, idempotencyKey))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Message{}, false, nil
+	}
+	if err != nil {
+		return Message{}, false, fmt.Errorf("load chat message by idempotency: %w", err)
 	}
 	return msg, true, nil
 }
@@ -152,6 +184,20 @@ func (t *Tx) AttachUpload(ctx context.Context, uploadID uuid.UUID) (Upload, erro
 		return Upload{}, fmt.Errorf("attach chat upload: %w", err)
 	}
 	return attached, nil
+}
+
+// LoadUploadForUpdate loads one upload row locked by the enclosing
+// transaction for attach-time reauthorization; a missing upload is denied
+// non-enumeratingly with ErrUploadNotAttachable.
+func (t *Tx) LoadUploadForUpdate(ctx context.Context, uploadID uuid.UUID) (Upload, error) {
+	upload, err := scanUpload(t.tx.QueryRow(ctx, findUploadForUpdateQuery, uploadID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Upload{}, ErrUploadNotAttachable
+	}
+	if err != nil {
+		return Upload{}, fmt.Errorf("lock chat upload for attach: %w", err)
+	}
+	return upload, nil
 }
 
 // InsertModerationAudit appends one content-free moderation fact.
@@ -257,17 +303,78 @@ func (r *Repository) ClaimOutboxEvents(ctx context.Context, limit int) ([]Outbox
 }
 
 // InsertUpload stages one private attachment row and returns the persisted
-// projection with its server-generated identity.
+// projection. A caller-pinned ID (the upload identity the object key derives
+// from) is preserved; a nil ID is database-generated.
 func (r *Repository) InsertUpload(ctx context.Context, upload Upload) (Upload, error) {
-	var duration any
+	var id, duration any
+	if upload.ID != uuid.Nil {
+		id = upload.ID
+	}
 	if upload.DurationSeconds != 0 {
 		duration = upload.DurationSeconds
 	}
-	staged, err := scanUpload(r.pool.QueryRow(ctx, insertUploadQuery, upload.UploaderID,
+	staged, err := scanUpload(r.pool.QueryRow(ctx, insertUploadQuery, id, upload.UploaderID,
 		upload.AuthorizationCircleID, upload.DMPeerID, upload.ObjectKey, upload.MIMEType,
 		upload.OriginalFileName, upload.SizeBytes, duration))
 	if err != nil {
 		return Upload{}, fmt.Errorf("stage chat upload: %w", err)
 	}
 	return staged, nil
+}
+
+// CountRecentUploads counts the uploader's successfully staged uploads
+// (staged or attached) created since the given instant, for the rolling-hour
+// upload budget (FR-022).
+func (r *Repository) CountRecentUploads(ctx context.Context, uploaderID uuid.UUID, since time.Time) (int, error) {
+	var count int
+	if err := r.pool.QueryRow(ctx, countRecentUploadsQuery, uploaderID, since).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count recent chat uploads: %w", err)
+	}
+	return count, nil
+}
+
+// FindQualifyingDMCircle returns one shared active circle that currently
+// authorizes the unordered pair's direct conversation (teacher-student or
+// supervisor-student roles in either direction), or uuid.Nil with false when
+// no qualifying circle exists (FR-016). The pair conversation is not owned by
+// the returned witness (FR-023).
+func (r *Repository) FindQualifyingDMCircle(ctx context.Context, userA, userB uuid.UUID) (uuid.UUID, bool, error) {
+	var circleID uuid.UUID
+	err := r.pool.QueryRow(ctx, findQualifyingDMCircleQuery, userA, userB).Scan(&circleID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, false, nil
+	}
+	if err != nil {
+		return uuid.Nil, false, fmt.Errorf("find qualifying dm circle: %w", err)
+	}
+	return circleID, true, nil
+}
+
+// FindMessageUpload loads one message together with its attached upload for
+// media renewal. A missing message or a message without an attached upload
+// (for example a text message) is denied non-enumeratingly with
+// ErrMessageNotVisible.
+func (r *Repository) FindMessageUpload(ctx context.Context, messageID uuid.UUID) (Message, Upload, error) {
+	var m Message
+	var u Upload
+	var content *string
+	var duration *int
+	err := r.pool.QueryRow(ctx, findMessageUploadQuery, messageID).Scan(
+		&m.ID, &m.CircleID, &m.DMRecipientID, &m.SenderID, &m.Type, &content,
+		&m.UploadID, &m.ReplyToID, &m.State, &m.SentAt, &m.DeletedAt,
+		&u.ID, &u.UploaderID, &u.AuthorizationCircleID, &u.DMPeerID, &u.ObjectKey,
+		&u.MIMEType, &u.OriginalFileName, &u.SizeBytes, &duration, &u.State, &u.CreatedAt, &u.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Message{}, Upload{}, ErrMessageNotVisible
+	}
+	if err != nil {
+		return Message{}, Upload{}, fmt.Errorf("load chat message upload: %w", err)
+	}
+	if content != nil {
+		m.Content = *content
+	}
+	if duration != nil {
+		u.DurationSeconds = *duration
+	}
+	return m, u, nil
 }

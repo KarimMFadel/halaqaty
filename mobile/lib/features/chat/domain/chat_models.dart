@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:halaqaty_mobile/features/chat/data/chat_protocol_constants.dart';
 
 /// F-004 domain models for chat per `specs/004-real-time-chat/contracts/`.
@@ -31,6 +33,9 @@ ChatDeliveryStatus _deliveryStatusFromName(String? name) {
   return status;
 }
 
+DateTime? _parseNullableDate(String? raw) =>
+    raw == null ? null : DateTime.parse(raw);
+
 /// Validates chat text before sending: non-empty after trimming and at most
 /// [ChatLimits.maxContentLength] characters (contract `content.maxLength`).
 ChatTextValidation validateChatText(String? content) {
@@ -40,6 +45,18 @@ ChatTextValidation validateChatText(String? content) {
     return ChatTextValidation.tooLong;
   }
   return ChatTextValidation.valid;
+}
+
+/// Creates a random (version 4) UUID used as the stable idempotency key of
+/// one logical message send: every retry of that send MUST reuse it so the
+/// server converges duplicates onto one durable message.
+String newChatIdempotencyKey() {
+  final bytes = List<int>.generate(16, (_) => Random.secure().nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+      '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
 }
 
 class ChatMessage {
@@ -52,6 +69,10 @@ class ChatMessage {
     required this.sentAt,
     required this.deliveryStatus,
     this.senderName,
+    this.mediaUrl,
+    this.mediaUrlExpiresAt,
+    this.fileName,
+    this.voiceDurationSeconds,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -64,6 +85,12 @@ class ChatMessage {
         deliveryStatus: _deliveryStatusFromName(
             json[ChatJsonKeys.deliveryStatus] as String?),
         senderName: json[ChatJsonKeys.senderName] as String?,
+        mediaUrl: json[ChatJsonKeys.mediaUrl] as String?,
+        mediaUrlExpiresAt: _parseNullableDate(
+            json[ChatJsonKeys.mediaUrlExpiresAt] as String?),
+        fileName: json[ChatJsonKeys.fileName] as String?,
+        voiceDurationSeconds:
+            json[ChatJsonKeys.voiceDurationSeconds] as int?,
       );
 
   final String id;
@@ -80,6 +107,13 @@ class ChatMessage {
   final DateTime sentAt;
   final ChatDeliveryStatus deliveryStatus;
   final String? senderName;
+
+  /// Short-lived media projection (FR-024); presigned for 7 days and never
+  /// authoritative — access controllers renew before playback/download.
+  final String? mediaUrl;
+  final DateTime? mediaUrlExpiresAt;
+  final String? fileName;
+  final int? voiceDurationSeconds;
 }
 
 /// One page of cursor-paginated history. [messages] arrives newest-first;

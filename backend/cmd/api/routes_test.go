@@ -42,7 +42,7 @@ func TestF005RouteConstantsMatchContract(t *testing.T) {
 	}
 }
 
-// TestF004RouteConstantsMatchContract pins every wired F-004 US1 route
+// TestF004RouteConstantsMatchContract pins every wired F-004 US1/US3 route
 // constant to the method and path of its operation in the canonical OpenAPI
 // contract (docs/contracts/openapi.yaml, server base /api/v1). Remaining
 // F-004 operations are wired with their own stories.
@@ -54,6 +54,10 @@ func TestF004RouteConstantsMatchContract(t *testing.T) {
 	}{
 		{operationID: "listCircleMessages", route: routeCircleMessagesGet, want: "GET /api/v1/circles/{circleId}/messages"},
 		{operationID: "sendCircleMessage", route: routeCircleMessagesSend, want: "POST /api/v1/circles/{circleId}/messages"},
+		{operationID: "uploadVoice", route: routeUploadsVoice, want: "POST /api/v1/uploads/voice"},
+		{operationID: "uploadImage", route: routeUploadsImage, want: "POST /api/v1/uploads/image"},
+		{operationID: "uploadFile", route: routeUploadsFile, want: "POST /api/v1/uploads/file"},
+		{operationID: "renewMessageMediaUrl", route: routeMessageMediaURL, want: "POST /api/v1/messages/{messageId}/media-url"},
 	}
 
 	seen := make(map[string]string, len(tests))
@@ -66,7 +70,7 @@ func TestF004RouteConstantsMatchContract(t *testing.T) {
 		}
 		seen[tt.route] = tt.operationID
 	}
-	if len(tests) != 2 {
-		t.Fatalf("contract coverage: got %d F-004 US1 operations, want 2", len(tests))
+	if len(tests) != 6 {
+		t.Fatalf("contract coverage: got %d F-004 US1/US3 operations, want 6", len(tests))
 	}
 }

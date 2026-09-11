@@ -176,6 +176,8 @@ var (
 	ErrInvalidCursor = errors.New("chat: invalid cursor")
 	// ErrInvalidIdempotencyKey indicates an empty or oversized retry key.
 	ErrInvalidIdempotencyKey = errors.New("chat: invalid idempotency key")
+	// ErrIdempotencyConflict indicates a retry key reused for a different payload.
+	ErrIdempotencyConflict = errors.New("chat: idempotency key payload conflict")
 	// ErrUnsupportedMIME indicates a media type outside the approved allowlist.
 	ErrUnsupportedMIME = errors.New("chat: unsupported MIME type")
 	// ErrUploadTooLarge indicates an attachment over its type-specific limit.

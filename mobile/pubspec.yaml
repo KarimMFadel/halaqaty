@@ -19,6 +19,12 @@ dependencies:
   dio: ^5.7.0
   flutter_secure_storage: ^9.2.2
   livekit_client: ^2.11.0
+  record: ^7.1.1
+  just_audio: ^0.10.6
+  image_picker: ^1.2.3
+  # ^12.2.0 conflicts with flutter_secure_storage ^9.2.2 through win32.
+  # Karim approved the compatible ^10.3.10 resolution on 2026-09-11.
+  file_picker: ^10.3.10
 
 dev_dependencies:
   flutter_test:

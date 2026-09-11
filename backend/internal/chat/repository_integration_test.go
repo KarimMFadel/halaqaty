@@ -632,3 +632,144 @@ func TestRepository_InsertModerationAudit_AppendOnly(t *testing.T) {
 		t.Fatalf("moderation audit count: got %d want 1", n)
 	}
 }
+
+// TestRepository_UploadQueries pins the T044 upload SQL against the real
+// schema: the rolling-hour budget counts only recent staged and attached
+// rows, DM eligibility resolves qualifying role pairs in both directions
+// while teacher-teacher and archived-only pairs never qualify, message
+// renewal loads only messages with attached uploads, and the attach lock
+// loads the locked row or denies non-enumeratingly.
+func TestRepository_UploadQueries(t *testing.T) {
+	repo := newChatRepo(t)
+	ctx := context.Background()
+	teacher := seedUser(t, repo, "uq-teacher")
+	student := seedUser(t, repo, "uq-student")
+	supervisor := seedUser(t, repo, "uq-supervisor")
+	otherTeacher := seedUser(t, repo, "uq-other")
+	joinedAt := time.Now().UTC().Add(-time.Hour)
+
+	qualifying := seedCircle(t, repo, "UQ Qualifying", teacher)
+	seedMember(t, repo, qualifying, teacher, "teacher", joinedAt)
+	seedMember(t, repo, qualifying, student, "student", joinedAt)
+	teacherOnly := seedCircle(t, repo, "UQ Teacher Teacher", otherTeacher)
+	seedMember(t, repo, teacherOnly, otherTeacher, "teacher", joinedAt)
+	seedMember(t, repo, teacherOnly, teacher, "teacher", joinedAt)
+	archived := seedCircle(t, repo, "UQ Archived", otherTeacher)
+	seedMember(t, repo, archived, supervisor, "supervisor", joinedAt)
+	seedMember(t, repo, archived, student, "student", joinedAt)
+	if _, err := repo.pool.Exec(ctx, `UPDATE circles SET is_archived = TRUE WHERE id = $1`, archived); err != nil {
+		t.Fatalf("archive circle: %v", err)
+	}
+
+	if id, ok, err := repo.FindQualifyingDMCircle(ctx, teacher, student); err != nil || !ok || id != qualifying {
+		t.Fatalf("teacher-student eligibility: got (%s, %v, %v) want (%s, true, nil)", id, ok, err, qualifying)
+	}
+	if _, ok, err := repo.FindQualifyingDMCircle(ctx, student, teacher); err != nil || !ok {
+		t.Fatalf("reverse direction must qualify: got (%v, %v)", ok, err)
+	}
+	if _, ok, err := repo.FindQualifyingDMCircle(ctx, teacher, otherTeacher); err != nil || ok {
+		t.Fatalf("teacher-teacher must never qualify: got (%v, %v)", ok, err)
+	}
+	if _, ok, err := repo.FindQualifyingDMCircle(ctx, supervisor, student); err != nil || ok {
+		t.Fatalf("archived-only supervisor-student must not qualify: got (%v, %v)", ok, err)
+	}
+
+	seedVoiceUpload := func(key string, id uuid.UUID) Upload {
+		t.Helper()
+		upload, err := repo.InsertUpload(ctx, Upload{
+			ID:                    id,
+			UploaderID:            teacher,
+			AuthorizationCircleID: qualifying,
+			ObjectKey:             key,
+			MIMEType:              "audio/ogg",
+			OriginalFileName:      "note.ogg",
+			SizeBytes:             1024,
+			DurationSeconds:       30,
+		})
+		if err != nil {
+			t.Fatalf("seed upload %s: %v", key, err)
+		}
+		return upload
+	}
+
+	// The caller-pinned identity must survive staging so the object key
+	// derivation chat/<upload id> stays exact.
+	pinned := uuid.New()
+	if staged := seedVoiceUpload("chat/uq/pinned.ogg", pinned); staged.ID != pinned || staged.State != UploadStateStaged {
+		t.Fatalf("pinned staged upload: got (%s, %q) want (%s, staged)", staged.ID, staged.State, pinned)
+	}
+	old := seedVoiceUpload("chat/uq/old.ogg", uuid.Nil)
+	if _, err := repo.pool.Exec(ctx, `UPDATE chat_uploads SET created_at = NOW() - INTERVAL '2 hours' WHERE id = $1`, old.ID); err != nil {
+		t.Fatalf("backdate staged upload: %v", err)
+	}
+	revoked := seedVoiceUpload("chat/uq/revoked.ogg", uuid.Nil)
+	if _, err := repo.pool.Exec(ctx, `UPDATE chat_uploads SET state = 'revoked', updated_at = NOW() WHERE id = $1`, revoked.ID); err != nil {
+		t.Fatalf("revoke staged upload: %v", err)
+	}
+	attachable := seedVoiceUpload("chat/uq/attach.ogg", uuid.Nil)
+	if err := repo.WithTx(ctx, func(tx *Tx) error {
+		_, err := tx.AttachUpload(ctx, attachable.ID)
+		return err
+	}); err != nil {
+		t.Fatalf("attach upload: %v", err)
+	}
+
+	// Recent staged and attached rows count; the window excludes the old row
+	// and the state filter excludes the revoked row (FR-022).
+	count, err := repo.CountRecentUploads(ctx, teacher, time.Now().UTC().Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("count recent uploads: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("rolling-hour budget: got %d want 2 (staged + attached only)", count)
+	}
+
+	// Renewal join: text messages and unknown ids are invisible; a message
+	// with its attached upload loads both projections.
+	textMessage := seedMessage(t, repo, teacher, &qualifying, nil, time.Now().UTC(), "plain text")
+	if _, _, err := repo.FindMessageUpload(ctx, textMessage); !errors.Is(err, ErrMessageNotVisible) {
+		t.Fatalf("text message renewal: got %v want ErrMessageNotVisible", err)
+	}
+	if _, _, err := repo.FindMessageUpload(ctx, uuid.New()); !errors.Is(err, ErrMessageNotVisible) {
+		t.Fatalf("unknown message renewal: got %v want ErrMessageNotVisible", err)
+	}
+	var mediaMessage uuid.UUID
+	if err := repo.pool.QueryRow(ctx, `
+		INSERT INTO messages (dm_recipient_id, sender_id, idempotency_key, message_type, upload_id)
+		VALUES ($1, $2, $3, 'voice', $4)
+		RETURNING id
+	`, student, teacher, "uq-media-"+uuid.NewString()[:8], attachable.ID).Scan(&mediaMessage); err != nil {
+		t.Fatalf("seed media message: %v", err)
+	}
+	msg, upload, err := repo.FindMessageUpload(ctx, mediaMessage)
+	if err != nil {
+		t.Fatalf("load media message upload: %v", err)
+	}
+	if msg.Type != MessageTypeVoice || msg.UploadID == nil || *msg.UploadID != attachable.ID {
+		t.Fatalf("media message projection: got type %q upload %v", msg.Type, msg.UploadID)
+	}
+	if upload.ID != attachable.ID || upload.State != UploadStateAttached || upload.DurationSeconds != 30 {
+		t.Fatalf("attached upload projection: got (%s, %q, %d)", upload.ID, upload.State, upload.DurationSeconds)
+	}
+
+	// The attach lock loads the locked staged row; a missing upload denies
+	// non-enumeratingly.
+	if err := repo.WithTx(ctx, func(tx *Tx) error {
+		locked, err := tx.LoadUploadForUpdate(ctx, pinned)
+		if err != nil {
+			return err
+		}
+		if locked.ID != pinned || locked.State != UploadStateStaged {
+			t.Fatalf("locked upload: got (%s, %q)", locked.ID, locked.State)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("lock upload for attach: %v", err)
+	}
+	if err := repo.WithTx(ctx, func(tx *Tx) error {
+		_, err := tx.LoadUploadForUpdate(ctx, uuid.New())
+		return err
+	}); !errors.Is(err, ErrUploadNotAttachable) {
+		t.Fatalf("missing upload lock: got %v want ErrUploadNotAttachable", err)
+	}
+}

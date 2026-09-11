@@ -94,7 +94,7 @@ services:
       - |
         mc alias set chatmedia http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
         mc mb --ignore-existing "chatmedia/$$CHAT_MEDIA_BUCKET"
-        mc versioning enable "chatmedia/$$CHAT_MEDIA_BUCKET"
+        mc version enable "chatmedia/$$CHAT_MEDIA_BUCKET"
 
 volumes:
   halaqaty-postgres-data:

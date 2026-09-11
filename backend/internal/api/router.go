@@ -20,26 +20,45 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
 )
 
+// DefaultChatUploadTimeout is the F-004 US3 upload-route timeout budget
+// (plan §Phase 1: 60-second upload timeout), applied in place of the global
+// request timeout because a 21 MB multipart body can legitimately take
+// longer than the 15-second default.
+const DefaultChatUploadTimeout = 60 * time.Second
+
+// defaultRequestTimeout is the global request timeout when MiddlewareSet
+// carries none.
+const defaultRequestTimeout = 15 * time.Second
+
+// defaultMaxRequestBodyBytes is the global request-body cap for the
+// JSON-based routes (1 MiB).
+const defaultMaxRequestBodyBytes = 1 << 20
+
 // MiddlewareSet defines all cross-cutting middleware dependencies.
 type MiddlewareSet struct {
-	Auth            *middleware.AuthMiddleware
-	Role            *middleware.RoleMiddleware
-	RateLimit       *middleware.RateLimitMiddleware
-	AuthHandler     *auth.Handler
-	ProfileHandler  *profile.Handler
-	RBACHandler     *rbac.Handler
-	SessionHandler  *sessions.Handler
-	RealtimeHandler *realtime.Handler
-	RealtimeHub     *realtime.Hub
-	QueueHandler    *queue.Handler
-	ChatHandler     *chat.GroupHandler
-	ChatSendLimiter *chat.ChatSendLimiter
-	Timeout         time.Duration
-	Logger          *slog.Logger
-	Metrics         *metrics.AuthMetrics
-	QueueMetrics    *metrics.QueueMetrics
-	ChatMetrics     *metrics.ChatMetrics
-	MetricsToken    string
+	Auth              *middleware.AuthMiddleware
+	Role              *middleware.RoleMiddleware
+	RateLimit         *middleware.RateLimitMiddleware
+	AuthHandler       *auth.Handler
+	ProfileHandler    *profile.Handler
+	RBACHandler       *rbac.Handler
+	SessionHandler    *sessions.Handler
+	RealtimeHandler   *realtime.Handler
+	RealtimeHub       *realtime.Hub
+	QueueHandler      *queue.Handler
+	ChatHandler       *chat.GroupHandler
+	ChatSendLimiter   *chat.ChatSendLimiter
+	ChatUploadHandler *chat.UploadHandler
+	ChatMediaHandler  *chat.MediaHandler
+	Timeout           time.Duration
+	// ChatUploadTimeout overrides Timeout on the upload routes; zero selects
+	// DefaultChatUploadTimeout.
+	ChatUploadTimeout time.Duration
+	Logger            *slog.Logger
+	Metrics           *metrics.AuthMetrics
+	QueueMetrics      *metrics.QueueMetrics
+	ChatMetrics       *metrics.ChatMetrics
+	MetricsToken      string
 }
 
 // Router wires API routes and middleware in one place.
@@ -62,35 +81,54 @@ func NewRouter(mw MiddlewareSet) *Router {
 // RateLimit.LimitByIP enforces IP budgets here (no principal yet).
 // Per-user rate limiting is applied per-route inside registerRoutes, after
 // auth middleware sets the principal in context.
+//
+// Two chains share the same core (mux + IP limiting + logging + request IDs
+// + recovery): the standard chain adds the JSON content-type gate and the
+// global 1 MiB body cap, while the upload chain (F-004 US3) carries the
+// route-specific 21 MB multipart cap and its own timeout budget. A nested
+// http.MaxBytesReader or context timeout inside the standard chain cannot
+// raise the outer caps, so upload routes take their own chain.
 func (r *Router) Handler() http.Handler {
-	handler := http.Handler(r.mux)
+	core := http.Handler(r.mux)
 	// Apply IP-only rate limiting globally; per-user limiting is wired per-route.
 	if r.mw.RateLimit != nil {
-		handler = r.mw.RateLimit.LimitByIP(handler)
+		core = r.mw.RateLimit.LimitByIP(core)
 	}
-	handler = validationMiddleware(handler)
-	// Limit request body to 1 MiB to prevent unbounded reads on auth/profile routes.
-	handler = phttp.MaxBytesMiddleware(1<<20, handler)
 
 	logger := r.mw.Logger
 	if logger == nil {
 		logger = slog.Default()
 	}
-	handler = phttp.LoggerMiddleware(logger, handler)
-	handler = phttp.RequestIDMiddleware(handler)
-	handler = phttp.RecoveryMiddleware(logger, handler)
+	withObservability := func(bodyLimited http.Handler) http.Handler {
+		handler := phttp.LoggerMiddleware(logger, bodyLimited)
+		handler = phttp.RequestIDMiddleware(handler)
+		return phttp.RecoveryMiddleware(logger, handler)
+	}
+
+	standard := withObservability(phttp.MaxBytesMiddleware(defaultMaxRequestBodyBytes, validationMiddleware(core)))
+	upload := withObservability(phttp.MaxBytesMiddleware(chat.ChatUploadMaxBodyBytes, core))
 
 	timeout := r.mw.Timeout
 	if timeout <= 0 {
-		timeout = 15 * time.Second
+		timeout = defaultRequestTimeout
 	}
-	timedHandler := phttp.TimeoutMiddleware(timeout, handler)
+	timedStandard := phttp.TimeoutMiddleware(timeout, standard)
+
+	uploadTimeout := r.mw.ChatUploadTimeout
+	if uploadTimeout <= 0 {
+		uploadTimeout = DefaultChatUploadTimeout
+	}
+	timedUpload := phttp.TimeoutMiddleware(uploadTimeout, upload)
+
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if isRealtimeWebSocketUpgrade(req) {
-			handler.ServeHTTP(w, req)
-			return
+		switch {
+		case isRealtimeWebSocketUpgrade(req):
+			standard.ServeHTTP(w, req)
+		case isChatUploadRequest(req):
+			timedUpload.ServeHTTP(w, req)
+		default:
+			timedStandard.ServeHTTP(w, req)
 		}
-		timedHandler.ServeHTTP(w, req)
 	})
 }
 
@@ -98,6 +136,19 @@ func isRealtimeWebSocketUpgrade(req *http.Request) bool {
 	return req.Method == http.MethodGet &&
 		req.URL.Path == routeRealtimeWebSocketPath &&
 		strings.EqualFold(req.Header.Get("Upgrade"), "websocket")
+}
+
+// isChatUploadRequest reports whether the request targets an F-004 upload
+// route and therefore carries the 21 MB body cap and 60-second timeout. It
+// matches the path only: unregistered methods still take the upload chain
+// and fail routing, and no other route family is affected.
+func isChatUploadRequest(req *http.Request) bool {
+	switch req.URL.Path {
+	case routeUploadsVoicePath, routeUploadsImagePath, routeUploadsFilePath:
+		return true
+	default:
+		return false
+	}
 }
 
 // requireWithUserLimit chains: auth (sets principal) → per-user rate limit → handler.
@@ -298,6 +349,18 @@ func (r *Router) registerRoutes() {
 				chatSend = r.mw.ChatSendLimiter.Limit(chatSend)
 			}
 			r.mux.Handle(routeCircleMessagesSend, r.requireWithUserLimit(chatSend))
+		}
+		// F-004 US3 chat media. The upload routes' 21 MB body cap and
+		// 60-second timeout are selected by isChatUploadRequest in Handler;
+		// the renewal route rides the standard chain.
+		if r.mw.ChatUploadHandler != nil {
+			uploadH := r.mw.ChatUploadHandler
+			r.mux.Handle(routeUploadsVoice, r.requireWithUserLimit(http.HandlerFunc(uploadH.UploadVoice)))
+			r.mux.Handle(routeUploadsImage, r.requireWithUserLimit(http.HandlerFunc(uploadH.UploadImage)))
+			r.mux.Handle(routeUploadsFile, r.requireWithUserLimit(http.HandlerFunc(uploadH.UploadFile)))
+		}
+		if r.mw.ChatMediaHandler != nil {
+			r.mux.Handle(routeMessageMediaURL, r.requireWithUserLimit(http.HandlerFunc(r.mw.ChatMediaHandler.RenewMessageMediaURL)))
 		}
 	}
 	if r.mw.SessionHandler != nil {

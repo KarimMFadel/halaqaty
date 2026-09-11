@@ -33,6 +33,12 @@ class ChatUnknownEvent extends ChatRealtimeEvent {
   final String type;
 }
 
+/// Emitted after a socket is re-established so the controller can refresh
+/// authoritative history and cover events missed while disconnected.
+class ChatReconnectedEvent extends ChatRealtimeEvent {
+  const ChatReconnectedEvent({required super.eventId});
+}
+
 /// Decodes chat frames for one circle topic, deduplicating at-least-once
 /// delivery by `event_id` (message-id deduplication is owned by the
 /// controller, which also sees REST history).
@@ -115,38 +121,64 @@ class WebSocketChatRealtimeClient implements ChatRealtimeClient {
 
   Future<void> _open(String circleId, String token, String backendSessionId,
       _ChatSocketConnection connection) async {
-    try {
-      final ticket = await _fetchTicket(token, backendSessionId);
-      final url = realtimeWebSocketUrl(_dio.options.baseUrl)
-          .replace(queryParameters: {'token': ticket});
-      final socket = await WebSocket.connect(url.toString());
-      if (connection.isClosed) {
-        // The subscriber left while connecting: never leak the socket.
-        await socket.close();
-        return;
+    final decoder = ChatRealtimeEventDecoder(circleId);
+    var delay = const Duration(seconds: 1);
+    var reconnects = 0;
+    while (!connection.isClosed) {
+      try {
+        final ticket = await _fetchTicket(token, backendSessionId);
+        final url = realtimeWebSocketUrl(_dio.options.baseUrl)
+            .replace(queryParameters: {'token': ticket});
+        final socket = await WebSocket.connect(url.toString());
+        if (connection.isClosed) {
+          await socket.close();
+          return;
+        }
+        connection.socket = socket;
+        final isReconnect = reconnects++ > 0;
+        var subscriptionAcknowledged = false;
+        socket.listen((data) {
+          if (data is! String || connection.sink.isClosed) return;
+          if (!subscriptionAcknowledged &&
+              _isSubscriptionAcknowledgement(data, circleId)) {
+            subscriptionAcknowledged = true;
+            if (isReconnect) {
+              connection.sink.add(ChatReconnectedEvent(
+                  eventId:
+                      'reconnect-${DateTime.now().microsecondsSinceEpoch}'));
+            }
+            return;
+          }
+          final event = decoder.decode(data);
+          if (event != null) connection.sink.add(event);
+        }, onError: (_) {}, onDone: () {});
+        socket.add(jsonEncode(realtimeSubscribeMessage('circle.$circleId')));
+        connection.heartbeat = Timer.periodic(_heartbeatInterval, (_) {
+          if (!connection.isClosed) socket.add(jsonEncode(realtimePingMessage));
+        });
+        delay = const Duration(seconds: 1);
+        await socket.done;
+        connection.heartbeat?.cancel();
+        connection.heartbeat = null;
+        connection.socket = null;
+      } catch (_) {
+        // Reconnect is deliberately bounded; authoritative REST refresh is
+        // owned by the controller after unknown or resumed delivery.
       }
-      connection.socket = socket;
-      final decoder = ChatRealtimeEventDecoder(circleId);
-      socket.listen((data) {
-        if (data is! String || connection.sink.isClosed) return;
-        final event = decoder.decode(data);
-        if (event != null) connection.sink.add(event);
-      },
-          // ponytail: transport failures close the stream instead of
-          // surfacing; reconnect/backoff arrives with US2 (T039/T040).
-          onError: (Object _) {
-        unawaited(connection.close());
-      }, onDone: () {
-        unawaited(connection.close());
-      }, cancelOnError: true);
-      socket.add(jsonEncode(realtimeSubscribeMessage('circle.$circleId')));
-      connection.heartbeat = Timer.periodic(_heartbeatInterval, (_) {
-        socket.add(jsonEncode(realtimePingMessage));
-      });
-    } catch (_) {
-      // Ticket or socket setup failure: close the stream; the controller
-      // keeps authoritative REST history. Reconnect is US2 (T039/T040).
-      await connection.close();
+      if (connection.isClosed) return;
+      await Future<void>.delayed(delay);
+      if (delay.inSeconds < 4) delay *= 2;
+    }
+  }
+
+  static bool _isSubscriptionAcknowledgement(String raw, String circleId) {
+    try {
+      final value = jsonDecode(raw);
+      return value is Map<String, dynamic> &&
+          value[ChatJsonKeys.type] == 'subscribed' &&
+          value['topic'] == 'circle.$circleId';
+    } on FormatException {
+      return false;
     }
   }
 

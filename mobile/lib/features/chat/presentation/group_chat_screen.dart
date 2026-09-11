@@ -56,7 +56,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
         GroupChatStatus.idle ||
         GroupChatStatus.loading =>
           _LoadingStatus(labels: labels),
-        GroupChatStatus.error => _ErrorStatus(
+        GroupChatStatus.error || GroupChatStatus.accessLost => _ErrorStatus(
             labels: labels,
             onRetry: () => unawaited(_controller.open(widget.circleId)),
           ),

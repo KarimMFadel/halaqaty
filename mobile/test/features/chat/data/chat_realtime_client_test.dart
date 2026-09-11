@@ -104,6 +104,28 @@ void main() {
     expect(unreadableMessage, isA<ChatUnknownEvent>());
   });
 
+  test('reconnects after a socket closes and keeps the decoder state',
+      () async {
+    final server = await _LoopbackChatServer.start();
+    server.closeAfterSubscribe = true;
+    addTearDown(server.close);
+    final client = WebSocketChatRealtimeClient(server.dio,
+        heartbeatInterval: const Duration(milliseconds: 20));
+    addTearDown(client.dispose);
+    final reconnected = Completer<ChatReconnectedEvent>();
+    final subscription = client
+        .circleChatEvents(_circleId, token: 't', backendSessionId: 's')
+        .listen((event) {
+      if (event is ChatReconnectedEvent && !reconnected.isCompleted) {
+        reconnected.complete(event);
+      }
+    });
+
+    await reconnected.future.timeout(const Duration(seconds: 3));
+    expect(server.connectionCount, greaterThanOrEqualTo(2));
+    await subscription.cancel();
+  });
+
   test('overlapping circle connections tear down independently', () async {
     final server = await _LoopbackChatServer.start();
     addTearDown(server.close);
@@ -207,6 +229,8 @@ class _LoopbackChatServer {
   final HttpServer _http;
   final socketsByTopic = <String, WebSocket>{};
   final closedSockets = <WebSocket>{};
+  int connectionCount = 0;
+  bool closeAfterSubscribe = false;
 
   /// When set, ticket responses wait on this completer first.
   Completer<void>? holdTickets;
@@ -226,10 +250,16 @@ class _LoopbackChatServer {
       }
       if (!WebSocketTransformer.isUpgradeRequest(request)) return;
       final socket = await WebSocketTransformer.upgrade(request);
+      server.connectionCount++;
       socket.listen((raw) {
         final frame = jsonDecode(raw as String) as Map<String, dynamic>;
         if (frame['action'] == 'subscribe' && frame['topic'] is String) {
-          server.socketsByTopic[frame['topic'] as String] = socket;
+          final topic = frame['topic'] as String;
+          server.socketsByTopic[topic] = socket;
+          socket.add(jsonEncode({'type': 'subscribed', 'topic': topic}));
+          if (server.closeAfterSubscribe && server.connectionCount == 1) {
+            unawaited(socket.close());
+          }
         }
       }, onDone: () => server.closedSockets.add(socket));
     });

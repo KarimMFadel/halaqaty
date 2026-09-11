@@ -12,6 +12,10 @@ Map<String, dynamic> _messageJson({
   String? content = 'السلام عليكم',
   String deliveryStatus = 'delivered',
   String sentAt = '2026-09-03T12:00:00Z',
+  String? mediaUrl,
+  String? mediaUrlExpiresAt,
+  String? fileName,
+  int? voiceDurationSeconds,
 }) =>
     {
       'id': id,
@@ -22,6 +26,11 @@ Map<String, dynamic> _messageJson({
       'content': content,
       'sent_at': sentAt,
       'delivery_status': deliveryStatus,
+      if (mediaUrl != null) 'media_url': mediaUrl,
+      if (mediaUrlExpiresAt != null) 'media_url_expires_at': mediaUrlExpiresAt,
+      if (fileName != null) 'file_name': fileName,
+      if (voiceDurationSeconds != null)
+        'voice_duration_seconds': voiceDurationSeconds,
     };
 
 ChatMessage _message(
@@ -80,6 +89,32 @@ void main() {
           throwsFormatException);
       expect(() => ChatMessage.fromJson(_messageJson(deliveryStatus: 'queued')),
           throwsFormatException);
+    });
+
+    test('parses the media projection fields for a voice message', () {
+      final message = ChatMessage.fromJson(_messageJson(
+        messageType: 'voice',
+        content: null,
+        mediaUrl: 'https://media.example.com/chat/voice/abc.m4a?sig=1',
+        mediaUrlExpiresAt: '2026-09-18T12:00:00Z',
+        fileName: 'note.m4a',
+        voiceDurationSeconds: 42,
+      ));
+
+      expect(message.type, ChatMessageType.voice);
+      expect(message.mediaUrl, 'https://media.example.com/chat/voice/abc.m4a?sig=1');
+      expect(message.mediaUrlExpiresAt, DateTime.parse('2026-09-18T12:00:00Z'));
+      expect(message.fileName, 'note.m4a');
+      expect(message.voiceDurationSeconds, 42);
+    });
+
+    test('media fields default to absent for text messages', () {
+      final message = ChatMessage.fromJson(_messageJson());
+
+      expect(message.mediaUrl, isNull);
+      expect(message.mediaUrlExpiresAt, isNull);
+      expect(message.fileName, isNull);
+      expect(message.voiceDurationSeconds, isNull);
     });
   });
 

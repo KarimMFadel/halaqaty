@@ -143,24 +143,37 @@ func (s *GroupService) SendText(ctx context.Context, senderID, circleID uuid.UUI
 // contain the sender (FR-001, FR-032, SR-002). Unknown circles and
 // non-members are denied identically so callers cannot enumerate circles.
 func (s *GroupService) authorizeActiveMember(ctx context.Context, actorID, circleID uuid.UUID) error {
-	circle, err := s.membership.FindCircleByID(ctx, circleID.String())
+	return authorizeActiveCircleMember(ctx, s.membership, actorID, circleID, func(reason metrics.ChatDenial) {
+		s.recordDenial(ctx, actorID, circleID, reason)
+	})
+}
+
+// denialRecorder records one bounded denial reason for an actor and circle.
+type denialRecorder func(reason metrics.ChatDenial)
+
+// authorizeActiveCircleMember rechecks current circle state from PostgreSQL
+// for a mutating chat operation: the circle must exist, be unarchived, and
+// currently contain the actor (FR-001, FR-032, SR-002). Unknown circles and
+// non-members are denied identically so callers cannot enumerate circles.
+func authorizeActiveCircleMember(ctx context.Context, membership MembershipReader, actorID, circleID uuid.UUID, deny denialRecorder) error {
+	circle, err := membership.FindCircleByID(ctx, circleID.String())
 	if errors.Is(err, rbac.ErrCircleNotFound) {
-		s.recordDenial(ctx, actorID, circleID, metrics.ChatDenialIneligible)
+		deny(metrics.ChatDenialIneligible)
 		return ErrCircleNotVisible
 	}
 	if err != nil {
 		return fmt.Errorf("load chat circle: %w", err)
 	}
-	member, err := s.membership.IsMember(ctx, circleID.String(), actorID.String())
+	member, err := membership.IsMember(ctx, circleID.String(), actorID.String())
 	if err != nil {
-		return fmt.Errorf("authorize chat send: %w", err)
+		return fmt.Errorf("authorize chat membership: %w", err)
 	}
 	if !member {
-		s.recordDenial(ctx, actorID, circleID, metrics.ChatDenialIneligible)
+		deny(metrics.ChatDenialIneligible)
 		return ErrCircleNotVisible
 	}
 	if circle.IsArchived {
-		s.recordDenial(ctx, actorID, circleID, metrics.ChatDenialArchived)
+		deny(metrics.ChatDenialArchived)
 		return ErrCircleArchived
 	}
 	return nil
@@ -169,9 +182,15 @@ func (s *GroupService) authorizeActiveMember(ctx context.Context, actorID, circl
 // recordDenial records one bounded authorization denial in metrics and a
 // redacted audit event; denial records never carry message content (SR-006).
 func (s *GroupService) recordDenial(ctx context.Context, actor, circle uuid.UUID, reason metrics.ChatDenial) {
-	s.metrics.RecordDenial(reason)
-	if s.audit != nil {
-		s.audit.LogChat(ctx, logging.ChatDenialAuditEvent(actor.String(), circle.String(), circle.String(), logging.ChatOutcomeDenied))
+	recordChatDenial(ctx, s.metrics, s.audit, actor, circle, reason)
+}
+
+// recordChatDenial records one bounded authorization denial in metrics and a
+// redacted audit event; denial records never carry message content (SR-006).
+func recordChatDenial(ctx context.Context, chatMetrics *metrics.ChatMetrics, audit *logging.AuditLogger, actor, circle uuid.UUID, reason metrics.ChatDenial) {
+	chatMetrics.RecordDenial(reason)
+	if audit != nil {
+		audit.LogChat(ctx, logging.ChatDenialAuditEvent(actor.String(), circle.String(), circle.String(), logging.ChatOutcomeDenied))
 	}
 }
 

@@ -76,12 +76,12 @@
 
 **Independent test**: Queue while offline, restart/reconnect, repeat REST and WebSocket delivery, and verify the stable idempotency key yields one database row and one UI item.
 
-- [ ] T037 [P] [US2] Add encrypted pending-envelope storage tests for one-item keys, stable idempotency keys, restart reload, local attachment paths, edit, and discard in `mobile/test/features/chat/data/pending_message_store_test.dart`
-- [ ] T038 [US2] Implement pending-envelope persistence with the existing `flutter_secure_storage` dependency in `mobile/lib/features/chat/data/pending_message_store.dart`
-- [ ] T039 [US2] Add controller/realtime tests for pending→sent→delivered transitions, 1/2/4-second retry eligibility, terminal failures, reconnect history refresh, gaps, duplicates, and unknown events in `mobile/test/features/chat/application/chat_delivery_controller_test.dart` and `mobile/test/features/chat/data/chat_realtime_client_test.dart`
-- [ ] T040 [US2] Implement bounded retry, reconnect, authoritative reconciliation, and visible terminal-error edit/discard behavior in `mobile/lib/features/chat/application/chat_delivery_controller.dart` and `mobile/lib/features/chat/data/chat_realtime_client.dart`
-- [ ] T041 [P] [US2] Add backend integration coverage for concurrent same-key sends, materially different payload conflicts, accepted-retry rate accounting, outbox crash recovery, redelivery, and PostgreSQL failure rejection in `backend/tests/integration/chat_reliability_test.go`
-- [ ] T042 [US2] Add offline/restart/reconnect and duplicate REST/WebSocket acceptance coverage in `mobile/integration_test/chat_offline_recovery_test.dart`
+- [X] T037 [P] [US2] Add encrypted pending-envelope storage tests for one-item keys, stable idempotency keys, restart reload, local attachment paths, edit, and discard in `mobile/test/features/chat/data/pending_message_store_test.dart`
+- [X] T038 [US2] Implement pending-envelope persistence with the existing `flutter_secure_storage` dependency in `mobile/lib/features/chat/data/pending_message_store.dart`
+- [X] T039 [US2] Add controller/realtime tests for pending→sent→delivered transitions, 1/2/4-second retry eligibility, terminal failures, reconnect history refresh, gaps, duplicates, and unknown events in `mobile/test/features/chat/application/chat_delivery_controller_test.dart` and `mobile/test/features/chat/data/chat_realtime_client_test.dart`
+- [X] T040 [US2] Implement bounded retry, reconnect, authoritative reconciliation, and visible terminal-error edit/discard behavior in `mobile/lib/features/chat/application/chat_delivery_controller.dart` and `mobile/lib/features/chat/data/chat_realtime_client.dart`
+- [X] T041 [P] [US2] Add backend integration coverage for concurrent same-key sends, materially different payload conflicts, accepted-retry rate accounting, outbox crash recovery, redelivery, and PostgreSQL failure rejection in `backend/tests/integration/chat_reliability_test.go`
+- [X] T042 [US2] Add offline/restart/reconnect and duplicate REST/WebSocket acceptance coverage in `mobile/integration_test/chat_offline_recovery_test.dart`
 
 ---
 
@@ -91,8 +91,8 @@
 
 **Independent test**: Record/preview/send/play a compliant voice note, send compliant image/PDF files, renew links, and reject every MIME, size, duration, ownership, context, and upload-rate violation.
 
-- [ ] T043 [P] [US3] Add upload-service tests for magic-byte MIME plus parse validation, voice 300s/20MB, image 5MB, PDF 10MB, 10 successfully staged uploads/hour/user across devices, uploader/context binding, 24-hour abandoned cleanup, reauthorization, and legacy-unbound-key rejection in `backend/internal/chat/upload_service_test.go`
-- [ ] T044 [US3] Implement staged upload, server validation, group/DM context binding, attach-once semantics, 24-hour inaccessible-stage cleanup, and seven-day renewal authorization in `backend/internal/chat/upload_service.go`
+- [X] T043 [P] [US3] Add upload-service tests for magic-byte MIME plus parse validation, voice 300s/20MB, image 5MB, PDF 10MB, 10 successfully staged uploads/hour/user across devices, uploader/context binding, 24-hour abandoned cleanup, reauthorization, and legacy-unbound-key rejection in `backend/internal/chat/upload_service_test.go`
+- [X] T044 [US3] Implement staged upload, server validation, group/DM context binding, attach-once semantics, 24-hour inaccessible-stage cleanup, and seven-day renewal authorization in `backend/internal/chat/upload_service.go`
 - [ ] T045 [P] [US3] Add upload/media-renewal contract tests for auth/session/RBAC denials, route-specific 21 MB cap vs global 1 MiB cap, `413/415/422/429` failures, 60-second timeout, non-enumerating errors, sanitized filenames, and response safety in `backend/tests/contract/chat_media_contract_test.go`
 - [ ] T046 [US3] Implement additive voice/image/file upload and media-link renewal handlers with route-specific 21 MB body limits while preserving the global 1 MiB default in `backend/internal/chat/upload_handler.go`, `backend/internal/chat/media_handler.go`, and `backend/internal/api/router.go`
 - [ ] T047 [US3] Add real-MinIO integration tests for private objects, supported media, expired/renewed versionless URLs, unauthorized renewal, and failed database-finalization cleanup in `backend/tests/integration/chat_media_test.go`
@@ -288,3 +288,4 @@
 3. Deliver and review the core US1/T036 checkpoint without treating it as the full product MVP.
 4. Complete every remaining P1 story, then every P2 story; together they are the approved F-004 MVP. No P3 work exists.
 5. Use `/speckit.analyze` before implementation, then `/speckit.implement` with test-first execution and task checkboxes updated only after fresh evidence.
+

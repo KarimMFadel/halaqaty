@@ -598,9 +598,9 @@ func TestChatGroupSendContract(t *testing.T) {
 			wantField:  httpconst.FieldIdempotencyKey,
 		},
 		{
-			name:       "non-text message type returns 422",
+			name:       "unknown message type returns 422",
 			path:       chatGroupMessagesPath(chatGroupCircleID),
-			body:       `{"message_type":"voice","content":""}`,
+			body:       `{"message_type":"video","content":""}`,
 			key:        "deny-key",
 			wantStatus: http.StatusUnprocessableEntity,
 			wantCode:   httpconst.ErrorCodeValidationFailed,
@@ -879,6 +879,259 @@ func TestChatGroupResponseSafetyContract(t *testing.T) {
 			if strings.Contains(rec.Body.String(), marker) {
 				t.Fatalf("error body leaks %q: %s", marker, rec.Body.String())
 			}
+		}
+	})
+}
+
+// chatGroupMediaSendCall records one SendGroupMedia call reaching the media
+// stub.
+type chatGroupMediaSendCall struct {
+	input chat.SendGroupMediaInput
+}
+
+// chatGroupMediaServiceStub is a deterministic chat.GroupMediaService.
+// SendGroupMedia mirrors the durable idempotency contract: the first call
+// commits a media message and every later call returns that same committed
+// message (FR-007).
+type chatGroupMediaServiceStub struct {
+	sendCalls []chatGroupMediaSendCall
+	sendErr   error
+	committed chat.Message
+}
+
+func (s *chatGroupMediaServiceStub) SendGroupMedia(_ context.Context, in chat.SendGroupMediaInput) (chat.Message, error) {
+	s.sendCalls = append(s.sendCalls, chatGroupMediaSendCall{input: in})
+	if s.sendErr != nil {
+		return chat.Message{}, s.sendErr
+	}
+	if s.committed.ID == uuid.Nil {
+		s.committed = chat.Message{
+			ID:       uuid.New(),
+			CircleID: &in.CircleID,
+			SenderID: in.SenderID,
+			Type:     in.MessageType,
+			UploadID: &in.UploadID,
+			State:    chat.MessageStateActive,
+			SentAt:   time.Now().UTC(),
+		}
+	}
+	return s.committed, nil
+}
+
+// chatGroupMediaRouter wires the production router with the group handler
+// carrying the media seam, so media-send cases exercise the exact deployed
+// middleware order.
+func chatGroupMediaRouter(media chat.GroupMediaService) http.Handler {
+	authMW := middleware.NewAuthMiddleware(
+		&alwaysOKVerifier{},
+		auth.NewSessionService(30*24*time.Hour),
+		&stubSessionRepo{sessionID: testSessionID, userID: testLocalUserID},
+	)
+	handler := chat.NewGroupHandler(&chatGroupServiceStub{})
+	handler.SetMediaService(media)
+	return api.NewRouter(api.MiddlewareSet{
+		Auth:        authMW,
+		ChatHandler: handler,
+	}).Handler()
+}
+
+// chatGroupVoiceSendBody is one well-formed voice send.
+const chatGroupVoiceSendBody = `{"message_type":"voice","upload_id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}`
+
+func TestChatGroupMediaSendContract(t *testing.T) {
+	t.Parallel()
+
+	t.Run("media send routes through the media seam and returns the durable Message", func(t *testing.T) {
+		t.Parallel()
+		stub := &chatGroupMediaServiceStub{}
+		rec := httptest.NewRecorder()
+		chatGroupMediaRouter(stub).ServeHTTP(rec, chatGroupRequest(http.MethodPost, chatGroupMessagesPath(chatGroupCircleID), chatGroupVoiceSendBody, "media-key-1"))
+
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("status: got %d, want %d body=%s", rec.Code, http.StatusCreated, rec.Body.String())
+		}
+		// Media messages carry no content, so the safe projection omits the key.
+		assertJSONKeySet(t, rec.Body.Bytes(), []string{"id", "circle_id", "sender_id", "message_type", "sent_at", "delivery_status"})
+		var message struct {
+			MessageType string `json:"message_type"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&message); err != nil {
+			t.Fatalf("decode message: %v body=%s", err, rec.Body.String())
+		}
+		if message.MessageType != string(chat.MessageTypeVoice) {
+			t.Fatalf("message_type: got %q, want voice", message.MessageType)
+		}
+		if len(stub.sendCalls) != 1 {
+			t.Fatalf("media send calls: got %d, want 1", len(stub.sendCalls))
+		}
+		call := stub.sendCalls[0].input
+		if call.SenderID.String() != testLocalUserID || call.CircleID.String() != chatGroupCircleID {
+			t.Fatalf("call context: sender=%s circle=%s", call.SenderID, call.CircleID)
+		}
+		if call.UploadID.String() != "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" || call.MessageType != chat.MessageTypeVoice {
+			t.Fatalf("call payload: upload=%s type=%s", call.UploadID, call.MessageType)
+		}
+		if call.IdempotencyKey != "media-key-1" {
+			t.Fatalf("idempotency key: got %q, want the request header", call.IdempotencyKey)
+		}
+		if len(stub.sendCalls) != 1 {
+			t.Fatalf("send calls: got %d, want 1", len(stub.sendCalls))
+		}
+	})
+
+	t.Run("same idempotency key replays the same media message", func(t *testing.T) {
+		t.Parallel()
+		stub := &chatGroupMediaServiceStub{}
+		router := chatGroupMediaRouter(stub)
+		bodies := make([]string, 0, 2)
+		for i := 0; i < 2; i++ {
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, chatGroupRequest(http.MethodPost, chatGroupMessagesPath(chatGroupCircleID), chatGroupVoiceSendBody, "media-replay-key"))
+			if rec.Code != http.StatusCreated {
+				t.Fatalf("send %d status: got %d, want %d body=%s", i+1, rec.Code, http.StatusCreated, rec.Body.String())
+			}
+			bodies = append(bodies, rec.Body.String())
+		}
+		if bodies[0] != bodies[1] {
+			t.Fatalf("idempotent replay bodies differ: %q vs %q", bodies[0], bodies[1])
+		}
+	})
+
+	cases := []struct {
+		name        string
+		body        string
+		key         string
+		noKey       bool
+		stubErr     error
+		wantStatus  int
+		wantCode    string
+		wantField   string
+		wantMessage string
+	}{
+		{
+			name:       "missing upload id returns 422",
+			body:       `{"message_type":"image"}`,
+			key:        "media-deny-key",
+			wantStatus: http.StatusUnprocessableEntity,
+			wantCode:   httpconst.ErrorCodeValidationFailed,
+			wantField:  httpconst.FieldUploadID,
+		},
+		{
+			name:       "malformed upload id returns 400",
+			body:       `{"message_type":"file","upload_id":"not-a-uuid"}`,
+			key:        "media-deny-key",
+			wantStatus: http.StatusBadRequest,
+			wantCode:   httpconst.ErrorCodeValidationFailed,
+			wantField:  httpconst.FieldUploadID,
+		},
+		{
+			name:       "media send with content returns 422",
+			body:       `{"message_type":"voice","upload_id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","content":"hi"}`,
+			key:        "media-deny-key",
+			wantStatus: http.StatusUnprocessableEntity,
+			wantCode:   httpconst.ErrorCodeValidationFailed,
+			wantField:  httpconst.FieldContent,
+		},
+		{
+			name:       "legacy media key returns 422",
+			body:       `{"message_type":"voice","upload_id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","media_key":"legacy"}`,
+			key:        "media-deny-key",
+			wantStatus: http.StatusUnprocessableEntity,
+			wantCode:   httpconst.ErrorCodeValidationFailed,
+			wantField:  httpconst.FieldMediaKey,
+		},
+		{
+			name:       "reply target returns 422",
+			body:       `{"message_type":"voice","upload_id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","reply_to_id":"11111111-1111-1111-1111-111111111111"}`,
+			key:        "media-deny-key",
+			wantStatus: http.StatusUnprocessableEntity,
+			wantCode:   httpconst.ErrorCodeValidationFailed,
+			wantField:  httpconst.FieldReplyToID,
+		},
+		{
+			name:        "already attached upload returns 409",
+			body:        chatGroupVoiceSendBody,
+			key:         "media-deny-key",
+			stubErr:     chat.ErrUploadNotStaged,
+			wantStatus:  http.StatusConflict,
+			wantCode:    httpconst.ErrorCodeConflict,
+			wantMessage: httpconst.ErrorMessageChatUploadNotAttachable,
+		},
+		{
+			name:        "foreign upload returns 409",
+			body:        chatGroupVoiceSendBody,
+			key:         "media-deny-key",
+			stubErr:     chat.ErrUploadNotAttachable,
+			wantStatus:  http.StatusConflict,
+			wantCode:    httpconst.ErrorCodeConflict,
+			wantMessage: httpconst.ErrorMessageChatUploadNotAttachable,
+		},
+		{
+			name:        "archived circle returns 409",
+			body:        chatGroupVoiceSendBody,
+			key:         "media-deny-key",
+			stubErr:     chat.ErrCircleArchived,
+			wantStatus:  http.StatusConflict,
+			wantCode:    httpconst.ErrorCodeConflict,
+			wantMessage: httpconst.ErrorMessageCircleArchived,
+		},
+		{
+			name:       "repository failure returns 500 without internals",
+			body:       chatGroupVoiceSendBody,
+			key:        "media-deny-key",
+			stubErr:    fmt.Errorf("send chat media message: %w", errors.New("connection refused")),
+			wantStatus: http.StatusInternalServerError,
+			wantCode:   httpconst.ErrorCodeInternalServerError,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			stub := &chatGroupMediaServiceStub{sendErr: tc.stubErr}
+			req := chatGroupRequest(http.MethodPost, chatGroupMessagesPath(chatGroupCircleID), tc.body, tc.key)
+			if tc.noKey {
+				req.Header.Del(httpconst.HeaderIdempotencyKey)
+			}
+			rec := httptest.NewRecorder()
+			chatGroupMediaRouter(stub).ServeHTTP(rec, req)
+
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status: got %d, want %d body=%s", rec.Code, tc.wantStatus, rec.Body.String())
+			}
+			envelope := decodeErrorEnvelope(t, rec)
+			if envelope.Error.Code != tc.wantCode {
+				t.Fatalf("error code: got %q, want %q", envelope.Error.Code, tc.wantCode)
+			}
+			if tc.wantMessage != "" && envelope.Error.Message != tc.wantMessage {
+				t.Fatalf("error message: got %q, want %q", envelope.Error.Message, tc.wantMessage)
+			}
+			if tc.wantField != "" {
+				if _, ok := envelope.Error.Fields[tc.wantField]; !ok {
+					t.Fatalf("expected field %q in Fields=%v", tc.wantField, envelope.Error.Fields)
+				}
+			}
+			if strings.Contains(rec.Body.String(), "connection refused") {
+				t.Fatalf("error body leaks internal detail: %s", rec.Body.String())
+			}
+		})
+	}
+
+	t.Run("non-member and unknown circle denials stay non-enumerating", func(t *testing.T) {
+		t.Parallel()
+		stub := &chatGroupMediaServiceStub{sendErr: chat.ErrCircleNotVisible}
+		rec := httptest.NewRecorder()
+		chatGroupMediaRouter(stub).ServeHTTP(rec, chatGroupRequest(http.MethodPost, chatGroupMessagesPath(chatGroupCircleID), chatGroupVoiceSendBody, "media-deny-key"))
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("status: got %d, want %d body=%s", rec.Code, http.StatusForbidden, rec.Body.String())
+		}
+		envelope := decodeErrorEnvelope(t, rec)
+		if envelope.Error.Code != httpconst.ErrorCodeForbidden {
+			t.Fatalf("error code: got %q, want %q", envelope.Error.Code, httpconst.ErrorCodeForbidden)
+		}
+		if len(envelope.Error.Fields) != 0 {
+			t.Fatalf("forbidden envelope must carry no field details: %v", envelope.Error.Fields)
 		}
 	})
 }

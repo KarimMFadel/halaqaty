@@ -31,11 +31,22 @@ type GroupChatService interface {
 	SendText(ctx context.Context, senderID, circleID uuid.UUID, content, idempotencyKey string) (Message, error)
 }
 
+// GroupMediaService is the transport-facing seam for US3 media sends; the
+// *UploadService satisfies it in production, and the REST contract tests
+// substitute deterministic fakes. Attach-once, uploader/context binding, and
+// non-enumerating failures are service-side.
+type GroupMediaService interface {
+	// SendGroupMedia durably accepts one idempotent group media message
+	// bound to a staged upload.
+	SendGroupMedia(ctx context.Context, in SendGroupMediaInput) (Message, error)
+}
+
 // GroupHandler exposes the F-004 US1 group-chat REST operations. Handlers
 // decode, delegate to the service seam, and project responses; they contain
 // no SQL and no business logic.
 type GroupHandler struct {
 	service GroupChatService
+	media   GroupMediaService
 }
 
 // NewGroupHandler constructs the group chat handler over the service seam.
@@ -45,9 +56,17 @@ func NewGroupHandler(service GroupChatService) *GroupHandler {
 	return &GroupHandler{service: service}
 }
 
+// SetMediaService wires the US3 media-send seam, mirroring the optional
+// dependency convention of sessions.Handler.SetWebhookVerifier. Without it
+// the send route serves text messages only and media sends report internal
+// server errors.
+func (h *GroupHandler) SetMediaService(media GroupMediaService) {
+	h.media = media
+}
+
 // sendMessageRequest mirrors the canonical SendMessageRequest contract
-// shape. US1 accepts text messages only; media sends (US3) and replies (US6)
-// extend this surface with their stories.
+// shape. US1 serves text and US3 serves media sends; replies (US6) extend
+// this surface with their story.
 type sendMessageRequest struct {
 	MessageType string  `json:"message_type"`
 	Content     string  `json:"content"`
@@ -56,12 +75,11 @@ type sendMessageRequest struct {
 	ReplyToID   *string `json:"reply_to_id"`
 }
 
-// validateTextSend enforces the US1 request shape: a text message carries
-// only content. Field-level rejections map to the contract's 422.
+// validateTextSend enforces the US1 text request shape: a text message
+// carries only content. The dispatch switch in SendCircleMessage has already
+// established the type. Field-level rejections map to the contract's 422.
 func (r sendMessageRequest) validateTextSend() (field, message string, ok bool) {
 	switch {
-	case r.MessageType != string(MessageTypeText):
-		return httpconst.FieldMessageType, httpconst.ErrorMessageChatMessageTypeTextOnly, false
 	case r.UploadID != nil:
 		return httpconst.FieldUploadID, httpconst.ErrorMessageChatUploadIDNotAllowed, false
 	case r.MediaKey != nil && strings.TrimSpace(*r.MediaKey) != "":
@@ -166,8 +184,8 @@ func (h *GroupHandler) ListCircleMessages(w http.ResponseWriter, r *http.Request
 }
 
 // SendCircleMessage implements the sendCircleMessage contract operation: one
-// idempotent group text send. Fresh inserts and idempotent replays both
-// return 201 with the durable message (FR-007).
+// idempotent group text send (US1) or media send (US3). Fresh inserts and
+// idempotent replays both return 201 with the durable message (FR-007).
 func (h *GroupHandler) SendCircleMessage(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
@@ -194,14 +212,68 @@ func (h *GroupHandler) SendCircleMessage(w http.ResponseWriter, r *http.Request)
 	if !phttp.DecodeJSONBody(w, r, &request) {
 		return
 	}
-	if field, message, ok := request.validateTextSend(); !ok {
-		writeFieldUnprocessable(w, field, message)
+
+	switch MessageType(request.MessageType) {
+	case MessageTypeText:
+		if field, message, ok := request.validateTextSend(); !ok {
+			writeFieldUnprocessable(w, field, message)
+			return
+		}
+		sent, err := h.service.SendText(r.Context(), senderID, circleID, request.Content, r.Header.Get(httpconst.HeaderIdempotencyKey))
+		if err != nil {
+			writeSendError(w, err)
+			return
+		}
+		phttp.WriteJSON(w, http.StatusCreated, newMessageResponse(sent))
+	case MessageTypeVoice, MessageTypeImage, MessageTypeFile:
+		h.sendMedia(w, r, request, senderID, circleID, MessageType(request.MessageType))
+	default:
+		writeFieldUnprocessable(w, httpconst.FieldMessageType, httpconst.ErrorMessageChatMessageTypeInvalid)
+	}
+}
+
+// sendMedia validates one US3 media send (message_type voice|image|file plus
+// upload_id), delegates to the media seam, and writes the documented
+// response. Malformed upload ids are 400; a missing upload id or disallowed
+// payload field is 422, mirroring the text-send shapes.
+func (h *GroupHandler) sendMedia(w http.ResponseWriter, r *http.Request, request sendMessageRequest, senderID, circleID uuid.UUID, msgType MessageType) {
+	if h.media == nil {
+		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
+		return
+	}
+	if request.UploadID == nil {
+		writeFieldUnprocessable(w, httpconst.FieldUploadID, httpconst.ErrorMessageChatUploadIDRequired)
+		return
+	}
+	uploadID, err := uuid.Parse(*request.UploadID)
+	if err != nil {
+		phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{
+			httpconst.FieldUploadID: httpconst.ErrorMessageChatUploadIDInvalid,
+		})
+		return
+	}
+	if strings.TrimSpace(request.Content) != "" {
+		writeFieldUnprocessable(w, httpconst.FieldContent, httpconst.ErrorMessageChatMediaContentNotAllowed)
+		return
+	}
+	if request.MediaKey != nil && strings.TrimSpace(*request.MediaKey) != "" {
+		writeFieldUnprocessable(w, httpconst.FieldMediaKey, httpconst.ErrorMessageChatMediaKeyUnsupported)
+		return
+	}
+	if request.ReplyToID != nil {
+		writeFieldUnprocessable(w, httpconst.FieldReplyToID, httpconst.ErrorMessageChatReplyUnsupported)
 		return
 	}
 
-	sent, err := h.service.SendText(r.Context(), senderID, circleID, request.Content, r.Header.Get(httpconst.HeaderIdempotencyKey))
+	sent, err := h.media.SendGroupMedia(r.Context(), SendGroupMediaInput{
+		SenderID:       senderID,
+		CircleID:       circleID,
+		UploadID:       uploadID,
+		MessageType:    msgType,
+		IdempotencyKey: r.Header.Get(httpconst.HeaderIdempotencyKey),
+	})
 	if err != nil {
-		writeSendError(w, err)
+		writeMediaSendError(w, err)
 		return
 	}
 	phttp.WriteJSON(w, http.StatusCreated, newMessageResponse(sent))
@@ -266,6 +338,8 @@ func writeHistoryError(w http.ResponseWriter, err error) {
 // not leak details.
 func writeSendError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, ErrIdempotencyConflict):
+		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageChatIdempotencyConflict, http.StatusConflict)
 	case errors.Is(err, ErrInvalidIdempotencyKey):
 		phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{
 			httpconst.FieldIdempotencyKey: httpconst.ErrorMessageChatIdempotencyKeyInvalid,
@@ -276,6 +350,34 @@ func writeSendError(w http.ResponseWriter, err error) {
 		phttp.WriteError(w, httpconst.ErrorCodeForbidden, httpconst.ErrorMessageForbidden, http.StatusForbidden)
 	case errors.Is(err, ErrCircleArchived):
 		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageCircleArchived, http.StatusConflict)
+	default:
+		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
+	}
+}
+
+// writeMediaSendError maps media-send service errors onto the contract's
+// declared responses, mirroring writeSendError plus the US3 attach
+// sentinels: an invalid Idempotency-Key is 400, a payload rejected by the
+// service despite handler validation is 422, a non-visible circle is the
+// same non-enumerating 403, an archived circle is 409, an upload that is
+// not attachable (single-use, other uploader, or wrong context) is 409, and
+// anything else is an internal error that must not leak details.
+func writeMediaSendError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, ErrIdempotencyConflict):
+		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageChatIdempotencyConflict, http.StatusConflict)
+	case errors.Is(err, ErrInvalidIdempotencyKey):
+		phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{
+			httpconst.FieldIdempotencyKey: httpconst.ErrorMessageChatIdempotencyKeyInvalid,
+		})
+	case errors.Is(err, ErrInvalidPayload):
+		writeFieldUnprocessable(w, httpconst.FieldUploadID, httpconst.ErrorMessageChatUploadIDRequired)
+	case errors.Is(err, ErrCircleNotVisible):
+		phttp.WriteError(w, httpconst.ErrorCodeForbidden, httpconst.ErrorMessageForbidden, http.StatusForbidden)
+	case errors.Is(err, ErrCircleArchived):
+		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageCircleArchived, http.StatusConflict)
+	case errors.Is(err, ErrUploadNotAttachable), errors.Is(err, ErrUploadNotStaged):
+		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageChatUploadNotAttachable, http.StatusConflict)
 	default:
 		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
 	}

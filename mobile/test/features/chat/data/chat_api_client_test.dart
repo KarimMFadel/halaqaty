@@ -126,6 +126,48 @@ void main() {
       expect(message.deliveryStatus, ChatDeliveryStatus.delivered);
     });
 
+    test('sends a media message with message_type and upload_id', () async {
+      final requests = <RequestOptions>[];
+      final client = ChatApiClient(
+        Dio()
+          ..httpClientAdapter = _ChatAdapter(
+            requests,
+            [
+              _ChatResponse.ok(201, {
+                ..._messageJson(),
+                'message_type': 'voice',
+                'content': null,
+                'media_url': 'https://media.example.com/chat/voice/a?sig=1',
+                'media_url_expires_at': '2026-09-18T12:00:00Z',
+                'file_name': 'note.m4a',
+                'voice_duration_seconds': 7,
+              }),
+            ],
+          ),
+      );
+
+      final message = await client.sendMediaMessage(
+        token: _token,
+        sessionId: _backendSessionId,
+        circleId: _circleId,
+        type: ChatMessageType.voice,
+        uploadId: '55555555-5555-5555-5555-555555555555',
+        idempotencyKey: 'media-send-key',
+      );
+
+      final request = requests.single;
+      expect(request.path, '/circles/$_circleId/messages');
+      expect(request.method, 'POST');
+      expect(request.headers['Idempotency-Key'], 'media-send-key');
+      expect(request.data, {
+        'message_type': 'voice',
+        'upload_id': '55555555-5555-5555-5555-555555555555',
+      });
+      expect(message.type, ChatMessageType.voice);
+      expect(message.voiceDurationSeconds, 7);
+      expect(message.mediaUrl, 'https://media.example.com/chat/voice/a?sig=1');
+    });
+
     test('maps contract error envelopes to ChatApiException', () async {
       final cases = <({
         int statusCode,

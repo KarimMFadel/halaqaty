@@ -121,7 +121,7 @@ func TestChatMinioCompose_ServiceVolumeHealthcheckAndBucketInit(t *testing.T) {
 	for _, fragment := range []string{
 		"condition: service_healthy",
 		"mc mb --ignore-existing",
-		"mc versioning enable",
+		"mc version enable",
 		"CHAT_MEDIA_BUCKET: ${CHAT_MEDIA_BUCKET:-halaqaty-chat}",
 	} {
 		if !strings.Contains(init, fragment) {

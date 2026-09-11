@@ -12,6 +12,8 @@ import (
 
 	firebaseAdmin "firebase.google.com/go/v4"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 
 	apirouter "github.com/KarimMFadel/halaqaty/backend/internal/api"
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
@@ -209,6 +211,47 @@ func main() {
 	)
 	chatHandler := chat.NewGroupHandler(chatService)
 
+	// ── Chat media (F-004 US3) ──────────────────────────────────────────────
+	// Gated like LiveKit: an absent CHAT_MEDIA_* configuration leaves the
+	// upload routes unregistered, but present-but-broken configuration must
+	// stop startup — a misconfigured bucket would silently degrade the
+	// delete-marker revocation guarantees (ADR-021).
+	var chatUploadHandler *chat.UploadHandler
+	var chatMediaHandler *chat.MediaHandler
+	var chatCleaner *chat.Cleaner
+	chatMediaCfg, err := config.LoadChatMediaConfig()
+	if err != nil {
+		logger.Error("failed to load chat media config", "error", err)
+		os.Exit(1)
+	}
+	if chatMediaCfg != (config.ChatMediaConfig{}) {
+		minioClient, err := minio.New(chatMediaCfg.Endpoint, &minio.Options{
+			Creds:  credentials.NewStaticV4(chatMediaCfg.AccessKeyID, chatMediaCfg.SecretAccessKey, ""),
+			Secure: chatMediaCfg.UseSSL,
+		})
+		if err != nil {
+			logger.Error("failed to init chat media object-store client", "error", err)
+			os.Exit(1)
+		}
+		chatMediaStore := chat.NewMediaStore(minioClient, chatMediaCfg.Bucket, chatMediaCfg.OperationTimeout)
+		if err := chatMediaStore.EnsureChatBucketVersioned(ctx); err != nil {
+			logger.Error("chat media bucket is missing, unversioned, or unreachable", "error", err)
+			os.Exit(1)
+		}
+		chatCleaner = chat.NewCleaner(chat.NewPoolStagedUploadSource(pool), chatMediaStore)
+		chatUploadService := chat.NewUploadService(
+			chatRepo,
+			rbacRepo,
+			chatMediaStore,
+			chatCleaner,
+			chatMetrics,
+			auditLogger,
+		)
+		chatHandler.SetMediaService(chatUploadService)
+		chatUploadHandler = chat.NewUploadHandler(chatUploadService)
+		chatMediaHandler = chat.NewMediaHandler(chatUploadService)
+	}
+
 	mwSet := apirouter.MiddlewareSet{
 		Auth:            authMW,
 		Role:            roleMW,
@@ -222,12 +265,16 @@ func main() {
 		QueueHandler:    queueHandler,
 		ChatHandler:     chatHandler,
 		ChatSendLimiter: chat.NewChatSendLimiter(chat.MaxSendsPerMinute),
-		Timeout:         cfg.RequestTimeout,
-		Logger:          logger,
-		Metrics:         authMetrics,
-		QueueMetrics:    queueMetrics,
-		ChatMetrics:     chatMetrics,
-		MetricsToken:    cfg.MetricsToken,
+		// Nil when chat media is unconfigured; the router leaves the
+		// upload/renewal routes unregistered in that case.
+		ChatUploadHandler: chatUploadHandler,
+		ChatMediaHandler:  chatMediaHandler,
+		Timeout:           cfg.RequestTimeout,
+		Logger:            logger,
+		Metrics:           authMetrics,
+		QueueMetrics:      queueMetrics,
+		ChatMetrics:       chatMetrics,
+		MetricsToken:      cfg.MetricsToken,
 	}
 
 	// ── Router ────────────────────────────────────────────────────────────────
@@ -284,6 +331,22 @@ func main() {
 			logger.Error("chat outbox dispatch stopped", "error", err)
 		}
 	}()
+	if chatCleaner != nil {
+		go func() {
+			ticker := time.NewTicker(time.Hour)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-reconcilerCtx.Done():
+					return
+				case <-ticker.C:
+					if err := chatCleaner.CleanStaged(reconcilerCtx, 100); err != nil {
+						logger.Error("chat staged-upload cleanup failed", "error", err)
+					}
+				}
+			}
+		}()
+	}
 
 	go func() {
 		logger.Info("server starting", "addr", srv.Addr)

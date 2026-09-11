@@ -86,9 +86,26 @@ const (
 	routeCircleMessagesSend = "POST /api/v1/circles/{circleId}/messages"
 )
 
+// F-004 US3 chat-media route patterns. The bare upload paths select the
+// route-specific 21 MB body-limit and 60-second timeout chain in
+// Router.Handler; the method-scoped constants register the routes.
+const (
+	routeUploadsVoicePath = "/api/v1/uploads/voice"
+	routeUploadsImagePath = "/api/v1/uploads/image"
+	routeUploadsFilePath  = "/api/v1/uploads/file"
+	routeUploadsVoice     = "POST " + routeUploadsVoicePath
+	routeUploadsImage     = "POST " + routeUploadsImagePath
+	routeUploadsFile      = "POST " + routeUploadsFilePath
+	routeMessageMediaURL  = "POST /api/v1/messages/{messageId}/media-url"
+)
+
 // Exported F-004 chat route aliases consumed by the cmd/api route-parity
 // composition tests.
 const (
 	RouteCircleMessagesGet  = routeCircleMessagesGet
 	RouteCircleMessagesSend = routeCircleMessagesSend
+	RouteUploadsVoice       = routeUploadsVoice
+	RouteUploadsImage       = routeUploadsImage
+	RouteUploadsFile        = routeUploadsFile
+	RouteMessageMediaURL    = routeMessageMediaURL
 )

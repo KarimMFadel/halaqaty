@@ -8,6 +8,21 @@ abstract final class ChatApiPaths {
       '/circles/$circleId/messages';
 }
 
+abstract final class ChatMediaApiPaths {
+  /// `POST /uploads/voice` (uploadVoice).
+  static const uploadsVoice = '/uploads/voice';
+
+  /// `POST /uploads/image` (uploadImage).
+  static const uploadsImage = '/uploads/image';
+
+  /// `POST /uploads/file` (uploadFile).
+  static const uploadsFile = '/uploads/file';
+
+  /// `POST /messages/{messageId}/media-url` (renewMessageMediaUrl).
+  static String renewMediaUrl(String messageId) =>
+      '/messages/$messageId/media-url';
+}
+
 abstract final class ChatJsonKeys {
   static const data = 'data';
   static const id = 'id';
@@ -28,6 +43,24 @@ abstract final class ChatJsonKeys {
   static const message = 'message';
   static const limit = 'limit';
   static const before = 'before';
+
+  /// Multipart `ChatUpload` field names and upload/media response keys.
+  static const file = 'file';
+  static const dmPeerId = 'dm_peer_id';
+
+  /// Client-declared voice duration (1–300 s) required by `/uploads/voice`.
+  static const durationSeconds = 'duration_seconds';
+  static const url = 'url';
+  static const objectKey = 'object_key';
+  static const uploadId = 'upload_id';
+  static const urlExpiresAt = 'url_expires_at';
+  static const expiresAt = 'expires_at';
+
+  /// Contract `Message` media projection keys.
+  static const mediaUrl = 'media_url';
+  static const mediaUrlExpiresAt = 'media_url_expires_at';
+  static const fileName = 'file_name';
+  static const voiceDurationSeconds = 'voice_duration_seconds';
 }
 
 abstract final class ChatRealtimeTypes {
@@ -43,6 +76,18 @@ abstract final class ChatHeaders {
 abstract final class ChatLimits {
   /// Contract `SendMessageRequest.content.maxLength`.
   static const maxContentLength = 4000;
+
+  /// Contract `/uploads/voice`: at most 300 seconds (FR-020).
+  static const maxVoiceDurationSeconds = 300;
+
+  /// Contract `/uploads/voice`: at most 20 MB (FR-020).
+  static const maxVoiceBytes = 20 * 1024 * 1024;
+
+  /// Contract `/uploads/image`: JPEG/PNG at most 5 MB (FR-021).
+  static const maxImageBytes = 5 * 1024 * 1024;
+
+  /// Contract `/uploads/file`: PDF at most 10 MB (FR-021).
+  static const maxFileBytes = 10 * 1024 * 1024;
 }
 
 abstract final class ChatApiErrors {

@@ -122,11 +122,13 @@ RETURNING ` + outboxColumns
 // --- Uploads -----------------------------------------------------------------
 
 // insertUploadQuery stages one private attachment row; state defaults to
-// 'staged' until a message attach transitions it exactly once.
+// 'staged' until a message attach transitions it exactly once. The id is
+// caller-pinned when provided (the object key derives from it) and
+// database-generated otherwise.
 const insertUploadQuery = `
-INSERT INTO chat_uploads AS u (uploader_id, authorization_circle_id, dm_peer_id, object_key,
+INSERT INTO chat_uploads AS u (id, uploader_id, authorization_circle_id, dm_peer_id, object_key,
                                mime_type, original_file_name, size_bytes, duration_seconds)
-VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8)
+VALUES (COALESCE($1::uuid, gen_random_uuid()), $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9)
 RETURNING ` + uploadColumns
 
 // attachUploadQuery applies the single-use staged→attached transition; a row
@@ -155,6 +157,57 @@ WHERE u.id IN (
     FOR UPDATE SKIP LOCKED
 )
 RETURNING ` + uploadColumns
+
+// countRecentUploadsQuery counts the uploader's successfully staged uploads
+// (staged or attached) created since the cutoff; only cleaned-up revoked rows
+// are excluded, matching the rolling-hour budget accounting that counts
+// staged-but-unattached uploads (FR-022).
+const countRecentUploadsQuery = `
+SELECT COUNT(*) FROM chat_uploads
+WHERE uploader_id = $1::uuid
+  AND created_at >= $2::timestamptz
+  AND state IN ('staged', 'attached')`
+
+// Serialize only finalization for this uploader across backend processes.
+const lockUploadBudgetQuery = `SELECT pg_advisory_xact_lock(hashtextextended('chat-upload:' || $1::text, 0))`
+
+// findQualifyingDMCircleQuery resolves one currently qualifying shared
+// active circle for an unordered pair: both users are current members of the
+// same non-archived circle and their roles form a teacher-student or
+// supervisor-student pair in either direction (FR-016). It returns only one
+// witness id and never discloses which circle matched.
+const findQualifyingDMCircleQuery = `
+SELECT cm_a.circle_id
+FROM circle_members cm_a
+JOIN circle_members cm_b ON cm_b.circle_id = cm_a.circle_id AND cm_b.user_id = $2::uuid
+JOIN circles c ON c.id = cm_a.circle_id
+WHERE cm_a.user_id = $1::uuid
+  AND c.is_archived = FALSE
+  AND (
+       (cm_a.role = 'teacher'    AND cm_b.role = 'student')
+    OR (cm_a.role = 'student'    AND cm_b.role = 'teacher')
+    OR (cm_a.role = 'supervisor' AND cm_b.role = 'student')
+    OR (cm_a.role = 'student'    AND cm_b.role = 'supervisor')
+  )
+LIMIT 1`
+
+// findMessageUploadQuery loads one message together with its attached upload
+// for media renewal. Text messages carry no upload row and match nothing, so
+// the caller can deny them non-enumeratingly.
+const findMessageUploadQuery = `
+SELECT ` + messageColumns + `, ` + uploadColumns + `
+FROM messages m
+JOIN chat_uploads u ON u.id = m.upload_id
+WHERE m.id = $1::uuid`
+
+// findUploadForUpdateQuery loads one upload row locked by the enclosing
+// transaction so concurrent attach attempts serialize on the row before the
+// guarded staged→attached transition.
+const findUploadForUpdateQuery = `
+SELECT ` + uploadColumns + `
+FROM chat_uploads u
+WHERE u.id = $1::uuid
+FOR UPDATE`
 
 // --- Moderation audits -------------------------------------------------------
 

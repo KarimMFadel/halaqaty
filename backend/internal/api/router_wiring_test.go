@@ -135,15 +135,17 @@ func wiringAuthenticatedRequest(method, path, body string) *http.Request {
 // registration branches in registerRoutes execute.
 func fullWiringMiddlewareSet(authMW *middleware.AuthMiddleware, extras ...func(*MiddlewareSet)) MiddlewareSet {
 	mw := MiddlewareSet{
-		Auth:            authMW,
-		Role:            middleware.NewRoleMiddleware(wiringRoleRepo{}),
-		ProfileHandler:  wiringProfileHandler(),
-		SessionHandler:  sessions.NewHandler(nil),
-		RealtimeHandler: realtime.NewHandler(nil),
-		RealtimeHub:     realtime.NewHub(nil, nil),
-		QueueHandler:    queue.NewHandler(nil, nil, nil, nil, nil),
-		ChatHandler:     chat.NewGroupHandler(nil),
-		ChatSendLimiter: chat.NewChatSendLimiter(30),
+		Auth:              authMW,
+		Role:              middleware.NewRoleMiddleware(wiringRoleRepo{}),
+		ProfileHandler:    wiringProfileHandler(),
+		SessionHandler:    sessions.NewHandler(nil),
+		RealtimeHandler:   realtime.NewHandler(nil),
+		RealtimeHub:       realtime.NewHub(nil, nil),
+		QueueHandler:      queue.NewHandler(nil, nil, nil, nil, nil),
+		ChatHandler:       chat.NewGroupHandler(nil),
+		ChatSendLimiter:   chat.NewChatSendLimiter(30),
+		ChatUploadHandler: chat.NewUploadHandler(nil),
+		ChatMediaHandler:  chat.NewMediaHandler(nil),
 	}
 	for _, apply := range extras {
 		apply(&mw)
@@ -195,6 +197,10 @@ func TestRegisterRoutes_EveryProtectedRouteRejectsUnauthenticatedRequests(t *tes
 		{http.MethodPost, "/api/v1/realtime/tickets"},
 		{http.MethodGet, "/api/v1/circles/" + wiringCircleID + "/messages"},
 		{http.MethodPost, "/api/v1/circles/" + wiringCircleID + "/messages"},
+		{http.MethodPost, "/api/v1/uploads/voice"},
+		{http.MethodPost, "/api/v1/uploads/image"},
+		{http.MethodPost, "/api/v1/uploads/file"},
+		{http.MethodPost, "/api/v1/messages/" + wiringSessionIDPath + "/media-url"},
 		{http.MethodGet, "/api/v1/sessions/" + wiringSessionIDPath + "/queue"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/queue/rounds"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/queue/reset"},
@@ -277,6 +283,18 @@ func TestRegisterRoutes_UnconfiguredHandlersReturnTypedInternalErrors(t *testing
 			name:        "chat list without service reports internal server error",
 			method:      http.MethodGet,
 			path:        "/api/v1/circles/" + wiringCircleID + "/messages",
+			wantMessage: httpconst.ErrorMessageInternalServerError,
+		},
+		{
+			name:        "chat upload without service reports internal server error",
+			method:      http.MethodPost,
+			path:        "/api/v1/uploads/voice",
+			wantMessage: httpconst.ErrorMessageInternalServerError,
+		},
+		{
+			name:        "media renewal without service reports internal server error",
+			method:      http.MethodPost,
+			path:        "/api/v1/messages/" + wiringSessionIDPath + "/media-url",
 			wantMessage: httpconst.ErrorMessageInternalServerError,
 		},
 	}

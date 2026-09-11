@@ -23,6 +23,7 @@ class GroupChatControllerState {
     this.errorMessage,
     this.actionErrorMessage,
     this.terminalFailures = const {},
+    this.readOnly = false,
   });
 
   final GroupChatStatus status;
@@ -32,6 +33,7 @@ class GroupChatControllerState {
   final String? errorMessage;
   final String? actionErrorMessage;
   final Map<String, String> terminalFailures;
+  final bool readOnly;
 
   GroupChatControllerState copyWith({
     GroupChatStatus? status,
@@ -41,6 +43,7 @@ class GroupChatControllerState {
     String? actionErrorMessage,
     bool clearActionError = false,
     Map<String, String>? terminalFailures,
+    bool? readOnly,
   }) =>
       GroupChatControllerState(
         status: status ?? this.status,
@@ -52,6 +55,7 @@ class GroupChatControllerState {
             ? null
             : (actionErrorMessage ?? this.actionErrorMessage),
         terminalFailures: terminalFailures ?? this.terminalFailures,
+        readOnly: readOnly ?? this.readOnly,
       );
 }
 
@@ -83,6 +87,14 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
   StreamSubscription<ChatRealtimeEvent>? _subscription;
   String? _circleId;
   int _refreshGeneration = 0;
+  bool _readOnly = false;
+
+  /// Switches the projection to retained-history mode after circle archival.
+  void setReadOnly(bool value) {
+    _readOnly = value;
+    if (!mounted) return;
+    state = state.copyWith(readOnly: value);
+  }
 
   /// Loads the authoritative newest-first page and subscribes to the circle
   /// topic. Re-opening resets any previous projection.
@@ -91,7 +103,10 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
     _subscription = null;
     _circleId = circleId;
     _refreshGeneration++;
-    state = const GroupChatControllerState(status: GroupChatStatus.loading);
+    state = GroupChatControllerState(
+      status: GroupChatStatus.loading,
+      readOnly: _readOnly,
+    );
     try {
       final credentials = await _credentials();
       _subscription = _realtime
@@ -144,6 +159,7 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
       if (_circleId != circleId) return;
       state = GroupChatControllerState(
         status: GroupChatStatus.ready,
+        readOnly: _readOnly,
         messages: mergeChatMessages(state.messages, page.messages),
         hasMore: page.hasMore,
         nextBefore: page.nextBefore,
@@ -161,7 +177,7 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
   /// can keep the draft on any failure (validation, credentials, REST).
   Future<bool> sendText(String content) async {
     final circleId = _circleId;
-    if (circleId == null || state.status != GroupChatStatus.ready) {
+    if (circleId == null || state.status != GroupChatStatus.ready || state.readOnly) {
       return false;
     }
     if (validateChatText(content) != ChatTextValidation.valid) return false;
@@ -347,6 +363,10 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
   }
 
   static bool _isRetryable(Object error) {
+    if (error is ChatApiException) {
+      final status = error.statusCode;
+      return status == null || status == 429 || status >= 500;
+    }
     if (error is! DioException) return false;
     final status = error.response?.statusCode;
     return status == null || status == 429 || status >= 500;
@@ -397,7 +417,8 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
       if (error is ChatApiException &&
           (error.statusCode == 401 || error.statusCode == 403) &&
           _circleId == circleId) {
-        state = const GroupChatControllerState(status: GroupChatStatus.accessLost);
+        state =
+            const GroupChatControllerState(status: GroupChatStatus.accessLost);
       }
       // Best-effort background refresh: failing silently keeps the current
       // projection usable; the next event or open() retries reconciliation.
@@ -434,6 +455,7 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
             ? const []
             : state.messages,
         errorMessage: error.toString(),
+        readOnly: _readOnly,
       );
     }
   }

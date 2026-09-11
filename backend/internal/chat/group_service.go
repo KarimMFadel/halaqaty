@@ -68,13 +68,10 @@ func NewGroupService(repo *Repository, membership MembershipReader, chatMetrics 
 // non-members and unknown circles return ErrCircleNotVisible identically.
 func (s *GroupService) History(ctx context.Context, viewerID, circleID uuid.UUID, before *uuid.UUID, limit int) ([]Message, error) {
 	start := time.Now()
-	member, err := s.membership.IsMember(ctx, circleID.String(), viewerID.String())
-	if err != nil {
-		return nil, fmt.Errorf("authorize chat history: %w", err)
-	}
-	if !member {
-		s.recordDenial(ctx, viewerID, circleID, metrics.ChatDenialIneligible)
-		return nil, ErrCircleNotVisible
+	if err := authorizeRetainedCircleMember(ctx, s.membership, viewerID, circleID, func(reason metrics.ChatDenial) {
+		s.recordDenial(ctx, viewerID, circleID, reason)
+	}); err != nil {
+		return nil, err
 	}
 	msgs, err := s.repo.GroupHistoryPage(ctx, circleID, viewerID, before, clampHistoryLimit(limit))
 	if err != nil {

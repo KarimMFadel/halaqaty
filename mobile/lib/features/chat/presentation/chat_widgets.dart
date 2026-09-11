@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_protocol_constants.dart';
 import 'package:halaqaty_mobile/features/chat/domain/chat_models.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_ui_labels.dart';
+import 'package:halaqaty_mobile/features/chat/presentation/chat_media_widgets.dart';
 
 /// One chat message: sender attribution, plain-text content (markup is never
 /// interpreted), and — for the sender's own messages — an icon+text delivery
@@ -56,7 +57,10 @@ class ChatMessageBubble extends StatelessWidget {
                   ),
                 ),
               ),
-            Text(message.content),
+            if (message.type == ChatMessageType.text)
+              Text(message.content)
+            else
+              ChatMediaMessageBody(key: ValueKey(message.id), message: message),
             if (isOwn)
               _DeliveryStatusBadge(
                 status: message.deliveryStatus,

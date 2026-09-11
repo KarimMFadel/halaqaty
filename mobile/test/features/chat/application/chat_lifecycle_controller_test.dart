@@ -64,6 +64,18 @@ void main() {
       );
     });
 
+    test('archived chat retains reads while denying mutations', () async {
+      final api = _LifecycleChatApi()..pages.add(_page([_message('archived')]));
+      final controller = _controller(api, _LifecycleRealtimeClient());
+      addTearDown(controller.dispose);
+
+      await controller.open(_circleId);
+      controller.setReadOnly(true);
+
+      expect(controller.state.messages.single.id, 'archived');
+      expect(await controller.sendText('blocked'), isFalse);
+      expect(api.sentContents, isEmpty);
+    });
   });
 }
 

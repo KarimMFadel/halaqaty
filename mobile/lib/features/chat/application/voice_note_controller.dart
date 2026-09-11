@@ -160,7 +160,8 @@ class JustAudioPreviewPlayer implements PreviewPlayer {
   }
 
   @override
-  Stream<Duration> get positionStream => (_player ??= AudioPlayer()).positionStream;
+  Stream<Duration> get positionStream =>
+      (_player ??= AudioPlayer()).positionStream;
 
   @override
   Future<void> dispose() async {
@@ -171,8 +172,8 @@ class JustAudioPreviewPlayer implements PreviewPlayer {
 
 /// Upload hand-off injected by the provider: keeps the controller free of
 /// Dio/credentials and unit tests pure.
-typedef VoiceNoteUpload
-    = Future<ChatUploadResult> Function(String filePath, int durationSeconds);
+typedef VoiceNoteUpload = Future<ChatUploadResult> Function(
+    String filePath, int durationSeconds);
 
 /// Owns the record → preview → send voice-note state machine (FR-019,
 /// FR-020): permission denial keeps the composer usable, recording

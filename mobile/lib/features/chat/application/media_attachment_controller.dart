@@ -1,12 +1,12 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/chat/application/chat_media_picker.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_api_client.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_media_api.dart';
-import 'package:halaqaty_mobile/features/chat/domain/chat_models.dart';
 
 /// Lifecycle of one image/PDF attachment (voice attaches via
 /// [MediaAttachmentController.attachVoice] after its own upload).
@@ -101,6 +101,7 @@ class MediaAttachmentController extends StateNotifier<MediaAttachmentState> {
 
   String? _idempotencyKey;
   ChatUploadResult? _pendingVoiceUpload;
+  ChatUploadResult? _pendingMediaUpload;
 
   /// Opens the native image picker; a cancelled pick keeps the composer
   /// idle, an accepted one enters the preview state without uploading.
@@ -111,9 +112,19 @@ class MediaAttachmentController extends StateNotifier<MediaAttachmentState> {
 
   Future<void> _pick(MediaAttachmentKind kind) async {
     if (state.phase != MediaAttachmentPhase.idle) return;
-    final path = kind == MediaAttachmentKind.image
-        ? await _picker.pickImage()
-        : await _picker.pickPdf();
+    String? path;
+    try {
+      path = kind == MediaAttachmentKind.image
+          ? await _picker.pickImage()
+          : await _picker.pickPdf();
+    } on PlatformException {
+      state = const MediaAttachmentState(
+        phase: MediaAttachmentPhase.failed,
+        error: MediaAttachmentError.network,
+        errorIsRetryable: true,
+      );
+      return;
+    }
     if (!mounted || path == null) return;
     state = MediaAttachmentState(
       phase: MediaAttachmentPhase.previewing,
@@ -153,7 +164,7 @@ class MediaAttachmentController extends StateNotifier<MediaAttachmentState> {
       fileName: _basename(filePath),
     );
     try {
-      final upload = kind == MediaAttachmentKind.image
+      final upload = _pendingMediaUpload ??= kind == MediaAttachmentKind.image
           ? await _uploadImage(filePath, _onProgress)
           : await _uploadFile(filePath, _onProgress);
       if (!mounted) return false;
@@ -228,6 +239,7 @@ class MediaAttachmentController extends StateNotifier<MediaAttachmentState> {
   void _reset() {
     _idempotencyKey = null;
     _pendingVoiceUpload = null;
+    _pendingMediaUpload = null;
     state = const MediaAttachmentState();
   }
 

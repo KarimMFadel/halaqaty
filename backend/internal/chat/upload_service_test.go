@@ -106,7 +106,20 @@ func (f *fakeUploadStore) WithTx(context.Context, func(*Tx) error) error {
 func newTestUploadService(repo uploadStore, membership MembershipReader, fake *fakeObjectClient, chatMetrics *metrics.ChatMetrics, now time.Time) *UploadService {
 	svc := NewUploadService(repo, membership, newTestMediaStore(fake), newTestCleaner(&fakeStagedSource{}, fake, now), chatMetrics, nil)
 	svc.now = func() time.Time { return now }
+	svc.validate = func(_ context.Context, kind MessageType, mime string, data []byte) (int, error) {
+		if !plausibleMediaFixture(mime, data) {
+			return 0, ErrUnsupportedMIME
+		}
+		if kind == MessageTypeVoice {
+			return 30, nil
+		}
+		return 0, nil
+	}
 	return svc
+}
+
+func plausibleMediaFixture(mime string, data []byte) bool {
+	return detectMIME(data) == mime && len(data) >= 4
 }
 
 // --- Byte fixtures --------------------------------------------------------------

@@ -102,7 +102,8 @@ void main() {
       ));
 
       expect(message.type, ChatMessageType.voice);
-      expect(message.mediaUrl, 'https://media.example.com/chat/voice/abc.m4a?sig=1');
+      expect(message.mediaUrl,
+          'https://media.example.com/chat/voice/abc.m4a?sig=1');
       expect(message.mediaUrlExpiresAt, DateTime.parse('2026-09-18T12:00:00Z'));
       expect(message.fileName, 'note.m4a');
       expect(message.voiceDurationSeconds, 42);

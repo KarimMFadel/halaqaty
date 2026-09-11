@@ -21,8 +21,7 @@ void main() {
       (tester) async {
     final harness = _Harness();
     final started = harness.controller.startRecording();
-    expect(harness.controller.state.phase,
-        VoiceNotePhase.requestingPermission);
+    expect(harness.controller.state.phase, VoiceNotePhase.requestingPermission);
     harness.recorder.permission.complete(true);
     await started;
     await tester.pump();
@@ -94,7 +93,8 @@ void main() {
     harness.controller.dispose();
   });
 
-  testWidgets('send hands file and duration to the upload and resets on success',
+  testWidgets(
+      'send hands file and duration to the upload and resets on success',
       (tester) async {
     final harness = _Harness()..grantPermission();
     await harness.controller.startRecording();
@@ -215,8 +215,8 @@ void main() {
 
     harness.player.positions.add(const Duration(seconds: 2));
     await tester.pump();
-    expect(harness.controller.state.previewPosition,
-        const Duration(seconds: 2));
+    expect(
+        harness.controller.state.previewPosition, const Duration(seconds: 2));
 
     harness.player.playback.complete();
     await tester.pump();

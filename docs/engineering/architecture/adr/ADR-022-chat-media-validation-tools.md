@@ -1,7 +1,7 @@
 # ADR-022: Parse Chat Attachments Before Staging
 
-**Status:** Accepted  
-**Date:** 2026-09-11  
+**Status:** Accepted
+**Date:** 2026-09-11
 **Decider:** Karim
 
 ## Context

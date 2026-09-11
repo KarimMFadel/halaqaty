@@ -21,10 +21,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -39,13 +43,54 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
 )
 
-// Realistic magic-byte-prefixed payloads for the three supported media
-// families; sizes stay far under each family's limit.
-var (
-	chatMediaVoicePayload = append([]byte("OggS"), bytes.Repeat([]byte{0x01}, 2048)...)
-	chatMediaImagePayload = append([]byte{0xFF, 0xD8, 0xFF, 0xE0}, bytes.Repeat([]byte{0x02}, 512)...)
-	chatMediaFilePayload  = append([]byte("%PDF-1.7\n"), bytes.Repeat([]byte{0x25}, 1024)...)
-)
+// Real-media fixtures for the three supported families (ADR-022: valid
+// generated media, never header-only placeholders). Audio and PDF bytes come
+// from the chat package's committed testdata; images are encoded in-process
+// with the standard library. Staging runs the real parsers, so voice and
+// file subtests skip cleanly when ffprobe/qpdf are not installed, mirroring
+// the clean-skip posture for unreachable infrastructure.
+
+// chatMediaFixture loads one committed binary fixture from the chat
+// package's testdata directory.
+func chatMediaFixture(t *testing.T, name string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "..", "internal", "chat", "testdata", name))
+	if err != nil {
+		t.Fatalf("read chat media fixture %s: %v", name, err)
+	}
+	return data
+}
+
+// chatMediaVoice loads a real OGG container (mono 440 Hz FLAC tone, parsed
+// duration 2.000000s). Voice staging requires ffprobe.
+func chatMediaVoice(t *testing.T) []byte {
+	t.Helper()
+	if _, err := exec.LookPath("ffprobe"); err != nil {
+		t.Skip("ffprobe not installed; real-audio staging requires the ADR-022 tools")
+	}
+	return chatMediaFixture(t, "voice_2s.ogg")
+}
+
+// chatMediaPDF loads a real one-page PDF with a correct xref table that
+// passes qpdf --check. PDF staging requires qpdf.
+func chatMediaPDF(t *testing.T) []byte {
+	t.Helper()
+	if _, err := exec.LookPath("qpdf"); err != nil {
+		t.Skip("qpdf not installed; real-PDF staging requires the ADR-022 tools")
+	}
+	return chatMediaFixture(t, "valid.pdf")
+}
+
+// chatMediaPNG encodes a genuinely decodable PNG; no external parser is
+// involved, so image staging runs everywhere.
+func chatMediaPNG(t *testing.T) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 16, 16))); err != nil {
+		t.Fatalf("encode PNG fixture: %v", err)
+	}
+	return buf.Bytes()
+}
 
 // chatMediaEnv bundles the real fixtures one chat-media integration test runs
 // against: an isolated PostgreSQL schema with the full migration chain, and an
@@ -297,17 +342,19 @@ func chatMediaLatestDeleteMarkerKey(t *testing.T, env *chatMediaEnv, ctx context
 }
 
 // chatMediaFailingUploadRepo delegates every operation to the real repository
-// except InsertUpload, which fails — the exact database-finalization seam whose
-// cleanup path must revoke the already-written object. Infrastructure-level DB
-// failures cannot be timed mid-call, so the failure is injected at this one
-// seam while PostgreSQL and MinIO stay real everywhere else.
+// except InsertUploadWithinBudget, which fails — the exact database-finalization
+// seam Stage calls, whose cleanup path must revoke the already-written object.
+// Infrastructure-level DB failures cannot be timed mid-call, so the failure is
+// injected at this one seam while PostgreSQL and MinIO stay real everywhere
+// else.
 type chatMediaFailingUploadRepo struct {
 	*chat.Repository
 	failErr error
 }
 
-// InsertUpload simulates the failed database finalization of a staged object.
-func (r chatMediaFailingUploadRepo) InsertUpload(ctx context.Context, upload chat.Upload) (chat.Upload, error) {
+// InsertUploadWithinBudget simulates the failed database finalization of a
+// staged object.
+func (r chatMediaFailingUploadRepo) InsertUploadWithinBudget(context.Context, chat.Upload, time.Time) (chat.Upload, error) {
 	return chat.Upload{}, r.failErr
 }
 
@@ -326,22 +373,23 @@ func TestChatMediaStagingAndAccess(t *testing.T) {
 		cases := []struct {
 			name         string
 			mediaType    chat.MessageType
-			payload      []byte
+			payload      func(*testing.T) []byte
 			mime         string
 			duration     int
 			declaredName string
 			storedName   string
 		}{
-			{name: "voice", mediaType: chat.MessageTypeVoice, payload: chatMediaVoicePayload, mime: "audio/ogg", duration: 42,
+			{name: "voice", mediaType: chat.MessageTypeVoice, payload: chatMediaVoice, mime: "audio/ogg", duration: 42,
 				declaredName: `..\..\recitation note.ogg`, storedName: "recitation note.ogg"},
-			{name: "image", mediaType: chat.MessageTypeImage, payload: chatMediaImagePayload, mime: "image/jpeg", duration: 0,
-				declaredName: "whiteboard.jpeg", storedName: "whiteboard.jpeg"},
-			{name: "file", mediaType: chat.MessageTypeFile, payload: chatMediaFilePayload, mime: "application/pdf", duration: 0,
+			{name: "image", mediaType: chat.MessageTypeImage, payload: chatMediaPNG, mime: "image/png", duration: 0,
+				declaredName: "whiteboard.png", storedName: "whiteboard.png"},
+			{name: "file", mediaType: chat.MessageTypeFile, payload: chatMediaPDF, mime: "application/pdf", duration: 0,
 				declaredName: "tajweed-rules.pdf", storedName: "tajweed-rules.pdf"},
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				staged := stageChatMedia(t, env, ctx, uploader, circle, tc.mediaType, tc.payload, tc.duration, tc.declaredName)
+				payload := tc.payload(t)
+				staged := stageChatMedia(t, env, ctx, uploader, circle, tc.mediaType, payload, tc.duration, tc.declaredName)
 
 				if staged.ObjectKey != "chat/"+staged.UploadID.String() {
 					t.Fatalf("object key=%q, want chat/%s (server-derived, filename-free)", staged.ObjectKey, staged.UploadID)
@@ -361,7 +409,7 @@ func TestChatMediaStagingAndAccess(t *testing.T) {
 					t.Fatalf("load staged upload row: %v", err)
 				}
 				if state != string(chat.UploadStateStaged) || mime != tc.mime || storedName != tc.storedName ||
-					sizeBytes != int64(len(tc.payload)) || storedUploader != uploader || storedCircle != circle {
+					sizeBytes != int64(len(payload)) || storedUploader != uploader || storedCircle != circle {
 					t.Fatalf("staged row state=%q mime=%q name=%q size=%d uploader=%s circle=%s", state, mime, storedName, sizeBytes, storedUploader, storedCircle)
 				}
 
@@ -369,8 +417,8 @@ func TestChatMediaStagingAndAccess(t *testing.T) {
 				if status != http.StatusOK {
 					t.Fatalf("presigned GET status=%d, want 200", status)
 				}
-				if !bytes.Equal(body, tc.payload) {
-					t.Fatalf("presigned GET returned %d bytes, want the original %d bytes", len(body), len(tc.payload))
+				if !bytes.Equal(body, payload) {
+					t.Fatalf("presigned GET returned %d bytes, want the original %d bytes", len(body), len(payload))
 				}
 				if contentType != tc.mime {
 					t.Fatalf("presigned GET content type=%q, want %q", contentType, tc.mime)
@@ -380,7 +428,7 @@ func TestChatMediaStagingAndAccess(t *testing.T) {
 	})
 
 	t.Run("objects are private without a signature", func(t *testing.T) {
-		staged := stageChatMedia(t, env, ctx, uploader, circle, chat.MessageTypeImage, chatMediaImagePayload, 0, "private.png")
+		staged := stageChatMedia(t, env, ctx, uploader, circle, chat.MessageTypeImage, chatMediaPNG(t), 0, "private.png")
 		status, _, _ := chatMediaGet(t, chatMediaPlainURL(staged.URL))
 		if status != http.StatusForbidden {
 			t.Fatalf("unsigned GET status=%d, want 403 (private bucket denies anonymous access)", status)
@@ -388,7 +436,7 @@ func TestChatMediaStagingAndAccess(t *testing.T) {
 	})
 
 	t.Run("delete marker revokes previously issued versionless url", func(t *testing.T) {
-		staged := stageChatMedia(t, env, ctx, uploader, circle, chat.MessageTypeFile, chatMediaFilePayload, 0, "revoke.pdf")
+		staged := stageChatMedia(t, env, ctx, uploader, circle, chat.MessageTypeFile, chatMediaPDF(t), 0, "revoke.pdf")
 		live, err := env.store.PresignGet(ctx, staged.ObjectKey, chat.MediaURLTTL)
 		if err != nil {
 			t.Fatalf("presign live url: %v", err)
@@ -427,7 +475,7 @@ func TestChatMediaSendRenewAndCleanup(t *testing.T) {
 	seedChatMediaMember(t, env.pool, circle, member, "student", time.Now().Add(-time.Hour))
 
 	t.Run("media send attaches once and replays idempotently", func(t *testing.T) {
-		staged, sent := stageAndSendChatMedia(t, env, ctx, uploader, circle, chat.MessageTypeImage, chatMediaImagePayload, 0, "board.png", "send-image-once")
+		staged, sent := stageAndSendChatMedia(t, env, ctx, uploader, circle, chat.MessageTypeImage, chatMediaPNG(t), 0, "board.png", "send-image-once")
 
 		if sent.UploadID == nil || *sent.UploadID != staged.UploadID {
 			t.Fatalf("sent message upload=%v, want %s", sent.UploadID, staged.UploadID)
@@ -476,7 +524,7 @@ func TestChatMediaSendRenewAndCleanup(t *testing.T) {
 			t.Fatalf("double attach err=%v, want ErrUploadNotStaged (single-use attach)", err)
 		}
 
-		voiceStaged := stageChatMedia(t, env, ctx, uploader, circle, chat.MessageTypeVoice, chatMediaVoicePayload, 30, "note.ogg")
+		voiceStaged := stageChatMedia(t, env, ctx, uploader, circle, chat.MessageTypeVoice, chatMediaVoice(t), 30, "note.ogg")
 		if _, err := env.service.SendGroupMedia(ctx, chat.SendGroupMediaInput{
 			SenderID: uploader, CircleID: circle, UploadID: voiceStaged.UploadID,
 			MessageType: chat.MessageTypeImage, IdempotencyKey: "send-wrong-family",
@@ -493,7 +541,7 @@ func TestChatMediaSendRenewAndCleanup(t *testing.T) {
 	})
 
 	t.Run("renewal serves members a fresh seven day url", func(t *testing.T) {
-		_, sent := stageAndSendChatMedia(t, env, ctx, uploader, circle, chat.MessageTypeVoice, chatMediaVoicePayload, 60, "lesson.ogg", "send-voice-renew")
+		_, sent := stageAndSendChatMedia(t, env, ctx, uploader, circle, chat.MessageTypeVoice, chatMediaVoice(t), 60, "lesson.ogg", "send-voice-renew")
 
 		access, err := env.service.RenewMediaURL(ctx, member, sent.ID)
 		if err != nil {
@@ -501,13 +549,13 @@ func TestChatMediaSendRenewAndCleanup(t *testing.T) {
 		}
 		assertChatMediaSevenDayTTL(t, "renewed url", access.ExpiresAt)
 		status, body, _ := chatMediaGet(t, access.URL.String())
-		if status != http.StatusOK || !bytes.Equal(body, chatMediaVoicePayload) {
+		if status != http.StatusOK || !bytes.Equal(body, chatMediaVoice(t)) {
 			t.Fatalf("renewed GET status=%d bytes=%d, want 200 and the staged payload", status, len(body))
 		}
 	})
 
 	t.Run("expired presigned url is denied and renewal restores access", func(t *testing.T) {
-		staged, sent := stageAndSendChatMedia(t, env, ctx, uploader, circle, chat.MessageTypeVoice, chatMediaVoicePayload, 15, "expiry.ogg", "send-voice-expiry")
+		staged, sent := stageAndSendChatMedia(t, env, ctx, uploader, circle, chat.MessageTypeVoice, chatMediaVoice(t), 15, "expiry.ogg", "send-voice-expiry")
 
 		// A short-TTL versionless URL stands in for a seven-day URL that has
 		// aged past its lifetime, without waiting a week.
@@ -527,13 +575,13 @@ func TestChatMediaSendRenewAndCleanup(t *testing.T) {
 		if err != nil {
 			t.Fatalf("renewal after expiry: %v", err)
 		}
-		if status, body, _ := chatMediaGet(t, access.URL.String()); status != http.StatusOK || !bytes.Equal(body, chatMediaVoicePayload) {
+		if status, body, _ := chatMediaGet(t, access.URL.String()); status != http.StatusOK || !bytes.Equal(body, chatMediaVoice(t)) {
 			t.Fatalf("renewed GET status=%d bytes=%d, want 200 and the staged payload", status, len(body))
 		}
 	})
 
 	t.Run("unauthorized renewal is non-enumerating", func(t *testing.T) {
-		_, sent := stageAndSendChatMedia(t, env, ctx, uploader, circle, chat.MessageTypeImage, chatMediaImagePayload, 0, "guard.png", "send-image-guard")
+		_, sent := stageAndSendChatMedia(t, env, ctx, uploader, circle, chat.MessageTypeImage, chatMediaPNG(t), 0, "guard.png", "send-image-guard")
 
 		if _, err := env.service.RenewMediaURL(ctx, outsider, sent.ID); !errors.Is(err, chat.ErrMessageNotVisible) {
 			t.Fatalf("outsider renewal err=%v, want ErrMessageNotVisible", err)
@@ -560,7 +608,7 @@ func TestChatMediaSendRenewAndCleanup(t *testing.T) {
 			UploaderID:       uploader,
 			Target:           chat.UploadTarget{CircleID: &circle},
 			MediaType:        chat.MessageTypeVoice,
-			Data:             chatMediaVoicePayload,
+			Data:             chatMediaVoice(t),
 			DeclaredFileName: "orphan.ogg",
 			DurationSeconds:  20,
 		}); err == nil {

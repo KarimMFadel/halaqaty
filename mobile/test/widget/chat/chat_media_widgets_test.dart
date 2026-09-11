@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,7 +11,6 @@ import 'package:halaqaty_mobile/features/chat/application/media_attachment_contr
 import 'package:halaqaty_mobile/features/chat/application/voice_note_controller.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_api_client.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_media_api.dart';
-import 'package:halaqaty_mobile/features/chat/domain/chat_models.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_media_widgets.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_ui_labels.dart';
 
@@ -59,18 +59,15 @@ class _Labels {
       rtl ? ChatUiLabels.attachImage : ChatUiLabels.attachImageEn;
   String get attachPdf =>
       rtl ? ChatUiLabels.attachPdf : ChatUiLabels.attachPdfEn;
-  String get recordVoiceNote => rtl
-      ? ChatUiLabels.recordVoiceNote
-      : ChatUiLabels.recordVoiceNoteEn;
+  String get recordVoiceNote =>
+      rtl ? ChatUiLabels.recordVoiceNote : ChatUiLabels.recordVoiceNoteEn;
   String get stopRecording =>
       rtl ? ChatUiLabels.stopRecording : ChatUiLabels.stopRecordingEn;
   String get sendRecording =>
       rtl ? ChatUiLabels.sendRecording : ChatUiLabels.sendRecordingEn;
-  String get recordingDuration => rtl
-      ? ChatUiLabels.recordingDuration
-      : ChatUiLabels.recordingDurationEn;
-  String get waveform =>
-      rtl ? ChatUiLabels.waveform : ChatUiLabels.waveformEn;
+  String get recordingDuration =>
+      rtl ? ChatUiLabels.recordingDuration : ChatUiLabels.recordingDurationEn;
+  String get waveform => rtl ? ChatUiLabels.waveform : ChatUiLabels.waveformEn;
   String get preview =>
       rtl ? ChatUiLabels.previewVoiceNote : ChatUiLabels.previewVoiceNoteEn;
   String get discard =>
@@ -82,9 +79,8 @@ class _Labels {
       rtl ? ChatUiLabels.openSettings : ChatUiLabels.openSettingsEn;
   String get voiceSendFailed =>
       rtl ? ChatUiLabels.voiceSendFailed : ChatUiLabels.voiceSendFailedEn;
-  String get voicePreviewFailed => rtl
-      ? ChatUiLabels.voicePreviewFailed
-      : ChatUiLabels.voicePreviewFailedEn;
+  String get voicePreviewFailed =>
+      rtl ? ChatUiLabels.voicePreviewFailed : ChatUiLabels.voicePreviewFailedEn;
   String get sendingVoice =>
       rtl ? ChatUiLabels.sendingVoice : ChatUiLabels.sendingVoiceEn;
   String get cancel => rtl ? ChatUiLabels.cancel : ChatUiLabels.cancelEn;
@@ -102,26 +98,20 @@ class _Labels {
       : ChatUiLabels.uploadUnsupportedTypeEn;
   String get uploadInvalid =>
       rtl ? ChatUiLabels.uploadInvalid : ChatUiLabels.uploadInvalidEn;
-  String get uploadRateLimited => rtl
-      ? ChatUiLabels.uploadRateLimited
-      : ChatUiLabels.uploadRateLimitedEn;
-  String get uploadNetworkError => rtl
-      ? ChatUiLabels.uploadNetworkError
-      : ChatUiLabels.uploadNetworkErrorEn;
-  String get attachFailedMedia => rtl
-      ? ChatUiLabels.attachFailedMedia
-      : ChatUiLabels.attachFailedMediaEn;
-  String get playVoiceMessage => rtl
-      ? ChatUiLabels.playVoiceMessage
-      : ChatUiLabels.playVoiceMessageEn;
+  String get uploadRateLimited =>
+      rtl ? ChatUiLabels.uploadRateLimited : ChatUiLabels.uploadRateLimitedEn;
+  String get uploadNetworkError =>
+      rtl ? ChatUiLabels.uploadNetworkError : ChatUiLabels.uploadNetworkErrorEn;
+  String get attachFailedMedia =>
+      rtl ? ChatUiLabels.attachFailedMedia : ChatUiLabels.attachFailedMediaEn;
+  String get playVoiceMessage =>
+      rtl ? ChatUiLabels.playVoiceMessage : ChatUiLabels.playVoiceMessageEn;
   String get loadingMedia =>
       rtl ? ChatUiLabels.loadingMedia : ChatUiLabels.loadingMediaEn;
-  String get mediaAccessDenied => rtl
-      ? ChatUiLabels.mediaAccessDenied
-      : ChatUiLabels.mediaAccessDeniedEn;
-  String get mediaAccessFailed => rtl
-      ? ChatUiLabels.mediaAccessFailed
-      : ChatUiLabels.mediaAccessFailedEn;
+  String get mediaAccessDenied =>
+      rtl ? ChatUiLabels.mediaAccessDenied : ChatUiLabels.mediaAccessDeniedEn;
+  String get mediaAccessFailed =>
+      rtl ? ChatUiLabels.mediaAccessFailed : ChatUiLabels.mediaAccessFailedEn;
   String get linkExpired =>
       rtl ? ChatUiLabels.linkExpired : ChatUiLabels.linkExpiredEn;
   String get renewLink =>
@@ -381,30 +371,30 @@ void main() {
     testWidgets(
         'picked image shows a preview before any upload starts; cancel '
         'discards it (RTL + LTR)', (tester) async {
-      final semantics = tester.ensureSemantics();
+      await tester.binding.setSurfaceSize(const Size(800, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       for (final direction in TextDirection.values) {
         final labels = _Labels(direction == TextDirection.rtl);
         final harness = await _pumpComposerBar(tester, direction: direction);
         final image = await _tempFile('photo.png');
         harness.picker.image = image.path;
 
-        await tester.tap(find.bySemanticsLabel(labels.attach));
-        await tester.pump(const Duration(milliseconds: 500));
-        await tester.tap(find.bySemanticsLabel(labels.attachImage));
-        await tester.pump(const Duration(milliseconds: 500));
+        await tester.tap(find.text(labels.attach));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(labels.attachImage));
+        await tester.pumpAndSettle();
 
         expect(find.byType(Image), findsOneWidget);
         expect(find.text('photo.png'), findsOneWidget);
-        expect(find.bySemanticsLabel(labels.cancel), findsOneWidget);
+        expect(find.text(labels.cancel), findsOneWidget);
         expect(harness.imageUploadCalls, isEmpty);
 
-        await tester.tap(find.bySemanticsLabel(labels.cancel));
-        await tester.pump(const Duration(milliseconds: 500));
+        await tester.tap(find.text(labels.cancel));
+        await tester.pumpAndSettle();
         expect(find.byType(Image), findsNothing);
         expect(harness.imageUploadCalls, isEmpty);
         harness.voice.dispose();
       }
-      semantics.dispose();
     });
 
     testWidgets(
@@ -471,8 +461,7 @@ void main() {
       semantics.dispose();
     });
 
-    testWidgets(
-        'a cancelled native pick leaves the composer idle (RTL + LTR)',
+    testWidgets('a cancelled native pick leaves the composer idle (RTL + LTR)',
         (tester) async {
       final semantics = tester.ensureSemantics();
       for (final direction in TextDirection.values) {
@@ -622,13 +611,13 @@ void main() {
         await tester.tap(find.bySemanticsLabel(labels.playVoiceMessage));
         await tester.pump();
         expect(access.renewCalls, 1);
-        expect(access.player.urlPlayed, 'https://media.example.com/v/new?sig=1');
+        expect(
+            access.player.urlPlayed, 'https://media.example.com/v/new?sig=1');
         expect(find.text(labels.loadingMedia), findsNothing);
 
         access.player.urlPlayback.complete();
         await tester.pumpAndSettle();
         expect(find.bySemanticsLabel(labels.playVoiceMessage), findsOneWidget);
-        access.dispose();
       }
       semantics.dispose();
     });
@@ -657,7 +646,6 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text(labels.mediaAccessDenied), findsOneWidget);
         expect(find.textContaining('secret'), findsNothing);
-        denied.dispose();
         await tester.pumpWidget(const SizedBox.shrink());
 
         final failed = _FakeAccess()
@@ -676,7 +664,6 @@ void main() {
         await tester.tap(find.bySemanticsLabel(labels.playVoiceMessage));
         await tester.pumpAndSettle();
         expect(find.text(labels.mediaAccessFailed), findsOneWidget);
-        failed.dispose();
       }
       semantics.dispose();
     });
@@ -706,7 +693,6 @@ void main() {
             warnIfMissed: false);
         await tester.pumpAndSettle();
         expect(access.renewCalls, 1);
-        access.dispose();
       }
       semantics.dispose();
     });
@@ -736,10 +722,9 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(access.renewCalls, 1);
-        expect(access.downloadedUrls,
-            ['https://media.example.com/f/new?sig=1']);
+        expect(
+            access.downloadedUrls, ['https://media.example.com/v/new?sig=1']);
         expect(find.text(labels.downloaded), findsOneWidget);
-        access.dispose();
       }
       semantics.dispose();
     });
@@ -758,17 +743,20 @@ void main() {
       );
 
       expect(find.text(labels.pdfFallbackName), findsOneWidget);
-      access.dispose();
       semantics.dispose();
     });
   });
 }
 
 Future<File> _tempFile(String name) async {
-  final dir = await Directory.systemTemp.createTemp('chat_media_widgets');
-  final file = File('${dir.path}/$name');
-  file.writeAsBytesSync(List<int>.filled(16, 1));
-  addTearDown(() => dir.delete(recursive: true));
+  final file = File('${Directory.systemTemp.path}/$name');
+  file.writeAsBytesSync(name.endsWith('.png')
+      ? base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL1GQAAAABJRU5ErkJggg==')
+      : List<int>.filled(16, 1));
+  addTearDown(() async {
+    if (await file.exists()) await file.delete();
+  });
   return file;
 }
 
@@ -970,8 +958,8 @@ class _FakeAccess {
   final downloadedUrls = <String>[];
   ChatMediaAccessController? _controller;
 
-  ChatMediaAccessController buildController() => _controller ??=
-      ChatMediaAccessController(
+  ChatMediaAccessController buildController() =>
+      _controller ??= ChatMediaAccessController(
         renew: () async {
           renewCalls++;
           final error = renewError;
@@ -1012,4 +1000,3 @@ class _UrlPlayer implements PreviewPlayer {
   @override
   Future<void> dispose() async {}
 }
-

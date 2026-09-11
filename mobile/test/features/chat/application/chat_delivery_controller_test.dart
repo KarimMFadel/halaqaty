@@ -80,7 +80,10 @@ class _DeliveryApi extends ChatApiClient {
       required String content,
       required String idempotencyKey}) async {
     keys.add(idempotencyKey);
-    if (attempts++ < failuresBeforeSuccess) throw StateError('offline');
+    if (attempts++ < failuresBeforeSuccess) {
+      throw const ChatApiException(
+          statusCode: null, code: 'ERR_REQUEST_FAILED', message: 'offline');
+    }
     return ChatMessage(
       id: 'server',
       senderId: 'user',

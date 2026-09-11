@@ -6,6 +6,7 @@ import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/chat/application/group_chat_controller.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_ui_labels.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_widgets.dart';
+import 'package:halaqaty_mobile/features/chat/presentation/chat_media_widgets.dart';
 
 /// Arabic-first RTL-aware group thread for one circle. Owns no chat state:
 /// it projects the authoritative [GroupChatController] and renders
@@ -15,10 +16,12 @@ class GroupChatScreen extends ConsumerStatefulWidget {
     super.key,
     required this.circleId,
     this.circleName,
+    this.readOnly = false,
   });
 
   final String circleId;
   final String? circleName;
+  final bool readOnly;
 
   @override
   ConsumerState<GroupChatScreen> createState() => _GroupChatScreenState();
@@ -32,6 +35,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     super.initState();
     _controller =
         ref.read(groupChatControllerProvider(widget.circleId).notifier);
+    _controller.setReadOnly(widget.readOnly);
     unawaited(_controller.open(widget.circleId));
   }
 
@@ -85,7 +89,18 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                           },
                         ),
                 ),
-                ChatComposer(onSend: _controller.sendText),
+                if (!state.readOnly) ...[
+                  ChatMediaComposerBar(circleId: widget.circleId),
+                  ChatComposer(onSend: _controller.sendText),
+                ] else
+                  Semantics(
+                    container: true,
+                    label: labels.readOnly,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Text(labels.readOnly),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -177,4 +192,7 @@ class _ScreenLabels {
   String get retry => rtl ? ChatUiLabels.retry : ChatUiLabels.retryEn;
   String get actionFailed =>
       rtl ? ChatUiLabels.actionFailed : ChatUiLabels.actionFailedEn;
+  String get readOnly => rtl
+      ? 'هذه المحادثة للقراءة فقط'
+      : 'This conversation is read-only';
 }

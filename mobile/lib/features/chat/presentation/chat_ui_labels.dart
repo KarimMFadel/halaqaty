@@ -85,8 +85,7 @@ class ChatUiLabels {
 
   // Voice-note surface (FR-019); consumed by the T050/T051 widgets.
   static const recordingEn = 'Recording';
-  static const recordingLimitReachedEn =
-      'Recording limit reached (5 minutes)';
+  static const recordingLimitReachedEn = 'Recording limit reached (5 minutes)';
   static const micPermissionDeniedEn = 'Recording needs microphone permission';
   static const openSettingsEn = 'Open settings';
   static const previewVoiceNoteEn = 'Preview';

@@ -25,6 +25,7 @@ func TestUploadServiceRejectsMalformedMedia(t *testing.T) {
 			repo := &fakeUploadStore{}
 			objects := &fakeObjectClient{}
 			svc := newTestUploadService(repo, memberMembership(t, circle), objects, nil, time.Now())
+			svc.validate = validateMediaPayload
 			_, err := svc.Stage(context.Background(), groupStageInput(uuid.New(), circle, tc.kind, tc.data, tc.duration))
 			if !errors.Is(err, ErrUnsupportedMIME) {
 				t.Fatalf("malformed media accepted: %v", err)

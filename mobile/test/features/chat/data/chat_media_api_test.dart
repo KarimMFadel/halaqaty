@@ -30,13 +30,13 @@ void main() {
     await _tempDir.delete(recursive: true);
   });
 
-  File _writeFile(String name, int bytes) {
+  File writeFile(String name, int bytes) {
     final file = File('${_tempDir.path}/$name');
     file.writeAsBytesSync(List<int>.filled(bytes, 1));
     return file;
   }
 
-  Map<String, String> _formFields(FormData form) => {
+  Map<String, String> formFields(FormData form) => {
         for (final entry in form.fields) entry.key: entry.value,
       };
 
@@ -47,7 +47,7 @@ void main() {
       final client = ChatMediaApiClient(
         Dio()..httpClientAdapter = _ChatAdapter(requests, [_uploadJson]),
       );
-      final file = _writeFile('note.m4a', 16);
+      final file = writeFile('note.m4a', 16);
 
       final result = await client.uploadVoice(
         token: _token,
@@ -63,7 +63,7 @@ void main() {
       expect(request.headers['Authorization'], 'Bearer $_token');
       expect(request.headers['X-Halaqaty-Session-ID'], _backendSessionId);
       final form = request.data as FormData;
-      final fields = _formFields(form);
+      final fields = formFields(form);
       expect(fields, containsPair('circle_id', _circleId));
       expect(fields.containsKey('dm_peer_id'), isFalse);
       // The backend voice contract requires the client-declared duration as
@@ -83,7 +83,7 @@ void main() {
       final client = ChatMediaApiClient(
         Dio()..httpClientAdapter = _ChatAdapter(requests, [_uploadJson]),
       );
-      final file = _writeFile('mushaf.png', 16);
+      final file = writeFile('mushaf.png', 16);
 
       await client.uploadImage(
         token: _token,
@@ -98,7 +98,7 @@ void main() {
       expect(request.headers['Authorization'], 'Bearer $_token');
       expect(request.headers['X-Halaqaty-Session-ID'], _backendSessionId);
       final form = request.data as FormData;
-      final fields = _formFields(form);
+      final fields = formFields(form);
       expect(fields, containsPair('dm_peer_id', _dmPeerId));
       expect(fields.containsKey('circle_id'), isFalse);
       // duration_seconds is voice-only in the contract.
@@ -113,7 +113,7 @@ void main() {
       final client = ChatMediaApiClient(
         Dio()..httpClientAdapter = _ChatAdapter(requests, [_uploadJson]),
       );
-      final file = _writeFile('exercise.pdf', 16);
+      final file = writeFile('exercise.pdf', 16);
 
       await client.uploadFile(
         token: _token,
@@ -128,9 +128,8 @@ void main() {
       expect(request.headers['Authorization'], 'Bearer $_token');
       expect(request.headers['X-Halaqaty-Session-ID'], _backendSessionId);
       final form = request.data as FormData;
-      expect(_formFields(form), containsPair('circle_id', _circleId));
-      expect(
-          _formFields(form).containsKey('duration_seconds'), isFalse);
+      expect(formFields(form), containsPair('circle_id', _circleId));
+      expect(formFields(form).containsKey('duration_seconds'), isFalse);
       expect(form.files.single.value.filename, 'exercise.pdf');
     });
 
@@ -141,7 +140,7 @@ void main() {
         Dio()..httpClientAdapter = _ChatAdapter(requests, [_uploadJson]),
       );
       final progress = <(int, int)>[];
-      final file = _writeFile('note.m4a', 16);
+      final file = writeFile('note.m4a', 16);
 
       await client.uploadVoice(
         token: _token,
@@ -168,7 +167,7 @@ void main() {
         final client = ChatMediaApiClient(
           Dio()..httpClientAdapter = _ChatAdapter(requests, [_uploadJson]),
         );
-        final file = _writeFile('note.$extension', 16);
+        final file = writeFile('note.$extension', 16);
 
         final result = await client.uploadVoice(
           token: _token,
@@ -290,7 +289,7 @@ void main() {
       final client = ChatMediaApiClient(
         Dio()..httpClientAdapter = _ChatAdapter(requests, [_uploadJson]),
       );
-      final file = _writeFile('note.m4a', 16);
+      final file = writeFile('note.m4a', 16);
 
       await expectLater(
         client.uploadVoice(
@@ -314,7 +313,7 @@ void main() {
       final client = ChatMediaApiClient(
         Dio()..httpClientAdapter = _ChatAdapter(requests, [_uploadJson]),
       );
-      final file = _writeFile('big.m4a', 20 * 1024 * 1024 + 1);
+      final file = writeFile('big.m4a', 20 * 1024 * 1024 + 1);
 
       await expectLater(
         client.uploadVoice(
@@ -337,7 +336,7 @@ void main() {
       final client = ChatMediaApiClient(
         Dio()..httpClientAdapter = _ChatAdapter(requests, [_uploadJson]),
       );
-      final file = _writeFile('big.png', 5 * 1024 * 1024 + 1);
+      final file = writeFile('big.png', 5 * 1024 * 1024 + 1);
 
       await expectLater(
         client.uploadImage(
@@ -359,7 +358,7 @@ void main() {
       final client = ChatMediaApiClient(
         Dio()..httpClientAdapter = _ChatAdapter(requests, [_uploadJson]),
       );
-      final file = _writeFile('big.pdf', 10 * 1024 * 1024 + 1);
+      final file = writeFile('big.pdf', 10 * 1024 * 1024 + 1);
 
       await expectLater(
         client.uploadFile(
@@ -383,9 +382,9 @@ void main() {
           ..httpClientAdapter =
               _ChatAdapter(requests, [_uploadJson, _uploadJson, _uploadJson]),
       );
-      final voice = _writeFile('at-limit.m4a', 20 * 1024 * 1024);
-      final image = _writeFile('at-limit.png', 5 * 1024 * 1024);
-      final pdf = _writeFile('at-limit.pdf', 10 * 1024 * 1024);
+      final voice = writeFile('at-limit.m4a', 20 * 1024 * 1024);
+      final image = writeFile('at-limit.png', 5 * 1024 * 1024);
+      final pdf = writeFile('at-limit.pdf', 10 * 1024 * 1024);
 
       await client.uploadVoice(
         token: _token,

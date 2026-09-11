@@ -86,11 +86,10 @@ class ChatMessage {
             json[ChatJsonKeys.deliveryStatus] as String?),
         senderName: json[ChatJsonKeys.senderName] as String?,
         mediaUrl: json[ChatJsonKeys.mediaUrl] as String?,
-        mediaUrlExpiresAt: _parseNullableDate(
-            json[ChatJsonKeys.mediaUrlExpiresAt] as String?),
+        mediaUrlExpiresAt:
+            _parseNullableDate(json[ChatJsonKeys.mediaUrlExpiresAt] as String?),
         fileName: json[ChatJsonKeys.fileName] as String?,
-        voiceDurationSeconds:
-            json[ChatJsonKeys.voiceDurationSeconds] as int?,
+        voiceDurationSeconds: json[ChatJsonKeys.voiceDurationSeconds] as int?,
       );
 
   final String id;

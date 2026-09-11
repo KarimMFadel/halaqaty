@@ -8,7 +8,12 @@ import 'package:halaqaty_mobile/features/chat/data/chat_protocol_constants.dart'
 import 'package:halaqaty_mobile/features/sessions/data/session_api_client.dart';
 
 /// Which FR-020/FR-021 product limit rejected the upload locally.
-enum ChatMediaLimitKind { voiceTooLong, voiceTooLarge, imageTooLarge, fileTooLarge }
+enum ChatMediaLimitKind {
+  voiceTooLong,
+  voiceTooLarge,
+  imageTooLarge,
+  fileTooLarge
+}
 
 /// Client-side pre-upload rejection, thrown before any network work so
 /// over-limit media never starts a 60-second upload round trip. The server
@@ -179,8 +184,8 @@ class ChatMediaApiClient {
         ChatJsonKeys.file: await MultipartFile.fromFile(filePath),
         if (circleId != null) ChatJsonKeys.circleId: circleId,
         if (dmPeerId != null) ChatJsonKeys.dmPeerId: dmPeerId,
-        if (durationSeconds != null) ChatJsonKeys.durationSeconds:
-            durationSeconds,
+        if (durationSeconds != null)
+          ChatJsonKeys.durationSeconds: durationSeconds,
       });
       final response = await _dio.post<Map<String, dynamic>>(
         path,

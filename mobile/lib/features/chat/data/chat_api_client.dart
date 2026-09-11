@@ -28,7 +28,8 @@ class ChatApiException implements Exception {
 /// the typed [ChatApiException]; shared by all F-004 chat API clients.
 ChatApiException mapChatApiException(DioException error) {
   final body = error.response?.data;
-  final envelope = body is Map<String, dynamic> ? body[ChatJsonKeys.error] : null;
+  final envelope =
+      body is Map<String, dynamic> ? body[ChatJsonKeys.error] : null;
   final details = envelope is Map<String, dynamic> ? envelope : const {};
   return ChatApiException(
     statusCode: error.response?.statusCode,

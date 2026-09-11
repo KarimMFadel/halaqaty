@@ -120,6 +120,7 @@ type UploadService struct {
 	metrics    *metrics.ChatMetrics
 	audit      *logging.AuditLogger
 	now        func() time.Time
+	validate   func(context.Context, MessageType, string, []byte) (int, error)
 }
 
 // NewUploadService constructs the staged chat upload service. repo is
@@ -134,6 +135,7 @@ func NewUploadService(repo uploadStore, membership MembershipReader, store *Medi
 		metrics:    chatMetrics,
 		audit:      audit,
 		now:        time.Now,
+		validate:   validateMediaPayload,
 	}
 }
 
@@ -252,19 +254,24 @@ func (s *UploadService) Stage(ctx context.Context, in StageUploadInput) (StagedU
 	if err := validateUploadTarget(in.UploaderID, in.Target); err != nil {
 		return s.rejectUpload(start, err)
 	}
-	// The duration between 1 and 300 seconds is the client-declared value;
-	// the server enforces the ceiling bounds only.
-	// ponytail: decode-based duration verification needs an approved media
-	// dependency and is deliberately out of MVP scope.
 	mime := detectMIME(in.Data)
-	if !plausibleMediaPayload(mime, in.Data) {
+	if err := ValidateUpload(UploadInput{
+		Type:            in.MediaType,
+		MIMEType:        mime,
+		SizeBytes:       int64(len(in.Data)),
+		DurationSeconds: in.DurationSeconds,
+	}); err != nil {
+		return s.rejectUpload(start, err)
+	}
+	duration, err := s.validate(ctx, in.MediaType, mime, in.Data)
+	if err != nil {
 		return s.rejectUpload(start, ErrUnsupportedMIME)
 	}
 	if err := ValidateUpload(UploadInput{
 		Type:            in.MediaType,
 		MIMEType:        mime,
 		SizeBytes:       int64(len(in.Data)),
-		DurationSeconds: in.DurationSeconds,
+		DurationSeconds: duration,
 	}); err != nil {
 		return s.rejectUpload(start, err)
 	}
@@ -297,7 +304,7 @@ func (s *UploadService) Stage(ctx context.Context, in StageUploadInput) (StagedU
 		MIMEType:              mime,
 		OriginalFileName:      sanitizeFileName(in.DeclaredFileName),
 		SizeBytes:             int64(len(in.Data)),
-		DurationSeconds:       in.DurationSeconds,
+		DurationSeconds:       duration,
 	}, s.now().Add(-time.Hour))
 	if err != nil {
 		s.cleanupStagedObject(ctx, key)
@@ -324,25 +331,6 @@ func (s *UploadService) Stage(ctx context.Context, in StageUploadInput) (StagedU
 		URL:          preview,
 		URLExpiresAt: s.now().Add(MediaURLTTL),
 	}, nil
-}
-
-// plausibleMediaPayload rejects signature-only and truncated containers before
-// the approved runtime parsers are invoked. The API image supplies FFprobe and
-// qpdf for full parsing; these bounded checks also keep unit tests deterministic.
-func plausibleMediaPayload(mime string, data []byte) bool {
-	if len(data) < 32 {
-		return false
-	}
-	switch mime {
-	case "image/jpeg":
-		return data[len(data)-2] == 0xff && data[len(data)-1] == 0xd9
-	case "image/png":
-		return len(data) >= 24
-	case "application/pdf":
-		return bytes.Contains(data, []byte("%%EOF"))
-	default:
-		return strings.HasPrefix(mime, "audio/")
-	}
 }
 
 // authorizeUploadTarget rechecks the target context from current state and
@@ -575,12 +563,11 @@ func messageCircle(msg Message) uuid.UUID {
 // revoke retained read access (FR-032). ErrMessageNotVisible denies;
 // anything else is an infrastructure failure.
 func (s *UploadService) authorizeGroupMediaView(ctx context.Context, viewerID uuid.UUID, msg Message) error {
-	member, err := s.membership.IsMember(ctx, msg.CircleID.String(), viewerID.String())
-	if err != nil {
-		return fmt.Errorf("authorize chat media renewal: %w", err)
-	}
-	if !member {
-		return ErrMessageNotVisible
+	if err := authorizeRetainedCircleMember(ctx, s.membership, viewerID, *msg.CircleID, func(metrics.ChatDenial) {}); err != nil {
+		if errors.Is(err, ErrCircleNotVisible) {
+			return ErrMessageNotVisible
+		}
+		return err
 	}
 	if periods, ok := s.membership.(membershipPeriodReader); ok {
 		joined, err := periods.MembershipStartedAt(ctx, msg.CircleID.String(), viewerID.String())

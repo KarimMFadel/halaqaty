@@ -4,12 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
-	"io"
 	"math"
 	"os"
 	"os/exec"
@@ -21,10 +19,10 @@ const (
 	// maxMediaPixels bounds the decoded pixel count before image.Decode is
 	// allowed to allocate (ADR-022).
 	maxMediaPixels = 100_000_000
-	// maxParserOutputBytes caps how many ffprobe/qpipe stdout and stderr
-	// bytes are read into memory per pipe, so a hostile file cannot OOM the
+	// maxParserOutputBytes caps how many ffprobe/qpdf stdout and stderr
+	// bytes are retained per pipe, so a hostile file cannot OOM the
 	// API through unbounded parser diagnostics (ADR-022 bounded output).
-	maxParserOutputBytes = 1 << 20
+	maxParserOutputBytes = 8 << 20
 	// parserTimeout bounds each external parser invocation (ADR-022).
 	parserTimeout = 10 * time.Second
 )
@@ -71,10 +69,10 @@ func validateMediaPayload(ctx context.Context, kind MessageType, mime string, da
 func validateImage(data []byte) (int, error) {
 	config, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil || config.Width < 1 || config.Height < 1 || int64(config.Width)*int64(config.Height) > maxMediaPixels {
-		return 0, ErrUnsupportedMIME
+		return 0, ErrMalformedMedia
 	}
 	if _, _, err := image.Decode(bytes.NewReader(data)); err != nil {
-		return 0, ErrUnsupportedMIME
+		return 0, ErrMalformedMedia
 	}
 	return 0, nil
 }
@@ -84,8 +82,14 @@ type probedStream struct {
 	CodecType string `json:"codec_type"`
 }
 
+type probedPacket struct {
+	PTS      string `json:"pts_time"`
+	Duration string `json:"duration_time"`
+}
+
 // probeResult is the ffprobe JSON payload audio validation consumes.
 type probeResult struct {
+	Packets []probedPacket `json:"packets"`
 	Streams []probedStream `json:"streams"`
 	Format  struct {
 		FormatName string `json:"format_name"`
@@ -94,7 +98,7 @@ type probeResult struct {
 }
 
 // probeAudioDuration parses an audio payload with ffprobe and returns the
-// duration in whole seconds derived from container metadata, never from a
+// duration in whole seconds derived from packets and metadata, never from a
 // client-declared value (FR-022). Malformed containers, non-allowlisted
 // demuxers, non-audio streams, and unreadable durations all reject.
 func probeAudioDuration(ctx context.Context, data []byte) (int, error) {
@@ -113,21 +117,51 @@ func probeAudioDuration(ctx context.Context, data []byte) (int, error) {
 	// option; that flag exists only in ffmpeg).
 	output, err := runBoundedCommand(parserCtx, "ffprobe",
 		"-v", "error", "-protocol_whitelist", "file",
-		"-show_entries", "stream=codec_type:format=format_name,duration",
+		"-show_packets", "-show_entries", "stream=codec_type:format=format_name,duration:packet=pts_time,duration_time",
 		"-of", "json", path)
 	if err != nil {
-		return 0, ErrUnsupportedMIME
+		return 0, ErrMalformedMedia
 	}
 	var result probeResult
 	if json.Unmarshal(output, &result) != nil {
-		return 0, ErrUnsupportedMIME
+		return 0, ErrMalformedMedia
 	}
 	if !allStreamsAudio(result.Streams) || !allowedAudioFormats[result.Format.FormatName] {
-		return 0, ErrUnsupportedMIME
+		return 0, ErrMalformedMedia
 	}
+	return parsedAudioDuration(result)
+}
+
+// parsedAudioDuration uses the larger of container duration and the complete
+// packet timeline, so understated container metadata cannot bypass the limit.
+func parsedAudioDuration(result probeResult) (int, error) {
 	duration, err := strconv.ParseFloat(result.Format.Duration, 64)
-	if err != nil || duration <= 0 || math.IsInf(duration, 0) || math.IsNaN(duration) {
-		return 0, ErrUnsupportedMIME
+	if result.Format.Duration == "" || result.Format.Duration == "N/A" {
+		duration = 0
+		err = nil
+	}
+	if err != nil || duration < 0 || math.IsInf(duration, 0) || math.IsNaN(duration) {
+		return 0, ErrMalformedMedia
+	}
+	if len(result.Packets) == 0 {
+		return 0, ErrMalformedMedia
+	}
+	first, last := math.Inf(1), math.Inf(-1)
+	for _, packet := range result.Packets {
+		pts, ptsErr := strconv.ParseFloat(packet.PTS, 64)
+		length, lengthErr := strconv.ParseFloat(packet.Duration, 64)
+		if ptsErr != nil || lengthErr != nil || length < 0 || math.IsNaN(pts) || math.IsInf(pts, 0) || math.IsNaN(length) || math.IsInf(length, 0) {
+			return 0, ErrMalformedMedia
+		}
+		first = math.Min(first, pts)
+		last = math.Max(last, pts+length)
+	}
+	duration = math.Max(duration, last-first)
+	if math.IsInf(duration, 0) || duration <= 0 {
+		return 0, ErrMalformedMedia
+	}
+	if duration > MaxVoiceDurationSeconds {
+		return MaxVoiceDurationSeconds + 1, nil
 	}
 	return int(math.Ceil(duration)), nil
 }
@@ -157,54 +191,48 @@ func validatePDF(ctx context.Context, data []byte) error {
 	parserCtx, cancel := context.WithTimeout(ctx, parserTimeout)
 	defer cancel()
 	if _, err := runBoundedCommand(parserCtx, "qpdf", "--check", path); err != nil {
-		return ErrUnsupportedMIME
+		return ErrMalformedMedia
 	}
 	return nil
 }
 
-// runBoundedCommand executes one external parser with fixed executable name
-// and argument array and returns its stdout. Both output pipes are drained
-// concurrently through size-capped readers so parser diagnostics can neither
-// block the process against a full OS pipe buffer nor exceed the bounded
-// output budget; exceeding maxParserOutputBytes on either pipe fails closed
-// (ADR-022).
+// parserOutputBuffer retains bounded output while accepting every byte, allowing
+// os/exec to drain both pipes even after the retention budget is exhausted.
+type parserOutputBuffer struct {
+	buffer   bytes.Buffer
+	exceeded bool
+}
+
+func (b *parserOutputBuffer) Len() int { return b.buffer.Len() }
+
+func (b *parserOutputBuffer) Write(data []byte) (int, error) {
+	count := len(data)
+	remaining := maxParserOutputBytes - b.Len()
+	if count > remaining {
+		b.exceeded = true
+		data = data[:remaining]
+	}
+	_, _ = b.buffer.Write(data)
+	return count, nil
+}
+
+// runBoundedCommand drains both output pipes through bounded writers.
 func runBoundedCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
-	stdout, err := cmd.StdoutPipe()
+	var stdout, stderr parserOutputBuffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if stdout.exceeded || stderr.exceeded {
+		return nil, fmt.Errorf("%s output exceeded limit", name)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("create %s stdout pipe: %w", name, err)
+		return nil, fmt.Errorf("run %s: %w", name, err)
 	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("create %s stderr pipe: %w", name, err)
+	if stderr.Len() > 0 {
+		return nil, fmt.Errorf("%s reported parser diagnostics", name)
 	}
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start %s: %w", name, err)
-	}
-	type pipeResult struct {
-		data []byte
-		err  error
-	}
-	readCapped := func(r io.Reader) pipeResult {
-		data, err := io.ReadAll(io.LimitReader(r, maxParserOutputBytes+1))
-		return pipeResult{data: data, err: err}
-	}
-	stdoutRes := make(chan pipeResult, 1)
-	stderrRes := make(chan pipeResult, 1)
-	go func() { stdoutRes <- readCapped(stdout) }()
-	go func() { stderrRes <- readCapped(stderr) }()
-	out, errOut := <-stdoutRes, <-stderrRes
-	waitErr := cmd.Wait()
-	if int64(len(out.data)) > maxParserOutputBytes || int64(len(errOut.data)) > maxParserOutputBytes {
-		return nil, fmt.Errorf("%s output exceeded %d bytes", name, maxParserOutputBytes)
-	}
-	if out.err != nil || errOut.err != nil {
-		return nil, fmt.Errorf("read %s output: %w", name, errors.Join(out.err, errOut.err))
-	}
-	if waitErr != nil {
-		return nil, fmt.Errorf("run %s: %w", name, waitErr)
-	}
-	return out.data, nil
+	return stdout.buffer.Bytes(), nil
 }
 
 // writeMediaTempFile writes one private temporary file and returns its path

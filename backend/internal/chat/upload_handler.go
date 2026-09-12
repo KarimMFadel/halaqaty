@@ -175,6 +175,13 @@ func parseUploadTarget(w http.ResponseWriter, r *http.Request) (UploadTarget, bo
 		}
 		target.DMPeerID = &dmPeerID
 	}
+	if (target.CircleID == nil) == (target.DMPeerID == nil) {
+		writeFieldsUnprocessable(w, map[string]string{
+			httpconst.FieldCircleID: httpconst.ErrorMessageChatUploadTargetInvalid,
+			httpconst.FieldDMPeerID: httpconst.ErrorMessageChatUploadTargetInvalid,
+		})
+		return target, false
+	}
 	return target, true
 }
 
@@ -219,6 +226,8 @@ func writeUploadReadError(w http.ResponseWriter, err error) {
 // internal error that must not leak details.
 func writeUploadError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, ErrMalformedMedia):
+		writeFieldsUnprocessable(w, map[string]string{httpconst.FieldFile: httpconst.ErrorMessageChatMalformedMedia})
 	case errors.Is(err, ErrUnsupportedMIME):
 		phttp.WriteError(w, httpconst.ErrorCodeUnsupportedMediaType, httpconst.ErrorMessageUnsupportedMediaType, http.StatusUnsupportedMediaType)
 	case errors.Is(err, ErrUploadTooLarge):

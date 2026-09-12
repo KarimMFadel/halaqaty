@@ -108,6 +108,9 @@ func (s *GroupService) SendText(ctx context.Context, senderID, circleID uuid.UUI
 
 	var sent Message
 	err = s.repo.WithTx(ctx, func(tx *Tx) error {
+		if err := tx.LockActiveCircleMember(ctx, circleID, senderID); err != nil {
+			return err
+		}
 		msg, inserted, err := tx.InsertMessage(ctx, MessageInput{
 			SenderID:       senderID,
 			CircleID:       &circleID,

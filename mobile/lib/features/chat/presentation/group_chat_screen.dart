@@ -35,7 +35,11 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     super.initState();
     _controller =
         ref.read(groupChatControllerProvider(widget.circleId).notifier);
-    _controller.setReadOnly(widget.readOnly);
+    // Riverpod forbids provider writes during mount; defer the projection
+    // flag until the first frame while opening the authoritative history.
+    Future<void>.microtask(() {
+      if (mounted) _controller.setReadOnly(widget.readOnly);
+    });
     unawaited(_controller.open(widget.circleId));
   }
 

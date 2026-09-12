@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -899,6 +900,38 @@ type chatGroupMediaServiceStub struct {
 	committed chat.Message
 }
 
+func (s *chatGroupMediaServiceStub) RenewMediaURL(context.Context, uuid.UUID, uuid.UUID) (chat.MediaAccess, error) {
+	return chat.MediaAccess{URL: &url.URL{Scheme: "https", Host: "media.example", Path: "/signed"}, ExpiresAt: time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC), FileName: "lesson.ogg", VoiceDurationSeconds: 2}, nil
+}
+
+func TestChatGroupHistoryProjectsMedia(t *testing.T) {
+	circle := uuid.MustParse(chatGroupCircleID)
+	handler := chat.NewGroupHandler(&chatGroupServiceStub{history: []chat.Message{
+		{ID: uuid.New(), CircleID: &circle, Type: chat.MessageTypeVoice, State: chat.MessageStateActive},
+		{ID: uuid.New(), CircleID: &circle, Type: chat.MessageTypeText, Content: "hello", State: chat.MessageStateActive},
+	}})
+	handler.SetMediaService(&chatGroupMediaServiceStub{})
+	authMW := middleware.NewAuthMiddleware(&alwaysOKVerifier{}, auth.NewSessionService(30*24*time.Hour), &stubSessionRepo{sessionID: testSessionID, userID: testLocalUserID})
+	router := api.NewRouter(api.MiddlewareSet{Auth: authMW, ChatHandler: handler}).Handler()
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, chatGroupRequest(http.MethodGet, chatGroupMessagesPath(chatGroupCircleID), "", ""))
+	if response.Code != http.StatusOK {
+		t.Fatalf("history status=%d body=%s", response.Code, response.Body.String())
+	}
+	var page struct {
+		Data []map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Data) != 2 || page.Data[0]["media_url"] != "https://media.example/signed" || page.Data[0]["voice_duration_seconds"] != float64(2) || page.Data[0]["file_name"] != "lesson.ogg" || page.Data[0]["media_url_expires_at"] == nil {
+		t.Fatalf("incomplete history media: %s", response.Body.String())
+	}
+	if _, exists := page.Data[1]["media_url"]; exists {
+		t.Fatal("text response gained media URL")
+	}
+}
+
 func (s *chatGroupMediaServiceStub) SendGroupMedia(_ context.Context, in chat.SendGroupMediaInput) (chat.Message, error) {
 	s.sendCalls = append(s.sendCalls, chatGroupMediaSendCall{input: in})
 	if s.sendErr != nil {
@@ -951,7 +984,7 @@ func TestChatGroupMediaSendContract(t *testing.T) {
 			t.Fatalf("status: got %d, want %d body=%s", rec.Code, http.StatusCreated, rec.Body.String())
 		}
 		// Media messages carry no content, so the safe projection omits the key.
-		assertJSONKeySet(t, rec.Body.Bytes(), []string{"id", "circle_id", "sender_id", "message_type", "sent_at", "delivery_status"})
+		assertJSONKeySet(t, rec.Body.Bytes(), []string{"id", "circle_id", "sender_id", "message_type", "sent_at", "delivery_status", "media_url", "media_url_expires_at", "file_name", "voice_duration_seconds"})
 		var message struct {
 			MessageType string `json:"message_type"`
 		}

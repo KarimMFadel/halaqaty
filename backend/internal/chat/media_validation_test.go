@@ -3,6 +3,8 @@ package chat
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -27,8 +29,13 @@ func TestUploadServiceRejectsMalformedMedia(t *testing.T) {
 			svc := newTestUploadService(repo, memberMembership(t, circle), objects, nil, time.Now())
 			svc.validate = validateMediaPayload
 			_, err := svc.Stage(context.Background(), groupStageInput(uuid.New(), circle, tc.kind, tc.data, tc.duration))
-			if !errors.Is(err, ErrUnsupportedMIME) {
+			if !errors.Is(err, ErrMalformedMedia) {
 				t.Fatalf("malformed media accepted: %v", err)
+			}
+			response := httptest.NewRecorder()
+			writeUploadError(response, err)
+			if response.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("malformed media status=%d want 422", response.Code)
 			}
 			if len(repo.inserts) != 0 || len(objects.puts) != 0 {
 				t.Fatal("malformed media reached storage")

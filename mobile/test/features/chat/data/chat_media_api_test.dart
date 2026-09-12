@@ -283,6 +283,40 @@ void main() {
   });
 
   group('ChatMediaApiClient client-side limits', () {
+    test('rejects missing or conflicting upload targets before network work',
+        () async {
+      final requests = <RequestOptions>[];
+      final client = ChatMediaApiClient(
+        Dio()..httpClientAdapter = _ChatAdapter(requests, [_uploadJson]),
+      );
+      final file = writeFile('target.png', 16);
+
+      for (final targets in <(String?, String?)>[
+        (null, null),
+        (_circleId, _dmPeerId),
+      ]) {
+        await expectLater(
+          client.uploadImage(
+            token: _token,
+            sessionId: _backendSessionId,
+            filePath: file.path,
+            circleId: targets.$1,
+            dmPeerId: targets.$2,
+          ),
+          throwsA(
+            isA<ChatApiException>()
+                .having((error) => error.statusCode, 'statusCode', 422)
+                .having(
+                  (error) => error.code,
+                  'code',
+                  ChatApiErrors.validationFailed,
+                ),
+          ),
+        );
+      }
+      expect(requests, isEmpty);
+    });
+
     test('rejects voice longer than 300 seconds before any network work',
         () async {
       final requests = <RequestOptions>[];

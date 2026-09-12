@@ -180,6 +180,9 @@ var (
 	ErrIdempotencyConflict = errors.New("chat: idempotency key payload conflict")
 	// ErrUnsupportedMIME indicates a media type outside the approved allowlist.
 	ErrUnsupportedMIME = errors.New("chat: unsupported MIME type")
+	// ErrMalformedMedia indicates an allowlisted media family whose bytes fail
+	// structural validation. HTTP maps this to contract status 422.
+	ErrMalformedMedia = errors.New("chat: malformed media")
 	// ErrUploadTooLarge indicates an attachment over its type-specific limit.
 	ErrUploadTooLarge = errors.New("chat: upload too large")
 	// ErrInvalidDuration indicates a missing, excessive, or incompatible duration.

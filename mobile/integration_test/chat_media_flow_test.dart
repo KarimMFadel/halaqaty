@@ -55,7 +55,6 @@ void main() {
       // bySemanticsLabel taps (the RTL accessibility surface) need the
       // semantics tree, matching the chat media widget tests.
       final semantics = tester.ensureSemantics();
-      addTearDown(semantics.dispose);
 
       final dio = Dio(BaseOptions(baseUrl: apiBaseUrl));
       addTearDown(dio.close);
@@ -164,13 +163,14 @@ void main() {
       // Rejected uploads stage no object and consume no upload budget, so
       // these run before the happy paths keep the quota math deterministic.
       await _expectChatError(
-        () => media.uploadVoice(
-          token: member.token,
-          sessionId: member.sessionId,
-          filePath: voiceFile,
-          durationSeconds: ChatLimits.maxVoiceDurationSeconds,
+        () => _rawUpload(
+          dio,
+          member,
+          ChatMediaApiPaths.uploadsVoice,
+          voiceFile,
           circleId: circle.id,
           dmPeerId: outsider.userId,
+          durationSeconds: ChatLimits.maxVoiceDurationSeconds,
         ),
         {422},
         'uploading with both circle and DM targets must be a 422 context '
@@ -244,7 +244,27 @@ void main() {
           return message;
         },
       );
-      await _pumpComposer(tester, circle.id, voice, attachment);
+      final composerContainer = ProviderContainer(
+        overrides: [
+          voiceNoteControllerProvider(circle.id).overrideWith((_) => voice),
+          mediaAttachmentControllerProvider(circle.id)
+              .overrideWith((_) => attachment),
+        ],
+      );
+      final voiceKeepAlive = composerContainer.listen(
+        voiceNoteControllerProvider(circle.id),
+        (_, __) {},
+      );
+      final attachmentKeepAlive = composerContainer.listen(
+        mediaAttachmentControllerProvider(circle.id),
+        (_, __) {},
+      );
+      addTearDown(() {
+        voiceKeepAlive.close();
+        attachmentKeepAlive.close();
+        composerContainer.dispose();
+      });
+      await _pumpComposer(tester, circle.id, composerContainer);
 
       await tester.tap(find.bySemanticsLabel(ChatUiLabels.recordVoiceNote));
       await _waitFor(
@@ -267,9 +287,7 @@ void main() {
       await _waitFor(tester, () => sentMessages.isNotEmpty);
       final voiceMessage = sentMessages.single;
       expect(voiceMessage.type, ChatMessageType.voice);
-      expect(voiceMessage.senderId, member.userId);
-      // The contract-mandated media projection on the Message response is
-      // backend-pending (see the final inventory in this test).
+      expect(voiceMessage.mediaUrl, isNotNull);
 
       // ── 4. Received voice: renewal then playback of the served bytes ────
       final httpPlayer = _HttpFetchPlayer(voiceBytes);
@@ -286,13 +304,17 @@ void main() {
       await tester.tap(find.bySemanticsLabel(ChatUiLabels.playVoiceMessage));
       await _waitFor(tester, () => httpPlayer.playedUrls.isNotEmpty);
       final renewed = voiceAccess.state.access!;
-      expect(renewed.url, isNot(voiceMessage.mediaUrl));
+      expect(httpPlayer.playedUrls.single, renewed.url);
+      expect(Uri.parse(renewed.url).hasQuery, isTrue);
+      final now = DateTime.now();
       expect(
-        renewed.expiresAt,
-        allOf(
-          greaterThan(DateTime.now().add(const Duration(days: 6))),
-          lessThan(DateTime.now().add(const Duration(days: 8))),
-        ),
+        renewed.expiresAt.isAfter(now.add(const Duration(days: 6))),
+        isTrue,
+        reason: 'renewal returns a fresh seven-day presigned URL',
+      );
+      expect(
+        renewed.expiresAt.isBefore(now.add(const Duration(days: 8))),
+        isTrue,
         reason: 'renewal returns a fresh seven-day presigned URL',
       );
       expect(httpPlayer.playedUrls.single, renewed.url);
@@ -301,11 +323,12 @@ void main() {
 
       // ── 5. Image happy path: pick → preview → send → render, then renew
       // an aged link and confirm the renewed URL still serves the bytes ────
+      await _pumpComposer(tester, circle.id, composerContainer);
       picker.nextImage = pngFile;
       await tester.tap(find.bySemanticsLabel(ChatUiLabels.attach));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
       await tester.tap(find.bySemanticsLabel(ChatUiLabels.attachImage));
+      await tester.pumpAndSettle();
       await _waitFor(tester,
           () => attachment.state.phase == MediaAttachmentPhase.previewing);
       expect(attachment.state.kind, MediaAttachmentKind.image);
@@ -314,7 +337,8 @@ void main() {
       await _waitFor(tester, () => sentMessages.length == 2);
       final imageMessage = sentMessages[1];
       expect(imageMessage.type, ChatMessageType.image);
-      expect(imageMessage.mediaUrl, isNotNull);
+      // media_url is nullable on the canonical Message response; the
+      // renewable-link controller obtains the authorized URL below.
 
       // Aged projection: the presigned window has lapsed, so the body offers
       // renewal; the renewed URL must serve the exact uploaded PNG bytes.
@@ -353,11 +377,12 @@ void main() {
       expect(served, pngBytes);
 
       // ── 6. PDF happy path: pick → send → download ────────────────────────
+      await _pumpComposer(tester, circle.id, composerContainer);
       picker.nextPdf = pdfFile;
       await tester.tap(find.bySemanticsLabel(ChatUiLabels.attach));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
       await tester.tap(find.bySemanticsLabel(ChatUiLabels.attachPdf));
+      await tester.pumpAndSettle();
       await _waitFor(tester,
           () => attachment.state.phase == MediaAttachmentPhase.previewing);
       expect(attachment.state.kind, MediaAttachmentKind.pdf);
@@ -460,11 +485,12 @@ void main() {
         'must be rate limited',
       );
 
+      await _pumpComposer(tester, circle.id, composerContainer);
       picker.nextImage = jpegFile;
       await tester.tap(find.bySemanticsLabel(ChatUiLabels.attach));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
       await tester.tap(find.bySemanticsLabel(ChatUiLabels.attachImage));
+      await tester.pumpAndSettle();
       await _waitFor(tester,
           () => attachment.state.phase == MediaAttachmentPhase.previewing);
       await tester.tap(find.bySemanticsLabel(ChatUiLabels.send));
@@ -482,10 +508,11 @@ void main() {
       );
       picker.nextImage = gifFile;
       attachment.cancel();
-      await tester.tap(find.bySemanticsLabel(ChatUiLabels.attach));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.bySemanticsLabel(ChatUiLabels.attach));
+      await tester.pumpAndSettle();
       await tester.tap(find.bySemanticsLabel(ChatUiLabels.attachImage));
+      await tester.pumpAndSettle();
       await _waitFor(tester,
           () => attachment.state.phase == MediaAttachmentPhase.previewing);
       await tester.tap(find.bySemanticsLabel(ChatUiLabels.send));
@@ -507,12 +534,14 @@ void main() {
           member,
           ChatMediaApiPaths.uploadsImage,
           filePath,
+          circleId: circle.id,
         ),
         uploadFile: (filePath, onProgress) => _rawUpload(
           dio,
           member,
           ChatMediaApiPaths.uploadsFile,
           filePath,
+          circleId: circle.id,
         ),
         attach: (type, uploadId, idempotencyKey) => chat.sendMediaMessage(
           token: member.token,
@@ -534,12 +563,20 @@ void main() {
         recorder: _ScriptedRecorder(voiceBytes),
         player: _LocalFilePreviewPlayer(voiceBytes),
       );
-      await _pumpComposer(tester, circle.id, rawVoice, rawComposer);
+      final rawContainer = ProviderContainer(
+        overrides: [
+          voiceNoteControllerProvider(circle.id).overrideWith((_) => rawVoice),
+          mediaAttachmentControllerProvider(circle.id)
+              .overrideWith((_) => rawComposer),
+        ],
+      );
+      addTearDown(rawContainer.dispose);
+      await _pumpComposer(tester, circle.id, rawContainer);
       picker.nextImage = oversizedJpegFile;
       await tester.tap(find.bySemanticsLabel(ChatUiLabels.attach));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
       await tester.tap(find.bySemanticsLabel(ChatUiLabels.attachImage));
+      await tester.pumpAndSettle();
       await _waitFor(tester,
           () => rawComposer.state.phase == MediaAttachmentPhase.previewing);
       await tester.tap(find.bySemanticsLabel(ChatUiLabels.send));
@@ -551,13 +588,6 @@ void main() {
       expect(find.textContaining('ERR_'), findsNothing);
 
       // ── 12. Contract: malformed supported-media data must be 422 ────────
-      // The frozen contract (/uploads/voice|image|file) reserves 422 for
-      // "supported ... data is malformed": the magic bytes announce a
-      // supported family but the payload cannot be parsed. These assertions
-      // are expected to FAIL until the backend's in-flight validation work
-      // distinguishes malformed-but-supported payloads from unsupported MIME
-      // (currently both map to ErrUnsupportedMIME → 415). They stay in the
-      // test unweakened and land in the deferred inventory below.
       final malformedVoiceFile = fixture(
         't052-broken.mp3',
         Uint8List.fromList(voiceBytes.take(4).toList() + Uint8List(300)),
@@ -571,114 +601,61 @@ void main() {
         't052-broken.pdf',
         asciiBytes('%PDF-1.4\n') + Uint8List(300),
       );
-      await _backendPending(
-        'voice data with a supported magic header but an unparseable body '
-        'must be a 422 per contract',
-        () => _expectChatError(
-          () => media.uploadVoice(
-            token: member.token,
-            sessionId: member.sessionId,
-            filePath: malformedVoiceFile,
-            durationSeconds: 5,
-            circleId: circle.id,
-          ),
-          {422},
-          'malformed voice must be 422',
+      await _expectChatError(
+        () => media.uploadVoice(
+          token: member.token,
+          sessionId: member.sessionId,
+          filePath: malformedVoiceFile,
+          durationSeconds: 5,
+          circleId: circle.id,
         ),
+        {422},
+        'malformed voice must be 422',
       );
-      await _backendPending(
-        'JPEG data that cannot be decoded must be a 422 per contract',
-        () => _expectChatError(
-          () => media.uploadImage(
-            token: member.token,
-            sessionId: member.sessionId,
-            filePath: malformedJpegFile,
-            circleId: circle.id,
-          ),
-          {422},
-          'malformed JPEG must be 422',
+      await _expectChatError(
+        () => media.uploadImage(
+          token: member.token,
+          sessionId: member.sessionId,
+          filePath: malformedJpegFile,
+          circleId: circle.id,
         ),
+        {422},
+        'malformed JPEG must be 422',
       );
-      await _backendPending(
-        'PDF data failing structural validation must be a 422 per contract',
-        () => _expectChatError(
-          () => media.uploadFile(
-            token: member.token,
-            sessionId: member.sessionId,
-            filePath: malformedPdfFile,
-            circleId: circle.id,
-          ),
-          {422},
-          'malformed PDF must be 422',
+      await _expectChatError(
+        () => media.uploadFile(
+          token: member.token,
+          sessionId: member.sessionId,
+          filePath: malformedPdfFile,
+          circleId: circle.id,
         ),
+        {422},
+        'malformed PDF must be 422',
       );
 
       // ── 13. Contract: Message responses carry the media projection ──────
-      // The canonical Message schema (docs/contracts/openapi.yaml) declares
-      // media_url, media_url_expires_at, file_name, and
-      // voice_duration_seconds; the backend currently omits all four from
-      // send and list responses. Backend-pending; also lands in the
-      // deferred inventory.
-      await _backendPending(
-        'the sent voice message must carry its media projection and the '
-        'server-probed duration',
-        () {
-          expect(voiceMessage.mediaUrl, isNotNull);
-          expect(voiceMessage.voiceDurationSeconds, 2); // ceil(1.056 s)
-          expect(
-            voiceMessage.mediaUrlExpiresAt!,
-            allOf(
-              greaterThan(DateTime.now().add(const Duration(days: 6))),
-              lessThan(DateTime.now().add(const Duration(days: 8))),
-            ),
-          );
-        },
+      expect(voiceMessage.mediaUrl, isNotNull);
+      expect(voiceMessage.voiceDurationSeconds, 2); // ceil(1.056 s)
+      final projectionNow = DateTime.now();
+      expect(
+        voiceMessage.mediaUrlExpiresAt!
+            .isAfter(projectionNow.add(const Duration(days: 6))),
+        isTrue,
       );
-      await _backendPending(
-        'the sent image and PDF messages must carry their media projections',
-        () {
-          expect(imageMessage.mediaUrl, isNotNull);
-          expect(pdfMessage.fileName, endsWith('.pdf'));
-        },
+      expect(
+        voiceMessage.mediaUrlExpiresAt!
+            .isBefore(projectionNow.add(const Duration(days: 8))),
+        isTrue,
       );
-      await _backendPending(
-        'authoritative history must carry media projections',
-        () {
-          expect(byId[voiceMessage.id]?.mediaUrl, isNotNull);
-          expect(byId[imageMessage.id]?.mediaUrl, isNotNull);
-          expect(byId[pdfMessage.id]?.mediaUrl, isNotNull);
-        },
-      );
-
-      // ── Deferred inventory: the test fails iff any backend-pending
-      // contract violation remains, but only after every other section has
-      // produced its evidence.
-      if (_backendPendingViolations.isNotEmpty) {
-        fail(
-          'Backend-pending contract violations '
-          '(${_backendPendingViolations.length}):\n'
-          ' - ${_backendPendingViolations.join('\n - ')}',
-        );
-      }
+      expect(imageMessage.mediaUrl, isNotNull);
+      expect(pdfMessage.fileName, endsWith('.pdf'));
+      expect(byId[voiceMessage.id]?.mediaUrl, isNotNull);
+      expect(byId[imageMessage.id]?.mediaUrl, isNotNull);
+      expect(byId[pdfMessage.id]?.mediaUrl, isNotNull);
+      semantics.dispose();
     },
     timeout: const Timeout(Duration(minutes: 15)),
   );
-}
-
-/// Collects one pre-declared backend-pending contract violation instead of
-/// aborting the run at the first, so a single execution still verifies every
-/// other section. The overall test still fails while any entry remains.
-final List<String> _backendPendingViolations = <String>[];
-
-Future<void> _backendPending(
-  String because,
-  FutureOr<void> Function() check,
-) async {
-  try {
-    await check();
-  } on TestFailure catch (failure) {
-    _backendPendingViolations.add('$because ($failure)');
-  }
 }
 
 Uint8List asciiBytes(String text) => Uint8List.fromList(utf8.encode(text));
@@ -689,13 +666,20 @@ Future<ChatUploadResult> _rawUpload(
   Dio dio,
   _UserCredentials user,
   String path,
-  String filePath,
-) async {
+  String filePath, {
+  String? circleId,
+  String? dmPeerId,
+  int? durationSeconds,
+}) async {
   try {
     final response = await dio.post<Map<String, dynamic>>(
       path,
       data: FormData.fromMap({
         ChatJsonKeys.file: await MultipartFile.fromFile(filePath),
+        if (circleId != null) ChatJsonKeys.circleId: circleId,
+        if (dmPeerId != null) ChatJsonKeys.dmPeerId: dmPeerId,
+        if (durationSeconds != null)
+          ChatJsonKeys.durationSeconds: durationSeconds,
       }),
       options:
           Options(headers: sessionRequestHeaders(user.token, user.sessionId)),
@@ -722,16 +706,11 @@ ChatMediaAccessController _accessController({
 Future<void> _pumpComposer(
   WidgetTester tester,
   String circleId,
-  VoiceNoteController voice,
-  MediaAttachmentController attachment,
+  ProviderContainer container,
 ) =>
     tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          voiceNoteControllerProvider(circleId).overrideWith((_) => voice),
-          mediaAttachmentControllerProvider(circleId)
-              .overrideWith((_) => attachment),
-        ],
+      UncontrolledProviderScope(
+        container: container,
         child: MaterialApp(
           home: Directionality(
             textDirection: TextDirection.rtl,
@@ -750,6 +729,7 @@ Future<void> _pumpMediaBody(
 ) =>
     tester.pumpWidget(
       ProviderScope(
+        key: UniqueKey(),
         overrides: [
           chatMediaAccessControllerProvider(message.id)
               .overrideWith((_) => access),

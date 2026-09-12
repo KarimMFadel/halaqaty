@@ -41,6 +41,16 @@ SELECT ` + messageColumns + `
 FROM messages m
 WHERE m.sender_id = $1::uuid AND m.idempotency_key = $2`
 
+// lockActiveCircleMemberQuery locks the circle row and verifies membership in
+// the same transaction as a chat mutation, closing the archive/removal race
+// between service authorization and message insertion.
+const lockActiveCircleMemberQuery = `
+SELECT c.is_archived
+FROM circles c
+JOIN circle_members cm ON cm.circle_id = c.id AND cm.user_id = $2::uuid
+WHERE c.id = $1::uuid
+FOR UPDATE OF c`
+
 // --- History pages -----------------------------------------------------------
 
 // findMessageCursorQuery resolves an anchor cursor to its (sent_at, id) pair.

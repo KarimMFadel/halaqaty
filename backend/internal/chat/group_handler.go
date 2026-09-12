@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -39,6 +40,8 @@ type GroupMediaService interface {
 	// SendGroupMedia durably accepts one idempotent group media message
 	// bound to a staged upload.
 	SendGroupMedia(ctx context.Context, in SendGroupMediaInput) (Message, error)
+	// RenewMediaURL returns currently authorized media and safe display metadata.
+	RenewMediaURL(ctx context.Context, viewerID, messageID uuid.UUID) (MediaAccess, error)
 }
 
 // GroupHandler exposes the F-004 US1 group-chat REST operations. Handlers
@@ -91,16 +94,20 @@ func (r sendMessageRequest) validateTextSend() (field, message string, ok bool) 
 }
 
 // messageResponse is the response-safe canonical REST Message projection:
-// identifiers, content, server-authoritative timestamps, and state only —
-// never object keys, URLs, tokens, or session identifiers (SR-006).
+// identifiers, content, timestamps, and currently authorized media links.
+// Object keys, tokens, and session identifiers are never exposed.
 type messageResponse struct {
-	ID             string `json:"id"`
-	CircleID       string `json:"circle_id,omitempty"`
-	SenderID       string `json:"sender_id"`
-	MessageType    string `json:"message_type"`
-	Content        string `json:"content,omitempty"`
-	SentAt         string `json:"sent_at"`
-	DeliveryStatus string `json:"delivery_status"`
+	ID                   string `json:"id"`
+	CircleID             string `json:"circle_id,omitempty"`
+	SenderID             string `json:"sender_id"`
+	MessageType          string `json:"message_type"`
+	Content              string `json:"content,omitempty"`
+	SentAt               string `json:"sent_at"`
+	DeliveryStatus       string `json:"delivery_status"`
+	MediaURL             string `json:"media_url,omitempty"`
+	MediaURLExpiresAt    string `json:"media_url_expires_at,omitempty"`
+	FileName             string `json:"file_name,omitempty"`
+	VoiceDurationSeconds int    `json:"voice_duration_seconds,omitempty"`
 }
 
 // newMessageResponse projects one durable message. Delivery state is
@@ -119,6 +126,26 @@ func newMessageResponse(msg Message) messageResponse {
 		response.CircleID = msg.CircleID.String()
 	}
 	return response
+}
+
+// projectMessage adds freshly authorized media only to REST media responses.
+func (h *GroupHandler) projectMessage(ctx context.Context, viewerID uuid.UUID, msg Message) (messageResponse, error) {
+	response := newMessageResponse(msg)
+	if msg.Type == MessageTypeText {
+		return response, nil
+	}
+	if h.media == nil {
+		return messageResponse{}, fmt.Errorf("chat media projection is not configured")
+	}
+	access, err := h.media.RenewMediaURL(ctx, viewerID, msg.ID)
+	if err != nil {
+		return messageResponse{}, err
+	}
+	response.MediaURL = access.URL.String()
+	response.MediaURLExpiresAt = access.ExpiresAt.UTC().Format(time.RFC3339Nano)
+	response.FileName = access.FileName
+	response.VoiceDurationSeconds = access.VoiceDurationSeconds
+	return response, nil
 }
 
 // paginatedMessagesResponse mirrors the canonical PaginatedMessages schema.
@@ -174,7 +201,12 @@ func (h *GroupHandler) ListCircleMessages(w http.ResponseWriter, r *http.Request
 		NextBefore: nil,
 	}
 	for _, msg := range messages {
-		page.Data = append(page.Data, newMessageResponse(msg))
+		response, err := h.projectMessage(r.Context(), viewerID, msg)
+		if err != nil {
+			writeMediaRenewalError(w, err)
+			return
+		}
+		page.Data = append(page.Data, response)
 	}
 	if page.HasMore && len(page.Data) > 0 {
 		next := page.Data[len(page.Data)-1].ID
@@ -276,7 +308,12 @@ func (h *GroupHandler) sendMedia(w http.ResponseWriter, r *http.Request, request
 		writeMediaSendError(w, err)
 		return
 	}
-	phttp.WriteJSON(w, http.StatusCreated, newMessageResponse(sent))
+	response, err := h.projectMessage(r.Context(), senderID, sent)
+	if err != nil {
+		writeMediaRenewalError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusCreated, response)
 }
 
 // parseHistoryLimit reads the optional limit query parameter, bounded to the

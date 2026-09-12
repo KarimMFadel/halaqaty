@@ -5,12 +5,15 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/chat"
@@ -19,6 +22,7 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
+	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
 )
 
 func TestChatLifecycleSecurity_CurrentDeviceSessionRequired(t *testing.T) {
@@ -107,6 +111,115 @@ func TestChatLifecycleSecurity_RemovalRejoinAndArchive(t *testing.T) {
 	assertChatError(t, send.Code, send.Body.Bytes(), http.StatusConflict, httpconst.ErrorCodeConflict)
 }
 
+// TestChatLifecycleSecurity_ServiceMutationMatrix keeps the lifecycle rules
+// covered below the HTTP layer as well.  The service is the common seam used
+// by REST and background callers, so archived and non-member writes must be
+// denied identically regardless of transport.
+func TestChatLifecycleSecurity_ServiceMutationMatrix(t *testing.T) {
+	env := setupChatLifecycleEnv(t)
+	ctx := context.Background()
+	circle := env.createCircle(t, "creator", `{"name":"Chat Service Lifecycle","is_private":true}`)
+	circleID := uuid.MustParse(circle.ID)
+	studentID := uuid.MustParse(env.userIDs["student"])
+	if err := env.circleService.AddStudentMember(ctx, circle.ID, env.userIDs["student"]); err != nil {
+		t.Fatalf("add student membership: %v", err)
+	}
+
+	service := chat.NewGroupService(chat.NewRepository(env.pool), env.circleRepo, &metrics.ChatMetrics{}, nil)
+	if _, err := service.SendText(ctx, studentID, circleID, "before removal", "lifecycle-service-1"); err != nil {
+		t.Fatalf("active member send: %v", err)
+	}
+	if err := env.circleRepo.RemoveMember(ctx, circle.ID, env.userIDs["student"]); err != nil {
+		t.Fatalf("remove student membership: %v", err)
+	}
+	if _, err := service.SendText(ctx, studentID, circleID, "removed", "lifecycle-service-2"); !errors.Is(err, chat.ErrCircleNotVisible) {
+		t.Fatalf("removed member send error=%v, want ErrCircleNotVisible", err)
+	}
+	if _, err := service.SendText(ctx, studentID, uuid.New(), "unknown", "lifecycle-service-3"); !errors.Is(err, chat.ErrCircleNotVisible) {
+		t.Fatalf("unknown circle send error=%v, want ErrCircleNotVisible", err)
+	}
+
+	if _, err := env.pool.Exec(ctx, `INSERT INTO circle_members (circle_id, user_id, role, joined_at) VALUES ($1, $2, 'student', NOW())`, circleID, studentID); err != nil {
+		t.Fatalf("rejoin student membership: %v", err)
+	}
+	if err := env.circleRepo.ArchiveCircle(ctx, circle.ID); err != nil {
+		t.Fatalf("archive circle: %v", err)
+	}
+	if _, err := service.SendText(ctx, studentID, circleID, "archived", "lifecycle-service-4"); !errors.Is(err, chat.ErrCircleArchived) {
+		t.Fatalf("archived member send error=%v, want ErrCircleArchived", err)
+	}
+	if _, err := service.History(ctx, studentID, circleID, nil, 50); err != nil {
+		t.Fatalf("archived retained history: %v", err)
+	}
+}
+
+// TestChatLifecycleSecurity_RealtimeAuthorizationRecheckedBeforeEveryWrite
+// catches any projector or hub change that reuses the subscription-time
+// audience without consulting current PostgreSQL membership and session state.
+func TestChatLifecycleSecurity_RealtimeAuthorizationRecheckedBeforeEveryWrite(t *testing.T) {
+	tests := []struct {
+		name   string
+		cutoff func(context.Context, *chatLifecycleEnv, string) error
+	}{
+		{
+			name: "membership removal",
+			cutoff: func(ctx context.Context, env *chatLifecycleEnv, circleID string) error {
+				return env.circleRepo.RemoveMember(ctx, circleID, env.userIDs["student"])
+			},
+		},
+		{
+			name: "backend session revocation",
+			cutoff: func(ctx context.Context, env *chatLifecycleEnv, _ string) error {
+				return auth.NewSessionRepository(env.pool).Revoke(ctx, env.sessions["student"], time.Now())
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := setupChatLifecycleEnv(t)
+			ctx := context.Background()
+			circle := env.createCircle(t, "creator", `{"name":"Chat Realtime Cutoff","is_private":true}`)
+			if err := env.circleService.AddStudentMember(ctx, circle.ID, env.userIDs["student"]); err != nil {
+				t.Fatalf("add student membership: %v", err)
+			}
+
+			tickets := realtime.NewTicketService(env.circleRepo)
+			ticket, err := tickets.IssueForSession(ctx, env.userIDs["student"], env.sessions["student"])
+			if err != nil {
+				t.Fatalf("issue realtime ticket: %v", err)
+			}
+			hub := realtime.NewHub(tickets, nil)
+			server := httptest.NewServer(hub)
+			t.Cleanup(server.Close)
+			conn := dialLifecycleRealtime(t, server, ticket.Token)
+			t.Cleanup(func() { _ = conn.Close() })
+			subscribeLifecycleCircle(t, conn, circle.ID)
+
+			sessionRepo := auth.NewSessionRepository(env.pool)
+			projector := chat.NewRealtimeProjector(env.circleRepo, hub, tickets, func(ctx context.Context, sessionID, userID string) (bool, error) {
+				session, err := sessionRepo.GetByIDAndUserID(ctx, sessionID, userID)
+				if err != nil {
+					return false, err
+				}
+				return session.RevokedAt == nil && time.Now().Before(session.ExpiresAt), nil
+			})
+			circleID := uuid.MustParse(circle.ID)
+			creatorID := uuid.MustParse(env.userIDs["creator"])
+			projectLifecycleMessage(t, projector, creatorID, circleID, "before cutoff")
+			if got := readLifecycleRealtime(t, conn); got["type"] != realtime.EventChatMessage {
+				t.Fatalf("authorized delivery=%v, want %s", got, realtime.EventChatMessage)
+			}
+
+			if err := tt.cutoff(ctx, env, circle.ID); err != nil {
+				t.Fatalf("apply %s cutoff: %v", tt.name, err)
+			}
+			projectLifecycleMessage(t, projector, creatorID, circleID, "after cutoff")
+			assertNoLifecycleRealtimeEvent(t, conn)
+		})
+	}
+}
+
 type chatLifecycleEnv struct {
 	*circleRoleEnv
 	circleRepo    *rbac.Repository
@@ -181,5 +294,73 @@ func assertChatError(t *testing.T, gotStatus int, body []byte, wantStatus int, w
 	}
 	if envelope.Error.Code != wantCode {
 		t.Fatalf("error code=%q, want %q body=%s", envelope.Error.Code, wantCode, body)
+	}
+}
+
+func dialLifecycleRealtime(t *testing.T, server *httptest.Server, token string) *websocket.Conn {
+	t.Helper()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http")+"?token="+token, nil)
+	if err != nil {
+		t.Fatalf("dial realtime hub: %v", err)
+	}
+	return conn
+}
+
+func subscribeLifecycleCircle(t *testing.T, conn *websocket.Conn, circleID string) {
+	t.Helper()
+	if err := conn.WriteJSON(map[string]any{"action": "subscribe", "topic": "circle." + circleID}); err != nil {
+		t.Fatalf("subscribe to circle topic: %v", err)
+	}
+	if got := readLifecycleRealtime(t, conn); got["type"] != "subscribed" {
+		t.Fatalf("subscription response=%v, want subscribed", got)
+	}
+}
+
+func projectLifecycleMessage(t *testing.T, projector *chat.RealtimeProjector, senderID, circleID uuid.UUID, content string) {
+	t.Helper()
+	messageID := uuid.New()
+	message := chat.Message{
+		ID:       messageID,
+		CircleID: &circleID,
+		SenderID: senderID,
+		Type:     chat.MessageTypeText,
+		Content:  content,
+		State:    chat.MessageStateActive,
+		SentAt:   time.Now().UTC(),
+	}
+	if err := projector.ProjectMessage(context.Background(), chat.OutboxEvent{
+		EventID:   uuid.New(),
+		MessageID: messageID,
+		EventType: realtime.EventChatMessage,
+	}, message); err != nil {
+		t.Fatalf("project realtime message: %v", err)
+	}
+}
+
+func readLifecycleRealtime(t *testing.T, conn *websocket.Conn) map[string]any {
+	t.Helper()
+	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("set realtime read deadline: %v", err)
+	}
+	var message map[string]any
+	if err := conn.ReadJSON(&message); err != nil {
+		t.Fatalf("read realtime message: %v", err)
+	}
+	return message
+}
+
+func assertNoLifecycleRealtimeEvent(t *testing.T, conn *websocket.Conn) {
+	t.Helper()
+	if err := conn.SetReadDeadline(time.Now().Add(150 * time.Millisecond)); err != nil {
+		t.Fatalf("set realtime cutoff deadline: %v", err)
+	}
+	if _, _, err := conn.ReadMessage(); err == nil {
+		t.Fatal("connection received an event after authorization cutoff")
+	} else if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+		if networkErr, ok := err.(interface{ Timeout() bool }); !ok || !networkErr.Timeout() {
+			t.Fatalf("read realtime cutoff: %v", err)
+		}
+	} else {
+		t.Fatalf("realtime connection closed before cutoff assertion: %v", err)
 	}
 }

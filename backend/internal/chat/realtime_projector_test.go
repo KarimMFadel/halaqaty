@@ -33,6 +33,14 @@ type fakeMembershipReader struct {
 	err     error
 }
 
+// MembershipStartedAt implements the production membership-period seam so
+// projector tests exercise the same fail-closed authorization path.
+func (f fakeMembershipReader) MembershipStartedAt(_ context.Context, _, _ string) (time.Time, error) {
+	return time.Time{}, nil
+}
+
+func validProjectorSession(context.Context, string, string) (bool, error) { return true, nil }
+
 // IsMember implements MembershipReader.
 func (f fakeMembershipReader) IsMember(_ context.Context, circleID, userID string) (bool, error) {
 	if f.err != nil {
@@ -124,7 +132,7 @@ func TestRealtimeProjector_DuplicateEventIDDeliveredOnce(t *testing.T) {
 	server := httptest.NewServer(hub)
 	defer server.Close()
 
-	ticket, err := tickets.Issue(context.Background(), "member-user")
+	ticket, err := tickets.IssueForSession(context.Background(), "member-user", "session-1")
 	if err != nil {
 		t.Fatalf("issue ticket: %v", err)
 	}
@@ -134,7 +142,7 @@ func TestRealtimeProjector_DuplicateEventIDDeliveredOnce(t *testing.T) {
 
 	projector := NewRealtimeProjector(fakeMembershipReader{
 		members: map[string]bool{projectorMember(projectorCircleID, "member-user"): true},
-	}, hub, tickets)
+	}, hub, tickets, validProjectorSession)
 	msg, event := projectorTestMessage(t)
 	for i := 0; i < 2; i++ {
 		if err := projector.ProjectMessage(context.Background(), event, msg); err != nil {
@@ -194,9 +202,9 @@ func TestRealtimeProjector_OnlyCurrentlyAuthorizedSubscribersReceive(t *testing.
 	server := httptest.NewServer(hub)
 	defer server.Close()
 
-	memberTicket, _ := tickets.Issue(context.Background(), "member-user")
-	removedTicket, _ := tickets.Issue(context.Background(), "removed-user")
-	offlineTicket, _ := tickets.Issue(context.Background(), "offline-user")
+	memberTicket, _ := tickets.IssueForSession(context.Background(), "member-user", "session-1")
+	removedTicket, _ := tickets.IssueForSession(context.Background(), "removed-user", "session-1")
+	offlineTicket, _ := tickets.IssueForSession(context.Background(), "offline-user", "session-1")
 	member := dialProjectorClient(t, server, memberTicket.Token)
 	defer func() { _ = member.Close() }()
 	removed := dialProjectorClient(t, server, removedTicket.Token)
@@ -208,7 +216,7 @@ func TestRealtimeProjector_OnlyCurrentlyAuthorizedSubscribersReceive(t *testing.
 
 	projector := NewRealtimeProjector(fakeMembershipReader{
 		members: map[string]bool{projectorMember(projectorCircleID, "member-user"): true},
-	}, hub, tickets)
+	}, hub, tickets, validProjectorSession)
 	msg, event := projectorTestMessage(t)
 	if err := projector.ProjectMessage(context.Background(), event, msg); err != nil {
 		t.Fatalf("projection: %v", err)
@@ -231,14 +239,14 @@ func TestRealtimeProjector_RevokedTicketSuppressedBeforeWrite(t *testing.T) {
 	server := httptest.NewServer(hub)
 	defer server.Close()
 
-	ticket, _ := tickets.Issue(context.Background(), "member-user")
+	ticket, _ := tickets.IssueForSession(context.Background(), "member-user", "session-1")
 	conn := dialProjectorClient(t, server, ticket.Token)
 	defer func() { _ = conn.Close() }()
 	subscribeProjectorCircle(t, conn, projectorCircleID)
 
 	projector := NewRealtimeProjector(fakeMembershipReader{
 		members: map[string]bool{projectorMember(projectorCircleID, "member-user"): true},
-	}, hub, realtime.NewTicketService(fixedCircleReader{}))
+	}, hub, realtime.NewTicketService(fixedCircleReader{}), validProjectorSession)
 	msg, event := projectorTestMessage(t)
 	if err := projector.ProjectMessage(context.Background(), event, msg); err != nil {
 		t.Fatalf("projection: %v", err)
@@ -255,12 +263,12 @@ func TestRealtimeProjector_AuthorizationFailureAbortsDelivery(t *testing.T) {
 	server := httptest.NewServer(hub)
 	defer server.Close()
 
-	ticket, _ := tickets.Issue(context.Background(), "member-user")
+	ticket, _ := tickets.IssueForSession(context.Background(), "member-user", "session-1")
 	conn := dialProjectorClient(t, server, ticket.Token)
 	defer func() { _ = conn.Close() }()
 	subscribeProjectorCircle(t, conn, projectorCircleID)
 
-	projector := NewRealtimeProjector(fakeMembershipReader{err: errors.New("membership unavailable")}, hub, tickets)
+	projector := NewRealtimeProjector(fakeMembershipReader{err: errors.New("membership unavailable")}, hub, tickets, validProjectorSession)
 	msg, event := projectorTestMessage(t)
 	if err := projector.ProjectMessage(context.Background(), event, msg); err == nil {
 		t.Fatal("projection must fail when per-write authorization cannot be verified")

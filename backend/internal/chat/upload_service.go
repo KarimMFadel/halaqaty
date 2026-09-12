@@ -103,8 +103,10 @@ type StagedUpload struct {
 
 // MediaAccess is a freshly renewed presigned chat-media URL.
 type MediaAccess struct {
-	URL       *url.URL
-	ExpiresAt time.Time
+	URL                  *url.URL
+	ExpiresAt            time.Time
+	FileName             string
+	VoiceDurationSeconds int
 }
 
 // UploadService implements US3 staged chat uploads: server-side media
@@ -265,7 +267,7 @@ func (s *UploadService) Stage(ctx context.Context, in StageUploadInput) (StagedU
 	}
 	duration, err := s.validate(ctx, in.MediaType, mime, in.Data)
 	if err != nil {
-		return s.rejectUpload(start, ErrUnsupportedMIME)
+		return s.rejectUpload(start, err)
 	}
 	if err := ValidateUpload(UploadInput{
 		Type:            in.MediaType,
@@ -422,6 +424,9 @@ func (s *UploadService) SendGroupMedia(ctx context.Context, in SendGroupMediaInp
 
 	var sent Message
 	err := s.repo.WithTx(ctx, func(tx *Tx) error {
+		if err := tx.LockActiveCircleMember(ctx, in.CircleID, in.SenderID); err != nil {
+			return err
+		}
 		// The row lock serializes concurrent attach attempts on the upload
 		// before any message insert.
 		upload, err := tx.LoadUploadForUpdate(ctx, in.UploadID)
@@ -545,7 +550,11 @@ func (s *UploadService) RenewMediaURL(ctx context.Context, viewerID, messageID u
 		return fail(fmt.Errorf("presign chat media url: %w", err))
 	}
 	s.metrics.RecordLatencyOutcome(metrics.ChatOperationUpload, metrics.ChatOutcomeAccepted, time.Since(start))
-	return MediaAccess{URL: signed, ExpiresAt: s.now().Add(MediaURLTTL)}, nil
+	access := MediaAccess{URL: signed, ExpiresAt: s.now().Add(MediaURLTTL), FileName: sanitizeFileName(upload.OriginalFileName)}
+	if msg.Type == MessageTypeVoice {
+		access.VoiceDurationSeconds = upload.DurationSeconds
+	}
+	return access, nil
 }
 
 // messageCircle returns the message's circle for denial accounting, or the
@@ -569,14 +578,16 @@ func (s *UploadService) authorizeGroupMediaView(ctx context.Context, viewerID uu
 		}
 		return err
 	}
-	if periods, ok := s.membership.(membershipPeriodReader); ok {
-		joined, err := periods.MembershipStartedAt(ctx, msg.CircleID.String(), viewerID.String())
-		if err != nil {
-			return fmt.Errorf("load chat membership period: %w", err)
-		}
-		if msg.SentAt.Before(joined) {
-			return ErrMessageNotVisible
-		}
+	periods, ok := s.membership.(membershipPeriodReader)
+	if !ok {
+		return ErrMessageNotVisible
+	}
+	joined, err := periods.MembershipStartedAt(ctx, msg.CircleID.String(), viewerID.String())
+	if err != nil {
+		return fmt.Errorf("load chat membership period: %w", err)
+	}
+	if msg.SentAt.Before(joined) {
+		return ErrMessageNotVisible
 	}
 	return nil
 }

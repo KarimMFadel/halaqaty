@@ -408,6 +408,7 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
       if (_circleId != circleId || generation != _refreshGeneration) return;
       state = GroupChatControllerState(
         status: GroupChatStatus.ready,
+        readOnly: _readOnly,
         messages: mergeChatMessages(state.messages, page.messages),
         hasMore: page.hasMore,
         nextBefore: page.nextBefore,
@@ -439,6 +440,7 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
       if (_circleId != circleId || generation != _refreshGeneration) return;
       state = GroupChatControllerState(
         status: GroupChatStatus.ready,
+        readOnly: _readOnly,
         messages: page.messages,
         hasMore: page.hasMore,
         nextBefore: page.nextBefore,

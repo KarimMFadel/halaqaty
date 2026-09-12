@@ -153,6 +153,24 @@ func (t *Tx) FindMessageByIdempotency(ctx context.Context, senderID uuid.UUID, i
 	return msg, true, nil
 }
 
+// LockActiveCircleMember verifies the actor's current membership while
+// locking the circle row. Call it inside the mutation transaction immediately
+// before inserting a message or attaching media.
+func (t *Tx) LockActiveCircleMember(ctx context.Context, circleID, userID uuid.UUID) error {
+	var archived bool
+	err := t.tx.QueryRow(ctx, lockActiveCircleMemberQuery, circleID, userID).Scan(&archived)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrCircleNotVisible
+	}
+	if err != nil {
+		return fmt.Errorf("lock chat circle membership: %w", err)
+	}
+	if archived {
+		return ErrCircleArchived
+	}
+	return nil
+}
+
 // InsertOutboxEvent persists one identifier-only chat event in the same
 // transaction as the mutation it describes.
 func (t *Tx) InsertOutboxEvent(ctx context.Context, messageID uuid.UUID, eventType string, recipientID *uuid.UUID) error {

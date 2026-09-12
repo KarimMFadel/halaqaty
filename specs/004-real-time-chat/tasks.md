@@ -100,7 +100,7 @@
 - [X] T049 [US3] Add `record ^7.1.1`, `just_audio ^0.10.6`, `image_picker ^1.2.3`, and `file_picker ^10.3.10` (approved compatibility deviation from planned ^12.2.0; ADR-022) to `mobile/pubspec.yaml`/`mobile/pubspec.lock`; implement media API calls and recording/playback state in `mobile/lib/features/chat/data/chat_media_api.dart` and `mobile/lib/features/chat/application/voice_note_controller.dart`
 - [X] T050 [US3] Add Arabic/English accessible widget tests for recording duration/waveform, preview/discard/send, image preview, PDF action, upload errors, and non-color-only progress in `mobile/test/widget/chat/chat_media_widgets_test.dart`
 - [X] T051 [US3] Implement voice recording with amplitude-drawn waveform, foreground preview/playback, native JPEG/PNG and PDF picking, playback/download, and renewable-link UI in `mobile/lib/features/chat/presentation/chat_media_widgets.dart`
-- [ ] T052 [US3] Add voice/image/PDF happy paths and all server-enforced limit/authorization boundaries in `mobile/integration_test/chat_media_flow_test.dart`
+- [X] T052 [US3] Add voice/image/PDF happy paths and all server-enforced limit/authorization boundaries in `mobile/integration_test/chat_media_flow_test.dart`
 
 ---
 
@@ -111,7 +111,7 @@
 **Independent test**: Revoke a device session, remove/rejoin a member, archive a circle, and verify retained reads/search/media plus denial of every archived mutation and all removed-member realtime access.
 
 - [ ] T053 [P] [US8] Add integration coverage for missing/invalid/revoked/mismatched sessions, removal, rejoin membership periods, archived retained history/search/play, explicit archived mark-read denial, all other archived mutations, per-write realtime cutoff, and non-enumerating denial responses in `backend/tests/integration/chat_lifecycle_security_test.go`
-- [ ] T054 [US8] Apply current-session, membership-period, removal, and archived read-only checks consistently across chat services and realtime projection in `backend/internal/chat/authorizer.go`, `backend/internal/chat/group_service.go`, `backend/internal/chat/upload_service.go`, and `backend/internal/chat/realtime_projector.go`
+- [X] T054 [US8] Apply current-session, membership-period, removal, and archived read-only checks consistently across chat services and realtime projection in `backend/internal/chat/authorizer.go`, `backend/internal/chat/group_service.go`, `backend/internal/chat/upload_service.go`, and `backend/internal/chat/realtime_projector.go`
 - [ ] T055 [P] [US8] Add controller/widget tests for immediate access loss, new membership-period history, archived read/search/play, disabled mutations, and identical in/out-of-session behavior in `mobile/test/features/chat/application/chat_lifecycle_controller_test.dart` and `mobile/test/widget/chat/archived_chat_screen_test.dart`
 - [ ] T056 [US8] Implement lifecycle refresh, access-loss state, archived read-only controls, and session-shell-independent navigation in `mobile/lib/features/chat/application/group_chat_controller.dart`, `mobile/lib/features/chat/presentation/group_chat_screen.dart`, and `mobile/lib/features/sessions/presentation/session_room_screen.dart`
 - [ ] T057 [US8] Add end-to-end removal/rejoin/archive/revoked-session behavior with no F-003, F-006, or F-008 dependency in `mobile/integration_test/chat_lifecycle_flow_test.dart`

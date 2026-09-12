@@ -161,8 +161,7 @@ class CircleDetailScreen extends ConsumerWidget {
               ),
               // ponytail: archived retained-read chat entry arrives with
               // F-004 US8 (T056); archived circles stay hidden for US1.
-              if (!circle.isArchived)
-                ListTile(
+              ListTile(
                   key: const Key('openCircleChat'),
                   leading: const Icon(Icons.chat_bubble_outline),
                   title: Text(rtl
@@ -175,6 +174,7 @@ class CircleDetailScreen extends ConsumerWidget {
                       builder: (_) => GroupChatScreen(
                         circleId: circle.id,
                         circleName: circle.name,
+                        readOnly: circle.isArchived,
                       ),
                     ),
                   ),

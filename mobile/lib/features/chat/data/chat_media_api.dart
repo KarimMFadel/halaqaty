@@ -176,6 +176,13 @@ class ChatMediaApiClient {
     int? durationSeconds,
     void Function(int count, int total)? onProgress,
   }) async {
+    if ((circleId == null) == (dmPeerId == null)) {
+      throw const ChatApiException(
+        statusCode: 422,
+        code: ChatApiErrors.validationFailed,
+        message: ChatApiErrors.uploadTargetInvalid,
+      );
+    }
     if (File(filePath).lengthSync() > maxBytes) {
       throw ChatMediaLimitException(sizeLimitKind);
     }

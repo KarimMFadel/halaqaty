@@ -76,6 +76,21 @@ void main() {
       expect(await controller.sendText('blocked'), isFalse);
       expect(api.sentContents, isEmpty);
     });
+
+    test('archived reconnect keeps the chat read-only', () async {
+      final api = _LifecycleChatApi()..pages.add(_page([_message('archived')]));
+      final realtime = _LifecycleRealtimeClient();
+      final controller = _controller(api, realtime);
+      addTearDown(controller.dispose);
+
+      await controller.open(_circleId);
+      controller.setReadOnly(true);
+      realtime.emit(const ChatReconnectedEvent(eventId: 'reconnected'));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.state.readOnly, isTrue);
+      expect(await controller.sendText('blocked after reconnect'), isFalse);
+    });
   });
 }
 

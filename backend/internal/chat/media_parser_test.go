@@ -49,7 +49,7 @@ func TestValidateMediaPayload_RejectsTruncatedContainers(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := validateMediaPayload(context.Background(), tc.kind, tc.mime, tc.data)
-			if !errors.Is(err, ErrUnsupportedMIME) {
+			if !errors.Is(err, ErrMalformedMedia) {
 				t.Fatalf("validateMediaPayload() error = %v, want unsupported media", err)
 			}
 		})
@@ -90,7 +90,7 @@ func TestValidateImageRejectsTruncatedPixelData(t *testing.T) {
 	for name, data := range map[string][]byte{"png": pngBuf.Bytes(), "jpeg": jpegBuf.Bytes()} {
 		t.Run(name, func(t *testing.T) {
 			truncated := data[:len(data)/2]
-			if _, err := validateImage(truncated); !errors.Is(err, ErrUnsupportedMIME) {
+			if _, err := validateImage(truncated); !errors.Is(err, ErrMalformedMedia) {
 				t.Fatalf("truncated %s accepted (len %d of %d)", name, len(truncated), len(data))
 			}
 		})
@@ -121,7 +121,7 @@ func craftedPNGHeader(width, height uint32) []byte {
 // no oversized pixel buffer was ever allocated for a full decode.
 func TestValidateImageRejectsOversizedDimensionsBeforeDecode(t *testing.T) {
 	header := craftedPNGHeader(100_001, 100_001)
-	if _, err := validateImage(header); !errors.Is(err, ErrUnsupportedMIME) {
+	if _, err := validateImage(header); !errors.Is(err, ErrMalformedMedia) {
 		t.Fatal("image exceeding the pixel ceiling accepted")
 	}
 }
@@ -150,7 +150,7 @@ func TestProbeAudioDurationParsesRealContainer(t *testing.T) {
 // -f lavfi -i sine=frequency=440:duration=1 -c:v libx264 -c:a aac`.
 func TestProbeAudioDurationRejectsVideoContainer(t *testing.T) {
 	requireParser(t, "ffprobe")
-	if _, err := probeAudioDuration(context.Background(), readTestdata(t, "video_with_audio.mp4")); !errors.Is(err, ErrUnsupportedMIME) {
+	if _, err := probeAudioDuration(context.Background(), readTestdata(t, "video_with_audio.mp4")); !errors.Is(err, ErrMalformedMedia) {
 		t.Fatalf("video container accepted as voice: %v", err)
 	}
 }

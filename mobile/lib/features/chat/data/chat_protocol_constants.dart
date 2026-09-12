@@ -93,4 +93,7 @@ abstract final class ChatLimits {
 abstract final class ChatApiErrors {
   static const requestFailed = 'ERR_REQUEST_FAILED';
   static const requestFailedMessage = 'Chat request failed.';
+  static const validationFailed = 'ERR_VALIDATION_FAILED';
+  static const uploadTargetInvalid =
+      'exactly one of circle_id or dm_peer_id is required';
 }

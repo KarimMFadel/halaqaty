@@ -76,15 +76,19 @@ func (p *RealtimeProjector) authorizeCircleDelivery(circleID uuid.UUID, sentAt t
 		if _, err := p.tickets.Validate(connection.RealtimeTicket, connection.UserID); err != nil {
 			return false, nil
 		}
-		if p.sessionValid != nil {
-			ticket, _ := p.tickets.Validate(connection.RealtimeTicket, connection.UserID)
-			valid, err := p.sessionValid(ctx, ticket.SessionID, connection.UserID)
-			if err != nil {
-				return false, fmt.Errorf("reauthorize backend session: %w", err)
-			}
-			if !valid {
-				return false, nil
-			}
+		if p.sessionValid == nil {
+			return false, nil
+		}
+		ticket, err := p.tickets.Validate(connection.RealtimeTicket, connection.UserID)
+		if err != nil || ticket.SessionID == "" {
+			return false, nil
+		}
+		valid, err := p.sessionValid(ctx, ticket.SessionID, connection.UserID)
+		if err != nil {
+			return false, fmt.Errorf("reauthorize backend session: %w", err)
+		}
+		if !valid {
+			return false, nil
 		}
 		member, err := p.membership.IsMember(ctx, circleID.String(), connection.UserID)
 		if err != nil {
@@ -93,14 +97,16 @@ func (p *RealtimeProjector) authorizeCircleDelivery(circleID uuid.UUID, sentAt t
 		if !member {
 			return false, nil
 		}
-		if periods, ok := p.membership.(membershipPeriodReader); ok {
-			joined, err := periods.MembershipStartedAt(ctx, circleID.String(), connection.UserID)
-			if err != nil {
-				return false, fmt.Errorf("load chat membership period: %w", err)
-			}
-			if sentAt.Before(joined) {
-				return false, nil
-			}
+		periods, ok := p.membership.(membershipPeriodReader)
+		if !ok {
+			return false, nil
+		}
+		joined, err := periods.MembershipStartedAt(ctx, circleID.String(), connection.UserID)
+		if err != nil {
+			return false, fmt.Errorf("load chat membership period: %w", err)
+		}
+		if sentAt.Before(joined) {
+			return false, nil
 		}
 		return true, nil
 	}

@@ -110,3 +110,6 @@ const (
 
 // ErrorMessageChatIdempotencyConflict describes a conflicting chat retry.
 const ErrorMessageChatIdempotencyConflict = "idempotency key was already used for different input"
+
+// ErrorMessageChatMalformedMedia describes supported media that cannot be parsed.
+const ErrorMessageChatMalformedMedia = "media content is malformed"

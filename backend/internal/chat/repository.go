@@ -154,8 +154,7 @@ func (t *Tx) FindMessageByIdempotency(ctx context.Context, senderID uuid.UUID, i
 }
 
 // LockActiveCircleMember verifies the actor's current membership while
-// locking the circle row. Call it inside the mutation transaction immediately
-// before inserting a message or attaching media.
+// locking the circle and membership rows against archive and removal races.
 func (t *Tx) LockActiveCircleMember(ctx context.Context, circleID, userID uuid.UUID) error {
 	var archived bool
 	err := t.tx.QueryRow(ctx, lockActiveCircleMemberQuery, circleID, userID).Scan(&archived)
@@ -169,6 +168,35 @@ func (t *Tx) LockActiveCircleMember(ctx context.Context, circleID, userID uuid.U
 		return ErrCircleArchived
 	}
 	return nil
+}
+
+// LockVisibleGroupMessageForRead returns the sender of an active message in
+// circleID that is visible in readerID's current membership period and sent by
+// a different user. The message row remains locked through the transaction.
+func (t *Tx) LockVisibleGroupMessageForRead(ctx context.Context, circleID, readerID, messageID uuid.UUID) (uuid.UUID, error) {
+	var senderID uuid.UUID
+	err := t.tx.QueryRow(ctx, lockVisibleGroupMessageForReadQuery, circleID, readerID, messageID).Scan(&senderID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, ErrMessageNotVisible
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("lock visible group message for read: %w", err)
+	}
+	return senderID, nil
+}
+
+// LockEligibleDirectMessageForRead returns the sender of one visible direct
+// message while rechecking the reader's current qualifying relationship.
+func (t *Tx) LockEligibleDirectMessageForRead(ctx context.Context, readerID, messageID uuid.UUID) (uuid.UUID, error) {
+	var senderID uuid.UUID
+	err := t.tx.QueryRow(ctx, lockEligibleDirectMessageForReadQuery, readerID, messageID).Scan(&senderID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, ErrDMNotEligible
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("lock eligible direct message for read: %w", err)
+	}
+	return senderID, nil
 }
 
 // InsertOutboxEvent persists one identifier-only chat event in the same
@@ -189,6 +217,19 @@ func (t *Tx) InsertMessageRead(ctx context.Context, messageID, userID uuid.UUID)
 		return false, fmt.Errorf("insert chat read receipt: %w", err)
 	}
 	return tag.RowsAffected() == 1, nil
+}
+
+// DeleteOwnDirectMessage soft-deletes a sender's recent direct message.
+func (t *Tx) DeleteOwnDirectMessage(ctx context.Context, messageID, senderID uuid.UUID) error {
+	var deletedID uuid.UUID
+	err := t.tx.QueryRow(ctx, softDeleteOwnDirectMessageQuery, messageID, senderID).Scan(&deletedID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrMessageNotVisible
+	}
+	if err != nil {
+		return fmt.Errorf("delete own direct message: %w", err)
+	}
+	return nil
 }
 
 // AttachUpload applies the single-use staged→attached transition. An upload
@@ -238,6 +279,31 @@ func (r *Repository) GroupHistoryPage(ctx context.Context, circleID, viewerID uu
 		return nil, err
 	}
 	return r.queryMessagePage(ctx, groupHistoryPageQuery, circleID, viewerID, anchorSentAt, anchorID, limit)
+}
+
+// GroupSearchPage returns one retained, non-deleted group-message search page.
+func (r *Repository) GroupSearchPage(ctx context.Context, circleID, viewerID uuid.UUID, query string, before *uuid.UUID, limit int) ([]Message, error) {
+	anchorSentAt, anchorID, err := r.messageCursor(ctx, before)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, groupSearchPageQuery, circleID, viewerID, query, anchorSentAt, anchorID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query chat search page: %w", err)
+	}
+	defer rows.Close()
+	messages := []Message{}
+	for rows.Next() {
+		message, err := scanMessage(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan chat search message: %w", err)
+		}
+		messages = append(messages, message)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate chat search page: %w", err)
+	}
+	return messages, nil
 }
 
 // DMHistoryPage returns one unordered-pair DM history page in (sent_at, id)

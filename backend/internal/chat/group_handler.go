@@ -28,6 +28,8 @@ const MaxSendsPerMinute = 30
 type GroupChatService interface {
 	// History returns one circle history page for a current member.
 	History(ctx context.Context, viewerID, circleID uuid.UUID, before *uuid.UUID, limit int) ([]Message, error)
+	// Search returns one retained search page for a current member.
+	Search(ctx context.Context, viewerID, circleID uuid.UUID, query string, before *uuid.UUID, limit int) ([]Message, error)
 	// SendText durably accepts one idempotent group text message.
 	SendText(ctx context.Context, senderID, circleID uuid.UUID, content, idempotencyKey string) (Message, error)
 }
@@ -99,6 +101,7 @@ func (r sendMessageRequest) validateTextSend() (field, message string, ok bool) 
 type messageResponse struct {
 	ID                   string `json:"id"`
 	CircleID             string `json:"circle_id,omitempty"`
+	DMRecipientID        string `json:"dm_peer_id,omitempty"`
 	SenderID             string `json:"sender_id"`
 	MessageType          string `json:"message_type"`
 	Content              string `json:"content,omitempty"`
@@ -124,6 +127,9 @@ func newMessageResponse(msg Message) messageResponse {
 	}
 	if msg.CircleID != nil {
 		response.CircleID = msg.CircleID.String()
+	}
+	if msg.DMRecipientID != nil {
+		response.DMRecipientID = msg.DMRecipientID.String()
 	}
 	return response
 }
@@ -202,6 +208,61 @@ func (h *GroupHandler) ListCircleMessages(w http.ResponseWriter, r *http.Request
 	}
 	for _, msg := range messages {
 		response, err := h.projectMessage(r.Context(), viewerID, msg)
+		if err != nil {
+			writeMediaRenewalError(w, err)
+			return
+		}
+		page.Data = append(page.Data, response)
+	}
+	if page.HasMore && len(page.Data) > 0 {
+		next := page.Data[len(page.Data)-1].ID
+		page.NextBefore = &next
+	}
+	phttp.WriteJSON(w, http.StatusOK, page)
+}
+
+// SearchCircleMessages implements the retained group-history search contract.
+func (h *GroupHandler) SearchCircleMessages(w http.ResponseWriter, r *http.Request) {
+	if h.service == nil {
+		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
+		return
+	}
+	principal, ok := middleware.CurrentPrincipal(r.Context())
+	if !ok {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	viewerID, err := uuid.Parse(principal.UserID)
+	if err != nil {
+		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
+		return
+	}
+	circleID, err := uuid.Parse(r.PathValue("circleId"))
+	if err != nil {
+		phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{httpconst.FieldCircleID: httpconst.ErrorMessageCircleIDInvalid})
+		return
+	}
+	query, err := ValidateSearchQuery(r.URL.Query().Get(httpconst.FieldQuery))
+	if err != nil {
+		phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{httpconst.FieldQuery: httpconst.ErrorMessageChatSearchInvalid})
+		return
+	}
+	limit, ok := parseHistoryLimit(w, r)
+	if !ok {
+		return
+	}
+	before, ok := parseBeforeCursor(w, r)
+	if !ok {
+		return
+	}
+	messages, err := h.service.Search(r.Context(), viewerID, circleID, query, before, limit)
+	if err != nil {
+		writeHistoryError(w, err)
+		return
+	}
+	page := paginatedMessagesResponse{Data: make([]messageResponse, 0, len(messages)), HasMore: len(messages) == limit}
+	for _, message := range messages {
+		response, err := h.projectMessage(r.Context(), viewerID, message)
 		if err != nil {
 			writeMediaRenewalError(w, err)
 			return

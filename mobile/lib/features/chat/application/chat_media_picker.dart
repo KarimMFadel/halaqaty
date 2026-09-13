@@ -19,6 +19,10 @@ class NativeChatAttachmentPicker implements ChatAttachmentPicker {
   Future<String?> pickImage() async {
     final photo = await ImagePicker().pickImage(
       source: ImageSource.gallery,
+      // Downscale/re-encode on pick so typical camera photos fit the 5 MB
+      // product limit; the server stays authoritative (FR-021).
+      maxWidth: 2560,
+      imageQuality: 85,
     );
     return photo?.path;
   }

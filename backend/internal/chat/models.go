@@ -174,6 +174,8 @@ var (
 	ErrInvalidText = errors.New("chat: invalid text")
 	// ErrInvalidCursor indicates a malformed or oversized pagination cursor.
 	ErrInvalidCursor = errors.New("chat: invalid cursor")
+	// ErrInvalidSearchQuery indicates a search query outside the contract range.
+	ErrInvalidSearchQuery = errors.New("chat: invalid search query")
 	// ErrInvalidIdempotencyKey indicates an empty or oversized retry key.
 	ErrInvalidIdempotencyKey = errors.New("chat: invalid idempotency key")
 	// ErrIdempotencyConflict indicates a retry key reused for a different payload.

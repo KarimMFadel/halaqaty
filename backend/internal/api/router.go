@@ -36,21 +36,23 @@ const defaultMaxRequestBodyBytes = 1 << 20
 
 // MiddlewareSet defines all cross-cutting middleware dependencies.
 type MiddlewareSet struct {
-	Auth              *middleware.AuthMiddleware
-	Role              *middleware.RoleMiddleware
-	RateLimit         *middleware.RateLimitMiddleware
-	AuthHandler       *auth.Handler
-	ProfileHandler    *profile.Handler
-	RBACHandler       *rbac.Handler
-	SessionHandler    *sessions.Handler
-	RealtimeHandler   *realtime.Handler
-	RealtimeHub       *realtime.Hub
-	QueueHandler      *queue.Handler
-	ChatHandler       *chat.GroupHandler
-	ChatSendLimiter   *chat.ChatSendLimiter
-	ChatUploadHandler *chat.UploadHandler
-	ChatMediaHandler  *chat.MediaHandler
-	Timeout           time.Duration
+	Auth                *middleware.AuthMiddleware
+	Role                *middleware.RoleMiddleware
+	RateLimit           *middleware.RateLimitMiddleware
+	AuthHandler         *auth.Handler
+	ProfileHandler      *profile.Handler
+	RBACHandler         *rbac.Handler
+	SessionHandler      *sessions.Handler
+	RealtimeHandler     *realtime.Handler
+	RealtimeHub         *realtime.Hub
+	QueueHandler        *queue.Handler
+	ChatHandler         *chat.GroupHandler
+	DirectChatHandler   *chat.DirectHandler
+	ChatPresenceHandler *chat.PresenceHandler
+	ChatSendLimiter     *chat.ChatSendLimiter
+	ChatUploadHandler   *chat.UploadHandler
+	ChatMediaHandler    *chat.MediaHandler
+	Timeout             time.Duration
 	// ChatUploadTimeout overrides Timeout on the upload routes; zero selects
 	// DefaultChatUploadTimeout.
 	ChatUploadTimeout time.Duration
@@ -342,6 +344,7 @@ func (r *Router) registerRoutes() {
 		if r.mw.ChatHandler != nil {
 			chatH := r.mw.ChatHandler
 			r.mux.Handle(routeCircleMessagesGet, r.requireWithUserLimit(http.HandlerFunc(chatH.ListCircleMessages)))
+			r.mux.Handle(routeCircleMessagesSearch, r.requireWithUserLimit(http.HandlerFunc(chatH.SearchCircleMessages)))
 			// Chat sends stack the FR-006 30-per-minute per-user-and-circle
 			// fixed window on top of the generic per-user budget.
 			var chatSend http.Handler = http.HandlerFunc(chatH.SendCircleMessage)
@@ -349,6 +352,20 @@ func (r *Router) registerRoutes() {
 				chatSend = r.mw.ChatSendLimiter.Limit(chatSend)
 			}
 			r.mux.Handle(routeCircleMessagesSend, r.requireWithUserLimit(chatSend))
+			if r.mw.ChatPresenceHandler != nil {
+				r.mux.Handle(routeCircleMessageRead, r.requireWithUserLimit(http.HandlerFunc(r.mw.ChatPresenceHandler.MarkCircleMessageRead)))
+				r.mux.Handle(routeDirectMessageRead, r.requireWithUserLimit(http.HandlerFunc(r.mw.ChatPresenceHandler.MarkDirectMessageRead)))
+			}
+		}
+		if r.mw.DirectChatHandler != nil {
+			directH := r.mw.DirectChatHandler
+			r.mux.Handle(routeDirectMessagesGet, r.requireWithUserLimit(http.HandlerFunc(directH.ListMessages)))
+			var directSend http.Handler = http.HandlerFunc(directH.SendMessage)
+			if r.mw.ChatSendLimiter != nil {
+				directSend = r.mw.ChatSendLimiter.Limit(directSend)
+			}
+			r.mux.Handle(routeDirectMessagesSend, r.requireWithUserLimit(directSend))
+			r.mux.Handle(routeDirectMessageDelete, r.requireWithUserLimit(http.HandlerFunc(directH.DeleteMessage)))
 		}
 		// F-004 US3 chat media. The upload routes' 21 MB body cap and
 		// 60-second timeout are selected by isChatUploadRequest in Handler;

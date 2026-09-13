@@ -22,7 +22,6 @@ void main() {
     final chat = GroupChatController(api,
         () async => (token: 'token', sessionId: 'session', userId: 'member'),
         realtime: realtime);
-    addTearDown(chat.dispose);
     await tester.pumpWidget(ProviderScope(
       overrides: [
         authControllerProvider.overrideWith((_) => _Auth()),
@@ -53,6 +52,7 @@ void main() {
     api.next = _message('after-rejoin', 'بعد العودة');
     await chat.open('circle');
     await _ready(tester, chat);
+    await tester.pump();
     expect(find.text('بعد العودة'), findsOneWidget);
     expect(find.text('قبل الإزالة'), findsNothing);
 

@@ -91,6 +91,15 @@ type SendGroupMediaInput struct {
 	IdempotencyKey string
 }
 
+// SendDirectMediaInput identifies one idempotent direct media send.
+type SendDirectMediaInput struct {
+	SenderID       uuid.UUID
+	PeerID         uuid.UUID
+	UploadID       uuid.UUID
+	MessageType    MessageType
+	IdempotencyKey string
+}
+
 // StagedUpload is the accepted-upload response data: the upload identity, the
 // legacy object_key compatibility field, and a seven-day presigned preview
 // URL with its expiry.
@@ -488,6 +497,50 @@ func (s *UploadService) SendGroupMedia(ctx context.Context, in SendGroupMediaInp
 	s.metrics.RecordLatencyOutcome(metrics.ChatOperationSend, metrics.ChatOutcomeAccepted, time.Since(start))
 	if s.audit != nil {
 		s.audit.LogChat(ctx, logging.ChatMessageAuditEvent(in.SenderID.String(), in.CircleID.String(), sent.ID.String(), logging.ChatOutcomeAccepted))
+	}
+	return sent, nil
+}
+
+// SendDirectMedia durably accepts one staged attachment for an eligible pair.
+func (s *UploadService) SendDirectMedia(ctx context.Context, in SendDirectMediaInput) (Message, error) {
+	if err := ValidateIdempotencyKey(in.IdempotencyKey); err != nil {
+		return Message{}, err
+	}
+	if err := ValidateMessageInput(MessageInput{SenderID: in.SenderID, DMRecipientID: &in.PeerID, Type: in.MessageType, UploadID: &in.UploadID}); err != nil {
+		return Message{}, err
+	}
+	if _, eligible, err := s.repo.FindQualifyingDMCircle(ctx, in.SenderID, in.PeerID); err != nil {
+		return Message{}, fmt.Errorf("authorize direct media: %w", err)
+	} else if !eligible {
+		return Message{}, ErrDMNotEligible
+	}
+
+	var sent Message
+	if err := s.repo.WithTx(ctx, func(tx *Tx) error {
+		upload, err := tx.LoadUploadForUpdate(ctx, in.UploadID)
+		if err != nil {
+			return err
+		}
+		if upload.UploaderID != in.SenderID || upload.State != UploadStateStaged || upload.DMPeerID == nil || *upload.DMPeerID != in.PeerID || mediaMessageType(upload.MIMEType) != in.MessageType {
+			return ErrUploadNotAttachable
+		}
+		msg, inserted, err := tx.InsertMessage(ctx, MessageInput{SenderID: in.SenderID, DMRecipientID: &in.PeerID, Type: in.MessageType, UploadID: &in.UploadID, IdempotencyKey: in.IdempotencyKey})
+		if err != nil {
+			return err
+		}
+		sent = msg
+		if !inserted {
+			return nil
+		}
+		if _, err := tx.AttachUpload(ctx, in.UploadID); err != nil {
+			return err
+		}
+		if err := tx.InsertOutboxEvent(ctx, msg.ID, realtime.EventChatMessage, &in.PeerID); err != nil {
+			return err
+		}
+		return tx.InsertOutboxEvent(ctx, msg.ID, realtime.EventChatMessage, &in.SenderID)
+	}); err != nil {
+		return Message{}, fmt.Errorf("send direct media: %w", err)
 	}
 	return sent, nil
 }

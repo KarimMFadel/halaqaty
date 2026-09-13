@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_detail_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
+import 'package:halaqaty_mobile/features/chat/presentation/direct_chat_screen.dart';
 
 class CircleMembersScreen extends ConsumerWidget {
   const CircleMembersScreen({super.key, required this.circleId});
@@ -99,21 +100,37 @@ class CircleMembersScreen extends ConsumerWidget {
                       subtitle: Text(
                         '${rtl ? 'انضم في' : 'Joined'}: ${member.joinedAt.year}/${member.joinedAt.month}/${member.joinedAt.day}',
                       ),
-                      trailing: Semantics(
-                        label: rtl
-                            ? 'دور العضو ${member.displayName}: $roleLabel'
-                            : '${member.displayName} role: $roleLabel',
-                        excludeSemantics: true,
-                        child: Chip(
-                          label: Text(
-                            roleLabel,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Semantics(
+                            label: rtl
+                                ? 'دور العضو ${member.displayName}: $roleLabel'
+                                : '${member.displayName} role: $roleLabel',
+                            excludeSemantics: true,
+                            child: Chip(
+                              label: Text(
+                                roleLabel,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              backgroundColor: _getRoleColor(member.role),
                             ),
                           ),
-                          backgroundColor: _getRoleColor(member.role),
-                        ),
+                          IconButton(
+                            key: Key('directChat-${member.userId}'),
+                            tooltip: rtl ? 'محادثة مباشرة' : 'Direct chat',
+                            icon: const Icon(Icons.chat_outlined),
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    DirectChatScreen(peerId: member.userId),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     );
                   },

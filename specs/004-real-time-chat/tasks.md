@@ -110,11 +110,11 @@
 
 **Independent test**: Revoke a device session, remove/rejoin a member, archive a circle, and verify retained reads/search/media plus denial of every archived mutation and all removed-member realtime access.
 
-- [ ] T053 [P] [US8] Add integration coverage for missing/invalid/revoked/mismatched sessions, removal, rejoin membership periods, archived retained history/search/play, explicit archived mark-read denial, all other archived mutations, per-write realtime cutoff, and non-enumerating denial responses in `backend/tests/integration/chat_lifecycle_security_test.go`
+- [X] T053 [P] [US8] Add integration coverage for missing/invalid/revoked/mismatched sessions, removal, rejoin membership periods, archived retained history/search/play, explicit archived mark-read denial, all other archived mutations, per-write realtime cutoff, and non-enumerating denial responses in `backend/tests/integration/chat_lifecycle_security_test.go`
 - [X] T054 [US8] Apply current-session, membership-period, removal, and archived read-only checks consistently across chat services and realtime projection in `backend/internal/chat/authorizer.go`, `backend/internal/chat/group_service.go`, `backend/internal/chat/upload_service.go`, and `backend/internal/chat/realtime_projector.go`
-- [ ] T055 [P] [US8] Add controller/widget tests for immediate access loss, new membership-period history, archived read/search/play, disabled mutations, and identical in/out-of-session behavior in `mobile/test/features/chat/application/chat_lifecycle_controller_test.dart` and `mobile/test/widget/chat/archived_chat_screen_test.dart`
-- [ ] T056 [US8] Implement lifecycle refresh, access-loss state, archived read-only controls, and session-shell-independent navigation in `mobile/lib/features/chat/application/group_chat_controller.dart`, `mobile/lib/features/chat/presentation/group_chat_screen.dart`, and `mobile/lib/features/sessions/presentation/session_room_screen.dart`
-- [ ] T057 [US8] Add end-to-end removal/rejoin/archive/revoked-session behavior with no F-003, F-006, or F-008 dependency in `mobile/integration_test/chat_lifecycle_flow_test.dart`
+- [X] T055 [P] [US8] Add controller/widget tests for immediate access loss, new membership-period history, archived read/search/play, disabled mutations, and identical in/out-of-session behavior in `mobile/test/features/chat/application/chat_lifecycle_controller_test.dart` and `mobile/test/widget/chat/archived_chat_screen_test.dart`
+- [X] T056 [US8] Implement lifecycle refresh, access-loss state, archived read-only controls, and session-shell-independent navigation in `mobile/lib/features/chat/application/group_chat_controller.dart`, `mobile/lib/features/chat/presentation/group_chat_screen.dart`, and `mobile/lib/features/sessions/presentation/session_room_screen.dart`
+- [X] T057 [US8] Add end-to-end removal/rejoin/archive/revoked-session behavior with no F-003, F-006, or F-008 dependency in `mobile/integration_test/chat_lifecycle_flow_test.dart`
 
 **P1 checkpoint**: T001–T057 complete all P1 stories.
 

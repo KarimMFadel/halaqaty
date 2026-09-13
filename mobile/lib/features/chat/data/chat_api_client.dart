@@ -14,11 +14,15 @@ class ChatApiException implements Exception {
     required this.statusCode,
     required this.code,
     required this.message,
+    this.retryAfterSeconds,
   });
 
   final int? statusCode;
   final String code;
   final String message;
+
+  /// Parsed `Retry-After` header from a `429`, in seconds, when present.
+  final int? retryAfterSeconds;
 
   @override
   String toString() => '$code: $message';
@@ -31,11 +35,14 @@ ChatApiException mapChatApiException(DioException error) {
   final envelope =
       body is Map<String, dynamic> ? body[ChatJsonKeys.error] : null;
   final details = envelope is Map<String, dynamic> ? envelope : const {};
+  final retryAfterRaw = error.response?.headers.value(ChatHeaders.retryAfter);
   return ChatApiException(
     statusCode: error.response?.statusCode,
     code: details[ChatJsonKeys.code] as String? ?? ChatApiErrors.requestFailed,
     message: details[ChatJsonKeys.message] as String? ??
         ChatApiErrors.requestFailedMessage,
+    retryAfterSeconds:
+        retryAfterRaw == null ? null : int.tryParse(retryAfterRaw),
   );
 }
 
@@ -45,6 +52,55 @@ class ChatApiClient {
   ChatApiClient(this._dio);
 
   final Dio _dio;
+
+  /// Lists the current eligible unordered-pair conversation.
+  Future<ChatMessagePage> listDirectMessages({
+    required String token,
+    required String sessionId,
+    required String userId,
+    int? limit,
+    String? before,
+  }) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        ChatApiPaths.directMessages(userId),
+        queryParameters: {
+          if (limit != null) ChatJsonKeys.limit: limit,
+          if (before != null) ChatJsonKeys.before: before,
+        },
+        options: Options(headers: sessionRequestHeaders(token, sessionId)),
+      );
+      return ChatMessagePage.fromJson(response.data!);
+    } on DioException catch (error) {
+      throw mapChatApiException(error);
+    }
+  }
+
+  /// Sends one idempotent direct text message.
+  Future<ChatMessage> sendDirectTextMessage({
+    required String token,
+    required String sessionId,
+    required String userId,
+    required String content,
+    required String idempotencyKey,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        ChatApiPaths.directMessages(userId),
+        data: {
+          ChatJsonKeys.messageType: ChatRealtimeTypes.text,
+          ChatJsonKeys.content: content,
+        },
+        options: Options(headers: {
+          ...sessionRequestHeaders(token, sessionId),
+          ChatHeaders.idempotencyKey: idempotencyKey,
+        }),
+      );
+      return ChatMessage.fromJson(response.data!);
+    } on DioException catch (error) {
+      throw mapChatApiException(error);
+    }
+  }
 
   /// Authoritative newest-first history page (`listCircleMessages`).
   Future<ChatMessagePage> listMessages({
@@ -64,6 +120,73 @@ class ChatApiClient {
         options: Options(headers: sessionRequestHeaders(token, sessionId)),
       );
       return ChatMessagePage.fromJson(response.data!);
+    } on DioException catch (error) {
+      throw mapChatApiException(error);
+    }
+  }
+
+  /// Searches retained group history using the server's normalized index.
+  Future<ChatMessagePage> searchMessages({
+    required String token,
+    required String sessionId,
+    required String circleId,
+    required String query,
+    int? limit,
+    String? before,
+  }) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        ChatApiPaths.searchCircleMessages(circleId),
+        queryParameters: {
+          ChatJsonKeys.query: query,
+          if (limit != null) ChatJsonKeys.limit: limit,
+          if (before != null) ChatJsonKeys.before: before,
+        },
+        options: Options(headers: sessionRequestHeaders(token, sessionId)),
+      );
+      return ChatMessagePage.fromJson(response.data!);
+    } on DioException catch (error) {
+      throw mapChatApiException(error);
+    }
+  }
+
+  /// Records a durable read fact for an active-circle message.
+  Future<void> markMessageRead({
+    required String token,
+    required String sessionId,
+    required String circleId,
+    required String messageId,
+    required String idempotencyKey,
+  }) async {
+    try {
+      await _dio.post<void>(
+        ChatApiPaths.markCircleMessageRead(circleId, messageId),
+        options: Options(headers: {
+          ...sessionRequestHeaders(token, sessionId),
+          ChatHeaders.idempotencyKey: idempotencyKey,
+        }),
+      );
+    } on DioException catch (error) {
+      throw mapChatApiException(error);
+    }
+  }
+
+  /// Records a durable read fact for an eligible direct message.
+  Future<void> markDirectMessageRead({
+    required String token,
+    required String sessionId,
+    required String userId,
+    required String messageId,
+    required String idempotencyKey,
+  }) async {
+    try {
+      await _dio.post<void>(
+        ChatApiPaths.markDirectMessageRead(userId, messageId),
+        options: Options(headers: {
+          ...sessionRequestHeaders(token, sessionId),
+          ChatHeaders.idempotencyKey: idempotencyKey,
+        }),
+      );
     } on DioException catch (error) {
       throw mapChatApiException(error);
     }

@@ -14,6 +14,8 @@ const (
 	MaxCursorLength = 36
 	// MaxIdempotencyKeyLength is the database and request key limit.
 	MaxIdempotencyKeyLength = 128
+	// MaxSearchQueryRunes is the maximum retained-history search query size.
+	MaxSearchQueryRunes = 200
 	// MaxVoiceSizeBytes is the maximum voice-note size.
 	MaxVoiceSizeBytes int64 = 20 * 1024 * 1024
 	// MaxImageSizeBytes is the maximum JPEG/PNG image size.
@@ -78,6 +80,16 @@ func ValidateCursor(cursor string) error {
 		return ErrInvalidCursor
 	}
 	return nil
+}
+
+// ValidateSearchQuery trims and validates a retained-history search query.
+func ValidateSearchQuery(query string) (string, error) {
+	trimmed := strings.TrimSpace(query)
+	runes := utf8.RuneCountInString(trimmed)
+	if runes < 2 || runes > MaxSearchQueryRunes {
+		return "", ErrInvalidSearchQuery
+	}
+	return trimmed, nil
 }
 
 // ValidateIdempotencyKey validates a required bounded retry identity.

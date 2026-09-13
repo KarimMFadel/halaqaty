@@ -82,8 +82,14 @@ const (
 // operations arrive with their own stories; these constants are the single
 // source for the route strings.
 const (
-	routeCircleMessagesGet  = "GET /api/v1/circles/{circleId}/messages"
-	routeCircleMessagesSend = "POST /api/v1/circles/{circleId}/messages"
+	routeCircleMessagesGet    = "GET /api/v1/circles/{circleId}/messages"
+	routeCircleMessagesSend   = "POST /api/v1/circles/{circleId}/messages"
+	routeCircleMessagesSearch = "GET /api/v1/circles/{circleId}/messages/search"
+	routeCircleMessageRead    = "POST /api/v1/circles/{circleId}/messages/{messageId}/read"
+	routeDirectMessageRead    = "POST /api/v1/dm/{userId}/messages/{messageId}/read"
+	routeDirectMessagesGet    = "GET /api/v1/dm/{userId}"
+	routeDirectMessagesSend   = "POST /api/v1/dm/{userId}"
+	routeDirectMessageDelete  = "DELETE /api/v1/dm/{userId}/messages/{messageId}"
 )
 
 // F-004 US3 chat-media route patterns. The bare upload paths select the
@@ -102,10 +108,16 @@ const (
 // Exported F-004 chat route aliases consumed by the cmd/api route-parity
 // composition tests.
 const (
-	RouteCircleMessagesGet  = routeCircleMessagesGet
-	RouteCircleMessagesSend = routeCircleMessagesSend
-	RouteUploadsVoice       = routeUploadsVoice
-	RouteUploadsImage       = routeUploadsImage
-	RouteUploadsFile        = routeUploadsFile
-	RouteMessageMediaURL    = routeMessageMediaURL
+	RouteCircleMessagesGet    = routeCircleMessagesGet
+	RouteCircleMessagesSend   = routeCircleMessagesSend
+	RouteCircleMessagesSearch = routeCircleMessagesSearch
+	RouteCircleMessageRead    = routeCircleMessageRead
+	RouteDirectMessageRead    = routeDirectMessageRead
+	RouteDirectMessagesGet    = routeDirectMessagesGet
+	RouteDirectMessagesSend   = routeDirectMessagesSend
+	RouteDirectMessageDelete  = routeDirectMessageDelete
+	RouteUploadsVoice         = routeUploadsVoice
+	RouteUploadsImage         = routeUploadsImage
+	RouteUploadsFile          = routeUploadsFile
+	RouteMessageMediaURL      = routeMessageMediaURL
 )

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/chat/application/group_chat_controller.dart';
+import 'package:halaqaty_mobile/features/chat/domain/chat_models.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_ui_labels.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_widgets.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_media_widgets.dart';
@@ -49,6 +50,45 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     super.dispose();
   }
 
+  /// Opens the edit sheet for one terminally failed draft (FR-008): the
+  /// controller rotates the idempotency key, so the edited text is a fresh
+  /// logical send rather than a key-conflicting replay.
+  Future<void> _editTerminalDraft(
+      BuildContext context, ChatMessage message) async {
+    final controller = TextEditingController(text: message.content);
+    final edited = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(_ScreenLabels(
+                Directionality.of(context) == TextDirection.rtl)
+            .editDraft),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: null,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(_ScreenLabels(
+                    Directionality.of(context) == TextDirection.rtl)
+                .cancelEdit),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: Text(_ScreenLabels(
+                    Directionality.of(context) == TextDirection.rtl)
+                .saveEdit),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (edited != null && mounted) {
+      await _controller.editPending(message.id, edited);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(groupChatControllerProvider(widget.circleId));
@@ -86,9 +126,27 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                           itemCount: state.messages.length,
                           itemBuilder: (context, index) {
                             final message = displayMessages[index];
-                            return ChatMessageBubble(
-                              message: message,
-                              isOwn: message.senderId == currentUserId,
+                            final terminalError =
+                                state.terminalFailures[message.id];
+                            return Column(
+                              children: [
+                                ChatMessageBubble(
+                                  message: message,
+                                  isOwn: message.senderId == currentUserId,
+                                ),
+                                if (terminalError != null)
+                                  _TerminalFailureActions(
+                                    labels: labels,
+                                    message: message,
+                                    onEdit: () =>
+                                        _editTerminalDraft(context, message),
+                                    onDiscard: () => unawaited(_controller
+                                        .discardPending(message.id)),
+                                    onRetry: () => unawaited(_controller
+                                        .retryPending(
+                                            idempotencyKey: message.id)),
+                                  ),
+                              ],
                             );
                           },
                         ),
@@ -183,6 +241,82 @@ class _ActionErrorLabel extends StatelessWidget {
       );
 }
 
+/// FR-008 terminal-failure affordance for one failed draft: non-color-only
+/// failure semantics plus labeled 48dp edit/discard/retry controls.
+class _TerminalFailureActions extends StatelessWidget {
+  const _TerminalFailureActions({
+    required this.labels,
+    required this.message,
+    required this.onEdit,
+    required this.onDiscard,
+    required this.onRetry,
+  });
+
+  final _ScreenLabels labels;
+  final ChatMessage message;
+  final VoidCallback onEdit;
+  final VoidCallback onDiscard;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Align(
+      alignment: AlignmentDirectional.centerEnd,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Semantics(
+              container: true,
+              liveRegion: true,
+              label: labels.sendFailed,
+              child: ExcludeSemantics(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.error_outline,
+                        size: 16, color: colorScheme.error),
+                    const SizedBox(width: 4),
+                    Text(
+                      labels.sendFailed,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: colorScheme.error),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Wrap(
+              children: [
+                _terminalAction(labels.editDraft, onEdit),
+                _terminalAction(labels.discardDraft, onDiscard),
+                _terminalAction(labels.retry, onRetry),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _terminalAction(String label, VoidCallback onPressed) => Semantics(
+        button: true,
+        label: label,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: TextButton(
+            onPressed: onPressed,
+            child: ExcludeSemantics(child: Text(label)),
+          ),
+        ),
+      );
+}
+
 class _ScreenLabels {
   const _ScreenLabels(this.rtl);
 
@@ -196,6 +330,14 @@ class _ScreenLabels {
   String get retry => rtl ? ChatUiLabels.retry : ChatUiLabels.retryEn;
   String get actionFailed =>
       rtl ? ChatUiLabels.actionFailed : ChatUiLabels.actionFailedEn;
+  String get sendFailed =>
+      rtl ? ChatUiLabels.sendFailed : ChatUiLabels.sendFailedEn;
+  String get editDraft =>
+      rtl ? ChatUiLabels.editDraft : ChatUiLabels.editDraftEn;
+  String get discardDraft =>
+      rtl ? ChatUiLabels.discardDraft : ChatUiLabels.discardDraftEn;
+  String get cancelEdit => rtl ? ChatUiLabels.cancel : ChatUiLabels.cancelEn;
+  String get saveEdit => rtl ? ChatUiLabels.send : ChatUiLabels.sendEn;
   String get readOnly => rtl
       ? 'هذه المحادثة للقراءة فقط'
       : 'This conversation is read-only';

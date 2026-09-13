@@ -210,7 +210,6 @@ class MediaAttachmentController extends StateNotifier<MediaAttachmentState> {
     state = MediaAttachmentState(
       phase: MediaAttachmentPhase.sending,
       kind: null,
-      fileName: upload.objectKey,
     );
     try {
       await _attach(ChatMessageType.voice, upload.uploadId!, key);
@@ -230,10 +229,22 @@ class MediaAttachmentController extends StateNotifier<MediaAttachmentState> {
     }
   }
 
-  /// Discards the preview/failed attachment and any staged voice upload.
-  void cancel() {
+  /// Discards the preview/failed attachment, its staged voice upload, and
+  /// the unsubmitted picked file (spec: cancellation discards the local
+  /// envelope and any unsubmitted local file).
+  Future<void> cancel() async {
     if (state.phase == MediaAttachmentPhase.idle) return;
-    _reset();
+    final pickedPath =
+        state.kind == null ? null : state.filePath; // voice files are owned
+    _reset();                                                  // by the recorder
+    if (pickedPath == null) return;
+    try {
+      final file = File(pickedPath);
+      if (await file.exists()) await file.delete();
+    } on FileSystemException {
+      // Best-effort local cleanup: an undeletable temp file never blocks
+      // returning the composer to idle.
+    }
   }
 
   void _reset() {

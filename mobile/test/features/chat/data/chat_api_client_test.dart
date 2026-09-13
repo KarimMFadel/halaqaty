@@ -92,6 +92,55 @@ void main() {
       expect(requests.single.queryParameters, isEmpty);
     });
 
+    test('searches retained messages with query and pagination', () async {
+      final requests = <RequestOptions>[];
+      final client = ChatApiClient(
+        Dio()
+          ..httpClientAdapter = _ChatAdapter(requests, [
+            _ChatResponse.ok(200, {
+              'data': [_messageJson()],
+              'has_more': false,
+              'next_before': null,
+            }),
+          ]),
+      );
+
+      final page = await client.searchMessages(
+        token: _token,
+        sessionId: _backendSessionId,
+        circleId: _circleId,
+        query: 'سلام',
+        limit: 10,
+      );
+
+      expect(requests.single.path, '/circles/$_circleId/messages/search');
+      expect(requests.single.queryParameters, {'q': 'سلام', 'limit': 10});
+      expect(page.messages, hasLength(1));
+    });
+
+    test('marks a message read with an idempotency key', () async {
+      final requests = <RequestOptions>[];
+      final client = ChatApiClient(
+        Dio()
+          ..httpClientAdapter = _ChatAdapter(requests, [
+            _ChatResponse.ok(204, {}),
+          ]),
+      );
+
+      await client.markMessageRead(
+        token: _token,
+        sessionId: _backendSessionId,
+        circleId: _circleId,
+        messageId: _messageId,
+        idempotencyKey: 'read-key',
+      );
+
+      expect(requests.single.path,
+          '/circles/$_circleId/messages/$_messageId/read');
+      expect(requests.single.method, 'POST');
+      expect(requests.single.headers['Idempotency-Key'], 'read-key');
+    });
+
     test('sends a text message with the idempotency key header', () async {
       final requests = <RequestOptions>[];
       final client = ChatApiClient(

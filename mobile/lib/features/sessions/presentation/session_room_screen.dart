@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
+import 'package:halaqaty_mobile/features/chat/presentation/chat_ui_labels.dart';
+import 'package:halaqaty_mobile/features/chat/presentation/group_chat_screen.dart';
 import 'package:halaqaty_mobile/features/sessions/application/queue_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/application/session_room_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/data/queue_api_client.dart';
@@ -26,6 +28,7 @@ class SessionRoomScreen extends ConsumerWidget {
     final queueState = state.queueState;
     final showRoomControls = _showRoomControls(state);
     final rtl = Directionality.of(context) == TextDirection.rtl;
+    final circleId = state.connection?.session.circleId;
     return Scaffold(
       appBar: AppBar(title: Text(rtl ? SessionUiLabels.title : 'Live session')),
       body: Padding(
@@ -71,6 +74,18 @@ class SessionRoomScreen extends ConsumerWidget {
           if (state.status == SessionRoomStatus.connected)
             Text(
                 rtl ? SessionUiLabels.connected : 'Connected. Audio is ready.'),
+          if (state.status == SessionRoomStatus.connected && circleId != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => GroupChatScreen(circleId: circleId),
+                  ),
+                ),
+                child: Text(rtl ? ChatUiLabels.title : ChatUiLabels.titleEn),
+              ),
+            ),
           if (state.status == SessionRoomStatus.ended)
             Text(rtl ? SessionUiLabels.sessionEnded : 'Session ended'),
           // Action failures never render raw errors; the room stays connected.

@@ -41,15 +41,15 @@ SELECT ` + messageColumns + `
 FROM messages m
 WHERE m.sender_id = $1::uuid AND m.idempotency_key = $2`
 
-// lockActiveCircleMemberQuery locks the circle row and verifies membership in
-// the same transaction as a chat mutation, closing the archive/removal race
-// between service authorization and message insertion.
+// lockActiveCircleMemberQuery locks the circle and membership rows in the same
+// transaction as a chat mutation, closing archive and removal races before
+// persistence.
 const lockActiveCircleMemberQuery = `
 SELECT c.is_archived
 FROM circles c
 JOIN circle_members cm ON cm.circle_id = c.id AND cm.user_id = $2::uuid
 WHERE c.id = $1::uuid
-FOR UPDATE OF c`
+FOR UPDATE OF c, cm`
 
 // --- History pages -----------------------------------------------------------
 
@@ -72,7 +72,20 @@ WHERE m.circle_id = $1::uuid
   AND m.sent_at >= cm.joined_at
   AND ($3::timestamptz IS NULL OR (m.sent_at, m.id) < ($3::timestamptz, $4::uuid))
 ORDER BY m.sent_at DESC, m.id DESC
-LIMIT $5`
+	LIMIT $5`
+
+// groupSearchPageQuery searches only retained, non-deleted group messages.
+const groupSearchPageQuery = `
+SELECT ` + messageColumns + `
+FROM messages m
+JOIN circle_members cm ON cm.circle_id = m.circle_id AND cm.user_id = $2::uuid
+WHERE m.circle_id = $1::uuid
+  AND m.deleted_at IS NULL
+  AND m.sent_at >= cm.joined_at
+  AND m.search_vector @@ websearch_to_tsquery('simple', halaqaty_normalize_arabic($3))
+  AND ($4::timestamptz IS NULL OR (m.sent_at, m.id) < ($4::timestamptz, $5::uuid))
+ORDER BY m.sent_at DESC, m.id DESC
+LIMIT $6`
 
 // dmHistoryPageQuery returns one unordered-pair DM history page in
 // (sent_at, id) DESC order, excluding deleted messages. Pair eligibility is
@@ -87,7 +100,53 @@ WHERE m.deleted_at IS NULL
 ORDER BY m.sent_at DESC, m.id DESC
 LIMIT $5`
 
+const softDeleteOwnDirectMessageQuery = `
+UPDATE messages
+SET deleted_at = NOW()
+WHERE id = $1::uuid
+  AND sender_id = $2::uuid
+  AND circle_id IS NULL
+  AND deleted_at IS NULL
+  AND sent_at >= NOW() - INTERVAL '10 minutes'
+RETURNING id`
+
 // --- Read receipts -----------------------------------------------------------
+
+// lockVisibleGroupMessageForReadQuery verifies and locks one active group
+// message that is visible in the reader's current membership period. The
+// sender exclusion prevents users from recording read facts for their own
+// messages.
+const lockVisibleGroupMessageForReadQuery = `
+SELECT m.sender_id
+FROM messages m
+JOIN circle_members cm ON cm.circle_id = m.circle_id AND cm.user_id = $2::uuid
+WHERE m.circle_id = $1::uuid
+  AND m.id = $3::uuid
+  AND m.deleted_at IS NULL
+  AND m.sent_at >= cm.joined_at
+  AND m.sender_id <> $2::uuid
+FOR SHARE OF m`
+
+// lockEligibleDirectMessageForReadQuery verifies the reader is the recipient
+// of a visible DM and that the unordered pair still has an active qualifying
+// circle relationship. The sender is returned for targeted delivery.
+const lockEligibleDirectMessageForReadQuery = `
+SELECT m.sender_id
+FROM messages m
+JOIN circle_members cm_a ON cm_a.user_id = m.sender_id
+JOIN circle_members cm_b ON cm_b.circle_id = cm_a.circle_id AND cm_b.user_id = $1::uuid
+JOIN circles c ON c.id = cm_a.circle_id AND c.is_archived = FALSE
+WHERE m.id = $2::uuid
+  AND m.circle_id IS NULL
+  AND m.deleted_at IS NULL
+  AND m.dm_recipient_id = $1::uuid
+  AND (
+       (cm_a.role = 'teacher' AND cm_b.role = 'student')
+    OR (cm_a.role = 'student' AND cm_b.role = 'teacher')
+    OR (cm_a.role = 'supervisor' AND cm_b.role = 'student')
+    OR (cm_a.role = 'student' AND cm_b.role = 'supervisor')
+  )
+FOR SHARE OF m`
 
 // insertMessageReadQuery records one read fact idempotently: a repeated
 // (message_id, user_id) insert affects zero rows and reports inserted=false.

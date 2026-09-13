@@ -19,7 +19,6 @@ const _messageId = 'msg-1';
 
 ChatUploadResult _uploadResult([String uploadId = 'upload-1']) =>
     ChatUploadResult(
-      objectKey: 'chat/voice/abc.m4a',
       url: 'https://media.example.com/chat/voice/abc.m4a?sig=1',
       uploadId: uploadId,
       urlExpiresAt: DateTime.parse('2026-09-18T12:00:00Z'),
@@ -725,6 +724,9 @@ void main() {
         expect(
             access.downloadedUrls, ['https://media.example.com/v/new?sig=1']);
         expect(find.text(labels.downloaded), findsOneWidget);
+        // The saved location is visible so the user can actually open the
+        // file outside the app (US3-AC4 download affordance).
+        expect(find.textContaining('/tmp/downloaded-1.pdf'), findsOneWidget);
       }
       semantics.dispose();
     });

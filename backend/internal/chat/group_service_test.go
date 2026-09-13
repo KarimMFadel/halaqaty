@@ -67,6 +67,15 @@ func TestGroupService_ClampHistoryLimit(t *testing.T) {
 	}
 }
 
+func TestGroupService_SearchValidatesQueryBeforeDependencies(t *testing.T) {
+	svc := NewGroupService(nil, nil, nil, nil)
+	for _, query := range []string{"", "x", strings.Repeat("م", 201)} {
+		if _, err := svc.Search(context.Background(), uuid.New(), uuid.New(), query, nil, 50); !errors.Is(err, ErrInvalidSearchQuery) {
+			t.Fatalf("Search(%q) error = %v, want %v", query, err, ErrInvalidSearchQuery)
+		}
+	}
+}
+
 // TestGroupService_PackageStaysSessionIndependent is a supplemental
 // source-policy guard for the US1-AC4 requirement that group chat works
 // without the live-session domain. Behavioral proof lives in

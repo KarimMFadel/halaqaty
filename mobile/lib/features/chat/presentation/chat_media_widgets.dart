@@ -339,8 +339,16 @@ class _ChatMediaMessageBodyState extends ConsumerState<ChatMediaMessageBody>
             l(ChatUiLabels.pdfFallbackName, ChatUiLabels.pdfFallbackNameEn)),
         _action(l(ChatUiLabels.downloadPdf, ChatUiLabels.downloadPdfEn),
             busy ? null : () => unawaited(controller.download())),
-        if (state.phase == ChatMediaAccessPhase.downloaded)
+        if (state.phase == ChatMediaAccessPhase.downloaded) ...[
           _status(l(ChatUiLabels.downloaded, ChatUiLabels.downloadedEn)),
+          // The saved location is visible and copyable so the user can open
+          // the PDF outside the app (US3-AC4).
+          if (state.downloadedPath != null)
+            SelectableText(
+              state.downloadedPath!,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+        ],
       ],
     ]);
   }

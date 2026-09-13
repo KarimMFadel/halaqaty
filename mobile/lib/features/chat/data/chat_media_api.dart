@@ -28,9 +28,11 @@ class ChatMediaLimitException implements Exception {
 }
 
 /// Contract `UploadResponse`: one staged chat media object ready to attach.
+/// The storage `object_key` is deliberately not parsed: the client only
+/// needs `upload_id` to attach, and object keys never travel further into
+/// UI-adjacent state than the API boundary (SR-006 hygiene).
 class ChatUploadResult {
   const ChatUploadResult({
-    required this.objectKey,
     required this.url,
     this.uploadId,
     this.urlExpiresAt,
@@ -39,14 +41,12 @@ class ChatUploadResult {
   factory ChatUploadResult.fromJson(Map<String, dynamic> json) {
     final expiresRaw = json[ChatJsonKeys.urlExpiresAt] as String?;
     return ChatUploadResult(
-      objectKey: json[ChatJsonKeys.objectKey] as String,
       url: json[ChatJsonKeys.url] as String,
       uploadId: json[ChatJsonKeys.uploadId] as String?,
       urlExpiresAt: expiresRaw == null ? null : DateTime.parse(expiresRaw),
     );
   }
 
-  final String objectKey;
   final String url;
   final String? uploadId;
   final DateTime? urlExpiresAt;

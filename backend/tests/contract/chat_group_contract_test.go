@@ -82,6 +82,14 @@ func (s *chatGroupServiceStub) History(_ context.Context, viewerID, circleID uui
 	return s.history, nil
 }
 
+func (s *chatGroupServiceStub) Search(_ context.Context, viewerID, circleID uuid.UUID, _ string, before *uuid.UUID, limit int) ([]chat.Message, error) {
+	s.historyCalls = append(s.historyCalls, chatGroupHistoryCall{viewerID: viewerID, circleID: circleID, before: before, limit: limit})
+	if s.historyErr != nil {
+		return nil, s.historyErr
+	}
+	return s.history, nil
+}
+
 func (s *chatGroupServiceStub) SendText(_ context.Context, senderID, circleID uuid.UUID, content, key string) (chat.Message, error) {
 	s.sendCalls = append(s.sendCalls, chatGroupSendCall{senderID: senderID, circleID: circleID, content: content, key: key})
 	if s.sendErr != nil {

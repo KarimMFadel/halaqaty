@@ -71,7 +71,8 @@ void main() {
       expect(fields, containsPair('duration_seconds', '42'));
       expect(form.files.single.key, 'file');
       expect(form.files.single.value.filename, 'note.m4a');
-      expect(result.objectKey, 'chat/voice/abc.m4a');
+      // The storage object_key is intentionally not surfaced by the client
+      // model (SR-006 hygiene): only url/upload_id/expiry cross the seam.
       expect(result.url, 'https://media.example.com/chat/voice/abc.m4a?sig=1');
       expect(result.uploadId, '55555555-5555-5555-5555-555555555555');
       expect(result.urlExpiresAt, DateTime.parse('2026-09-15T12:00:00Z'));

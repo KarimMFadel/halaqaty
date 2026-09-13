@@ -8,7 +8,6 @@ import 'package:halaqaty_mobile/features/chat/data/chat_media_api.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_protocol_constants.dart';
 
 ChatUploadResult _uploadResult() => ChatUploadResult(
-      objectKey: 'chat/voice/abc.m4a',
       url: 'https://media.example.com/chat/voice/abc.m4a?sig=1',
       uploadId: '55555555-5555-5555-5555-555555555555',
       urlExpiresAt: DateTime.parse('2026-09-15T12:00:00Z'),

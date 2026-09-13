@@ -95,6 +95,7 @@ const (
 	ErrorMessageChatMediaKeyUnsupported    = "media_key is not supported"
 	ErrorMessageChatReplyUnsupported       = "reply_to_id is not supported yet"
 	ErrorMessageChatLimitInvalid           = "limit must be between 1 and 100"
+	ErrorMessageChatSearchInvalid          = "q must be between 2 and 200 characters"
 
 	// Chat media (F-004 US3). User-safe: no filenames, object keys, URLs, or
 	// identifiers appear in these strings.

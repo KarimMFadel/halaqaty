@@ -493,9 +493,11 @@ Broadcast to all session participants.
 
 F-004 reuses this authenticated socket and the authorized `circle.{circle_id}` topics; LiveKit remains audio-only. Every durable chat event includes `event_id` and `occurred_at`. Delivery is at least once, and clients reconcile authoritative state through the REST chat endpoints. F-004 emits no Firebase/FCM trigger; F-008 owns all background and closed-app notifications.
 
+**Emission status:** `chat.message` is implemented and live. `chat.message_deleted`, `chat.message_read`, and `chat.typing` (plus the `cmd.chat.typing` command) are contract targets for F-004 Phases 8/10 and are **not yet emitted by the current backend**; clients must treat them as unknown events and reconcile through REST until they ship.
+
 ### `chat.message` (Server → Client)
 
-Emitted after durable acceptance. Group messages go only to currently authorized circle-topic subscribers. Direct messages go to the currently eligible pair's authenticated user connections without selecting or disclosing one qualifying circle. Immediately before every write, the server revalidates the connection's backend session and current PostgreSQL group/DM authorization; a stale audience snapshot never grants delivery. The payload matches the REST `Message` projection.
+Emitted after durable acceptance. Group messages go only to currently authorized circle-topic subscribers. Direct messages go to the currently eligible pair's authenticated user connections without selecting or disclosing one qualifying circle. Immediately before every write, the server revalidates the connection's backend session and current PostgreSQL group/DM authorization; a stale audience snapshot never grants delivery. The payload is a redacted subset of the REST `Message` projection — identifiers, type, server timestamps, delivery state, and `content` for text messages only. Media URLs, read receipts, and sender names are REST-only and never broadcast (SR-006).
 
 ```json
 {
@@ -503,15 +505,13 @@ Emitted after durable acceptance. Group messages go only to currently authorized
   "event_id": "uuid",
   "occurred_at": "2026-09-03T10:30:00Z",
   "payload": {
-    "message_id": "uuid",
+    "id": "uuid",
     "circle_id": "uuid",
     "sender_id": "uuid",
-    "sender_name": "Sheikh Abdullah",
     "message_type": "text",
     "content": "السلام عليكم",
-    "reply_to_id": null,
-    "delivery_status": "delivered",
-    "sent_at": "2026-09-03T10:30:00Z"
+    "sent_at": "2026-09-03T10:30:00Z",
+    "delivery_status": "delivered"
   }
 }
 ```

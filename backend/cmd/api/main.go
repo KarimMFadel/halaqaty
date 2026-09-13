@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
+
 	firebaseAdmin "firebase.google.com/go/v4"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
@@ -201,6 +203,10 @@ func main() {
 		}
 		return session.RevokedAt == nil && time.Now().Before(session.ExpiresAt), nil
 	})
+	chatProjector.SetDMEligibilityChecker(func(ctx context.Context, userA, userB uuid.UUID) (bool, error) {
+		_, eligible, err := chatRepo.FindQualifyingDMCircle(ctx, userA, userB)
+		return eligible, err
+	})
 	chatDispatcher := chat.NewOutboxDispatcher(
 		chat.NewPGOutboxStore(chatRepo),
 		chatProjector,
@@ -210,6 +216,9 @@ func main() {
 		nil,
 	)
 	chatHandler := chat.NewGroupHandler(chatService)
+	directHandler := chat.NewDirectHandler(chat.NewDirectService(chatRepo, nil))
+	chatPresenceHandler := chat.NewPresenceHandler(chat.NewPresenceService(chatRepo, rbacRepo))
+	realtimeHub.SetChatCommandHandler(chat.NewTypingCommandHandler(rbacRepo, realtimeHub))
 
 	// ── Chat media (F-004 US3) ──────────────────────────────────────────────
 	// Gated like LiveKit: an absent CHAT_MEDIA_* configuration leaves the
@@ -248,23 +257,26 @@ func main() {
 			auditLogger,
 		)
 		chatHandler.SetMediaService(chatUploadService)
+		directHandler.SetMediaService(chatUploadService)
 		chatUploadHandler = chat.NewUploadHandler(chatUploadService)
 		chatMediaHandler = chat.NewMediaHandler(chatUploadService)
 	}
 
 	mwSet := apirouter.MiddlewareSet{
-		Auth:            authMW,
-		Role:            roleMW,
-		RateLimit:       rateLimitMW,
-		AuthHandler:     authHandler,
-		ProfileHandler:  profileHandler,
-		RBACHandler:     rbacHandler,
-		SessionHandler:  sessionHandler,
-		RealtimeHandler: realtimeHandler,
-		RealtimeHub:     realtimeHub,
-		QueueHandler:    queueHandler,
-		ChatHandler:     chatHandler,
-		ChatSendLimiter: chat.NewChatSendLimiter(chat.MaxSendsPerMinute),
+		Auth:                authMW,
+		Role:                roleMW,
+		RateLimit:           rateLimitMW,
+		AuthHandler:         authHandler,
+		ProfileHandler:      profileHandler,
+		RBACHandler:         rbacHandler,
+		SessionHandler:      sessionHandler,
+		RealtimeHandler:     realtimeHandler,
+		RealtimeHub:         realtimeHub,
+		QueueHandler:        queueHandler,
+		ChatHandler:         chatHandler,
+		DirectChatHandler:   directHandler,
+		ChatPresenceHandler: chatPresenceHandler,
+		ChatSendLimiter:     chat.NewChatSendLimiter(chat.MaxSendsPerMinute),
 		// Nil when chat media is unconfigured; the router leaves the
 		// upload/renewal routes unregistered in that case.
 		ChatUploadHandler: chatUploadHandler,

@@ -97,11 +97,41 @@ func TestChatLifecycleSecurity_RemovalRejoinAndArchive(t *testing.T) {
 	}
 	afterRejoin := seedLifecycleMessage(t, env, creatorID, circleID, rejoinedAt.Add(time.Minute), "second membership")
 	assertLifecycleHistory(t, doJSONRequest(t, env.mux, http.MethodGet, historyPath, "", studentHeaders), afterRejoin)
+	search := chat.NewGroupService(chat.NewRepository(env.pool), env.circleRepo, &metrics.ChatMetrics{}, nil)
+	results, err := search.Search(ctx, studentID, circleID, "second membership", nil, 50)
+	if err != nil || len(results) != 1 || results[0].ID != afterRejoin {
+		t.Fatalf("retained membership search: results=%v err=%v want %s", results, err, afterRejoin)
+	}
 
 	if err := env.circleRepo.ArchiveCircle(ctx, circle.ID); err != nil {
 		t.Fatalf("archive circle: %v", err)
 	}
 	assertLifecycleHistory(t, doJSONRequest(t, env.mux, http.MethodGet, historyPath, "", studentHeaders), afterRejoin)
+	presence := chat.NewPresenceService(chat.NewRepository(env.pool), env.circleRepo)
+	readPath := historyPath + "/" + afterRejoin.String() + "/read"
+	readResponse := doJSONRequest(t, env.mux, http.MethodPost, readPath, "", map[string]string{
+		httpconst.HeaderAuthorization:  env.tokens["student"],
+		httpconst.HeaderSessionID:      env.sessions["student"],
+		httpconst.HeaderIdempotencyKey: "archived-read",
+	})
+	assertChatError(t, readResponse.Code, readResponse.Body.Bytes(), http.StatusConflict, httpconst.ErrorCodeConflict)
+	if err := presence.MarkGroupMessageRead(ctx, studentID, circleID, afterRejoin); !errors.Is(err, chat.ErrCircleArchived) {
+		t.Fatalf("archived mark-read error=%v, want ErrCircleArchived", err)
+	}
+	var readFacts int
+	if err := env.pool.QueryRow(ctx, `SELECT COUNT(*) FROM message_reads WHERE message_id = $1 AND user_id = $2`, afterRejoin, studentID).Scan(&readFacts); err != nil {
+		t.Fatalf("count archived mark-read facts: %v", err)
+	}
+	if readFacts != 0 {
+		t.Fatalf("archived mark-read persisted %d read facts, want 0", readFacts)
+	}
+	var readEvents int
+	if err := env.pool.QueryRow(ctx, `SELECT COUNT(*) FROM chat_event_outbox WHERE message_id = $1 AND event_type = $2`, afterRejoin, realtime.EventChatMessageRead).Scan(&readEvents); err != nil {
+		t.Fatalf("count archived mark-read outbox events: %v", err)
+	}
+	if readEvents != 0 {
+		t.Fatalf("archived mark-read persisted %d outbox events, want 0", readEvents)
+	}
 	send := doJSONRequest(t, env.mux, http.MethodPost, historyPath, `{"message_type":"text","content":"archived write"}`, map[string]string{
 		httpconst.HeaderAuthorization:  env.tokens["student"],
 		httpconst.HeaderSessionID:      env.sessions["student"],
@@ -247,6 +277,9 @@ func setupChatLifecycleEnv(t *testing.T) *chatLifecycleEnv {
 	handler := chat.NewGroupHandler(service)
 	base.mux.Handle("GET /api/v1/circles/{circleId}/messages", authMW.Require(http.HandlerFunc(handler.ListCircleMessages)))
 	base.mux.Handle("POST /api/v1/circles/{circleId}/messages", authMW.Require(http.HandlerFunc(handler.SendCircleMessage)))
+	presence := chat.NewPresenceService(chat.NewRepository(base.pool), circleRepo)
+	presenceHandler := chat.NewPresenceHandler(presence)
+	base.mux.Handle("POST /api/v1/circles/{circleId}/messages/{messageId}/read", authMW.Require(http.HandlerFunc(presenceHandler.MarkCircleMessageRead)))
 	return &chatLifecycleEnv{circleRoleEnv: base, circleRepo: circleRepo, circleService: base.svc}
 }
 

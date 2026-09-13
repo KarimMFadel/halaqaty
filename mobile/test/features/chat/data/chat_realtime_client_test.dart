@@ -104,6 +104,24 @@ void main() {
     expect(unreadableMessage, isA<ChatUnknownEvent>());
   });
 
+  test('a revoked session stops reconnecting and ends the stream', () async {
+    final server = await _LoopbackChatServer.start()
+      ..ticketStatus = 401;
+    addTearDown(server.close);
+    final client = WebSocketChatRealtimeClient(server.dio);
+    addTearDown(client.dispose);
+
+    final done = Completer<void>();
+    client
+        .circleChatEvents(_circleId, token: 't', backendSessionId: 's')
+        .listen((_) {}, onDone: done.complete);
+
+    // Terminal auth failure: the subscription ends instead of retrying the
+    // ticket forever; REST reconciliation surfaces the access loss.
+    await done.future.timeout(const Duration(seconds: 3));
+    expect(server.ticketAttempts, 1);
+  });
+
   test('reconnects after a socket closes and keeps the decoder state',
       () async {
     final server = await _LoopbackChatServer.start();
@@ -232,6 +250,10 @@ class _LoopbackChatServer {
   int connectionCount = 0;
   bool closeAfterSubscribe = false;
 
+  /// HTTP status returned for realtime ticket requests (200 by default).
+  int ticketStatus = 200;
+  int ticketAttempts = 0;
+
   /// When set, ticket responses wait on this completer first.
   Completer<void>? holdTickets;
 
@@ -243,6 +265,12 @@ class _LoopbackChatServer {
           request.uri.path == '/api/v1/realtime/tickets') {
         final gate = server.holdTickets;
         if (gate != null) await gate.future;
+        server.ticketAttempts++;
+        if (server.ticketStatus != 200) {
+          request.response.statusCode = server.ticketStatus;
+          await request.response.close();
+          return;
+        }
         request.response.headers.contentType = ContentType.json;
         request.response.write(jsonEncode({'token': 'ticket'}));
         await request.response.close();

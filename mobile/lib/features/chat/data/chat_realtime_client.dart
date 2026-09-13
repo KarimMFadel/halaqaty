@@ -25,6 +25,32 @@ class ChatMessageEvent extends ChatRealtimeEvent {
   final ChatMessage message;
 }
 
+/// A targeted sender notification that one recipient read a message.
+class ChatMessageReadEvent extends ChatRealtimeEvent {
+  const ChatMessageReadEvent(
+      {required super.eventId,
+      required this.messageId,
+      required this.readerId,
+      required this.readAt});
+  final String messageId;
+  final String readerId;
+  final DateTime readAt;
+}
+
+/// An ephemeral typing projection. Consumers must expire it locally.
+class ChatTypingEvent extends ChatRealtimeEvent {
+  const ChatTypingEvent(
+      {required super.eventId,
+      required this.userId,
+      required this.circleId,
+      required this.isTyping,
+      required this.expiresAt});
+  final String userId;
+  final String? circleId;
+  final bool isTyping;
+  final DateTime expiresAt;
+}
+
 /// Any other event type (or an unreadable `chat.message` frame). Callers
 /// reconcile against authoritative REST history instead of guessing.
 class ChatUnknownEvent extends ChatRealtimeEvent {
@@ -63,6 +89,41 @@ class ChatRealtimeEventDecoder {
     }
     if (!_seenEventIds.add(eventId)) return null;
 
+    if (type == ChatRealtimeTypes.messageRead) {
+      final payload = decoded[ChatJsonKeys.payload];
+      if (payload is! Map<String, dynamic>)
+        return ChatUnknownEvent(eventId: eventId, type: type);
+      try {
+        return ChatMessageReadEvent(
+          eventId: eventId,
+          messageId: payload[ChatJsonKeys.messageId] as String,
+          readerId: payload[ChatJsonKeys.readerId] as String,
+          readAt: DateTime.parse(payload[ChatJsonKeys.readAt] as String),
+        );
+      } on FormatException {
+        return ChatUnknownEvent(eventId: eventId, type: type);
+      } on TypeError {
+        return ChatUnknownEvent(eventId: eventId, type: type);
+      }
+    }
+    if (type == ChatRealtimeTypes.typing) {
+      final payload = decoded[ChatJsonKeys.payload];
+      if (payload is! Map<String, dynamic>)
+        return ChatUnknownEvent(eventId: eventId, type: type);
+      try {
+        return ChatTypingEvent(
+          eventId: eventId,
+          userId: payload[ChatJsonKeys.userId] as String,
+          circleId: payload[ChatJsonKeys.circleId] as String?,
+          isTyping: payload[ChatJsonKeys.isTyping] as bool,
+          expiresAt: DateTime.parse(payload[ChatJsonKeys.expiresAt] as String),
+        );
+      } on FormatException {
+        return ChatUnknownEvent(eventId: eventId, type: type);
+      } on TypeError {
+        return ChatUnknownEvent(eventId: eventId, type: type);
+      }
+    }
     if (type != ChatRealtimeTypes.message) {
       return ChatUnknownEvent(eventId: eventId, type: type);
     }
@@ -161,6 +222,16 @@ class WebSocketChatRealtimeClient implements ChatRealtimeClient {
         connection.heartbeat?.cancel();
         connection.heartbeat = null;
         connection.socket = null;
+      } on DioException catch (error) {
+        // A rejected ticket means the session is revoked or unauthorized:
+        // reconnecting would retry forever against a terminal state, so the
+        // stream ends and REST reconciliation surfaces the access loss
+        // (FR-010 suppression; no unbounded battery-draining loop).
+        final status = error.response?.statusCode;
+        if (status == 401 || status == 403) {
+          await connection.close();
+          return;
+        }
       } catch (_) {
         // Reconnect is deliberately bounded; authoritative REST refresh is
         // owned by the controller after unknown or resumed delivery.

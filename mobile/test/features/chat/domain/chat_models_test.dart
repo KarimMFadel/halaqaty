@@ -192,4 +192,60 @@ void main() {
       expect(merged.map((m) => m.id), ['z', 'b', 'a']);
     });
   });
+
+  group('reconcileChatMessages', () {
+    final noon = DateTime.utc(2026, 9, 3, 12);
+
+    test('removes a server message absent from its authoritative window',
+        () {
+      // 'gone' sits between the page's oldest and newest entries, so the
+        // page would have returned it; absence means server-side deletion.
+      final reconciled = reconcileChatMessages(
+        [
+          _message('newest', sentAt: noon.add(const Duration(minutes: 2))),
+          _message('gone', sentAt: noon.add(const Duration(minutes: 1))),
+          _message('oldest', sentAt: noon),
+        ],
+        [
+          _message('newest', sentAt: noon.add(const Duration(minutes: 2))),
+          _message('oldest', sentAt: noon),
+        ],
+      );
+
+      expect(reconciled.map((m) => m.id), ['newest', 'oldest']);
+    });
+
+    test('keeps messages outside the page window and local pending items',
+        () {
+      final reconciled = reconcileChatMessages(
+        [
+          // Newer than the page's newest: committed after the snapshot.
+          _message('post-snapshot',
+              sentAt: noon.add(const Duration(minutes: 5))),
+          // Older than the page's oldest: owned by older pages.
+          _message('ancient', sentAt: noon.subtract(const Duration(hours: 1))),
+          // Local optimistic item: never removable by server pages.
+          _message('local-key', status: ChatDeliveryStatus.pending),
+          _message('in-window-gone', sentAt: noon.add(const Duration(minutes: 1))),
+        ],
+        [
+          _message('newest', sentAt: noon.add(const Duration(minutes: 2))),
+          _message('oldest', sentAt: noon),
+        ],
+      );
+
+      expect(reconciled.map((m) => m.id),
+          ['post-snapshot', 'newest', 'oldest', 'local-key', 'ancient']);
+    });
+
+    test('an empty page cannot establish a window, so nothing is removed',
+        () {
+      final reconciled = reconcileChatMessages(
+        [_message('m1'), _message('m2')],
+        const [],
+      );
+
+      expect(reconciled.map((m) => m.id), ['m2', 'm1']);
+    });
+  });
 }

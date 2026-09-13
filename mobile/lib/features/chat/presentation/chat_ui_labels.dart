@@ -20,6 +20,11 @@ class ChatUiLabels {
   static const statusRead = 'تمت القراءة';
   static const memberFallback = 'عضو';
 
+  // Terminal send-failure affordances (FR-008 edit/discard/explicit retry).
+  static const sendFailed = 'فشل الإرسال';
+  static const editDraft = 'تعديل الرسالة';
+  static const discardDraft = 'تجاهل الرسالة';
+
   // Voice-note surface (FR-019); consumed by the T050/T051 widgets.
   static const recording = 'جارٍ التسجيل';
   static const recordingLimitReached = 'تم بلوغ الحد الأقصى للتسجيل (٥ دقائق)';
@@ -82,6 +87,11 @@ class ChatUiLabels {
   static const statusSentEn = 'Sent';
   static const statusDeliveredEn = 'Delivered';
   static const statusReadEn = 'Read';
+
+  // Terminal send-failure affordances (FR-008 edit/discard/explicit retry).
+  static const sendFailedEn = 'Send failed';
+  static const editDraftEn = 'Edit message';
+  static const discardDraftEn = 'Discard message';
 
   // Voice-note surface (FR-019); consumed by the T050/T051 widgets.
   static const recordingEn = 'Recording';

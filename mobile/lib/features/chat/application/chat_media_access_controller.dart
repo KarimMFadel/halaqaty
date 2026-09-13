@@ -40,9 +40,13 @@ enum ChatMediaAccessPhase {
 
 class ChatMediaAccessState {
   const ChatMediaAccessState(
-      {this.phase = ChatMediaAccessPhase.idle, this.access});
+      {this.phase = ChatMediaAccessPhase.idle, this.access, this.downloadedPath});
   final ChatMediaAccessPhase phase;
   final ChatMediaAccess? access;
+
+  /// Local path of a completed PDF download so the UI can show where the
+  /// file was saved (US3-AC4); null unless [phase] is `downloaded`.
+  final String? downloadedPath;
 }
 
 /// Renews authorization before opening received media; denied links are removed.
@@ -84,7 +88,8 @@ class ChatMediaAccessController extends StateNotifier<ChatMediaAccessState> {
           phase: saved != null
               ? ChatMediaAccessPhase.downloaded
               : ChatMediaAccessPhase.ready,
-          access: access);
+          access: access,
+          downloadedPath: saved);
     } catch (error) {
       if (!mounted) return;
       final denied = error is ChatApiException &&

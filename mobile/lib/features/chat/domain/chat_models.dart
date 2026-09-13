@@ -64,6 +64,7 @@ class ChatMessage {
     required this.id,
     required this.senderId,
     required this.circleId,
+    this.dmPeerId,
     required this.content,
     required this.type,
     required this.sentAt,
@@ -73,12 +74,14 @@ class ChatMessage {
     this.mediaUrlExpiresAt,
     this.fileName,
     this.voiceDurationSeconds,
+    this.readReceipts = const [],
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
         id: json[ChatJsonKeys.id] as String,
         senderId: json[ChatJsonKeys.senderId] as String,
         circleId: json[ChatJsonKeys.circleId] as String?,
+        dmPeerId: json[ChatJsonKeys.dmPeerId] as String?,
         content: json[ChatJsonKeys.content] as String? ?? '',
         type: _messageTypeFromName(json[ChatJsonKeys.messageType] as String?),
         sentAt: DateTime.parse(json[ChatJsonKeys.sentAt] as String),
@@ -90,11 +93,16 @@ class ChatMessage {
             _parseNullableDate(json[ChatJsonKeys.mediaUrlExpiresAt] as String?),
         fileName: json[ChatJsonKeys.fileName] as String?,
         voiceDurationSeconds: json[ChatJsonKeys.voiceDurationSeconds] as int?,
+        readReceipts: (json['read_receipts'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(ChatReadReceipt.fromJson)
+            .toList(growable: false),
       );
 
   final String id;
   final String senderId;
   final String? circleId;
+  final String? dmPeerId;
 
   /// Plain text passthrough: never HTML-interpreted here; escaping happens in
   /// the presentation layer, which renders text widgets without markup.
@@ -113,6 +121,21 @@ class ChatMessage {
   final DateTime? mediaUrlExpiresAt;
   final String? fileName;
   final int? voiceDurationSeconds;
+  final List<ChatReadReceipt> readReceipts;
+}
+
+/// One sender-visible, currently authorized read fact.
+class ChatReadReceipt {
+  const ChatReadReceipt({required this.readerId, required this.readAt});
+
+  factory ChatReadReceipt.fromJson(Map<String, dynamic> json) =>
+      ChatReadReceipt(
+        readerId: json[ChatJsonKeys.readerId] as String,
+        readAt: DateTime.parse(json[ChatJsonKeys.readAt] as String),
+      );
+
+  final String readerId;
+  final DateTime readAt;
 }
 
 /// One page of cursor-paginated history. [messages] arrives newest-first;
@@ -155,4 +178,41 @@ List<ChatMessage> mergeChatMessages(
       return b.id.compareTo(a.id);
     });
   return merged;
+}
+
+/// Whether a message is a client-local projection (optimistic or queued).
+/// The server only ever emits `delivered`/`read`, so these never collide
+/// with authoritative rows.
+bool _isLocal(ChatMessage message) =>
+    message.deliveryStatus == ChatDeliveryStatus.pending ||
+    message.deliveryStatus == ChatDeliveryStatus.sent;
+
+/// Reconciles the projection against an authoritative first page. Within the
+/// page's `(sent_at, id)` coverage window, absence means the server deleted
+/// or never committed the message, so it is removed; messages outside the
+/// window (older pages, post-snapshot commits) and local pending/sent items
+/// are kept. An empty page establishes no window, so nothing is removed
+/// (FR-011 reconciliation; deletion convergence for FR-031).
+List<ChatMessage> reconcileChatMessages(
+  Iterable<ChatMessage> existing,
+  Iterable<ChatMessage> page,
+) {
+  final merged = mergeChatMessages(existing, page);
+  final pageList = page.toList(growable: false);
+  if (pageList.length < 2) return merged;
+  final newest = pageList.first;
+  final oldest = pageList.last;
+  final pageIds = {for (final message in pageList) message.id};
+  return merged.where((message) {
+    if (pageIds.contains(message.id) || _isLocal(message)) return true;
+    // Keep anything strictly outside [oldest, newest]; only in-window
+    // absentees are provably deleted.
+    final newerThanNewest = message.sentAt.isAfter(newest.sentAt) ||
+        (message.sentAt.isAtSameMomentAs(newest.sentAt) &&
+            message.id.compareTo(newest.id) > 0);
+    final olderThanOldest = message.sentAt.isBefore(oldest.sentAt) ||
+        (message.sentAt.isAtSameMomentAs(oldest.sentAt) &&
+            message.id.compareTo(oldest.id) < 0);
+    return newerThanNewest || olderThanOldest;
+  }).toList(growable: false);
 }

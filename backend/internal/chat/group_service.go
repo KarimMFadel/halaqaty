@@ -86,6 +86,32 @@ func (s *GroupService) History(ctx context.Context, viewerID, circleID uuid.UUID
 	return msgs, nil
 }
 
+// Search returns one retained, non-deleted group-message search page for a
+// current member, including retained history from an archived circle.
+func (s *GroupService) Search(ctx context.Context, viewerID, circleID uuid.UUID, query string, before *uuid.UUID, limit int) ([]Message, error) {
+	start := time.Now()
+	trimmed, err := ValidateSearchQuery(query)
+	if err != nil {
+		return nil, err
+	}
+	if err := authorizeRetainedCircleMember(ctx, s.membership, viewerID, circleID, func(reason metrics.ChatDenial) {
+		s.recordDenial(ctx, viewerID, circleID, reason)
+	}); err != nil {
+		return nil, err
+	}
+	messages, err := s.repo.GroupSearchPage(ctx, circleID, viewerID, trimmed, before, clampHistoryLimit(limit))
+	if err != nil {
+		s.metrics.RecordLatencyOutcome(metrics.ChatOperationSearch, metrics.ChatOutcomeFailure, time.Since(start))
+		return nil, fmt.Errorf("search chat history: %w", err)
+	}
+	outcome := metrics.ChatOutcomeAccepted
+	if len(messages) == 0 {
+		outcome = metrics.ChatOutcomeNoResults
+	}
+	s.metrics.RecordLatencyOutcome(metrics.ChatOperationSearch, outcome, time.Since(start))
+	return messages, nil
+}
+
 // SendText durably accepts one group text message for a current member of an
 // active circle. The message and its identifier-only chat.message outbox event
 // commit atomically; a replayed (sender, idempotency key) returns the committed

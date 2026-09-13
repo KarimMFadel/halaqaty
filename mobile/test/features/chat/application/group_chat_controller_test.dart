@@ -97,10 +97,12 @@ void main() {
 
     final sending = controller.sendText('مرحبا');
     await Future<void>.delayed(Duration.zero);
-    final pending =
+    final inFlight =
         controller.state.messages.singleWhere((m) => m.content == 'مرحبا');
-    expect(pending.deliveryStatus, ChatDeliveryStatus.pending);
-    expect(pending.senderId, _senderId);
+    // The request has left the local queue but acceptance is unconfirmed:
+    // the local projection shows `sent` (US5-AC2), never a server state.
+    expect(inFlight.deliveryStatus, ChatDeliveryStatus.sent);
+    expect(inFlight.senderId, _senderId);
 
     final serverMessage = _message('server-1',
         status: ChatDeliveryStatus.delivered, content: 'مرحبا');
@@ -154,6 +156,29 @@ void main() {
     expect(api.listCalls, hasLength(2));
     expect(api.listCalls.last.before, isNull);
     expect(controller.state.messages.map((m) => m.id), ['m2', 'm1']);
+  });
+
+  test('a realtime message arriving during the initial page load survives',
+      () async {
+    // The REST snapshot is in flight while a commit is delivered live: the
+    // page predates the commit, so applying it must merge, not replace
+    // (FR-011 REST/realtime arrival in either order).
+    final listGate = Completer<ChatMessagePage>();
+    final api = _FakeChatApi()..nextListResult = listGate.future;
+    final realtime = _FakeChatRealtimeClient();
+    final controller = _controller(api, realtime);
+    addTearDown(controller.dispose);
+
+    final opening = controller.open(_circleId);
+    await Future<void>.delayed(Duration.zero);
+    realtime.emit(ChatMessageEvent(
+      eventId: 'event-live',
+      message: _message('m-live', sentAt: DateTime.utc(2026, 9, 3, 12, 30)),
+    ));
+    listGate.complete(_page([_message('m1')]));
+    await opening;
+
+    expect(controller.state.messages.map((m) => m.id), ['m-live', 'm1']);
   });
 
   test('close stops realtime updates and resets the projection', () async {
@@ -248,6 +273,7 @@ class _FakeChatApi extends ChatApiClient {
   final pages = <ChatMessagePage>[];
   final listCalls = <_ListCall>[];
   Object? listFailure;
+  Future<ChatMessagePage>? nextListResult;
 
   final sentIdempotencyKeys = <String>[];
   final sentContents = <String>[];
@@ -264,6 +290,7 @@ class _FakeChatApi extends ChatApiClient {
   }) async {
     listCalls.add(_ListCall(before: before));
     if (listFailure != null) throw listFailure!;
+    if (nextListResult != null) return nextListResult!;
     if (pages.isEmpty) {
       throw StateError('No canned page for list call');
     }

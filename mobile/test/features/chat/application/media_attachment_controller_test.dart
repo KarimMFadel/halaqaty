@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:halaqaty_mobile/features/chat/application/chat_media_picker.dart';
@@ -6,6 +8,27 @@ import 'package:halaqaty_mobile/features/chat/data/chat_api_client.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_media_api.dart';
 
 void main() {
+  test('cancelling a preview deletes the unsubmitted picked file', () async {
+    final picked =
+        File('${Directory.systemTemp.path}/cancel-me-${DateTime.now().microsecondsSinceEpoch}.png')
+          ..writeAsBytesSync(List<int>.filled(4, 0));
+    final controller = MediaAttachmentController(
+      picker: _Picker(pickedPath: picked.path),
+      uploadImage: (_, __) async => throw UnimplementedError(),
+      uploadFile: (_, __) async => throw UnimplementedError(),
+      attach: (_, __, ___) async => throw UnimplementedError(),
+    );
+    addTearDown(controller.dispose);
+    await controller.pickImage();
+    expect(controller.state.phase, MediaAttachmentPhase.previewing);
+
+    await controller.cancel();
+
+    expect(controller.state.phase, MediaAttachmentPhase.idle);
+    // Cancellation discards the unsubmitted local file (spec: offline items).
+    expect(picked.existsSync(), isFalse);
+  });
+
   test('lost attach response retries the staged upload with identical payload',
       () async {
     var uploads = 0;
@@ -15,7 +38,7 @@ void main() {
       uploadImage: (path, progress) async {
         uploads++;
         return const ChatUploadResult(
-            objectKey: 'object', url: 'https://media.test', uploadId: 'staged');
+            url: 'https://media.test', uploadId: 'staged');
       },
       uploadFile: (_, __) async => throw UnimplementedError(),
       attach: (type, uploadId, key) async {
@@ -60,10 +83,11 @@ void main() {
 }
 
 class _Picker implements ChatAttachmentPicker {
-  _Picker({this.fail = false});
+  _Picker({this.fail = false, this.pickedPath});
   final bool fail;
+  final String? pickedPath;
   @override
-  Future<String?> pickImage() async => '/tmp/image.png';
+  Future<String?> pickImage() async => pickedPath ?? '/tmp/image.png';
   @override
   Future<String?> pickPdf() async {
     if (fail) throw PlatformException(code: 'native_failure');

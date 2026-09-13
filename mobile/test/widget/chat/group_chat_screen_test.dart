@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/auth/data/auth_api_client.dart';
 import 'package:halaqaty_mobile/features/chat/application/group_chat_controller.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_api_client.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_realtime_client.dart';
+import 'package:halaqaty_mobile/features/chat/data/pending_message_store.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/group_chat_screen.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_detail_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
@@ -405,6 +407,48 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets(
+      'terminal send failure keeps the draft visible with edit, discard, and '
+      'retry affordances (RTL + LTR)', (tester) async {
+    final semantics = tester.ensureSemantics();
+    for (final direction in TextDirection.values) {
+      final labels = _ChatLabels(direction == TextDirection.rtl);
+      final api = _FakeChatApi()
+        ..pages.add(_page([]))
+        ..sendFailure = const ChatApiException(
+            statusCode: 422, code: 'ERR_VALIDATION_FAILED', message: 'invalid');
+      final chat = GroupChatController(
+        api,
+        () async => (token: 'token', sessionId: 'backend-session', userId: _meId),
+        realtime: _FakeChatRealtimeClient(),
+        pendingStore: PendingMessageStore(_MemorySecureStorage()),
+      );
+      await _pumpChat(tester, direction: direction, api: api, controller: chat);
+
+      await tester.enterText(_editableWithin(labels.composerHint), 'مسودة');
+      await tester.pump();
+      await tester.tap(find.bySemanticsLabel(labels.send));
+      await tester.pumpAndSettle();
+
+      // FR-008: a terminal failure stays visible for edit/discard; meaning
+      // never depends on color alone and controls are labeled. The draft
+      // legitimately appears twice: the failed bubble and the kept composer
+      // draft (a rejected send never discards user input).
+      expect(api.sentContents, ['مسودة']);
+      expect(find.text('مسودة'), findsNWidgets(2));
+      expect(find.bySemanticsLabel(labels.sendFailed), findsOneWidget);
+      expect(find.bySemanticsLabel(labels.editDraft), findsOneWidget);
+      expect(find.bySemanticsLabel(labels.discardDraft), findsOneWidget);
+      expect(find.bySemanticsLabel(labels.retry), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel(labels.discardDraft));
+      await tester.pumpAndSettle();
+      // Only the composer draft remains after discarding the failed item.
+      expect(find.text('مسودة'), findsOneWidget);
+    }
+    semantics.dispose();
+  });
+
   testWidgets('leaving the screen disposes the circle chat controller',
       (tester) async {
     final api = _FakeChatApi()..pages.add(_page([_message('m1')]));
@@ -687,6 +731,54 @@ class _ChatLabels {
   String get statusDelivered => rtl ? 'تم التسليم' : 'Delivered';
   String get statusRead => rtl ? 'تمت القراءة' : 'Read';
   String get memberFallback => rtl ? 'عضو' : 'Member';
+  String get sendFailed => rtl ? 'فشل الإرسال' : 'Send failed';
+  String get editDraft => rtl ? 'تعديل الرسالة' : 'Edit message';
+  String get discardDraft => rtl ? 'تجاهل الرسالة' : 'Discard message';
 
   String counter(int length) => '$length/4000';
+}
+
+/// In-memory secure storage so terminal drafts persist like production.
+class _MemorySecureStorage extends FlutterSecureStorage {
+  final values = <String, String>{};
+
+  @override
+  Future<String?> read(
+          {required String key,
+          IOSOptions? iOptions,
+          AndroidOptions? aOptions,
+          WebOptions? webOptions,
+          MacOsOptions? mOptions,
+          LinuxOptions? lOptions,
+          WindowsOptions? wOptions}) async =>
+      values[key];
+
+  @override
+  Future<void> write(
+      {required String key,
+      required String? value,
+      IOSOptions? iOptions,
+      AndroidOptions? aOptions,
+      WebOptions? webOptions,
+      MacOsOptions? mOptions,
+      LinuxOptions? lOptions,
+      WindowsOptions? wOptions}) async {
+    if (value == null) {
+      values.remove(key);
+    } else {
+      values[key] = value;
+    }
+  }
+
+  @override
+  Future<void> delete(
+      {required String key,
+      IOSOptions? iOptions,
+      AndroidOptions? aOptions,
+      WebOptions? webOptions,
+      MacOsOptions? mOptions,
+      LinuxOptions? lOptions,
+      WindowsOptions? wOptions}) async {
+    values.remove(key);
+  }
 }

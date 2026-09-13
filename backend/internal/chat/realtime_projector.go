@@ -19,6 +19,7 @@ type RealtimeProjector struct {
 	hub          *realtime.Hub
 	tickets      *realtime.TicketService
 	sessionValid func(context.Context, string, string) (bool, error)
+	dmEligible   func(context.Context, uuid.UUID, uuid.UUID) (bool, error)
 }
 
 type SessionValidator func(context.Context, string, string) (bool, error)
@@ -35,6 +36,12 @@ func NewRealtimeProjector(membership MembershipReader, hub *realtime.Hub, ticket
 	return &RealtimeProjector{membership: membership, hub: hub, tickets: tickets, sessionValid: validator}
 }
 
+// SetDMEligibilityChecker supplies the current PostgreSQL-backed DM
+// relationship check used immediately before every direct-user write.
+func (p *RealtimeProjector) SetDMEligibilityChecker(checker func(context.Context, uuid.UUID, uuid.UUID) (bool, error)) {
+	p.dmEligible = checker
+}
+
 // ProjectMessage projects one reloaded group chat.message event through the
 // circle topic. The hub rebuilds the audience from current subscribers and
 // invokes the per-write authorizer immediately before each socket write;
@@ -46,8 +53,14 @@ func (p *RealtimeProjector) ProjectMessage(ctx context.Context, event OutboxEven
 	if event.EventType != realtime.EventChatMessage {
 		return fmt.Errorf("project chat event %q: unsupported event type", event.EventType)
 	}
+	if msg.DMRecipientID != nil {
+		if p.dmEligible == nil {
+			return errors.New("project direct chat message: eligibility checker is not configured")
+		}
+		return p.projectDirectMessage(ctx, event, msg)
+	}
 	if msg.CircleID == nil {
-		return errors.New("project chat message: group projection requires a circle-scoped message")
+		return errors.New("project chat message: message has no conversation context")
 	}
 	topic, err := realtime.NewCircleTopic(msg.CircleID.String())
 	if err != nil {
@@ -67,20 +80,67 @@ func (p *RealtimeProjector) ProjectMessage(ctx context.Context, event OutboxEven
 	return nil
 }
 
+func (p *RealtimeProjector) projectDirectMessage(ctx context.Context, event OutboxEvent, msg Message) error {
+	eventID := event.EventID.String()
+	envelope := map[string]any{
+		"type":        realtime.EventChatMessage,
+		"event_id":    eventID,
+		"occurred_at": msg.SentAt.UTC().Format(time.RFC3339Nano),
+		"payload":     chatMessagePayload(msg),
+	}
+	users := []string{msg.SenderID.String(), msg.DMRecipientID.String()}
+	if err := p.hub.SendToUsers(ctx, users, realtime.AuthorizedDelivery{
+		EventID: eventID,
+		Payload: envelope,
+		Authorize: func(ctx context.Context, connection realtime.ConnectionIdentity) (bool, error) {
+			if connection.UserID != msg.SenderID.String() && connection.UserID != msg.DMRecipientID.String() {
+				return false, nil
+			}
+			allowed, err := p.authorizeSession(ctx, connection)
+			if err != nil || !allowed {
+				return allowed, err
+			}
+			viewerID, err := uuid.Parse(connection.UserID)
+			if err != nil {
+				return false, nil
+			}
+			otherID := msg.SenderID
+			if viewerID == otherID {
+				otherID = *msg.DMRecipientID
+			}
+			return p.dmEligible(ctx, viewerID, otherID)
+		},
+	}); err != nil {
+		return fmt.Errorf("send direct chat message: %w", err)
+	}
+	return nil
+}
+
+func (p *RealtimeProjector) authorizeSession(ctx context.Context, connection realtime.ConnectionIdentity) (bool, error) {
+	ticket, err := p.tickets.Validate(connection.RealtimeTicket, connection.UserID)
+	if err != nil || p.sessionValid == nil || ticket.SessionID == "" {
+		return false, nil
+	}
+	return p.sessionValid(ctx, ticket.SessionID, connection.UserID)
+}
+
 // authorizeCircleDelivery builds the per-write authorizer for one circle: the
 // connection's realtime ticket must still validate for its user, and the user
 // must remain a current member of the circle. A failed check suppresses the
 // write; an authorization error aborts delivery so the outbox retries.
 func (p *RealtimeProjector) authorizeCircleDelivery(circleID uuid.UUID, sentAt time.Time) realtime.DeliveryAuthorizer {
 	return func(ctx context.Context, connection realtime.ConnectionIdentity) (bool, error) {
-		if _, err := p.tickets.Validate(connection.RealtimeTicket, connection.UserID); err != nil {
+		// One ticket validation per write serves both the eligibility check
+		// and the session lookup; validating twice doubled every write's
+		// ticket work for no additional guarantee.
+		ticket, err := p.tickets.Validate(connection.RealtimeTicket, connection.UserID)
+		if err != nil {
 			return false, nil
 		}
 		if p.sessionValid == nil {
 			return false, nil
 		}
-		ticket, err := p.tickets.Validate(connection.RealtimeTicket, connection.UserID)
-		if err != nil || ticket.SessionID == "" {
+		if ticket.SessionID == "" {
 			return false, nil
 		}
 		valid, err := p.sessionValid(ctx, ticket.SessionID, connection.UserID)
@@ -118,11 +178,17 @@ func (p *RealtimeProjector) authorizeCircleDelivery(circleID uuid.UUID, sentAt t
 func chatMessagePayload(msg Message) map[string]any {
 	payload := map[string]any{
 		"id":              msg.ID.String(),
-		"circle_id":       msg.CircleID.String(),
+		"circle_id":       nil,
 		"sender_id":       msg.SenderID.String(),
 		"message_type":    string(msg.Type),
 		"sent_at":         msg.SentAt.UTC().Format(time.RFC3339Nano),
 		"delivery_status": string(DeliveryStatusDelivered),
+	}
+	if msg.CircleID != nil {
+		payload["circle_id"] = msg.CircleID.String()
+	}
+	if msg.DMRecipientID != nil {
+		payload["dm_peer_id"] = msg.DMRecipientID.String()
 	}
 	if msg.Type == MessageTypeText {
 		payload["content"] = msg.Content

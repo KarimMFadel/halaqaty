@@ -6,6 +6,20 @@ abstract final class ChatApiPaths {
   /// sendCircleMessage).
   static String circleMessages(String circleId) =>
       '/circles/$circleId/messages';
+
+  static String searchCircleMessages(String circleId) =>
+      '/circles/$circleId/messages/search';
+
+  static String markCircleMessageRead(String circleId, String messageId) =>
+      '/circles/$circleId/messages/$messageId/read';
+
+  static String markDirectMessageRead(String userId, String messageId) =>
+      '/dm/$userId/messages/$messageId/read';
+
+  static String directMessages(String userId) => '/dm/$userId';
+
+  static String deleteDirectMessage(String userId, String messageId) =>
+      '/dm/$userId/messages/$messageId';
 }
 
 abstract final class ChatMediaApiPaths {
@@ -26,8 +40,11 @@ abstract final class ChatMediaApiPaths {
 abstract final class ChatJsonKeys {
   static const data = 'data';
   static const id = 'id';
+  static const messageId = 'message_id';
   static const circleId = 'circle_id';
+  static const dmPeerId = 'dm_peer_id';
   static const senderId = 'sender_id';
+  static const userId = 'user_id';
   static const senderName = 'sender_name';
   static const messageType = 'message_type';
   static const content = 'content';
@@ -43,10 +60,13 @@ abstract final class ChatJsonKeys {
   static const message = 'message';
   static const limit = 'limit';
   static const before = 'before';
+  static const query = 'q';
+  static const readerId = 'reader_id';
+  static const readAt = 'read_at';
+  static const isTyping = 'is_typing';
 
   /// Multipart `ChatUpload` field names and upload/media response keys.
   static const file = 'file';
-  static const dmPeerId = 'dm_peer_id';
 
   /// Client-declared voice duration (1–300 s) required by `/uploads/voice`.
   static const durationSeconds = 'duration_seconds';
@@ -66,12 +86,21 @@ abstract final class ChatJsonKeys {
 abstract final class ChatRealtimeTypes {
   /// Durable group/DM message projection (server to client).
   static const message = 'chat.message';
+  static const messageRead = 'chat.message_read';
+  static const typing = 'chat.typing';
   static const text = 'text';
 }
 
 abstract final class ChatHeaders {
   static const idempotencyKey = 'Idempotency-Key';
+
+  /// Server-advised retry delay on `429`, honored up to 30 seconds (FR-008).
+  static const retryAfter = 'Retry-After';
 }
+
+/// Ceiling applied to any server-advised `Retry-After` delay (spec
+/// assumption: 429 honors Retry-After capped at 30 seconds).
+const chatRetryAfterCap = Duration(seconds: 30);
 
 abstract final class ChatLimits {
   /// Contract `SendMessageRequest.content.maxLength`.

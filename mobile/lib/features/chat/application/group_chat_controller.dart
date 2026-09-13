@@ -505,6 +505,12 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
         );
       case ChatUnknownEvent():
         unawaited(_reconcile());
+      case ChatMessageReadEvent():
+        unawaited(_reconcile());
+      case ChatTypingEvent():
+        // Typing is projected by the presence controller; it is not durable
+        // group history and must not alter this authoritative message list.
+        break;
       case ChatReconnectedEvent():
         unawaited(_recoverAfterReconnect());
     }

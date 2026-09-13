@@ -517,6 +517,9 @@ func (s *UploadService) SendDirectMedia(ctx context.Context, in SendDirectMediaI
 
 	var sent Message
 	if err := s.repo.WithTx(ctx, func(tx *Tx) error {
+		if err := tx.LockQualifyingDMCircle(ctx, in.SenderID, in.PeerID); err != nil {
+			return err
+		}
 		upload, err := tx.LoadUploadForUpdate(ctx, in.UploadID)
 		if err != nil {
 			return err
@@ -543,6 +546,34 @@ func (s *UploadService) SendDirectMedia(ctx context.Context, in SendDirectMediaI
 		return Message{}, fmt.Errorf("send direct media: %w", err)
 	}
 	return sent, nil
+}
+
+// RevokeMessageMediaInTx places the versionless delete marker required before
+// a direct attachment message is soft-deleted while the caller's transaction
+// still holds the authorization and message locks.
+func (s *UploadService) RevokeMessageMediaInTx(ctx context.Context, tx *Tx, messageID, senderID, peerID uuid.UUID) error {
+	if s == nil || s.store == nil {
+		return errors.New("revoke direct media: media store is not configured")
+	}
+	msg, upload, err := tx.LoadDirectMessageUploadForDelete(ctx, messageID, senderID, peerID)
+	if err != nil {
+		if errors.Is(err, ErrMessageNotVisible) {
+			// Text messages have no attachment to revoke; the transactional
+			// delete path remains authoritative.
+			return nil
+		}
+		return fmt.Errorf("load direct media for revocation: %w", err)
+	}
+	if msg.CircleID != nil || msg.SenderID != senderID || msg.DMRecipientID == nil || *msg.DMRecipientID != peerID {
+		return ErrMessageNotVisible
+	}
+	if msg.State == MessageStateDeleted {
+		return nil
+	}
+	if err := s.store.ApplyDeleteMarker(ctx, upload.ObjectKey); err != nil {
+		return fmt.Errorf("revoke direct media: %w", err)
+	}
+	return nil
 }
 
 // RenewMediaURL reauthorizes the viewer and returns a fresh seven-day

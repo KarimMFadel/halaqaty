@@ -362,7 +362,7 @@ func (r *Router) registerRoutes() {
 			r.mux.Handle(routeDirectMessagesGet, r.requireWithUserLimit(http.HandlerFunc(directH.ListMessages)))
 			var directSend http.Handler = http.HandlerFunc(directH.SendMessage)
 			if r.mw.ChatSendLimiter != nil {
-				directSend = r.mw.ChatSendLimiter.Limit(directSend)
+				directSend = r.mw.ChatSendLimiter.LimitDirect(directSend)
 			}
 			r.mux.Handle(routeDirectMessagesSend, r.requireWithUserLimit(directSend))
 			r.mux.Handle(routeDirectMessageDelete, r.requireWithUserLimit(http.HandlerFunc(directH.DeleteMessage)))

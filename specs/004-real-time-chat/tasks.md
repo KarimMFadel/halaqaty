@@ -126,13 +126,13 @@
 
 **Independent test**: Exercise both directions of allowed role pairs, all denied role/circle states, multi-circle media authorization, loss of the last qualifying relationship, and complete-history restoration.
 
-- [ ] T058 [P] [US4] Add repository/service tests for unordered-pair history, allowed role pairs in both directions, every denied pair, any-qualifying-circle media, direct authenticated-user realtime delivery when pair members subscribe to different qualifying circles, last-circle revocation, and full-history restoration in `backend/internal/chat/direct_service_test.go`
-- [ ] T059 [US4] Implement current-role/shared-active-circle DM list/send/delete/read/upload/renew authorization and pair-history queries in `backend/internal/chat/direct_service.go`, `backend/internal/chat/repository.go`, and `backend/internal/chat/queries.go`
-- [ ] T060 [P] [US4] Add DM contract tests for list/send/own-delete/read/media operations, required idempotency, RBAC matrix denials, cross-circle non-enumeration, rate limits, and response safety in `backend/tests/contract/chat_direct_contract_test.go`
-- [ ] T061 [US4] Implement DM handlers, per-write-reauthorized direct-user realtime projection, pair rate-limit keys, and route strings/wiring in `backend/internal/chat/direct_handler.go`, `backend/internal/chat/realtime_projector.go`, `backend/internal/api/routes.go`, and `backend/internal/api/router.go`
-- [ ] T062 [P] [US4] Add mobile DM model/API/controller/widget tests for eligibility changes, pair-history restoration, media continuity across qualifying circles, and safe denial UI in `mobile/test/features/chat/application/direct_chat_controller_test.dart` and `mobile/test/widget/chat/direct_chat_screen_test.dart`
-- [ ] T063 [US4] Implement direct-chat entry from an eligible shared-circle member context, the direct controller, and Arabic-first thread—without an uncontracted inbox/list endpoint—in `mobile/lib/features/chat/application/direct_chat_controller.dart`, `mobile/lib/features/chat/presentation/direct_chat_screen.dart`, and `mobile/lib/features/circles/presentation/circle_members_screen.dart`
-- [ ] T064 [US4] Add both allowed role pairs, all prohibited pairs, cross-circle denial, last-circle loss, multi-circle media, and restored-history acceptance coverage in `mobile/integration_test/chat_direct_flow_test.dart`
+- [X] T058 [P] [US4] Add repository/service tests for unordered-pair history, allowed role pairs in both directions, every denied pair, any-qualifying-circle media, direct authenticated-user realtime delivery when pair members subscribe to different qualifying circles, last-circle revocation, and full-history restoration in `backend/internal/chat/direct_service_integration_test.go` and `backend/internal/chat/realtime_projector_test.go`
+- [X] T059 [US4] Implement current-role/shared-active-circle DM list/send/delete/read/upload/renew authorization and pair-history queries in `backend/internal/chat/direct_service.go`, `backend/internal/chat/repository.go`, and `backend/internal/chat/queries.go`
+- [X] T060 [P] [US4] Add DM contract tests for list/send/own-delete/read/media operations, required idempotency, RBAC matrix denials, cross-circle non-enumeration, rate limits, and response safety in `backend/tests/contract/chat_direct_contract_test.go`
+- [X] T061 [US4] Implement DM handlers, per-write-reauthorized direct-user realtime projection, pair rate-limit keys, and route strings/wiring in `backend/internal/chat/direct_handler.go`, `backend/internal/chat/realtime_projector.go`, `backend/internal/api/routes.go`, and `backend/internal/api/router.go`
+- [X] T062 [P] [US4] Add mobile DM model/API/controller/widget tests for eligibility changes, pair-history restoration, media continuity across qualifying circles, and safe denial UI in `mobile/test/features/chat/application/direct_chat_controller_test.dart` and `mobile/test/widget/chat/direct_chat_screen_test.dart`
+- [X] T063 [US4] Implement direct-chat entry from an eligible shared-circle member context, the direct controller, and Arabic-first thread—without an uncontracted inbox/list endpoint—in `mobile/lib/features/chat/application/direct_chat_controller.dart`, `mobile/lib/features/chat/presentation/direct_chat_screen.dart`, and `mobile/lib/features/circles/presentation/circle_members_screen.dart`
+- [X] T064 [US4] Add both allowed role pairs, all prohibited pairs, cross-circle denial, last-circle loss, multi-circle media, and restored-history acceptance coverage in `mobile/integration_test/chat_direct_flow_test.dart`
 
 ---
 
@@ -288,4 +288,3 @@
 3. Deliver and review the core US1/T036 checkpoint without treating it as the full product MVP.
 4. Complete every remaining P1 story, then every P2 story; together they are the approved F-004 MVP. No P3 work exists.
 5. Use `/speckit.analyze` before implementation, then `/speckit.implement` with test-first execution and task checkboxes updated only after fresh evidence.
-

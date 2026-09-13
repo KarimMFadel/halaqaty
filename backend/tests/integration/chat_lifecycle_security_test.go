@@ -56,6 +56,15 @@ func TestChatLifecycleSecurity_CurrentDeviceSessionRequired(t *testing.T) {
 		httpconst.HeaderSessionID:     env.sessions["teacher_a"],
 	})
 	assertChatError(t, response.Code, response.Body.Bytes(), http.StatusUnauthorized, httpconst.ErrorCodeSessionRevoked)
+
+	if _, err := env.pool.Exec(context.Background(), `UPDATE user_sessions SET expires_at = NOW() - INTERVAL '1 minute' WHERE session_id = $1`, env.sessions["student"]); err != nil {
+		t.Fatalf("expire backend session: %v", err)
+	}
+	response = doJSONRequest(t, env.mux, http.MethodGet, path, "", map[string]string{
+		httpconst.HeaderAuthorization: env.tokens["student"],
+		httpconst.HeaderSessionID:     env.sessions["student"],
+	})
+	assertChatError(t, response.Code, response.Body.Bytes(), http.StatusUnauthorized, httpconst.ErrorCodeSessionExpired)
 }
 
 func TestChatLifecycleSecurity_RemovalRejoinAndArchive(t *testing.T) {
@@ -131,6 +140,42 @@ func TestChatLifecycleSecurity_RemovalRejoinAndArchive(t *testing.T) {
 	}
 	if readEvents != 0 {
 		t.Fatalf("archived mark-read persisted %d outbox events, want 0", readEvents)
+	}
+
+	chatRepo := chat.NewRepository(env.pool)
+	upload, err := chatRepo.InsertUpload(ctx, chat.Upload{
+		UploaderID:            studentID,
+		AuthorizationCircleID: circleID,
+		ObjectKey:             "chat/lifecycle/archived.png",
+		MIMEType:              "image/png",
+		OriginalFileName:      "archived.png",
+		SizeBytes:             10,
+	})
+	if err != nil {
+		t.Fatalf("stage archived upload fixture: %v", err)
+	}
+	media := chat.NewUploadService(chatRepo, env.circleRepo, nil, nil, &metrics.ChatMetrics{}, nil)
+	if _, err := media.SendGroupMedia(ctx, chat.SendGroupMediaInput{
+		SenderID:       studentID,
+		CircleID:       circleID,
+		UploadID:       upload.ID,
+		MessageType:    chat.MessageTypeImage,
+		IdempotencyKey: "archived-media",
+	}); !errors.Is(err, chat.ErrCircleArchived) {
+		t.Fatalf("archived upload error=%v, want ErrCircleArchived", err)
+	}
+
+	typingHub := realtime.NewHub(realtime.NewTicketService(env.circleRepo), nil)
+	typing := chat.NewTypingCommandHandler(env.circleRepo, typingHub)
+	if err := typing(ctx, realtime.ChatCommand{
+		Connection: realtime.ConnectionIdentity{UserID: studentID.String()},
+		RequestID:  "archived-typing",
+		Payload: map[string]any{
+			"circle_id": circleID.String(),
+			"is_typing": true,
+		},
+	}); !errors.Is(err, chat.ErrCircleNotVisible) {
+		t.Fatalf("archived typing error=%v, want ErrCircleNotVisible", err)
 	}
 	send := doJSONRequest(t, env.mux, http.MethodPost, historyPath, `{"message_type":"text","content":"archived write"}`, map[string]string{
 		httpconst.HeaderAuthorization:  env.tokens["student"],

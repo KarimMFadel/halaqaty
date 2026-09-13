@@ -295,3 +295,50 @@ func TestRealtimeProjector_RejectsUnsupportedEventAndDirectMessages(t *testing.T
 		t.Fatal("unsupported event types must be rejected")
 	}
 }
+
+func TestRealtimeProjector_DirectMessageTargetsBothUsersAcrossDifferentCircleSubscriptions(t *testing.T) {
+	senderID := uuid.New()
+	peerID := uuid.New()
+	circleA := "44444444-4444-4444-4444-444444444444"
+	circleB := "55555555-5555-5555-5555-555555555555"
+	tickets := realtime.NewTicketService(fixedCircleReader{
+		senderID.String(): {circleA},
+		peerID.String():   {circleB},
+	})
+	hub := realtime.NewHub(tickets, nil)
+	server := httptest.NewServer(hub)
+	defer server.Close()
+
+	senderTicket, err := tickets.IssueForSession(context.Background(), senderID.String(), "sender-session")
+	if err != nil {
+		t.Fatalf("issue sender ticket: %v", err)
+	}
+	peerTicket, err := tickets.IssueForSession(context.Background(), peerID.String(), "peer-session")
+	if err != nil {
+		t.Fatalf("issue peer ticket: %v", err)
+	}
+	sender := dialProjectorClient(t, server, senderTicket.Token)
+	defer func() { _ = sender.Close() }()
+	peer := dialProjectorClient(t, server, peerTicket.Token)
+	defer func() { _ = peer.Close() }()
+	subscribeProjectorCircle(t, sender, circleA)
+	subscribeProjectorCircle(t, peer, circleB)
+
+	projector := NewRealtimeProjector(fakeMembershipReader{}, hub, tickets, validProjectorSession)
+	projector.SetDMEligibilityChecker(func(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
+		return true, nil
+	})
+	msg, event := projectorTestMessage(t)
+	msg.SenderID = senderID
+	msg.CircleID = nil
+	msg.DMRecipientID = &peerID
+	if err := projector.ProjectMessage(context.Background(), event, msg); err != nil {
+		t.Fatalf("direct projection: %v", err)
+	}
+	if got := readProjectorJSON(t, sender); got["type"] != realtime.EventChatMessage {
+		t.Fatalf("sender direct event = %v", got)
+	}
+	if got := readProjectorJSON(t, peer); got["type"] != realtime.EventChatMessage {
+		t.Fatalf("peer direct event = %v", got)
+	}
+}

@@ -4,10 +4,33 @@ import 'package:halaqaty_mobile/features/circles/application/circle_detail_contr
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/direct_chat_screen.dart';
 
+bool canOpenDirectChat({
+  required String? currentUserId,
+  required CircleRole? currentRole,
+  required String peerUserId,
+  required CircleRole peerRole,
+  required bool isArchived,
+}) {
+  if (isArchived ||
+      currentUserId == null ||
+      currentRole == null ||
+      currentUserId == peerUserId) {
+    return false;
+  }
+  return (currentRole == CircleRole.teacher &&
+          peerRole == CircleRole.student) ||
+      (currentRole == CircleRole.student && peerRole == CircleRole.teacher) ||
+      (currentRole == CircleRole.supervisor &&
+          peerRole == CircleRole.student) ||
+      (currentRole == CircleRole.student && peerRole == CircleRole.supervisor);
+}
+
 class CircleMembersScreen extends ConsumerWidget {
-  const CircleMembersScreen({super.key, required this.circleId});
+  const CircleMembersScreen(
+      {super.key, required this.circleId, this.currentUserId});
 
   final String circleId;
+  final String? currentUserId;
 
   String _getRoleLabel(CircleRole role, bool rtl) {
     if (!rtl) {
@@ -87,6 +110,13 @@ class CircleMembersScreen extends ConsumerWidget {
                   itemCount: members.length,
                   itemBuilder: (context, index) {
                     final member = members[index];
+                    CircleRole? currentRole;
+                    for (final candidate in members) {
+                      if (candidate.userId == currentUserId) {
+                        currentRole = candidate.role;
+                        break;
+                      }
+                    }
                     final roleLabel = _getRoleLabel(member.role, rtl);
                     return ListTile(
                       leading: CircleAvatar(
@@ -119,17 +149,24 @@ class CircleMembersScreen extends ConsumerWidget {
                               backgroundColor: _getRoleColor(member.role),
                             ),
                           ),
-                          IconButton(
-                            key: Key('directChat-${member.userId}'),
-                            tooltip: rtl ? 'محادثة مباشرة' : 'Direct chat',
-                            icon: const Icon(Icons.chat_outlined),
-                            onPressed: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) =>
-                                    DirectChatScreen(peerId: member.userId),
+                          if (canOpenDirectChat(
+                            currentUserId: currentUserId,
+                            currentRole: currentRole,
+                            peerUserId: member.userId,
+                            peerRole: member.role,
+                            isArchived: isArchived,
+                          ))
+                            IconButton(
+                              key: Key('directChat-${member.userId}'),
+                              tooltip: rtl ? 'محادثة مباشرة' : 'Direct chat',
+                              icon: const Icon(Icons.chat_outlined),
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      DirectChatScreen(peerId: member.userId),
+                                ),
                               ),
                             ),
-                          ),
                         ],
                       ),
                     );

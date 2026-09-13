@@ -105,6 +105,7 @@ UPDATE messages
 SET deleted_at = NOW()
 WHERE id = $1::uuid
   AND sender_id = $2::uuid
+  AND dm_recipient_id = $3::uuid
   AND circle_id IS NULL
   AND deleted_at IS NULL
   AND sent_at >= NOW() - INTERVAL '10 minutes'
@@ -258,7 +259,46 @@ WHERE cm_a.user_id = $1::uuid
     OR (cm_a.role = 'supervisor' AND cm_b.role = 'student')
     OR (cm_a.role = 'student'    AND cm_b.role = 'supervisor')
   )
-LIMIT 1`
+ LIMIT 1`
+
+// lockQualifyingDMCircleQuery serializes a direct mutation with membership,
+// role, and archive changes by locking the qualifying circle and both member
+// rows in the caller's transaction.
+const lockQualifyingDMCircleQuery = `
+SELECT cm_a.circle_id
+FROM circle_members cm_a
+JOIN circle_members cm_b ON cm_b.circle_id = cm_a.circle_id AND cm_b.user_id = $2::uuid
+JOIN circles c ON c.id = cm_a.circle_id
+WHERE cm_a.user_id = $1::uuid
+  AND c.is_archived = FALSE
+  AND (
+       (cm_a.role = 'teacher'    AND cm_b.role = 'student')
+    OR (cm_a.role = 'student'    AND cm_b.role = 'teacher')
+    OR (cm_a.role = 'supervisor' AND cm_b.role = 'student')
+    OR (cm_a.role = 'student'    AND cm_b.role = 'supervisor')
+  )
+ORDER BY cm_a.circle_id
+LIMIT 1
+FOR UPDATE OF c, cm_a, cm_b`
+
+const lockOwnDirectMessageForDeleteQuery = `
+SELECT deleted_at, sent_at
+FROM messages
+WHERE id = $1::uuid
+  AND sender_id = $2::uuid
+  AND dm_recipient_id = $3::uuid
+  AND circle_id IS NULL
+FOR UPDATE`
+
+const findDirectMessageUploadForDeleteQuery = `
+SELECT ` + messageColumns + `, ` + uploadColumns + `
+FROM messages m
+JOIN chat_uploads u ON u.id = m.upload_id
+WHERE m.id = $1::uuid
+  AND m.sender_id = $2::uuid
+  AND m.dm_recipient_id = $3::uuid
+  AND m.circle_id IS NULL
+FOR UPDATE OF m, u`
 
 // findMessageUploadQuery loads one message together with its attached upload
 // for media renewal. Text messages carry no upload row and match nothing, so

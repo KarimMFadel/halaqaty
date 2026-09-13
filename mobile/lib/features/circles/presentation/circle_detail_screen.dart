@@ -154,7 +154,10 @@ class CircleDetailScreen extends ConsumerWidget {
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => CircleMembersScreen(circleId: circle.id),
+                      builder: (_) => CircleMembersScreen(
+                        circleId: circle.id,
+                        currentUserId: userId,
+                      ),
                     ),
                   );
                 },
@@ -163,23 +166,22 @@ class CircleDetailScreen extends ConsumerWidget {
               // FR-032): the chat opens read-only, mutations are denied
               // server-side.
               ListTile(
-                  key: const Key('openCircleChat'),
-                  leading: const Icon(Icons.chat_bubble_outline),
-                  title: Text(rtl
-                      ? CircleDetailLabels.chatAr
-                      : CircleDetailLabels.chatEn),
-                  trailing:
-                      Icon(rtl ? Icons.chevron_left : Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => GroupChatScreen(
-                        circleId: circle.id,
-                        circleName: circle.name,
-                        readOnly: circle.isArchived,
-                      ),
+                key: const Key('openCircleChat'),
+                leading: const Icon(Icons.chat_bubble_outline),
+                title: Text(rtl
+                    ? CircleDetailLabels.chatAr
+                    : CircleDetailLabels.chatEn),
+                trailing: Icon(rtl ? Icons.chevron_left : Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => GroupChatScreen(
+                      circleId: circle.id,
+                      circleName: circle.name,
+                      readOnly: circle.isArchived,
                     ),
                   ),
                 ),
+              ),
               if (!circle.isArchived &&
                   userId != null &&
                   (currentRole == CircleRole.teacher ||

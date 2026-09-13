@@ -219,17 +219,75 @@ func (t *Tx) InsertMessageRead(ctx context.Context, messageID, userID uuid.UUID)
 	return tag.RowsAffected() == 1, nil
 }
 
-// DeleteOwnDirectMessage soft-deletes a sender's recent direct message.
-func (t *Tx) DeleteOwnDirectMessage(ctx context.Context, messageID, senderID uuid.UUID) error {
-	var deletedID uuid.UUID
-	err := t.tx.QueryRow(ctx, softDeleteOwnDirectMessageQuery, messageID, senderID).Scan(&deletedID)
+// LockQualifyingDMCircle locks one qualifying circle and its pair memberships
+// for a direct-message mutation.
+func (t *Tx) LockQualifyingDMCircle(ctx context.Context, userA, userB uuid.UUID) error {
+	var circleID uuid.UUID
+	err := t.tx.QueryRow(ctx, lockQualifyingDMCircleQuery, userA, userB).Scan(&circleID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrMessageNotVisible
+		return ErrDMNotEligible
 	}
 	if err != nil {
-		return fmt.Errorf("delete own direct message: %w", err)
+		return fmt.Errorf("lock qualifying direct circle: %w", err)
 	}
 	return nil
+}
+
+// LoadDirectMessageUploadForDelete locks one direct attachment for the
+// marker-before-commit deletion sequence.
+func (t *Tx) LoadDirectMessageUploadForDelete(ctx context.Context, messageID, senderID, peerID uuid.UUID) (Message, Upload, error) {
+	var message Message
+	var upload Upload
+	var content *string
+	var duration *int
+	err := t.tx.QueryRow(ctx, findDirectMessageUploadForDeleteQuery, messageID, senderID, peerID).Scan(
+		&message.ID, &message.CircleID, &message.DMRecipientID, &message.SenderID, &message.Type, &content,
+		&message.UploadID, &message.ReplyToID, &message.State, &message.SentAt, &message.DeletedAt,
+		&upload.ID, &upload.UploaderID, &upload.AuthorizationCircleID, &upload.DMPeerID, &upload.ObjectKey,
+		&upload.MIMEType, &upload.OriginalFileName, &upload.SizeBytes, &duration, &upload.State, &upload.CreatedAt, &upload.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Message{}, Upload{}, ErrMessageNotVisible
+	}
+	if err != nil {
+		return Message{}, Upload{}, fmt.Errorf("load direct message upload for delete: %w", err)
+	}
+	if content != nil {
+		message.Content = *content
+	}
+	if duration != nil {
+		upload.DurationSeconds = *duration
+	}
+	return message, upload, nil
+}
+
+// DeleteOwnDirectMessage soft-deletes a sender's recent direct message and
+// reports whether this call changed the row. A prior successful deletion is a
+// safe idempotent replay.
+func (t *Tx) DeleteOwnDirectMessage(ctx context.Context, messageID, senderID, peerID uuid.UUID) (bool, error) {
+	var deletedAt *time.Time
+	var sentAt time.Time
+	err := t.tx.QueryRow(ctx, lockOwnDirectMessageForDeleteQuery, messageID, senderID, peerID).Scan(&deletedAt, &sentAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, ErrMessageNotVisible
+	}
+	if err != nil {
+		return false, fmt.Errorf("lock direct message for delete: %w", err)
+	}
+	if deletedAt != nil {
+		return false, nil
+	}
+	if sentAt.Before(time.Now().UTC().Add(-10 * time.Minute)) {
+		return false, ErrDirectDeleteConflict
+	}
+	var deletedID uuid.UUID
+	err = t.tx.QueryRow(ctx, softDeleteOwnDirectMessageQuery, messageID, senderID, peerID).Scan(&deletedID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, ErrDirectDeleteConflict
+	}
+	if err != nil {
+		return false, fmt.Errorf("delete own direct message: %w", err)
+	}
+	return true, nil
 }
 
 // AttachUpload applies the single-use staged→attached transition. An upload

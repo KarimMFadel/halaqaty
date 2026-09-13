@@ -22,6 +22,7 @@ import (
 type directServiceStub struct {
 	eligible bool
 	message  chat.Message
+	sendErr  error
 }
 
 func (s *directServiceStub) History(_ context.Context, _, _ uuid.UUID, _ *uuid.UUID, _ int) ([]chat.Message, error) {
@@ -32,6 +33,9 @@ func (s *directServiceStub) History(_ context.Context, _, _ uuid.UUID, _ *uuid.U
 }
 
 func (s *directServiceStub) SendText(_ context.Context, senderID, peerID uuid.UUID, content, _ string) (chat.Message, error) {
+	if s.sendErr != nil {
+		return chat.Message{}, s.sendErr
+	}
 	if !s.eligible {
 		return chat.Message{}, chat.ErrDMNotEligible
 	}
@@ -47,8 +51,16 @@ func (s *directServiceStub) DeleteOwnMessage(context.Context, uuid.UUID, uuid.UU
 }
 
 func directRouter(service chat.DirectChatService) http.Handler {
+	return directRouterWithLimiter(service, nil)
+}
+
+func directRouterWithLimiter(service chat.DirectChatService, limiter *chat.ChatSendLimiter) http.Handler {
 	authMW := middleware.NewAuthMiddleware(&alwaysOKVerifier{}, auth.NewSessionService(30*24*time.Hour), &stubSessionRepo{sessionID: testSessionID, userID: testLocalUserID})
-	return api.NewRouter(api.MiddlewareSet{Auth: authMW, DirectChatHandler: chat.NewDirectHandler(service)}).Handler()
+	return api.NewRouter(api.MiddlewareSet{
+		Auth:              authMW,
+		DirectChatHandler: chat.NewDirectHandler(service),
+		ChatSendLimiter:   limiter,
+	}).Handler()
 }
 
 func TestDirectContract_EligibleListAndSendAreResponseSafe(t *testing.T) {
@@ -93,5 +105,101 @@ func TestDirectContract_IneligiblePairIsNonEnumerating(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(rec.Body.String()), "eligible") {
 		t.Fatalf("ineligible response disclosed relationship details: %s", rec.Body.String())
+	}
+}
+
+func TestDirectContract_RejectsSelfPeerAndMissingMedia(t *testing.T) {
+	handler := directRouter(&directServiceStub{eligible: true})
+
+	self := httptest.NewRequest(http.MethodGet, "/api/v1/dm/11111111-1111-1111-1111-111111111111", nil)
+	self.Header.Set(httpconst.HeaderAuthorization, bearerValid)
+	self.Header.Set(httpconst.HeaderSessionID, testSessionID)
+	// The contract router's authenticated principal is testLocalUserID; using
+	// that exact path value must not turn a self-DM into a service lookup.
+	self.URL.Path = "/api/v1/dm/" + testLocalUserID
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, self)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("self peer status=%d body=%s, want 400", rec.Code, rec.Body.String())
+	}
+
+	media := httptest.NewRequest(http.MethodPost, "/api/v1/dm/"+uuid.NewString(), strings.NewReader(`{"message_type":"image"}`))
+	media.Header.Set(httpconst.HeaderAuthorization, bearerValid)
+	media.Header.Set(httpconst.HeaderSessionID, testSessionID)
+	media.Header.Set(httpconst.HeaderContentType, httpconst.ContentTypeApplicationJSON)
+	media.Header.Set(httpconst.HeaderIdempotencyKey, "media-missing-upload")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, media)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("missing upload status=%d body=%s, want 422", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDirectContract_DeleteRequiresIdempotencyAndReturnsNoContent(t *testing.T) {
+	service := &directServiceStub{eligible: true}
+	handler := directRouter(service)
+	path := "/api/v1/dm/" + uuid.NewString() + "/messages/" + uuid.NewString()
+
+	req := httptest.NewRequest(http.MethodDelete, path, nil)
+	req.Header.Set(httpconst.HeaderAuthorization, bearerValid)
+	req.Header.Set(httpconst.HeaderSessionID, testSessionID)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("missing delete key status=%d body=%s, want 400", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, path, nil)
+	req.Header.Set(httpconst.HeaderAuthorization, bearerValid)
+	req.Header.Set(httpconst.HeaderSessionID, testSessionID)
+	req.Header.Set(httpconst.HeaderIdempotencyKey, "delete-contract-key")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete status=%d body=%s, want 204", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDirectContract_IdempotencyConflictIsSafeConflict(t *testing.T) {
+	handler := directRouter(&directServiceStub{
+		eligible: true,
+		sendErr:  chat.ErrIdempotencyConflict,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/dm/"+uuid.NewString(), strings.NewReader(`{"message_type":"text","content":"different"}`))
+	req.Header.Set(httpconst.HeaderAuthorization, bearerValid)
+	req.Header.Set(httpconst.HeaderSessionID, testSessionID)
+	req.Header.Set(httpconst.HeaderContentType, httpconst.ContentTypeApplicationJSON)
+	req.Header.Set(httpconst.HeaderIdempotencyKey, "reused-key")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("idempotency conflict status=%d body=%s, want 409", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "different\"") {
+		t.Fatalf("conflict response leaked request content: %s", rec.Body.String())
+	}
+}
+
+func TestDirectContract_RateLimitUsesUnorderedPairBudget(t *testing.T) {
+	handler := directRouterWithLimiter(&directServiceStub{eligible: true}, chat.NewChatSendLimiter(1))
+	path := "/api/v1/dm/" + uuid.NewString()
+	request := func() *http.Request {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"message_type":"text","content":"salam"}`))
+		req.Header.Set(httpconst.HeaderAuthorization, bearerValid)
+		req.Header.Set(httpconst.HeaderSessionID, testSessionID)
+		req.Header.Set(httpconst.HeaderContentType, httpconst.ContentTypeApplicationJSON)
+		req.Header.Set(httpconst.HeaderIdempotencyKey, uuid.NewString())
+		return req
+	}
+
+	first := httptest.NewRecorder()
+	handler.ServeHTTP(first, request())
+	if first.Code != http.StatusCreated {
+		t.Fatalf("first direct send status=%d body=%s, want 201", first.Code, first.Body.String())
+	}
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, request())
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second direct send status=%d body=%s, want 429", second.Code, second.Body.String())
 	}
 }

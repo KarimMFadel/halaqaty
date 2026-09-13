@@ -25,12 +25,9 @@ func NewDirectService(repo *Repository, media *UploadService) *DirectService {
 	return &DirectService{repo: repo, media: media}
 }
 
-func qualifiesDirectRolePair(left, right string) bool {
-	return (left == "teacher" && right == "student") ||
-		(left == "student" && right == "teacher") ||
-		(left == "supervisor" && right == "student") ||
-		(left == "student" && right == "supervisor")
-}
+// SetMediaService wires the configured object-store service after startup
+// configuration has been loaded.
+func (s *DirectService) SetMediaService(media *UploadService) { s.media = media }
 
 // History returns the current eligible pair's newest-first message page.
 func (s *DirectService) History(ctx context.Context, viewerID, peerID uuid.UUID, before *uuid.UUID, limit int) ([]Message, error) {
@@ -59,6 +56,9 @@ func (s *DirectService) SendText(ctx context.Context, senderID, peerID uuid.UUID
 
 	var sent Message
 	err = s.repo.WithTx(ctx, func(tx *Tx) error {
+		if err := tx.LockQualifyingDMCircle(ctx, senderID, peerID); err != nil {
+			return err
+		}
 		msg, inserted, err := tx.InsertMessage(ctx, MessageInput{
 			SenderID:       senderID,
 			DMRecipientID:  &peerID,
@@ -91,8 +91,20 @@ func (s *DirectService) DeleteOwnMessage(ctx context.Context, senderID, peerID, 
 		return err
 	}
 	return s.repo.WithTx(ctx, func(tx *Tx) error {
-		if err := tx.DeleteOwnDirectMessage(ctx, messageID, senderID); err != nil {
-			return ErrDirectDeleteConflict
+		if err := tx.LockQualifyingDMCircle(ctx, senderID, peerID); err != nil {
+			return err
+		}
+		if s.media != nil {
+			if err := s.media.RevokeMessageMediaInTx(ctx, tx, messageID, senderID, peerID); err != nil {
+				return err
+			}
+		}
+		deleted, err := tx.DeleteOwnDirectMessage(ctx, messageID, senderID, peerID)
+		if err != nil {
+			return err
+		}
+		if !deleted {
+			return nil
 		}
 		return tx.InsertOutboxEvent(ctx, messageID, realtime.EventChatMessageDeleted, &peerID)
 	})

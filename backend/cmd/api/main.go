@@ -216,7 +216,8 @@ func main() {
 		nil,
 	)
 	chatHandler := chat.NewGroupHandler(chatService)
-	directHandler := chat.NewDirectHandler(chat.NewDirectService(chatRepo, nil))
+	directService := chat.NewDirectService(chatRepo, nil)
+	directHandler := chat.NewDirectHandler(directService)
 	chatPresenceHandler := chat.NewPresenceHandler(chat.NewPresenceService(chatRepo, rbacRepo))
 	realtimeHub.SetChatCommandHandler(chat.NewTypingCommandHandler(rbacRepo, realtimeHub))
 
@@ -257,6 +258,7 @@ func main() {
 			auditLogger,
 		)
 		chatHandler.SetMediaService(chatUploadService)
+		directService.SetMediaService(chatUploadService)
 		directHandler.SetMediaService(chatUploadService)
 		chatUploadHandler = chat.NewUploadHandler(chatUploadService)
 		chatMediaHandler = chat.NewMediaHandler(chatUploadService)

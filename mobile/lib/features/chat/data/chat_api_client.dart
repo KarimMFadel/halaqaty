@@ -220,6 +220,33 @@ class ChatApiClient {
     }
   }
 
+  /// Sends one staged direct media message for the currently eligible pair.
+  Future<ChatMessage> sendDirectMediaMessage({
+    required String token,
+    required String sessionId,
+    required String userId,
+    required ChatMessageType type,
+    required String uploadId,
+    required String idempotencyKey,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        ChatApiPaths.directMessages(userId),
+        data: {
+          ChatJsonKeys.messageType: type.name,
+          ChatJsonKeys.uploadId: uploadId,
+        },
+        options: Options(headers: {
+          ...sessionRequestHeaders(token, sessionId),
+          ChatHeaders.idempotencyKey: idempotencyKey,
+        }),
+      );
+      return ChatMessage.fromJson(response.data!);
+    } on DioException catch (error) {
+      throw mapChatApiException(error);
+    }
+  }
+
   /// Attaches one staged upload as a media message (`sendCircleMessage`
   /// with `upload_id`). Retries MUST reuse [idempotencyKey]: the upload
   /// attaches exactly once and a fresh key re-attaching a consumed upload

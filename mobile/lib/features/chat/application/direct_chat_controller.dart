@@ -1,10 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
-import 'package:halaqaty_mobile/features/chat/application/group_chat_controller.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_api_client.dart';
-import 'package:halaqaty_mobile/features/chat/data/chat_protocol_constants.dart';
 
 enum DirectChatStatus { idle, loading, ready, error, accessLost }
+
+typedef DirectChatCredentials
+    = Future<({String token, String sessionId, String userId})> Function();
 
 class DirectChatControllerState {
   const DirectChatControllerState({
@@ -42,7 +43,7 @@ class DirectChatController extends StateNotifier<DirectChatControllerState> {
       : super(const DirectChatControllerState());
 
   final ChatApiClient _api;
-  final ChatCredentials _credentials;
+  final DirectChatCredentials _credentials;
   String? _peerId;
 
   Future<void> open(String peerId) async {
@@ -110,7 +111,14 @@ class DirectChatController extends StateNotifier<DirectChatControllerState> {
           messages: mergeChatMessages(state.messages, [message]));
       return true;
     } catch (error) {
-      state = state.copyWith(errorMessage: _safeError(error));
+      if (_isAccessLost(error)) {
+        state = DirectChatControllerState(
+          status: DirectChatStatus.accessLost,
+          errorMessage: _safeError(error),
+        );
+      } else {
+        state = state.copyWith(errorMessage: _safeError(error));
+      }
       return false;
     }
   }
@@ -121,8 +129,15 @@ class DirectChatController extends StateNotifier<DirectChatControllerState> {
           error.statusCode == 403 ||
           error.statusCode == 404);
 
-  static String _safeError(Object error) =>
-      error is ChatApiException ? error.message : 'Chat request failed.';
+  static String _safeError(Object error) {
+    if (error is ChatApiException &&
+        (error.statusCode == 401 ||
+            error.statusCode == 403 ||
+            error.statusCode == 404)) {
+      return 'This conversation is unavailable';
+    }
+    return 'Chat request failed.';
+  }
 }
 
 final directChatControllerProvider = StateNotifierProvider.autoDispose

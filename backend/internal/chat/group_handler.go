@@ -545,6 +545,25 @@ func (l *ChatSendLimiter) Limit(next http.Handler) http.Handler {
 	})
 }
 
+// LimitDirect applies the same send budget to one unordered user pair.
+func (l *ChatSendLimiter) LimitDirect(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if l != nil && l.perMinute > 0 {
+			if principal, ok := middleware.CurrentPrincipal(r.Context()); ok && principal.UserID != "" {
+				peer := r.PathValue("userId")
+				if id, err := uuid.Parse(peer); err == nil {
+					peer = id.String()
+				}
+				if l.hitLimit(principal.UserID + "\x00" + peer) {
+					phttp.WriteError(w, httpconst.ErrorCodeRateLimitExceeded, httpconst.ErrorMessageRateLimitExceeded, http.StatusTooManyRequests)
+					return
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // canonicalLimiterCircleID canonicalizes the circle path segment so textual
 // UUID variants ({braced}, urn:uuid:, uppercase) share one rate-limit budget.
 // Unparseable values fall back to the raw segment; such requests fail

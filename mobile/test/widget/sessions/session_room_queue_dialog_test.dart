@@ -196,6 +196,18 @@ void main() {
     expect(tester.widget<FilledButton>(endSession).onPressed, isNotNull);
     semantics.dispose();
   });
+
+  testWidgets('manager queue room scrolls at a short viewport without overflow',
+      (tester) async {
+    final fixture = await _pumpManagerRoom(
+      tester,
+      surfaceSize: const Size(800, 600),
+    );
+    addTearDown(fixture.queue.dispose);
+
+    expect(find.text('Recitation queue'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Finder _editableWithin(String label) => find.descendant(
@@ -214,8 +226,9 @@ void _expectConfirmDisabled(WidgetTester tester, String label) {
 Future<_ManagerRoomFixture> _pumpManagerRoom(
   WidgetTester tester, {
   TextDirection direction = TextDirection.ltr,
+  Size surfaceSize = const Size(1000, 1000),
 }) async {
-  await tester.binding.setSurfaceSize(const Size(1000, 1000));
+  await tester.binding.setSurfaceSize(surfaceSize);
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final realtime = _EmptyRealtimeClient();
   final queue = QueueController(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_protocol_constants.dart';
 import 'package:halaqaty_mobile/features/chat/domain/chat_models.dart';
@@ -124,11 +126,15 @@ class _DeliveryStatusBadge extends StatelessWidget {
 /// Isolated leaf widget: the TextEditingController draft is local UI state,
 /// so `setState` here does not leak into feature state management.
 class ChatComposer extends StatefulWidget {
-  const ChatComposer({super.key, required this.onSend});
+  const ChatComposer({super.key, required this.onSend, this.onTyping});
 
   /// Returns true when the content was accepted (server acknowledged);
   /// false keeps the draft so a failed send never discards user input.
   final Future<bool> Function(String content) onSend;
+
+  /// Emits start/stop transitions only; the authenticated transport owns
+  /// delivery, authorization, and eventual expiry.
+  final Future<void> Function(bool isTyping)? onTyping;
 
   @override
   State<ChatComposer> createState() => _ChatComposerState();
@@ -137,9 +143,11 @@ class ChatComposer extends StatefulWidget {
 class _ChatComposerState extends State<ChatComposer> {
   final _controller = TextEditingController();
   bool _sending = false;
+  bool _typing = false;
 
   @override
   void dispose() {
+    if (_typing) unawaited(widget.onTyping?.call(false));
     _controller.dispose();
     super.dispose();
   }
@@ -188,7 +196,14 @@ class _ChatComposerState extends State<ChatComposer> {
                   controller: _controller,
                   textInputAction: TextInputAction.send,
                   onSubmitted: canSend ? (_) => _send() : null,
-                  onChanged: (_) => setState(() {}),
+                  onChanged: (value) {
+                    final isTyping = value.isNotEmpty;
+                    if (isTyping != _typing) {
+                      _typing = isTyping;
+                      unawaited(widget.onTyping?.call(isTyping));
+                    }
+                    setState(() {});
+                  },
                 ),
               ),
             ),

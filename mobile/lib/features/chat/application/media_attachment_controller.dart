@@ -236,7 +236,7 @@ class MediaAttachmentController extends StateNotifier<MediaAttachmentState> {
     if (state.phase == MediaAttachmentPhase.idle) return;
     final pickedPath =
         state.kind == null ? null : state.filePath; // voice files are owned
-    _reset();                                                  // by the recorder
+    _reset(); // by the recorder
     if (pickedPath == null) return;
     try {
       final file = File(pickedPath);

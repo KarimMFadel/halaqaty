@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:halaqaty_mobile/features/chat/application/group_chat_controller.dart';
+import 'package:halaqaty_mobile/features/chat/application/chat_presence_controller.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_api_client.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_realtime_client.dart';
 
@@ -14,10 +15,11 @@ ChatMessage _message(
   DateTime? sentAt,
   ChatDeliveryStatus status = ChatDeliveryStatus.delivered,
   String content = 'نص',
+  String senderId = _senderId,
 }) =>
     ChatMessage(
       id: id,
-      senderId: _senderId,
+      senderId: senderId,
       circleId: _circleId,
       content: content,
       type: ChatMessageType.text,
@@ -34,6 +36,32 @@ ChatMessagePage _page(
         messages: messages, hasMore: hasMore, nextBefore: nextBefore);
 
 void main() {
+  test('initial history marks only eligible incoming messages as read',
+      () async {
+    final api = _FakeChatApi()
+      ..pages.add(_page([
+        _message('incoming', senderId: 'other'),
+        _message('own', senderId: 'user'),
+      ]));
+    final presence = ChatPresenceController(
+      api,
+      () async => (token: 'token', sessionId: 'session', userId: 'user'),
+    );
+    final controller = GroupChatController(
+      api,
+      () async => (token: 'token', sessionId: 'session', userId: 'user'),
+      realtime: _FakeChatRealtimeClient(),
+      presence: presence,
+    );
+    addTearDown(() {
+      controller.dispose();
+      presence.dispose();
+    });
+
+    await controller.open('circle');
+
+    expect(api.groupReadIds, ['incoming']);
+  });
   test('open loads the authoritative newest-first page and subscribes',
       () async {
     final api = _FakeChatApi()
@@ -84,6 +112,36 @@ void main() {
 
     await controller.loadOlder();
     expect(api.listCalls, hasLength(2));
+  });
+
+  test('loadOlder marks newly loaded eligible incoming messages as read',
+      () async {
+    final api = _FakeChatApi()
+      ..pages.add(_page([_message('own', senderId: _senderId)],
+          hasMore: true, nextBefore: 'cursor-1'))
+      ..pages.add(_page([
+        _message('incoming', senderId: 'other'),
+        _message('older-own', senderId: _senderId),
+      ]));
+    final presence = ChatPresenceController(
+      api,
+      () async => (token: 'token', sessionId: 'session', userId: _senderId),
+    );
+    final controller = GroupChatController(
+      api,
+      () async => (token: 'token', sessionId: 'session', userId: _senderId),
+      realtime: _FakeChatRealtimeClient(),
+      presence: presence,
+    );
+    addTearDown(() {
+      controller.dispose();
+      presence.dispose();
+    });
+
+    await controller.open(_circleId);
+    await controller.loadOlder();
+
+    expect(api.groupReadIds, ['incoming']);
   });
 
   test('sendText is optimistic pending then replaces with the server message',
@@ -279,6 +337,17 @@ class _FakeChatApi extends ChatApiClient {
   final sentContents = <String>[];
   Future<ChatMessage>? nextSendResult;
   Object? sendFailure;
+  final groupReadIds = <String>[];
+
+  @override
+  Future<void> markMessageRead({
+    required String token,
+    required String sessionId,
+    required String circleId,
+    required String messageId,
+    required String idempotencyKey,
+  }) async =>
+      groupReadIds.add(messageId);
 
   @override
   Future<ChatMessagePage> listMessages({

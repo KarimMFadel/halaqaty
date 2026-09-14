@@ -60,7 +60,7 @@ func (h *DirectHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	page := paginatedMessagesResponse{Data: make([]messageResponse, 0, len(messages)), HasMore: len(messages) == limit}
 	for _, message := range messages {
-		response := newMessageResponse(message)
+		response := newMessageResponseForViewer(message, viewerID)
 		page.Data = append(page.Data, response)
 	}
 	if page.HasMore && len(page.Data) > 0 {

@@ -104,6 +104,27 @@ void main() {
     expect(unreadableMessage, isA<ChatUnknownEvent>());
   });
 
+  test('decodes direct typing with the typing user as its peer context', () {
+    final decoder = ChatRealtimeEventDecoder(_circleId);
+
+    final event = decoder.decode(_frame(
+      type: ChatRealtimeTypes.typing,
+      eventId: 'direct-typing-1',
+      payload: {
+        'user_id': 'typing-user',
+        'dm_peer_id': 'typing-user',
+        'is_typing': true,
+        'expires_at': '2026-09-03T12:00:05Z',
+      },
+    ));
+
+    expect(event, isA<ChatTypingEvent>());
+    final typing = event! as ChatTypingEvent;
+    expect(typing.userId, 'typing-user');
+    expect(typing.dmPeerId, 'typing-user');
+    expect(typing.circleId, isNull);
+  });
+
   test('a revoked session stops reconnecting and ends the stream', () async {
     final server = await _LoopbackChatServer.start()
       ..ticketStatus = 401;

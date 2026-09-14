@@ -34,7 +34,14 @@ func (s *DirectService) History(ctx context.Context, viewerID, peerID uuid.UUID,
 	if err := s.authorize(ctx, viewerID, peerID); err != nil {
 		return nil, err
 	}
-	return s.repo.DMHistoryPage(ctx, viewerID, peerID, before, clampHistoryLimit(limit))
+	messages, err := s.repo.DMHistoryPage(ctx, viewerID, peerID, before, clampHistoryLimit(limit))
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.hydrateSenderReadReceipts(ctx, viewerID, messages); err != nil {
+		return nil, fmt.Errorf("load direct chat read receipts: %w", err)
+	}
+	return messages, nil
 }
 
 // SendText durably accepts one idempotent direct text message and creates

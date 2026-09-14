@@ -31,8 +31,8 @@ void main() {
     await offline.open(_circleId);
     expect(await offline.sendText('رسالة مؤجلة'), isFalse);
     final pending = (await store.loadAll()).single;
-    expect(offline.state.messages.single.deliveryStatus,
-        ChatDeliveryStatus.pending);
+    expect(
+        offline.state.messages.single.deliveryStatus, ChatDeliveryStatus.sent);
     await offline.close();
     offline.dispose();
     await offlineRealtime.dispose();

@@ -78,6 +78,9 @@ func (s *GroupService) History(ctx context.Context, viewerID, circleID uuid.UUID
 		s.metrics.RecordLatencyOutcome(metrics.ChatOperationHistory, metrics.ChatOutcomeFailure, time.Since(start))
 		return nil, fmt.Errorf("load chat history: %w", err)
 	}
+	if err := s.repo.hydrateSenderReadReceipts(ctx, viewerID, msgs); err != nil {
+		return nil, fmt.Errorf("load chat history read receipts: %w", err)
+	}
 	outcome := metrics.ChatOutcomeAccepted
 	if len(msgs) == 0 {
 		outcome = metrics.ChatOutcomeNoResults
@@ -103,6 +106,9 @@ func (s *GroupService) Search(ctx context.Context, viewerID, circleID uuid.UUID,
 	if err != nil {
 		s.metrics.RecordLatencyOutcome(metrics.ChatOperationSearch, metrics.ChatOutcomeFailure, time.Since(start))
 		return nil, fmt.Errorf("search chat history: %w", err)
+	}
+	if err := s.repo.hydrateSenderReadReceipts(ctx, viewerID, messages); err != nil {
+		return nil, fmt.Errorf("load chat search read receipts: %w", err)
 	}
 	outcome := metrics.ChatOutcomeAccepted
 	if len(messages) == 0 {

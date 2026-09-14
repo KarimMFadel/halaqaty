@@ -207,6 +207,7 @@ func main() {
 		_, eligible, err := chatRepo.FindQualifyingDMCircle(ctx, userA, userB)
 		return eligible, err
 	})
+	chatProjector.SetReadReceiptLoader(chatRepo.FindMessageRead)
 	chatDispatcher := chat.NewOutboxDispatcher(
 		chat.NewPGOutboxStore(chatRepo),
 		chatProjector,
@@ -219,7 +220,7 @@ func main() {
 	directService := chat.NewDirectService(chatRepo, nil)
 	directHandler := chat.NewDirectHandler(directService)
 	chatPresenceHandler := chat.NewPresenceHandler(chat.NewPresenceService(chatRepo, rbacRepo))
-	realtimeHub.SetChatCommandHandler(chat.NewTypingCommandHandler(rbacRepo, realtimeHub))
+	realtimeHub.SetChatCommandHandler(chat.NewTypingCommandHandler(chatProjector))
 
 	// ── Chat media (F-004 US3) ──────────────────────────────────────────────
 	// Gated like LiveKit: an absent CHAT_MEDIA_* configuration leaves the

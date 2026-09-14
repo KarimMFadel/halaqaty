@@ -229,6 +229,8 @@ void main() {
       // before the student submits a new request.
       await studentQueue.connect(liveSessionId, listenRealtime: false);
       await tester.pumpAndSettle();
+      expect(studentQueue.state.queue?.entries.length, 1,
+          reason: 'reset queue must expose exactly one student entry');
       expect(studentQueue.state.queue?.entries.single.status, 'waiting');
       expect(find.bySemanticsLabel('الاعتذار عن الدور'), findsOneWidget);
 
@@ -357,7 +359,11 @@ void main() {
       // snapshot before exercising the student command.
       await studentQueue.connect(liveSessionId, listenRealtime: false);
       await _waitFor(
-        () => studentQueue.state.queue?.roundId == resetState.roundId,
+        () {
+          final queueState = studentQueue.state.queue;
+          return queueState?.roundId == resetState.roundId &&
+              queueState?.entries.length == 1;
+        },
         timeout: const Duration(seconds: 5),
       );
       expect(studentQueue.state.queue?.entries.single.status, 'waiting');
@@ -386,6 +392,10 @@ void main() {
                 .where((e) => e.type == 'queue.entry_updated')
                 .length >
             entryUpdatedCountBeforeAutoApprove,
+        timeout: const Duration(seconds: 5),
+      );
+      await _waitFor(
+        () => studentQueue.state.queue?.entries.single.status == 'opted_out',
         timeout: const Duration(seconds: 5),
       );
       expect(find.text('تم اعتماد الاعتذار تلقائيًا'), findsOneWidget);

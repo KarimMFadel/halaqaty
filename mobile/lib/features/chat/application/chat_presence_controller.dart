@@ -3,17 +3,23 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_api_client.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_realtime_client.dart';
-import 'package:halaqaty_mobile/features/chat/domain/chat_models.dart';
 
 /// Credentials required for a presence mutation.
-typedef PresenceCredentials = Future<({String token, String sessionId})>
-    Function();
+typedef PresenceCredentials
+    = Future<({String token, String sessionId, String userId})> Function();
 
 /// Ephemeral typing state for one conversation.
 class ChatTypingUser {
-  const ChatTypingUser({required this.userId, required this.expiresAt});
+  const ChatTypingUser({
+    required this.userId,
+    required this.expiresAt,
+    this.circleId,
+    this.dmPeerId,
+  });
   final String userId;
   final DateTime expiresAt;
+  final String? circleId;
+  final String? dmPeerId;
 }
 
 /// Read and typing projections kept separate from durable message history.
@@ -42,15 +48,42 @@ class ChatPresenceController extends StateNotifier<ChatPresenceState> {
   final PresenceCredentials _credentials;
   final Map<String, Timer> _expiryTimers = {};
 
+  /// Current typing users for the active chat projection.
+  List<String> get typingUserIds =>
+      state.typing.values.map((user) => user.userId).toList(growable: false);
+
+  /// Returns typing users only for one active group or direct conversation.
+  List<String> typingUserIdsFor({String? circleId, String? dmPeerId}) {
+    if ((circleId == null) == (dmPeerId == null)) return const [];
+    return state.typing.values
+        .where((user) => user.circleId == circleId && user.dmPeerId == dmPeerId)
+        .map((user) => user.userId)
+        .toList(growable: false);
+  }
+
   /// Records a group read fact; callers should not invoke this for archived
   /// conversations or messages authored by the current user.
   Future<void> markGroupMessageRead(
       ChatMessage message, String circleId) async {
     final credentials = await _credentials();
+    if (message.senderId == credentials.userId) return;
     await _api.markMessageRead(
       token: credentials.token,
       sessionId: credentials.sessionId,
       circleId: circleId,
+      messageId: message.id,
+      idempotencyKey: newChatIdempotencyKey(),
+    );
+  }
+
+  /// Records a direct-message read fact unless the current user sent it.
+  Future<void> markDirectMessageRead(ChatMessage message, String userId) async {
+    final credentials = await _credentials();
+    if (message.senderId == credentials.userId) return;
+    await _api.markDirectMessageRead(
+      token: credentials.token,
+      sessionId: credentials.sessionId,
+      userId: userId,
       messageId: message.id,
       idempotencyKey: newChatIdempotencyKey(),
     );
@@ -71,7 +104,7 @@ class ChatPresenceController extends StateNotifier<ChatPresenceState> {
           });
         }
       case final ChatTypingEvent typing:
-        final key = typing.circleId ?? '';
+        final key = typing.circleId ?? typing.dmPeerId ?? '';
         final next = {...state.typing};
         final timerKey = '$key:${typing.userId}';
         _expiryTimers.remove(timerKey)?.cancel();
@@ -79,7 +112,11 @@ class ChatPresenceController extends StateNotifier<ChatPresenceState> {
           next.remove(timerKey);
         } else {
           next[timerKey] = ChatTypingUser(
-              userId: typing.userId, expiresAt: typing.expiresAt);
+            userId: typing.userId,
+            expiresAt: typing.expiresAt,
+            circleId: typing.circleId,
+            dmPeerId: typing.dmPeerId,
+          );
           _expiryTimers[timerKey] = Timer(
             typing.expiresAt.difference(DateTime.now()),
             () {

@@ -33,200 +33,204 @@ class SessionRoomScreen extends ConsumerWidget {
       appBar: AppBar(title: Text(rtl ? SessionUiLabels.title : 'Live session')),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child:
-            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text(rtl ? SessionUiLabels.audioOnly : 'Audio-only session',
-              style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 16),
-          if (state.status == SessionRoomStatus.loading)
-            const Center(child: CircularProgressIndicator()),
-          if (state.status == SessionRoomStatus.loading)
-            Text(rtl
-                ? SessionUiLabels.loadingParticipants
-                : 'Loading participants...'),
-          if (state.status == SessionRoomStatus.error) ...[
-            Text(
-                rtl
-                    ? (state.recovery == SessionRoomRecovery.terminal
-                        ? SessionUiLabels.terminalConnectionError
-                        : SessionUiLabels.unableToConnect)
-                    : (state.recovery == SessionRoomRecovery.terminal
-                        ? 'Session access has ended'
-                        : 'Connection was interrupted'),
-                style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              alignment: WrapAlignment.center,
-              children: [
-                if (state.recovery == SessionRoomRecovery.retryable)
-                  OutlinedButton(
-                    onPressed: controller.retry,
-                    child: Text(rtl ? SessionUiLabels.retry : 'Retry'),
-                  ),
-                FilledButton(
-                  onPressed: controller.leave,
-                  child: Text(rtl ? SessionUiLabels.leave : 'Leave'),
-                ),
-              ],
-            ),
-          ],
-          if (state.status == SessionRoomStatus.connected)
-            Text(
-                rtl ? SessionUiLabels.connected : 'Connected. Audio is ready.'),
-          if (state.status == SessionRoomStatus.connected && circleId != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: OutlinedButton(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => GroupChatScreen(circleId: circleId),
-                  ),
-                ),
-                child: Text(rtl ? ChatUiLabels.title : ChatUiLabels.titleEn),
-              ),
-            ),
-          if (state.status == SessionRoomStatus.ended)
-            Text(rtl ? SessionUiLabels.sessionEnded : 'Session ended'),
-          // Action failures never render raw errors; the room stays connected.
-          if (state.actionErrorMessage != null)
-            Text(rtl ? SessionUiLabels.actionFailed : 'Action failed',
-                style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          if (state.isModerator && queueState != null) ...[
-            const SizedBox(height: 8),
-            QueueManagerPanel(
-              queue: queueState.queue,
-              status: _queuePanelStatus(state),
-              onPrepare: () => _showRoundDetailsDialog(
-                context,
-                rtl: rtl,
-                title: rtl ? SessionUiLabels.prepareRound : 'Prepare round',
-                onConfirm: controller.prepareQueueRound,
-              ),
-              // Reorder and policy editing are owned by later tasks.
-              onReorder: () => _showQueueActionPrompt(context, rtl),
-              onMove: () => _showMoveEntryDialog(
-                context,
-                rtl: rtl,
-                entries: queueState.queue?.entries ?? const <QueueEntry>[],
-                onConfirm: controller.moveQueueEntry,
-              ),
-              onAdvance: controller.advanceQueue,
-              onStart: controller.startSelectedQueueEntry,
-              onSkip: controller.skipSelectedQueueEntry,
-              onComplete: () => _showGradeDialog(
-                context,
-                rtl: rtl,
-                entryId: queueState.queue?.selectedEntryId,
-                title: rtl ? 'تسجيل إتمام التلاوة' : 'Complete recitation',
-                onConfirm: (
-                        {required entryId,
-                        grade,
-                        notes,
-                        required clearNotes}) =>
-                    controller.completeQueueEntry(
-                  entryId: entryId,
-                  grade: grade,
-                  notes: notes,
-                ),
-              ),
-              onCorrect: (entryId) {
-                final entries =
-                    queueState.queue?.entries ?? const <QueueEntry>[];
-                final matching = entries.where((entry) => entry.id == entryId);
-                final entry = matching.isEmpty ? null : matching.first;
-                if (entry != null) {
-                  _showGradeDialog(
-                    context,
-                    rtl: rtl,
-                    entryId: entry.id,
-                    initialGrade: entry.grade,
-                    initialNotes: entry.gradeNotes,
-                    title: rtl ? 'تصحيح التقييم' : 'Correct grade',
-                    onConfirm: (
-                            {required entryId,
-                            grade,
-                            notes,
-                            required clearNotes}) =>
-                        controller.correctQueueGrade(
-                      entryId: entryId,
-                      grade: grade,
-                      notes: notes,
-                      clearNotes: clearNotes,
+        child: SingleChildScrollView(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text(rtl ? SessionUiLabels.audioOnly : 'Audio-only session',
+                style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 16),
+            if (state.status == SessionRoomStatus.loading)
+              const Center(child: CircularProgressIndicator()),
+            if (state.status == SessionRoomStatus.loading)
+              Text(rtl
+                  ? SessionUiLabels.loadingParticipants
+                  : 'Loading participants...'),
+            if (state.status == SessionRoomStatus.error) ...[
+              Text(
+                  rtl
+                      ? (state.recovery == SessionRoomRecovery.terminal
+                          ? SessionUiLabels.terminalConnectionError
+                          : SessionUiLabels.unableToConnect)
+                      : (state.recovery == SessionRoomRecovery.terminal
+                          ? 'Session access has ended'
+                          : 'Connection was interrupted'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  if (state.recovery == SessionRoomRecovery.retryable)
+                    OutlinedButton(
+                      onPressed: controller.retry,
+                      child: Text(rtl ? SessionUiLabels.retry : 'Retry'),
                     ),
-                  );
-                }
-              },
-              onReset: () => _showRoundDetailsDialog(
-                context,
-                rtl: rtl,
-                title: rtl ? SessionUiLabels.resetQueue : 'Reset round',
-                initialQueue: queueState.queue,
-                onConfirm: controller.resetQueueRound,
+                  FilledButton(
+                    onPressed: controller.leave,
+                    child: Text(rtl ? SessionUiLabels.leave : 'Leave'),
+                  ),
+                ],
               ),
-              onEditPolicy: () => _showQueueActionPrompt(context, rtl),
-            ),
-            if (_gradingEntry(queueState.queue) case final entry?)
-              QueueGradingPanel(
-                entry: entry,
-                gradingRequired: queueState.queue!.gradingRequired,
-                lifecycle: queueState.queue!.lifecycle,
-                onComplete: (grade, notes) => unawaited(
-                  ref
-                      .read(queueControllerProvider(sessionId).notifier)
-                      .completeQueueEntry(entry.id, grade: grade, notes: notes),
-                ),
-                onCorrect: (grade, notes, clearNotes) => unawaited(
-                  ref
-                      .read(queueControllerProvider(sessionId).notifier)
-                      .correctQueueEntry(entry.id,
-                          grade: grade, notes: notes, clearNotes: clearNotes),
+            ],
+            if (state.status == SessionRoomStatus.connected)
+              Text(rtl
+                  ? SessionUiLabels.connected
+                  : 'Connected. Audio is ready.'),
+            if (state.status == SessionRoomStatus.connected && circleId != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => GroupChatScreen(circleId: circleId),
+                    ),
+                  ),
+                  child: Text(rtl ? ChatUiLabels.title : ChatUiLabels.titleEn),
                 ),
               ),
-          ],
-          if (!state.isModerator && queueState != null) ...[
-            const SizedBox(height: 8),
-            QueueStudentPanel(
-              queue: queueState.queue,
-              myEntry: _myEntry(queueState.queue?.entries, state.currentUserId),
-              status: _queueStudentPanelStatus(state),
-              optOutStatus: _studentOptOutStatus(queueState.optOutFeedback),
-              onRequestOptOut: controller.requestQueueOptOut,
-            ),
-          ],
-          if (showRoomControls) ...[
-            const SizedBox(height: 8),
-            Text(rtl ? SessionUiLabels.participantsTitle : 'Participants',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Expanded(
-                child: _ParticipantList(
-                    participants: state.participants,
-                    isModerator: state.isModerator,
-                    rtl: rtl,
-                    onMute: controller.muteParticipant,
-                    onRemove: controller.removeParticipant)),
-            const SizedBox(height: 8),
-            _RoomControls(
-                state: state,
-                rtl: rtl,
-                onRaiseHand: controller.raiseHand,
-                onLowerHand: controller.lowerHand,
-                onToggleLock: () => controller.setLock(!state.isLocked),
-                onMuteAll: controller.muteAll,
-                onEnd: controller.endSession),
-          ],
-          const Spacer(),
-          FilledButton(
-              onPressed: state.status == SessionRoomStatus.loading
-                  ? null
-                  : () => canStart
-                      ? controller.start(sessionId)
-                      : controller.join(sessionId),
-              child: Text(canStart
-                  ? (rtl ? SessionUiLabels.start : 'Start session')
-                  : (rtl ? SessionUiLabels.join : 'Join'))),
-        ]),
+            if (state.status == SessionRoomStatus.ended)
+              Text(rtl ? SessionUiLabels.sessionEnded : 'Session ended'),
+            // Action failures never render raw errors; the room stays connected.
+            if (state.actionErrorMessage != null)
+              Text(rtl ? SessionUiLabels.actionFailed : 'Action failed',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            if (state.isModerator && queueState != null) ...[
+              const SizedBox(height: 8),
+              QueueManagerPanel(
+                queue: queueState.queue,
+                status: _queuePanelStatus(state),
+                onPrepare: () => _showRoundDetailsDialog(
+                  context,
+                  rtl: rtl,
+                  title: rtl ? SessionUiLabels.prepareRound : 'Prepare round',
+                  onConfirm: controller.prepareQueueRound,
+                ),
+                // Reorder and policy editing are owned by later tasks.
+                onReorder: () => _showQueueActionPrompt(context, rtl),
+                onMove: () => _showMoveEntryDialog(
+                  context,
+                  rtl: rtl,
+                  entries: queueState.queue?.entries ?? const <QueueEntry>[],
+                  onConfirm: controller.moveQueueEntry,
+                ),
+                onAdvance: controller.advanceQueue,
+                onStart: controller.startSelectedQueueEntry,
+                onSkip: controller.skipSelectedQueueEntry,
+                onComplete: () => _showGradeDialog(
+                  context,
+                  rtl: rtl,
+                  entryId: queueState.queue?.selectedEntryId,
+                  title: rtl ? 'تسجيل إتمام التلاوة' : 'Complete recitation',
+                  onConfirm: (
+                          {required entryId,
+                          grade,
+                          notes,
+                          required clearNotes}) =>
+                      controller.completeQueueEntry(
+                    entryId: entryId,
+                    grade: grade,
+                    notes: notes,
+                  ),
+                ),
+                onCorrect: (entryId) {
+                  final entries =
+                      queueState.queue?.entries ?? const <QueueEntry>[];
+                  final matching =
+                      entries.where((entry) => entry.id == entryId);
+                  final entry = matching.isEmpty ? null : matching.first;
+                  if (entry != null) {
+                    _showGradeDialog(
+                      context,
+                      rtl: rtl,
+                      entryId: entry.id,
+                      initialGrade: entry.grade,
+                      initialNotes: entry.gradeNotes,
+                      title: rtl ? 'تصحيح التقييم' : 'Correct grade',
+                      onConfirm: (
+                              {required entryId,
+                              grade,
+                              notes,
+                              required clearNotes}) =>
+                          controller.correctQueueGrade(
+                        entryId: entryId,
+                        grade: grade,
+                        notes: notes,
+                        clearNotes: clearNotes,
+                      ),
+                    );
+                  }
+                },
+                onReset: () => _showRoundDetailsDialog(
+                  context,
+                  rtl: rtl,
+                  title: rtl ? SessionUiLabels.resetQueue : 'Reset round',
+                  initialQueue: queueState.queue,
+                  onConfirm: controller.resetQueueRound,
+                ),
+                onEditPolicy: () => _showQueueActionPrompt(context, rtl),
+              ),
+              if (_gradingEntry(queueState.queue) case final entry?)
+                QueueGradingPanel(
+                  entry: entry,
+                  gradingRequired: queueState.queue!.gradingRequired,
+                  lifecycle: queueState.queue!.lifecycle,
+                  onComplete: (grade, notes) => unawaited(
+                    ref
+                        .read(queueControllerProvider(sessionId).notifier)
+                        .completeQueueEntry(entry.id,
+                            grade: grade, notes: notes),
+                  ),
+                  onCorrect: (grade, notes, clearNotes) => unawaited(
+                    ref
+                        .read(queueControllerProvider(sessionId).notifier)
+                        .correctQueueEntry(entry.id,
+                            grade: grade, notes: notes, clearNotes: clearNotes),
+                  ),
+                ),
+            ],
+            if (!state.isModerator && queueState != null) ...[
+              const SizedBox(height: 8),
+              QueueStudentPanel(
+                queue: queueState.queue,
+                myEntry:
+                    _myEntry(queueState.queue?.entries, state.currentUserId),
+                status: _queueStudentPanelStatus(state),
+                optOutStatus: _studentOptOutStatus(queueState.optOutFeedback),
+                onRequestOptOut: controller.requestQueueOptOut,
+              ),
+            ],
+            if (showRoomControls) ...[
+              const SizedBox(height: 8),
+              Text(rtl ? SessionUiLabels.participantsTitle : 'Participants',
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 4),
+              _ParticipantList(
+                  participants: state.participants,
+                  isModerator: state.isModerator,
+                  rtl: rtl,
+                  onMute: controller.muteParticipant,
+                  onRemove: controller.removeParticipant),
+              const SizedBox(height: 8),
+              _RoomControls(
+                  state: state,
+                  rtl: rtl,
+                  onRaiseHand: controller.raiseHand,
+                  onLowerHand: controller.lowerHand,
+                  onToggleLock: () => controller.setLock(!state.isLocked),
+                  onMuteAll: controller.muteAll,
+                  onEnd: controller.endSession),
+            ],
+            FilledButton(
+                onPressed: state.status == SessionRoomStatus.loading
+                    ? null
+                    : () => canStart
+                        ? controller.start(sessionId)
+                        : controller.join(sessionId),
+                child: Text(canStart
+                    ? (rtl ? SessionUiLabels.start : 'Start session')
+                    : (rtl ? SessionUiLabels.join : 'Join'))),
+          ]),
+        ),
       ),
     );
   }
@@ -812,6 +816,8 @@ class _ParticipantList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children: [
         for (final participant
             in participants.where((p) => p.isCurrentlyPresent))

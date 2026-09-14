@@ -12,6 +12,22 @@ void main() {
     expect(find.byIcon(Icons.visibility), findsOneWidget);
   });
 
+  testWidgets('all four delivery states have distinct text and icons',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Column(
+        children: ChatDeliveryStatus.values
+            .map((status) => ChatDeliveryStatusView(status: status))
+            .toList(),
+      ),
+    ));
+
+    for (final status in ChatDeliveryStatus.values) {
+      expect(find.text(status.name[0].toUpperCase() + status.name.substring(1)),
+          findsOneWidget);
+    }
+  });
+
   testWidgets('typing indicator renders accessible text', (tester) async {
     await tester.pumpWidget(const MaterialApp(
       home: ChatTypingIndicator(userNames: ['Amina']),

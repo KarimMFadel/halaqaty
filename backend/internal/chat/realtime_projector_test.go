@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,6 +15,29 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
 	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
 )
+
+type archiveRaceMembership struct {
+	circleID string
+	members  map[string]bool
+	lookups  atomic.Int32
+}
+
+func (m *archiveRaceMembership) IsMember(_ context.Context, _ string, userID string) (bool, error) {
+	return m.members[userID], nil
+}
+
+func (m *archiveRaceMembership) MembershipStartedAt(context.Context, string, string) (time.Time, error) {
+	return time.Time{}, nil
+}
+
+func (m *archiveRaceMembership) FindCircleByID(_ context.Context, circleID string) (rbac.Circle, error) {
+	if circleID != m.circleID {
+		return rbac.Circle{}, rbac.ErrCircleNotFound
+	}
+	// Admission observes the first two lookups; archive immediately before the
+	// subscribed peer's socket write.
+	return rbac.Circle{ID: circleID, IsArchived: m.lookups.Add(1) > 2}, nil
+}
 
 const projectorCircleID = "33333333-3333-3333-3333-333333333333"
 
@@ -294,6 +318,154 @@ func TestRealtimeProjector_RejectsUnsupportedEventAndDirectMessages(t *testing.T
 	if err := projector.ProjectMessage(context.Background(), unsupported, msg); err == nil {
 		t.Fatal("unsupported event types must be rejected")
 	}
+}
+
+func TestRealtimeProjector_ProjectsReadEventOnlyToSender(t *testing.T) {
+	senderID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	readerID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	tickets := realtime.NewTicketService(fixedCircleReader{
+		senderID.String(): {projectorCircleID},
+		readerID.String(): {projectorCircleID},
+	})
+	hub := realtime.NewHub(tickets, nil)
+	server := httptest.NewServer(hub)
+	defer server.Close()
+	senderTicket, err := tickets.IssueForSession(context.Background(), senderID.String(), "sender-session")
+	if err != nil {
+		t.Fatalf("issue sender ticket: %v", err)
+	}
+	readerTicket, err := tickets.IssueForSession(context.Background(), readerID.String(), "reader-session")
+	if err != nil {
+		t.Fatalf("issue reader ticket: %v", err)
+	}
+	sender := dialProjectorClient(t, server, senderTicket.Token)
+	reader := dialProjectorClient(t, server, readerTicket.Token)
+	defer func() { _ = sender.Close() }()
+	defer func() { _ = reader.Close() }()
+
+	projector := NewRealtimeProjector(fakeMembershipReader{
+		members: map[string]bool{projectorMember(projectorCircleID, senderID.String()): true},
+	}, hub, tickets, validProjectorSession)
+	readAt := time.Date(2026, 9, 3, 12, 2, 0, 0, time.UTC)
+	projector.SetReadReceiptLoader(func(context.Context, uuid.UUID, uuid.UUID) (MessageRead, error) {
+		return MessageRead{UserID: readerID, ReadAt: readAt}, nil
+	})
+	msg, event := projectorTestMessage(t)
+	msg.SenderID = senderID
+	event.EventType = realtime.EventChatMessageRead
+	event.RecipientID = &readerID
+
+	if err := projector.ProjectMessage(context.Background(), event, msg); err != nil {
+		t.Fatalf("project read event: %v", err)
+	}
+	if got := readProjectorJSON(t, sender); got["type"] != realtime.EventChatMessageRead {
+		t.Fatalf("sender event = %v", got)
+	} else if payload, ok := got["payload"].(map[string]any); !ok || payload["message_id"] != msg.ID.String() || payload["reader_id"] != readerID.String() || payload["read_at"] != readAt.Format(time.RFC3339Nano) {
+		t.Fatalf("read payload = %v", got["payload"])
+	}
+	assertNoProjectorEvent(t, reader)
+}
+
+func TestTypingCommandHandler_AllowsEligibleDMOnlyAfterSessionReauthorization(t *testing.T) {
+	senderID := uuid.New()
+	peerID := uuid.New()
+	tickets := realtime.NewTicketService(fixedCircleReader{senderID.String(): {projectorCircleID}, peerID.String(): {projectorCircleID}})
+	hub := realtime.NewHub(tickets, nil)
+	projector := NewRealtimeProjector(fakeMembershipReader{}, hub, tickets, validProjectorSession)
+	projector.SetDMEligibilityChecker(func(context.Context, uuid.UUID, uuid.UUID) (bool, error) { return true, nil })
+	handler := NewTypingCommandHandler(projector)
+	senderTicket, err := tickets.IssueForSession(context.Background(), senderID.String(), "sender-session")
+	if err != nil {
+		t.Fatalf("issue sender ticket: %v", err)
+	}
+
+	if err := handler(context.Background(), realtime.ChatCommand{
+		Connection: realtime.ConnectionIdentity{UserID: senderID.String(), RealtimeTicket: senderTicket.Token},
+		RequestID:  uuid.NewString(),
+		Payload: map[string]any{
+			"dm_peer_id": peerID.String(),
+			"is_typing":  true,
+		},
+	}); err != nil {
+		t.Fatalf("eligible DM typing command: %v", err)
+	}
+	projector.sessionValid = func(context.Context, string, string) (bool, error) { return false, nil }
+	if err := handler(context.Background(), realtime.ChatCommand{
+		Connection: realtime.ConnectionIdentity{UserID: senderID.String(), RealtimeTicket: senderTicket.Token},
+		RequestID:  uuid.NewString(),
+		Payload:    map[string]any{"dm_peer_id": peerID.String(), "is_typing": true},
+	}); !errors.Is(err, ErrDMNotEligible) {
+		t.Fatalf("revoked session DM typing error = %v, want ErrDMNotEligible", err)
+	}
+}
+
+func TestTypingCommandHandler_DirectTypingExcludesSenderAndTargetsEligiblePeer(t *testing.T) {
+	senderID := uuid.New()
+	peerID := uuid.New()
+	tickets := realtime.NewTicketService(fixedCircleReader{senderID.String(): {projectorCircleID}, peerID.String(): {projectorCircleID}})
+	hub := realtime.NewHub(tickets, nil)
+	server := httptest.NewServer(hub)
+	defer server.Close()
+	projector := NewRealtimeProjector(fakeMembershipReader{}, hub, tickets, validProjectorSession)
+	projector.SetDMEligibilityChecker(func(_ context.Context, userA, userB uuid.UUID) (bool, error) {
+		return (userA == senderID && userB == peerID) || (userA == peerID && userB == senderID), nil
+	})
+	handler := NewTypingCommandHandler(projector)
+	senderTicket, err := tickets.IssueForSession(context.Background(), senderID.String(), "sender-session")
+	if err != nil {
+		t.Fatalf("issue sender ticket: %v", err)
+	}
+	peerTicket, err := tickets.IssueForSession(context.Background(), peerID.String(), "peer-session")
+	if err != nil {
+		t.Fatalf("issue peer ticket: %v", err)
+	}
+	sender := dialProjectorClient(t, server, senderTicket.Token)
+	peer := dialProjectorClient(t, server, peerTicket.Token)
+	defer func() { _ = sender.Close() }()
+	defer func() { _ = peer.Close() }()
+
+	if err := handler(context.Background(), realtime.ChatCommand{Connection: realtime.ConnectionIdentity{UserID: senderID.String(), RealtimeTicket: senderTicket.Token}, RequestID: uuid.NewString(), Payload: map[string]any{"dm_peer_id": peerID.String(), "is_typing": true}}); err != nil {
+		t.Fatalf("direct typing command: %v", err)
+	}
+	if got := readProjectorJSON(t, peer); got["type"] != realtime.EventChatTyping {
+		t.Fatalf("peer typing event = %v", got)
+	} else if payload, ok := got["payload"].(map[string]any); !ok || payload["user_id"] != senderID.String() || payload["dm_peer_id"] != senderID.String() {
+		t.Fatalf("peer typing payload = %v", got["payload"])
+	}
+	assertNoProjectorEvent(t, sender)
+}
+
+// TestTypingCommandHandler_SuppressesGroupTypingArchivedBeforeSocketWrite
+// covers the archive race between command admission and peer delivery.
+func TestTypingCommandHandler_SuppressesGroupTypingArchivedBeforeSocketWrite(t *testing.T) {
+	senderID := uuid.New()
+	peerID := uuid.New()
+	tickets := realtime.NewTicketService(fixedCircleReader{senderID.String(): {projectorCircleID}, peerID.String(): {projectorCircleID}})
+	hub := realtime.NewHub(tickets, nil)
+	server := httptest.NewServer(hub)
+	defer server.Close()
+	membership := &archiveRaceMembership{circleID: projectorCircleID, members: map[string]bool{senderID.String(): true, peerID.String(): true}}
+	projector := NewRealtimeProjector(membership, hub, tickets, validProjectorSession)
+	handler := NewTypingCommandHandler(projector)
+	senderTicket, err := tickets.IssueForSession(context.Background(), senderID.String(), "sender-session")
+	if err != nil {
+		t.Fatalf("issue sender ticket: %v", err)
+	}
+	peerTicket, err := tickets.IssueForSession(context.Background(), peerID.String(), "peer-session")
+	if err != nil {
+		t.Fatalf("issue peer ticket: %v", err)
+	}
+	sender := dialProjectorClient(t, server, senderTicket.Token)
+	defer func() { _ = sender.Close() }()
+	peer := dialProjectorClient(t, server, peerTicket.Token)
+	defer func() { _ = peer.Close() }()
+	subscribeProjectorCircle(t, sender, projectorCircleID)
+	subscribeProjectorCircle(t, peer, projectorCircleID)
+
+	if err := handler(context.Background(), realtime.ChatCommand{Connection: realtime.ConnectionIdentity{UserID: senderID.String(), RealtimeTicket: senderTicket.Token}, RequestID: uuid.NewString(), Payload: map[string]any{"circle_id": projectorCircleID, "is_typing": true}}); err != nil {
+		t.Fatalf("typing command: %v", err)
+	}
+	assertNoProjectorEvent(t, peer)
 }
 
 func TestRealtimeProjector_DirectMessageTargetsBothUsersAcrossDifferentCircleSubscriptions(t *testing.T) {

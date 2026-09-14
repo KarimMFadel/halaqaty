@@ -142,13 +142,13 @@
 
 **Independent test**: Drive a message through all four states, record duplicate reads, and verify typing start/stop/expiry without durable history or unauthorized audience leakage.
 
-- [ ] T065 [P] [US5] Add service/repository tests for idempotent visible-message non-sender reads, sender-only currently authorized `read_receipts`, group headline state, sender-targeted events, pre-join/post-removal/archived denial, restored-DM facts, and non-persisted five-second typing in `backend/internal/chat/presence_service_test.go`
-- [ ] T066 [US5] Implement read transactions, headline/detail projections, and transient typing authorization in `backend/internal/chat/presence_service.go` and `backend/internal/chat/repository.go`
-- [ ] T067 [P] [US5] Add WebSocket/REST contract tests for sender-only `read_receipts`, group/direct mark-read, archived `409`, server-only `delivered/read`, `chat.message_read`, `cmd.chat.typing`, `chat.typing`, command rate limits, malformed context, RBAC denial, expiry, and response safety in `backend/tests/contract/chat_presence_contract_test.go`
-- [ ] T068 [US5] Implement read handlers, sender-targeted outbox delivery, and authorized typing command/broadcast handling in `backend/internal/chat/presence_handler.go`, `backend/internal/chat/realtime_projector.go`, and `backend/internal/realtime/hub.go`
-- [ ] T069 [P] [US5] Add mobile tests for all four delivery states, group read details, sender-own-read exclusion, duplicate facts, typing stop loss, and five-second expiry in `mobile/test/features/chat/application/chat_presence_controller_test.dart` and `mobile/test/widget/chat/chat_status_test.dart`
-- [ ] T070 [US5] Implement read submission/details and non-color-only status/typing projections in `mobile/lib/features/chat/application/chat_presence_controller.dart` and `mobile/lib/features/chat/presentation/chat_status_widgets.dart`
-- [ ] T071 [US5] Add pending→sent→delivered→read and typing start/stop/expiry acceptance coverage for group and DM in `mobile/integration_test/chat_presence_flow_test.dart`
+- [X] T065 [P] [US5] Add service/repository tests for idempotent visible-message non-sender reads, sender-only currently authorized `read_receipts`, group headline state, sender-targeted events, pre-join/post-removal/archived denial, restored-DM facts, and non-persisted five-second typing in `backend/internal/chat/presence_service_test.go`
+- [X] T066 [US5] Implement read transactions, headline/detail projections, and transient typing authorization in `backend/internal/chat/presence_service.go` and `backend/internal/chat/repository.go`
+- [X] T067 [P] [US5] Add WebSocket/REST contract tests for sender-only `read_receipts`, group/direct mark-read, archived `409`, server-only `delivered/read`, `chat.message_read`, `cmd.chat.typing`, `chat.typing`, command rate limits, malformed context, RBAC denial, expiry, and response safety in `backend/tests/contract/chat_presence_contract_test.go`
+- [X] T068 [US5] Implement read handlers, sender-targeted outbox delivery, and authorized typing command/broadcast handling in `backend/internal/chat/presence_handler.go`, `backend/internal/chat/realtime_projector.go`, and `backend/internal/realtime/hub.go`
+- [X] T069 [P] [US5] Add mobile tests for all four delivery states, group read details, sender-own-read exclusion, duplicate facts, typing stop loss, and five-second expiry in `mobile/test/features/chat/application/chat_presence_controller_test.dart` and `mobile/test/widget/chat/chat_status_test.dart`
+- [X] T070 [US5] Implement read submission/details and non-color-only status/typing projections in `mobile/lib/features/chat/application/chat_presence_controller.dart` and `mobile/lib/features/chat/presentation/chat_status_widgets.dart`
+- [X] T071 [US5] Add pending→sent→delivered→read and typing start/stop/expiry acceptance coverage for group and DM in `mobile/integration_test/chat_presence_flow_test.dart`
 
 ---
 

@@ -32,7 +32,7 @@ func (s *PresenceService) MarkGroupMessageRead(ctx context.Context, readerID, ci
 		if err := tx.LockActiveCircleMember(ctx, circleID, readerID); err != nil {
 			return err
 		}
-		senderID, err := tx.LockVisibleGroupMessageForRead(ctx, circleID, readerID, messageID)
+		_, err := tx.LockVisibleGroupMessageForRead(ctx, circleID, readerID, messageID)
 		if err != nil {
 			return err
 		}
@@ -40,7 +40,7 @@ func (s *PresenceService) MarkGroupMessageRead(ctx context.Context, readerID, ci
 		if err != nil || !inserted {
 			return err
 		}
-		return tx.InsertOutboxEvent(ctx, messageID, realtime.EventChatMessageRead, &senderID)
+		return tx.InsertOutboxEvent(ctx, messageID, realtime.EventChatMessageRead, &readerID)
 	})
 	if err != nil {
 		return fmt.Errorf("mark group message read: %w", err)
@@ -51,9 +51,9 @@ func (s *PresenceService) MarkGroupMessageRead(ctx context.Context, readerID, ci
 // MarkDirectMessageRead records one eligible recipient read fact idempotently.
 // The pair relationship and target message are rechecked in the transaction
 // immediately before persistence.
-func (s *PresenceService) MarkDirectMessageRead(ctx context.Context, readerID, messageID uuid.UUID) error {
+func (s *PresenceService) MarkDirectMessageRead(ctx context.Context, readerID, peerID, messageID uuid.UUID) error {
 	err := s.repo.WithTx(ctx, func(tx *Tx) error {
-		senderID, err := tx.LockEligibleDirectMessageForRead(ctx, readerID, messageID)
+		_, err := tx.LockEligibleDirectMessageForRead(ctx, readerID, peerID, messageID)
 		if err != nil {
 			return err
 		}
@@ -61,7 +61,7 @@ func (s *PresenceService) MarkDirectMessageRead(ctx context.Context, readerID, m
 		if err != nil || !inserted {
 			return err
 		}
-		return tx.InsertOutboxEvent(ctx, messageID, realtime.EventChatMessageRead, &senderID)
+		return tx.InsertOutboxEvent(ctx, messageID, realtime.EventChatMessageRead, &readerID)
 	})
 	if err != nil {
 		return fmt.Errorf("mark direct message read: %w", err)

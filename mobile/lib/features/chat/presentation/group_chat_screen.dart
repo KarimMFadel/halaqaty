@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/chat/application/group_chat_controller.dart';
+import 'package:halaqaty_mobile/features/chat/application/chat_presence_controller.dart';
+import 'package:halaqaty_mobile/features/chat/presentation/chat_status_widgets.dart';
 import 'package:halaqaty_mobile/features/chat/domain/chat_models.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_ui_labels.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_widgets.dart';
@@ -36,6 +38,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     super.initState();
     _controller =
         ref.read(groupChatControllerProvider(widget.circleId).notifier);
+    _controller.presence?.addListener(_onPresenceChanged);
     // Riverpod forbids provider writes during mount; defer the projection
     // flag until the first frame while opening the authoritative history.
     Future<void>.microtask(() {
@@ -50,6 +53,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     super.dispose();
   }
 
+  void _onPresenceChanged(ChatPresenceState _) {
+    if (mounted) setState(() {});
+  }
+
   /// Opens the edit sheet for one terminally failed draft (FR-008): the
   /// controller rotates the idempotency key, so the edited text is a fresh
   /// logical send rather than a key-conflicting replay.
@@ -59,9 +66,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     final edited = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(_ScreenLabels(
-                Directionality.of(context) == TextDirection.rtl)
-            .editDraft),
+        title: Text(
+            _ScreenLabels(Directionality.of(context) == TextDirection.rtl)
+                .editDraft),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -70,15 +77,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(_ScreenLabels(
-                    Directionality.of(context) == TextDirection.rtl)
-                .cancelEdit),
+            child: Text(
+                _ScreenLabels(Directionality.of(context) == TextDirection.rtl)
+                    .cancelEdit),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, controller.text),
-            child: Text(_ScreenLabels(
-                    Directionality.of(context) == TextDirection.rtl)
-                .saveEdit),
+            child: Text(
+                _ScreenLabels(Directionality.of(context) == TextDirection.rtl)
+                    .saveEdit),
           ),
         ],
       ),
@@ -97,6 +104,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
         _ScreenLabels(Directionality.of(context) == TextDirection.rtl);
     // Oldest-first view of the newest-first controller projection.
     final displayMessages = state.messages.reversed.toList();
+    final presence = _controller.presence;
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.circleName ?? labels.title)),
@@ -112,6 +120,11 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
             padding: const EdgeInsets.all(8),
             child: Column(
               children: [
+                if (presence != null)
+                  ChatTypingIndicator(
+                    userNames:
+                        presence.typingUserIdsFor(circleId: widget.circleId),
+                  ),
                 if (state.actionErrorMessage != null)
                   _ActionErrorLabel(labels: labels),
                 if (state.hasMore)
@@ -140,10 +153,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                                     message: message,
                                     onEdit: () =>
                                         _editTerminalDraft(context, message),
-                                    onDiscard: () => unawaited(_controller
-                                        .discardPending(message.id)),
-                                    onRetry: () => unawaited(_controller
-                                        .retryPending(
+                                    onDiscard: () => unawaited(
+                                        _controller.discardPending(message.id)),
+                                    onRetry: () => unawaited(
+                                        _controller.retryPending(
                                             idempotencyKey: message.id)),
                                   ),
                               ],
@@ -153,7 +166,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                 ),
                 if (!state.readOnly) ...[
                   ChatMediaComposerBar(circleId: widget.circleId),
-                  ChatComposer(onSend: _controller.sendText),
+                  ChatComposer(
+                    onSend: _controller.sendText,
+                    onTyping: _controller.setTyping,
+                  ),
                 ] else
                   Semantics(
                     container: true,
@@ -338,7 +354,6 @@ class _ScreenLabels {
       rtl ? ChatUiLabels.discardDraft : ChatUiLabels.discardDraftEn;
   String get cancelEdit => rtl ? ChatUiLabels.cancel : ChatUiLabels.cancelEn;
   String get saveEdit => rtl ? ChatUiLabels.send : ChatUiLabels.sendEn;
-  String get readOnly => rtl
-      ? 'هذه المحادثة للقراءة فقط'
-      : 'This conversation is read-only';
+  String get readOnly =>
+      rtl ? 'هذه المحادثة للقراءة فقط' : 'This conversation is read-only';
 }

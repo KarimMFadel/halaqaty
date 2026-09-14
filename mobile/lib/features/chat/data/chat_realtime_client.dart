@@ -42,11 +42,13 @@ class ChatTypingEvent extends ChatRealtimeEvent {
   const ChatTypingEvent(
       {required super.eventId,
       required this.userId,
-      required this.circleId,
+      this.circleId,
+      this.dmPeerId,
       required this.isTyping,
       required this.expiresAt});
   final String userId;
   final String? circleId;
+  final String? dmPeerId;
   final bool isTyping;
   final DateTime expiresAt;
 }
@@ -71,7 +73,7 @@ class ChatReconnectedEvent extends ChatRealtimeEvent {
 class ChatRealtimeEventDecoder {
   ChatRealtimeEventDecoder(this._circleId);
 
-  final String _circleId;
+  final String? _circleId;
   final Set<String> _seenEventIds = {};
 
   ChatRealtimeEvent? decode(String raw) {
@@ -91,8 +93,9 @@ class ChatRealtimeEventDecoder {
 
     if (type == ChatRealtimeTypes.messageRead) {
       final payload = decoded[ChatJsonKeys.payload];
-      if (payload is! Map<String, dynamic>)
+      if (payload is! Map<String, dynamic>) {
         return ChatUnknownEvent(eventId: eventId, type: type);
+      }
       try {
         return ChatMessageReadEvent(
           eventId: eventId,
@@ -108,13 +111,20 @@ class ChatRealtimeEventDecoder {
     }
     if (type == ChatRealtimeTypes.typing) {
       final payload = decoded[ChatJsonKeys.payload];
-      if (payload is! Map<String, dynamic>)
+      if (payload is! Map<String, dynamic>) {
         return ChatUnknownEvent(eventId: eventId, type: type);
+      }
       try {
+        final circleId = payload[ChatJsonKeys.circleId] as String?;
+        final dmPeerId = payload[ChatJsonKeys.dmPeerId] as String?;
+        if ((circleId == null) == (dmPeerId == null)) {
+          return ChatUnknownEvent(eventId: eventId, type: type);
+        }
         return ChatTypingEvent(
           eventId: eventId,
           userId: payload[ChatJsonKeys.userId] as String,
-          circleId: payload[ChatJsonKeys.circleId] as String?,
+          circleId: circleId,
+          dmPeerId: dmPeerId,
           isTyping: payload[ChatJsonKeys.isTyping] as bool,
           expiresAt: DateTime.parse(payload[ChatJsonKeys.expiresAt] as String),
         );
@@ -131,7 +141,9 @@ class ChatRealtimeEventDecoder {
     if (payload is! Map<String, dynamic>) {
       return ChatUnknownEvent(eventId: eventId, type: type);
     }
-    if (payload[ChatJsonKeys.circleId] != _circleId) return null;
+    if (_circleId != null && payload[ChatJsonKeys.circleId] != _circleId) {
+      return null;
+    }
     try {
       return ChatMessageEvent(
         eventId: eventId,
@@ -157,7 +169,18 @@ abstract interface class ChatRealtimeClient {
   Future<void> dispose();
 }
 
-class WebSocketChatRealtimeClient implements ChatRealtimeClient {
+/// Realtime additions used only by active chat controllers. Keeping these
+/// narrow lets existing circle-only consumers remain on [ChatRealtimeClient].
+abstract interface class ChatRealtimePresenceClient {
+  Stream<ChatRealtimeEvent> directChatEvents(String peerId,
+      {required String token, required String backendSessionId});
+
+  Future<void> sendTyping(
+      {String? circleId, String? dmPeerId, required bool isTyping});
+}
+
+class WebSocketChatRealtimeClient
+    implements ChatRealtimeClient, ChatRealtimePresenceClient {
   WebSocketChatRealtimeClient(this._dio,
       {Duration heartbeatInterval = const Duration(seconds: 30)})
       : _heartbeatInterval = heartbeatInterval;
@@ -171,7 +194,8 @@ class WebSocketChatRealtimeClient implements ChatRealtimeClient {
       {required String token, required String backendSessionId}) {
     // Each call gets its own connection state: overlapping circles can
     // never clobber each other's socket, heartbeat, or teardown.
-    final connection = _ChatSocketConnection(_connections.remove);
+    final connection =
+        _ChatSocketConnection(_connections.remove, circleId: circleId);
     _connections.add(connection);
     final controller =
         StreamController<ChatRealtimeEvent>(onCancel: connection.close);
@@ -180,7 +204,44 @@ class WebSocketChatRealtimeClient implements ChatRealtimeClient {
     return controller.stream;
   }
 
-  Future<void> _open(String circleId, String token, String backendSessionId,
+  @override
+  Stream<ChatRealtimeEvent> directChatEvents(String peerId,
+      {required String token, required String backendSessionId}) {
+    final connection =
+        _ChatSocketConnection(_connections.remove, dmPeerId: peerId);
+    _connections.add(connection);
+    final controller =
+        StreamController<ChatRealtimeEvent>(onCancel: connection.close);
+    connection.sink = controller;
+    unawaited(_open(null, token, backendSessionId, connection));
+    return controller.stream;
+  }
+
+  @override
+  Future<void> sendTyping(
+      {String? circleId, String? dmPeerId, required bool isTyping}) async {
+    if ((circleId == null) == (dmPeerId == null)) return;
+    _ChatSocketConnection? connection;
+    for (final candidate in _connections) {
+      if (candidate.circleId == circleId && candidate.dmPeerId == dmPeerId) {
+        connection = candidate;
+        break;
+      }
+    }
+    final socket = connection?.socket;
+    if (socket == null || connection!.isClosed) return;
+    socket.add(jsonEncode({
+      ChatJsonKeys.type: 'cmd.chat.typing',
+      'request_id': newChatIdempotencyKey(),
+      ChatJsonKeys.payload: {
+        ChatJsonKeys.circleId: circleId,
+        ChatJsonKeys.dmPeerId: dmPeerId,
+        ChatJsonKeys.isTyping: isTyping,
+      },
+    }));
+  }
+
+  Future<void> _open(String? circleId, String token, String backendSessionId,
       _ChatSocketConnection connection) async {
     final decoder = ChatRealtimeEventDecoder(circleId);
     var delay = const Duration(seconds: 1);
@@ -197,11 +258,11 @@ class WebSocketChatRealtimeClient implements ChatRealtimeClient {
         }
         connection.socket = socket;
         final isReconnect = reconnects++ > 0;
-        var subscriptionAcknowledged = false;
+        var subscriptionAcknowledged = circleId == null;
         socket.listen((data) {
           if (data is! String || connection.sink.isClosed) return;
           if (!subscriptionAcknowledged &&
-              _isSubscriptionAcknowledgement(data, circleId)) {
+              _isSubscriptionAcknowledgement(data, circleId!)) {
             subscriptionAcknowledged = true;
             if (isReconnect) {
               connection.sink.add(ChatReconnectedEvent(
@@ -213,7 +274,9 @@ class WebSocketChatRealtimeClient implements ChatRealtimeClient {
           final event = decoder.decode(data);
           if (event != null) connection.sink.add(event);
         }, onError: (_) {}, onDone: () {});
-        socket.add(jsonEncode(realtimeSubscribeMessage('circle.$circleId')));
+        if (circleId != null) {
+          socket.add(jsonEncode(realtimeSubscribeMessage('circle.$circleId')));
+        }
         connection.heartbeat = Timer.periodic(_heartbeatInterval, (_) {
           if (!connection.isClosed) socket.add(jsonEncode(realtimePingMessage));
         });
@@ -279,10 +342,13 @@ class WebSocketChatRealtimeClient implements ChatRealtimeClient {
 /// transport error/done, ticket failure, or client dispose). Closed
 /// connections remove themselves from the owning client.
 class _ChatSocketConnection {
-  _ChatSocketConnection(void Function(_ChatSocketConnection) onRemoved)
+  _ChatSocketConnection(void Function(_ChatSocketConnection) onRemoved,
+      {this.circleId, this.dmPeerId})
       : _onRemoved = onRemoved;
 
   final void Function(_ChatSocketConnection) _onRemoved;
+  final String? circleId;
+  final String? dmPeerId;
   late final StreamController<ChatRealtimeEvent> sink;
   WebSocket? socket;
   Timer? heartbeat;

@@ -145,6 +145,22 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('composer emits typing start and stop for its open circle',
+      (tester) async {
+    final api = _FakeChatApi()..pages.add(_page([]));
+    final realtime = _FakeChatRealtimeClient();
+    await _pumpChat(tester,
+        direction: TextDirection.ltr, api: api, realtime: realtime);
+
+    final field = _editableWithin('Write a message');
+    await tester.enterText(field, 'typing');
+    await tester.pump();
+    await tester.enterText(field, '');
+    await tester.pump();
+
+    expect(realtime.typing, [true, false]);
+  });
+
   testWidgets(
       'composer keeps the draft on failed send and retries from it '
       '(RTL + LTR)', (tester) async {
@@ -419,7 +435,8 @@ void main() {
             statusCode: 422, code: 'ERR_VALIDATION_FAILED', message: 'invalid');
       final chat = GroupChatController(
         api,
-        () async => (token: 'token', sessionId: 'backend-session', userId: _meId),
+        () async =>
+            (token: 'token', sessionId: 'backend-session', userId: _meId),
         realtime: _FakeChatRealtimeClient(),
         pendingStore: PendingMessageStore(_MemorySecureStorage()),
       );
@@ -683,11 +700,13 @@ class _FakeChatApi extends ChatApiClient {
 }
 
 /// Fake realtime boundary: the controller subscribes to the broadcast stream.
-class _FakeChatRealtimeClient implements ChatRealtimeClient {
+class _FakeChatRealtimeClient
+    implements ChatRealtimeClient, ChatRealtimePresenceClient {
   final StreamController<ChatRealtimeEvent> _events =
       StreamController<ChatRealtimeEvent>.broadcast(sync: true);
 
   int circleChatEventsCalls = 0;
+  final typing = <bool>[];
 
   void emit(ChatRealtimeEvent event) => _events.add(event);
 
@@ -699,6 +718,17 @@ class _FakeChatRealtimeClient implements ChatRealtimeClient {
   }) {
     circleChatEventsCalls++;
     return _events.stream;
+  }
+
+  @override
+  Stream<ChatRealtimeEvent> directChatEvents(String peerId,
+          {required String token, required String backendSessionId}) =>
+      const Stream.empty();
+
+  @override
+  Future<void> sendTyping(
+      {String? circleId, String? dmPeerId, required bool isTyping}) async {
+    typing.add(isTyping);
   }
 
   @override

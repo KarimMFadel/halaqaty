@@ -2,12 +2,35 @@ package realtime
 
 import (
 	"context"
+	"errors"
 	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestHub_ChatCommandMapsAuthorizationDenialToUnauthorized(t *testing.T) {
+	tickets := NewTicketService(hubTicketReader{circleID: chatCircleID1})
+	hub := NewHub(tickets, nil)
+	hub.SetChatCommandHandler(func(context.Context, ChatCommand) error {
+		return NewAuthorizationError(errors.New("chat: circle not visible"))
+	})
+	server := httptest.NewServer(hub)
+	defer server.Close()
+	ticket, err := tickets.Issue(context.Background(), "user-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn := dialHub(t, server, ticket.Token)
+	defer func() { _ = conn.Close() }()
+	writeHub(t, conn, map[string]any{"type": CommandChatTyping, "request_id": "00000000-0000-0000-0000-000000000001", "payload": map[string]any{"circle_id": chatCircleID1, "is_typing": true}})
+	got := readHub(t, conn)
+	payload, _ := got["payload"].(map[string]any)
+	if got["type"] != realtimeTypeError || payload["code"] != realtimeErrorUnauthorized {
+		t.Fatalf("authorization denial = %v, want UNAUTHORIZED", got)
+	}
+}
 
 const (
 	chatCircleID1 = "11111111-1111-1111-1111-111111111111"

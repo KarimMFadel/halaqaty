@@ -9,9 +9,9 @@ import 'package:halaqaty_mobile/features/chat/data/chat_media_api.dart';
 
 void main() {
   test('cancelling a preview deletes the unsubmitted picked file', () async {
-    final picked =
-        File('${Directory.systemTemp.path}/cancel-me-${DateTime.now().microsecondsSinceEpoch}.png')
-          ..writeAsBytesSync(List<int>.filled(4, 0));
+    final picked = File(
+        '${Directory.systemTemp.path}/cancel-me-${DateTime.now().microsecondsSinceEpoch}.png')
+      ..writeAsBytesSync(List<int>.filled(4, 0));
     final controller = MediaAttachmentController(
       picker: _Picker(pickedPath: picked.path),
       uploadImage: (_, __) async => throw UnimplementedError(),

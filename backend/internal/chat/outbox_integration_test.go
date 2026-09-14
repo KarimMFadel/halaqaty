@@ -11,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/logging"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
@@ -95,7 +98,17 @@ func TestOutboxIntegration_DispatchDueProjectsToAuthorizedSubscriber(t *testing.
 	hub := realtime.NewHub(tickets, nil)
 	server := httptest.NewServer(hub)
 	defer server.Close()
-	ticket, err := tickets.Issue(ctx, teacher.String())
+	sessionRepo := auth.NewSessionRepository(repo.pool)
+	sessionID := uuid.NewString()
+	if err := sessionRepo.CreateSession(ctx, auth.Session{
+		ID:             sessionID,
+		UserID:         teacher.String(),
+		LastActivityAt: time.Now().UTC(),
+		ExpiresAt:      time.Now().UTC().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("create backend session: %v", err)
+	}
+	ticket, err := tickets.IssueForSession(ctx, teacher.String(), sessionID)
 	if err != nil {
 		t.Fatalf("issue ticket: %v", err)
 	}
@@ -107,7 +120,13 @@ func TestOutboxIntegration_DispatchDueProjectsToAuthorizedSubscriber(t *testing.
 	if err != nil {
 		t.Fatalf("send: %v", err)
 	}
-	projector := NewRealtimeProjector(membership, hub, tickets)
+	projector := NewRealtimeProjector(membership, hub, tickets, func(ctx context.Context, sessionID, userID string) (bool, error) {
+		session, err := sessionRepo.GetByIDAndUserID(ctx, sessionID, userID)
+		if err != nil {
+			return false, err
+		}
+		return session.RevokedAt == nil && time.Now().Before(session.ExpiresAt), nil
+	})
 	dispatcher := NewOutboxDispatcher(NewPGOutboxStore(repo), projector, nil, nil, nil, nil)
 	if err := dispatcher.DispatchDue(ctx, 10); err != nil {
 		t.Fatalf("dispatch due: %v", err)

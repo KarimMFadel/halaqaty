@@ -137,10 +137,11 @@ FROM messages m
 JOIN circle_members cm_a ON cm_a.user_id = m.sender_id
 JOIN circle_members cm_b ON cm_b.circle_id = cm_a.circle_id AND cm_b.user_id = $1::uuid
 JOIN circles c ON c.id = cm_a.circle_id AND c.is_archived = FALSE
-WHERE m.id = $2::uuid
-  AND m.circle_id IS NULL
-  AND m.deleted_at IS NULL
-  AND m.dm_recipient_id = $1::uuid
+WHERE m.id = $3::uuid
+	AND m.circle_id IS NULL
+	AND m.deleted_at IS NULL
+	AND m.dm_recipient_id = $1::uuid
+	AND m.sender_id = $2::uuid
   AND (
        (cm_a.role = 'teacher' AND cm_b.role = 'student')
     OR (cm_a.role = 'student' AND cm_b.role = 'teacher')
@@ -155,6 +156,38 @@ const insertMessageReadQuery = `
 INSERT INTO message_reads (message_id, user_id)
 VALUES ($1::uuid, $2::uuid)
 ON CONFLICT (message_id, user_id) DO NOTHING`
+
+const findMessageReadQuery = `
+SELECT message_id, user_id, read_at
+FROM message_reads
+WHERE message_id = $1::uuid AND user_id = $2::uuid`
+
+const groupMessageReadReceiptsQuery = `
+SELECT mr.message_id, mr.user_id, mr.read_at
+FROM message_reads mr
+JOIN messages m ON m.id = mr.message_id
+JOIN circle_members sender ON sender.circle_id = m.circle_id AND sender.user_id = m.sender_id
+JOIN circle_members reader ON reader.circle_id = m.circle_id AND reader.user_id = mr.user_id
+WHERE m.id = $1::uuid AND m.sender_id = $2::uuid AND m.circle_id IS NOT NULL
+  AND mr.user_id <> m.sender_id
+	AND m.sent_at >= reader.joined_at
+ORDER BY mr.read_at, mr.user_id`
+
+const directMessageReadReceiptsQuery = `
+SELECT mr.message_id, mr.user_id, mr.read_at
+FROM message_reads mr
+JOIN messages m ON m.id = mr.message_id
+WHERE m.id = $1::uuid AND m.sender_id = $2::uuid AND m.circle_id IS NULL
+  AND mr.user_id = m.dm_recipient_id
+  AND EXISTS (
+    SELECT 1
+    FROM circle_members sender
+    JOIN circle_members reader ON reader.circle_id = sender.circle_id AND reader.user_id = mr.user_id
+    JOIN circles c ON c.id = sender.circle_id AND c.is_archived = FALSE
+    WHERE sender.user_id = m.sender_id
+      AND ((sender.role IN ('teacher', 'supervisor') AND reader.role = 'student')
+        OR (sender.role = 'student' AND reader.role IN ('teacher', 'supervisor')))
+  )`
 
 // --- Transactional outbox ----------------------------------------------------
 

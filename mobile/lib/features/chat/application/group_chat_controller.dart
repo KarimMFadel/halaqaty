@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_api_client.dart';
+import 'package:halaqaty_mobile/features/chat/application/chat_presence_controller.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_protocol_constants.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_realtime_client.dart';
 import 'package:halaqaty_mobile/features/chat/data/pending_message_store.dart';
@@ -82,6 +83,7 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
     required ChatRealtimeClient realtime,
     PendingMessageStore? pendingStore,
     ChatRetryDelay? retryDelay,
+    this.presence,
   })  : _realtime = realtime,
         _pendingStore = pendingStore,
         _retryDelay = retryDelay ?? Future<void>.delayed,
@@ -92,6 +94,7 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
   final ChatRealtimeClient _realtime;
   final PendingMessageStore? _pendingStore;
   final ChatRetryDelay _retryDelay;
+  final ChatPresenceController? presence;
   final Set<String> _activeRetries = {};
   StreamSubscription<ChatRealtimeEvent>? _subscription;
   String? _circleId;
@@ -130,6 +133,9 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
       if (!_isCurrentLifecycle(circleId, lifecycleEpoch) ||
           state.status == GroupChatStatus.accessLost) {
         return;
+      }
+      for (final message in state.messages) {
+        unawaited(presence?.markGroupMessageRead(message, circleId));
       }
       await _restorePending(circleId, credentials.userId);
       if (!_isCurrentLifecycle(circleId, lifecycleEpoch) ||
@@ -185,6 +191,9 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
         hasMore: page.hasMore,
         nextBefore: page.nextBefore,
       );
+      for (final message in page.messages) {
+        await presence?.markGroupMessageRead(message, circleId);
+      }
     } catch (error) {
       if (_isCurrentLifecycle(circleId, lifecycleEpoch) &&
           _isAccessRevoked(error)) {
@@ -192,6 +201,19 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
         return;
       }
       state = state.copyWith(actionErrorMessage: error.toString());
+    }
+  }
+
+  /// Sends a best-effort ephemeral typing command for the open circle.
+  Future<void> setTyping(bool isTyping) async {
+    final circleId = _circleId;
+    if (circleId == null ||
+        state.status != GroupChatStatus.ready ||
+        state.readOnly) {
+      return;
+    }
+    if (_realtime case final ChatRealtimePresenceClient realtime) {
+      await realtime.sendTyping(circleId: circleId, isTyping: isTyping);
     }
   }
 
@@ -497,8 +519,13 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
   }
 
   void handleRealtimeEvent(ChatRealtimeEvent event) {
+    presence?.handleRealtimeEvent(event);
     switch (event) {
-      case ChatMessageEvent():
+      case final ChatMessageEvent message:
+        final circleId = _circleId;
+        if (circleId != null) {
+          unawaited(presence?.markGroupMessageRead(message.message, circleId));
+        }
         if (state.status == GroupChatStatus.accessLost) return;
         state = state.copyWith(
           messages: mergeChatMessages(state.messages, [event.message]),
@@ -616,23 +643,30 @@ final groupChatControllerProvider = StateNotifierProvider.autoDispose
     .family<GroupChatController, GroupChatControllerState, String>(
         (ref, circleId) {
   final auth = ref.watch(authControllerProvider);
+  Future<({String token, String sessionId, String userId})>
+      credentials() async {
+    final user = ref.read(firebaseAuthProvider).currentUser;
+    final sessionId = auth.sessionId;
+    final token = await user?.getIdToken();
+    final userId = auth.user?.id;
+    if (token == null ||
+        token.isEmpty ||
+        sessionId == null ||
+        sessionId.isEmpty ||
+        userId == null) {
+      throw StateError('User not authenticated');
+    }
+    return (token: token, sessionId: sessionId, userId: userId);
+  }
+
+  final presence =
+      ChatPresenceController(ref.watch(chatApiClientProvider), credentials);
+  ref.onDispose(presence.dispose);
   return GroupChatController(
     ref.watch(chatApiClientProvider),
-    () async {
-      final user = ref.read(firebaseAuthProvider).currentUser;
-      final sessionId = auth.sessionId;
-      final token = await user?.getIdToken();
-      final userId = auth.user?.id;
-      if (token == null ||
-          token.isEmpty ||
-          sessionId == null ||
-          sessionId.isEmpty ||
-          userId == null) {
-        throw StateError('User not authenticated');
-      }
-      return (token: token, sessionId: sessionId, userId: userId);
-    },
+    credentials,
     realtime: ref.watch(chatRealtimeClientProvider),
     pendingStore: PendingMessageStore(const FlutterSecureStorage()),
+    presence: presence,
   );
 });

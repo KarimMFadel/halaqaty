@@ -51,10 +51,10 @@ void main() {
 
     // Circle creators start as supervisors. Make the fixture's named teacher
     // an actual teacher before asserting the teacher-student authorization.
-    await _assignRole(circles, teacher, circleA, teacher.userId,
-        CircleRole.teacher);
-    await _assignRole(circles, teacher, circleB, teacher.userId,
-        CircleRole.teacher);
+    await _assignRole(
+        circles, teacher, circleA, teacher.userId, CircleRole.teacher);
+    await _assignRole(
+        circles, teacher, circleB, teacher.userId, CircleRole.teacher);
 
     await _join(circles, student, circleA.inviteCode);
     await _join(circles, student, circleB.inviteCode);

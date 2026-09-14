@@ -20,6 +20,7 @@ type RealtimeProjector struct {
 	tickets      *realtime.TicketService
 	sessionValid func(context.Context, string, string) (bool, error)
 	dmEligible   func(context.Context, uuid.UUID, uuid.UUID) (bool, error)
+	readReceipt  func(context.Context, uuid.UUID, uuid.UUID) (MessageRead, error)
 }
 
 type SessionValidator func(context.Context, string, string) (bool, error)
@@ -42,6 +43,13 @@ func (p *RealtimeProjector) SetDMEligibilityChecker(checker func(context.Context
 	p.dmEligible = checker
 }
 
+// SetReadReceiptLoader supplies the authoritative read fact for a targeted
+// read event. The outbox stores the reader ID in RecipientID for this event;
+// the projector derives the sender target from the message itself.
+func (p *RealtimeProjector) SetReadReceiptLoader(loader func(context.Context, uuid.UUID, uuid.UUID) (MessageRead, error)) {
+	p.readReceipt = loader
+}
+
 // ProjectMessage projects one reloaded group chat.message event through the
 // circle topic. The hub rebuilds the audience from current subscribers and
 // invokes the per-write authorizer immediately before each socket write;
@@ -49,6 +57,9 @@ func (p *RealtimeProjector) SetDMEligibilityChecker(checker func(context.Context
 func (p *RealtimeProjector) ProjectMessage(ctx context.Context, event OutboxEvent, msg Message) error {
 	if p == nil || p.hub == nil || p.membership == nil || p.tickets == nil {
 		return errors.New("chat realtime projector is not configured")
+	}
+	if event.EventType == realtime.EventChatMessageRead {
+		return p.projectRead(ctx, event, msg)
 	}
 	if event.EventType != realtime.EventChatMessage {
 		return fmt.Errorf("project chat event %q: unsupported event type", event.EventType)
@@ -78,6 +89,48 @@ func (p *RealtimeProjector) ProjectMessage(ctx context.Context, event OutboxEven
 		return fmt.Errorf("broadcast chat message: %w", err)
 	}
 	return nil
+}
+
+func (p *RealtimeProjector) projectRead(ctx context.Context, event OutboxEvent, msg Message) error {
+	if event.RecipientID == nil || p.readReceipt == nil {
+		return errors.New("project chat read event: receipt is not configured")
+	}
+	receipt, err := p.readReceipt(ctx, msg.ID, *event.RecipientID)
+	if err != nil {
+		return fmt.Errorf("load chat read receipt: %w", err)
+	}
+	eventID := event.EventID.String()
+	envelope := map[string]any{
+		"type":        realtime.EventChatMessageRead,
+		"event_id":    eventID,
+		"occurred_at": receipt.ReadAt.UTC().Format(time.RFC3339Nano),
+		"payload": map[string]any{
+			"message_id": msg.ID.String(),
+			"reader_id":  receipt.UserID.String(),
+			"read_at":    receipt.ReadAt.UTC().Format(time.RFC3339Nano),
+		},
+	}
+	delivery := realtime.AuthorizedDelivery{EventID: eventID, Payload: envelope, Authorize: p.authorizeReadDelivery(msg)}
+	if err := p.hub.SendToUsers(ctx, []string{msg.SenderID.String()}, delivery); err != nil {
+		return fmt.Errorf("send chat read event: %w", err)
+	}
+	return nil
+}
+
+func (p *RealtimeProjector) authorizeReadDelivery(msg Message) realtime.DeliveryAuthorizer {
+	if msg.CircleID != nil {
+		return p.authorizeCircleDelivery(*msg.CircleID, msg.SentAt)
+	}
+	return func(ctx context.Context, connection realtime.ConnectionIdentity) (bool, error) {
+		if p.dmEligible == nil || connection.UserID != msg.SenderID.String() {
+			return false, nil
+		}
+		allowed, err := p.authorizeSession(ctx, connection)
+		if err != nil || !allowed {
+			return allowed, err
+		}
+		return p.dmEligible(ctx, msg.SenderID, *msg.DMRecipientID)
+	}
 }
 
 func (p *RealtimeProjector) projectDirectMessage(ctx context.Context, event OutboxEvent, msg Message) error {
@@ -122,6 +175,40 @@ func (p *RealtimeProjector) authorizeSession(ctx context.Context, connection rea
 		return false, nil
 	}
 	return p.sessionValid(ctx, ticket.SessionID, connection.UserID)
+}
+
+func (p *RealtimeProjector) authorizeTypingCircle(circleID uuid.UUID) realtime.DeliveryAuthorizer {
+	return func(ctx context.Context, connection realtime.ConnectionIdentity) (bool, error) {
+		allowed, err := p.authorizeSession(ctx, connection)
+		if err != nil || !allowed {
+			return allowed, err
+		}
+		circle, err := p.membership.FindCircleByID(ctx, circleID.String())
+		if errorsIsCircleNotFound(err) || (err == nil && circle.IsArchived) {
+			return false, nil
+		}
+		if err != nil {
+			return false, fmt.Errorf("reauthorize typing circle: %w", err)
+		}
+		return p.membership.IsMember(ctx, circleID.String(), connection.UserID)
+	}
+}
+
+func (p *RealtimeProjector) authorizeTypingDirect(peerID uuid.UUID) realtime.DeliveryAuthorizer {
+	return func(ctx context.Context, connection realtime.ConnectionIdentity) (bool, error) {
+		if p.dmEligible == nil {
+			return false, nil
+		}
+		allowed, err := p.authorizeSession(ctx, connection)
+		if err != nil || !allowed {
+			return allowed, err
+		}
+		userID, err := uuid.Parse(connection.UserID)
+		if err != nil {
+			return false, nil
+		}
+		return p.dmEligible(ctx, userID, peerID)
+	}
 }
 
 // authorizeCircleDelivery builds the per-write authorizer for one circle: the

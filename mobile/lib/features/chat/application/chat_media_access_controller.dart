@@ -40,7 +40,9 @@ enum ChatMediaAccessPhase {
 
 class ChatMediaAccessState {
   const ChatMediaAccessState(
-      {this.phase = ChatMediaAccessPhase.idle, this.access, this.downloadedPath});
+      {this.phase = ChatMediaAccessPhase.idle,
+      this.access,
+      this.downloadedPath});
   final ChatMediaAccessPhase phase;
   final ChatMediaAccess? access;
 

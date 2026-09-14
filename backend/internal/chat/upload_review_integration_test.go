@@ -49,6 +49,9 @@ func TestMediaReplayRejectsChangedEnvelope(t *testing.T) {
 	user := seedUser(t, repo, "replay")
 	circle := seedCircle(t, repo, "original", user)
 	other := seedCircle(t, repo, "other", user)
+	joinedAt := time.Now().UTC().Add(-time.Minute)
+	seedMember(t, repo, circle, user, "teacher", joinedAt)
+	seedMember(t, repo, other, user, "teacher", joinedAt)
 	upload, err := repo.InsertUpload(context.Background(), Upload{UploaderID: user, AuthorizationCircleID: circle, ObjectKey: "chat/" + uuid.NewString(), MIMEType: "image/png", OriginalFileName: "image.png", SizeBytes: 20})
 	if err != nil {
 		t.Fatal(err)

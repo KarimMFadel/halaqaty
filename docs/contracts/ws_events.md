@@ -493,7 +493,7 @@ Broadcast to all session participants.
 
 F-004 reuses this authenticated socket and the authorized `circle.{circle_id}` topics; LiveKit remains audio-only. Every durable chat event includes `event_id` and `occurred_at`. Delivery is at least once, and clients reconcile authoritative state through the REST chat endpoints. F-004 emits no Firebase/FCM trigger; F-008 owns all background and closed-app notifications.
 
-**Emission status:** `chat.message` is implemented and live. `chat.message_deleted`, `chat.message_read`, and `chat.typing` (plus the `cmd.chat.typing` command) are contract targets for F-004 Phases 8/10 and are **not yet emitted by the current backend**; clients must treat them as unknown events and reconcile through REST until they ship.
+**Emission status:** `chat.message`, `chat.message_read`, and best-effort `chat.typing` are implemented and live; `cmd.chat.typing` is accepted by the backend. `chat.message_deleted` remains a contract target and is not emitted yet, so clients reconcile deletion through REST until it ships.
 
 ### `chat.message` (Server → Client)
 
@@ -560,6 +560,10 @@ Targeted to the message sender after the read fact is stored idempotently.
 ---
 
 ### `chat.typing` (Server → Client)
+
+For a direct indicator, `dm_peer_id` is receiver-relative: it equals
+`user_id` (the typing peer), not the receiving user's ID. In the client
+command, `dm_peer_id` instead identifies the intended recipient.
 
 ```json
 {

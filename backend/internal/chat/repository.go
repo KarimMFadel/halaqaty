@@ -187,9 +187,9 @@ func (t *Tx) LockVisibleGroupMessageForRead(ctx context.Context, circleID, reade
 
 // LockEligibleDirectMessageForRead returns the sender of one visible direct
 // message while rechecking the reader's current qualifying relationship.
-func (t *Tx) LockEligibleDirectMessageForRead(ctx context.Context, readerID, messageID uuid.UUID) (uuid.UUID, error) {
+func (t *Tx) LockEligibleDirectMessageForRead(ctx context.Context, readerID, peerID, messageID uuid.UUID) (uuid.UUID, error) {
 	var senderID uuid.UUID
-	err := t.tx.QueryRow(ctx, lockEligibleDirectMessageForReadQuery, readerID, messageID).Scan(&senderID)
+	err := t.tx.QueryRow(ctx, lockEligibleDirectMessageForReadQuery, readerID, peerID, messageID).Scan(&senderID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, ErrDMNotEligible
 	}
@@ -217,6 +217,59 @@ func (t *Tx) InsertMessageRead(ctx context.Context, messageID, userID uuid.UUID)
 		return false, fmt.Errorf("insert chat read receipt: %w", err)
 	}
 	return tag.RowsAffected() == 1, nil
+}
+
+// FindMessageRead loads one authoritative read fact for realtime projection.
+func (r *Repository) FindMessageRead(ctx context.Context, messageID, userID uuid.UUID) (MessageRead, error) {
+	var read MessageRead
+	if err := r.pool.QueryRow(ctx, findMessageReadQuery, messageID, userID).Scan(&read.MessageID, &read.UserID, &read.ReadAt); err != nil {
+		return MessageRead{}, fmt.Errorf("load chat read receipt: %w", err)
+	}
+	return read, nil
+}
+
+// LoadSenderReadReceipts returns only currently authorized readers for a
+// sender-owned message. Callers pass only messages already visible to the
+// current viewer, so the query never creates a new enumeration surface.
+func (r *Repository) LoadSenderReadReceipts(ctx context.Context, message Message) ([]MessageRead, error) {
+	if message.CircleID == nil && message.DMRecipientID == nil {
+		return nil, ErrInvalidContext
+	}
+	query := groupMessageReadReceiptsQuery
+	if message.DMRecipientID != nil {
+		query = directMessageReadReceiptsQuery
+	}
+	rows, err := r.pool.Query(ctx, query, message.ID, message.SenderID)
+	if err != nil {
+		return nil, fmt.Errorf("load chat read receipts: %w", err)
+	}
+	defer rows.Close()
+	receipts := []MessageRead{}
+	for rows.Next() {
+		var receipt MessageRead
+		if err := rows.Scan(&receipt.MessageID, &receipt.UserID, &receipt.ReadAt); err != nil {
+			return nil, fmt.Errorf("scan chat read receipt: %w", err)
+		}
+		receipts = append(receipts, receipt)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate chat read receipts: %w", err)
+	}
+	return receipts, nil
+}
+
+func (r *Repository) hydrateSenderReadReceipts(ctx context.Context, viewerID uuid.UUID, messages []Message) error {
+	for i := range messages {
+		if messages[i].SenderID != viewerID {
+			continue
+		}
+		receipts, err := r.LoadSenderReadReceipts(ctx, messages[i])
+		if err != nil {
+			return err
+		}
+		messages[i].ReadReceipts = receipts
+	}
+	return nil
 }
 
 // LockQualifyingDMCircle locks one qualifying circle and its pair memberships

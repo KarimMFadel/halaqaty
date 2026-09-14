@@ -112,6 +112,7 @@ type Message struct {
 	State         MessageState
 	SentAt        time.Time
 	DeletedAt     *time.Time
+	ReadReceipts  []MessageRead
 }
 
 // Upload is the persistence-oriented private chat attachment value.

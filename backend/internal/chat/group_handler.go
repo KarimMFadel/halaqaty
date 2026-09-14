@@ -99,18 +99,24 @@ func (r sendMessageRequest) validateTextSend() (field, message string, ok bool) 
 // identifiers, content, timestamps, and currently authorized media links.
 // Object keys, tokens, and session identifiers are never exposed.
 type messageResponse struct {
-	ID                   string `json:"id"`
-	CircleID             string `json:"circle_id,omitempty"`
-	DMRecipientID        string `json:"dm_peer_id,omitempty"`
-	SenderID             string `json:"sender_id"`
-	MessageType          string `json:"message_type"`
-	Content              string `json:"content,omitempty"`
-	SentAt               string `json:"sent_at"`
-	DeliveryStatus       string `json:"delivery_status"`
-	MediaURL             string `json:"media_url,omitempty"`
-	MediaURLExpiresAt    string `json:"media_url_expires_at,omitempty"`
-	FileName             string `json:"file_name,omitempty"`
-	VoiceDurationSeconds int    `json:"voice_duration_seconds,omitempty"`
+	ID                   string                `json:"id"`
+	CircleID             string                `json:"circle_id,omitempty"`
+	DMRecipientID        string                `json:"dm_peer_id,omitempty"`
+	SenderID             string                `json:"sender_id"`
+	MessageType          string                `json:"message_type"`
+	Content              string                `json:"content,omitempty"`
+	SentAt               string                `json:"sent_at"`
+	DeliveryStatus       string                `json:"delivery_status"`
+	MediaURL             string                `json:"media_url,omitempty"`
+	MediaURLExpiresAt    string                `json:"media_url_expires_at,omitempty"`
+	FileName             string                `json:"file_name,omitempty"`
+	VoiceDurationSeconds int                   `json:"voice_duration_seconds,omitempty"`
+	ReadReceipts         []readReceiptResponse `json:"read_receipts,omitempty"`
+}
+
+type readReceiptResponse struct {
+	ReaderID string `json:"reader_id"`
+	ReadAt   string `json:"read_at"`
 }
 
 // newMessageResponse projects one durable message. Delivery state is
@@ -131,12 +137,31 @@ func newMessageResponse(msg Message) messageResponse {
 	if msg.DMRecipientID != nil {
 		response.DMRecipientID = msg.DMRecipientID.String()
 	}
+	if len(msg.ReadReceipts) > 0 {
+		response.DeliveryStatus = string(DeliveryStatusRead)
+		response.ReadReceipts = make([]readReceiptResponse, 0, len(msg.ReadReceipts))
+		for _, receipt := range msg.ReadReceipts {
+			response.ReadReceipts = append(response.ReadReceipts, readReceiptResponse{
+				ReaderID: receipt.UserID.String(),
+				ReadAt:   receipt.ReadAt.UTC().Format(time.RFC3339Nano),
+			})
+		}
+	}
 	return response
+}
+
+// newMessageResponseForViewer excludes sender-only receipt details before a
+// durable message is projected to another authorized viewer.
+func newMessageResponseForViewer(msg Message, viewerID uuid.UUID) messageResponse {
+	if viewerID != msg.SenderID {
+		msg.ReadReceipts = nil
+	}
+	return newMessageResponse(msg)
 }
 
 // projectMessage adds freshly authorized media only to REST media responses.
 func (h *GroupHandler) projectMessage(ctx context.Context, viewerID uuid.UUID, msg Message) (messageResponse, error) {
-	response := newMessageResponse(msg)
+	response := newMessageResponseForViewer(msg, viewerID)
 	if msg.Type == MessageTypeText {
 		return response, nil
 	}

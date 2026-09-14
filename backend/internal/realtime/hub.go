@@ -41,6 +41,24 @@ type SessionSnapshotProvider func(context.Context, string, string) (map[string]a
 // deduplication ID plus an already-redacted event envelope.
 type SessionCommandHandler func(context.Context, string, string, string) (string, map[string]any, error)
 
+// AuthorizationError lets a domain command preserve its cause while the hub
+// projects its canonical authorization-denial code without importing domains.
+type AuthorizationError struct{ Err error }
+
+// Error implements error.
+func (e AuthorizationError) Error() string { return e.Err.Error() }
+
+// Unwrap exposes the domain denial sentinel to callers.
+func (e AuthorizationError) Unwrap() error { return e.Err }
+
+// NewAuthorizationError marks one command failure as an authorization denial.
+func NewAuthorizationError(err error) error { return AuthorizationError{Err: err} }
+
+func isAuthorizationError(err error) bool {
+	var authorizationError AuthorizationError
+	return errors.As(err, &authorizationError)
+}
+
 // Hub is the authenticated, generic WebSocket transport. Domain handlers
 // publish already-redacted events through Broadcast; the hub owns topic
 // authorization, connection limits, heartbeats, and delivery deduplication.
@@ -227,8 +245,17 @@ func (h *Hub) handleChatCommand(ctx context.Context, client *hubClient, requestI
 		Payload:    payload,
 	}
 	if err := h.chat(ctx, command); err != nil {
-		writeRealtimeError(client, realtimeErrorInvalid, "chat command rejected")
+		writeRealtimeError(client, chatCommandErrorCode(err), "chat command rejected")
 	}
+}
+
+// chatCommandErrorCode preserves the realtime package's transport boundary:
+// chat owns its sentinels, while the hub owns canonical wire error codes.
+func chatCommandErrorCode(err error) string {
+	if isAuthorizationError(err) {
+		return realtimeErrorUnauthorized
+	}
+	return realtimeErrorInvalid
 }
 
 func (h *Hub) handleCommand(ctx context.Context, client *hubClient, command string, payload map[string]any) {

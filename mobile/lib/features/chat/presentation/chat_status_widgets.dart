@@ -22,6 +22,7 @@ class ChatDeliveryStatusView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Semantics(
+        container: true,
         label: _label,
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(_icon, size: 14),

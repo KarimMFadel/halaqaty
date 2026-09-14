@@ -50,8 +50,7 @@ void main() {
   test('a 429 with Retry-After replaces the next delay, capped at 30s',
       () async {
     final delays = <Duration>[];
-    final api = _DeliveryApi(failuresBeforeSuccess: 2)
-      ..rateLimited = true;
+    final api = _DeliveryApi(failuresBeforeSuccess: 2)..rateLimited = true;
     final controller = GroupChatController(
       api,
       _credentials,
@@ -98,8 +97,8 @@ void main() {
     );
     await restored.open('circle');
     await _until(() => restored.state.messages.isNotEmpty);
-    final pending =
-        restored.state.messages.singleWhere((m) => m.content == 'offline draft');
+    final pending = restored.state.messages
+        .singleWhere((m) => m.content == 'offline draft');
     expect(pending.senderId, 'user');
     expect(pending.deliveryStatus, ChatDeliveryStatus.pending);
   });

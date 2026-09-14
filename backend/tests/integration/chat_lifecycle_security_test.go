@@ -165,11 +165,13 @@ func TestChatLifecycleSecurity_RemovalRejoinAndArchive(t *testing.T) {
 		t.Fatalf("archived upload error=%v, want ErrCircleArchived", err)
 	}
 
-	typingHub := realtime.NewHub(realtime.NewTicketService(env.circleRepo), nil)
-	typing := chat.NewTypingCommandHandler(env.circleRepo, typingHub)
+	typingTickets := realtime.NewTicketService(env.circleRepo)
+	typingHub := realtime.NewHub(typingTickets, nil)
+	typingProjector := chat.NewRealtimeProjector(env.circleRepo, typingHub, typingTickets, func(context.Context, string, string) (bool, error) { return true, nil })
+	typing := chat.NewTypingCommandHandler(typingProjector)
 	if err := typing(ctx, realtime.ChatCommand{
 		Connection: realtime.ConnectionIdentity{UserID: studentID.String()},
-		RequestID:  "archived-typing",
+		RequestID:  uuid.NewString(),
 		Payload: map[string]any{
 			"circle_id": circleID.String(),
 			"is_typing": true,

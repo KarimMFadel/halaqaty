@@ -18,65 +18,109 @@ import (
 // PresenceServiceAPI is the transport seam for durable chat presence facts.
 type PresenceServiceAPI interface {
 	MarkGroupMessageRead(ctx context.Context, readerID, circleID, messageID uuid.UUID) error
-	MarkDirectMessageRead(ctx context.Context, readerID, messageID uuid.UUID) error
+	MarkDirectMessageRead(ctx context.Context, readerID, peerID, messageID uuid.UUID) error
 }
 
-// NewTypingCommandHandler creates the non-persistent group typing command
-// handler. Authorization is checked before broadcast and again for each
-// subscribed connection; the sender never receives their own indicator.
-func NewTypingCommandHandler(membership MembershipReader, hub *realtime.Hub) realtime.ChatCommandHandler {
+// NewTypingCommandHandler creates the non-persistent typing command handler.
+// The projector supplies the same immediate ticket, backend-session, and
+// current conversation authorization used for durable realtime delivery.
+func NewTypingCommandHandler(projector *RealtimeProjector) realtime.ChatCommandHandler {
 	return func(ctx context.Context, command realtime.ChatCommand) error {
-		circleRaw, ok := command.Payload[httpconst.FieldCircleID].(string)
-		if !ok || command.Payload["dm_peer_id"] != nil {
+		if projector == nil || projector.hub == nil {
 			return ErrInvalidContext
 		}
-		circleID, err := uuid.Parse(circleRaw)
-		if err != nil || membership == nil || hub == nil {
+		if _, err := uuid.Parse(command.RequestID); err != nil {
 			return ErrInvalidContext
-		}
-		circle, err := membership.FindCircleByID(ctx, circleID.String())
-		if err != nil || circle.IsArchived {
-			return ErrCircleNotVisible
-		}
-		member, err := membership.IsMember(ctx, circleID.String(), command.Connection.UserID)
-		if err != nil || !member {
-			return ErrCircleNotVisible
 		}
 		isTyping, ok := command.Payload["is_typing"].(bool)
 		if !ok {
 			return ErrInvalidContext
 		}
-		topic, err := realtime.NewCircleTopic(circleID.String())
-		if err != nil {
-			return fmt.Errorf("build typing topic: %w", err)
+		circleRaw, hasCircle := command.Payload[httpconst.FieldCircleID].(string)
+		peerRaw, hasPeer := command.Payload["dm_peer_id"].(string)
+		if hasCircle == hasPeer {
+			return ErrInvalidContext
 		}
-		eventID := command.RequestID
-		if eventID == "" {
-			eventID = uuid.NewString()
+		var err error
+		if hasCircle {
+			err = projector.broadcastGroupTyping(ctx, command, circleRaw, isTyping)
+		} else {
+			err = projector.broadcastDirectTyping(ctx, command, peerRaw, isTyping)
 		}
-		expiresAt := time.Now().UTC().Add(5 * time.Second)
-		payload := map[string]any{
-			"type":        realtime.EventChatTyping,
-			"event_id":    eventID,
-			"occurred_at": time.Now().UTC().Format(time.RFC3339Nano),
-			"payload": map[string]any{
-				"user_id":    command.Connection.UserID,
-				"circle_id":  circleID.String(),
-				"is_typing":  isTyping,
-				"expires_at": expiresAt.Format(time.RFC3339Nano),
-			},
+		if errors.Is(err, ErrCircleNotVisible) || errors.Is(err, ErrDMNotEligible) {
+			return realtime.NewAuthorizationError(err)
 		}
-		return hub.BroadcastAuthorized(ctx, topic, realtime.AuthorizedDelivery{
-			EventID: eventID,
-			Payload: payload,
-			Authorize: func(ctx context.Context, connection realtime.ConnectionIdentity) (bool, error) {
-				if connection.UserID == command.Connection.UserID {
-					return false, nil
-				}
-				return membership.IsMember(ctx, circleID.String(), connection.UserID)
-			},
-		})
+		return err
 	}
+}
+
+func (p *RealtimeProjector) broadcastGroupTyping(ctx context.Context, command realtime.ChatCommand, circleRaw string, isTyping bool) error {
+	circleID, err := uuid.Parse(circleRaw)
+	if err != nil || p.membership == nil {
+		return ErrInvalidContext
+	}
+	circle, err := p.membership.FindCircleByID(ctx, circleID.String())
+	if err != nil || circle.IsArchived {
+		return ErrCircleNotVisible
+	}
+	authorize := p.authorizeTypingCircle(circleID)
+	allowed, err := authorize(ctx, command.Connection)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return ErrCircleNotVisible
+	}
+	topic, err := realtime.NewCircleTopic(circleID.String())
+	if err != nil {
+		return fmt.Errorf("build typing topic: %w", err)
+	}
+	return p.hub.BroadcastAuthorized(ctx, topic, realtime.AuthorizedDelivery{EventID: typingEventID(command), Payload: typingPayload(command, isTyping, circleID.String(), ""), Authorize: func(ctx context.Context, connection realtime.ConnectionIdentity) (bool, error) {
+		if connection.UserID == command.Connection.UserID {
+			return false, nil
+		}
+		return authorize(ctx, connection)
+	}})
+}
+
+func (p *RealtimeProjector) broadcastDirectTyping(ctx context.Context, command realtime.ChatCommand, peerRaw string, isTyping bool) error {
+	peerID, err := uuid.Parse(peerRaw)
+	if err != nil {
+		return ErrInvalidContext
+	}
+	authorize := p.authorizeTypingDirect(peerID)
+	allowed, err := authorize(ctx, command.Connection)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return ErrDMNotEligible
+	}
+	return p.hub.SendToUsers(ctx, []string{peerID.String()}, realtime.AuthorizedDelivery{EventID: typingEventID(command), Payload: typingPayload(command, isTyping, "", command.Connection.UserID), Authorize: func(ctx context.Context, connection realtime.ConnectionIdentity) (bool, error) {
+		if connection.UserID == command.Connection.UserID {
+			return false, nil
+		}
+		return p.authorizeTypingDirect(uuid.MustParse(command.Connection.UserID))(ctx, connection)
+	}})
+}
+
+func typingEventID(command realtime.ChatCommand) string {
+	if command.RequestID != "" {
+		return command.RequestID
+	}
+	return uuid.NewString()
+}
+
+func typingPayload(command realtime.ChatCommand, isTyping bool, circleID, peerID string) map[string]any {
+	now := time.Now().UTC()
+	payload := map[string]any{"user_id": command.Connection.UserID, "circle_id": nil, "dm_peer_id": nil, "is_typing": isTyping, "expires_at": now.Add(5 * time.Second).Format(time.RFC3339Nano)}
+	if circleID != "" {
+		payload["circle_id"] = circleID
+	}
+	if peerID != "" {
+		payload["dm_peer_id"] = peerID
+	}
+	return map[string]any{"type": realtime.EventChatTyping, "event_id": typingEventID(command), "occurred_at": now.Format(time.RFC3339Nano), "payload": payload}
 }
 
 // MarkDirectMessageRead records the caller's read fact for an eligible DM.
@@ -99,7 +143,8 @@ func (h *PresenceHandler) MarkDirectMessageRead(w http.ResponseWriter, r *http.R
 		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
 		return
 	}
-	if _, err := uuid.Parse(r.PathValue("userId")); err != nil {
+	peerID, err := uuid.Parse(r.PathValue("userId"))
+	if err != nil {
 		phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{httpconst.FieldUserID: httpconst.ErrorMessageChatDMPeerIDInvalid})
 		return
 	}
@@ -108,7 +153,7 @@ func (h *PresenceHandler) MarkDirectMessageRead(w http.ResponseWriter, r *http.R
 		phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{httpconst.FieldMessageID: httpconst.ErrorMessageChatMessageIDInvalid})
 		return
 	}
-	if err := h.service.MarkDirectMessageRead(r.Context(), readerID, messageID); err != nil {
+	if err := h.service.MarkDirectMessageRead(r.Context(), readerID, peerID, messageID); err != nil {
 		if errors.Is(err, ErrDMNotEligible) {
 			phttp.WriteError(w, httpconst.ErrorCodeForbidden, httpconst.ErrorMessageForbidden, http.StatusForbidden)
 			return

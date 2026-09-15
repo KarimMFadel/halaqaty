@@ -140,10 +140,19 @@ provider registry, job framework, or new lifecycle end reason.
 
 ---
 
+## 11. Provider Replaceability
+
+| ID | Question | Decision | Rationale |
+|---|---|---|---|
+| PROVIDER-BOUNDARY | How should storage and live audio remain replaceable? | **F-018: targeted provider boundaries, current providers only.** Secure chat attachments currently use MinIO; live audio currently uses LiveKit. Replacement is a development/deployment-time concern. Keep application contracts independent of provider SDKs, preserve deletion/recovery and configuration behavior, and retain direct injection of one adapter per capability. No new vendor, runtime registry, settings UI, database migration, or live failover is included. | Approved by Karim on 2026-09-16 after reviewing the plan with Architect and Tech Lead. Spec-Kit owns the feature artifacts; Superpowers supplies implementation discipline. Current constitutional provider choices and ADR-015's future replacement gate remain in force. |
+
+---
+
 ## Amendment Log
 
 | Date | Decision ID | Old Value | New Value | Rationale | ADR |
 |---|---|---|---|---|---|
+| 2026-09-16 | PROVIDER-BOUNDARY / F-018 | MinIO SDK-shaped storage seam; LiveKit SDK construction outside its adapter | Approved provider adapter boundary refactor preserving current providers, public behavior, and existing safety guarantees | Makes future approved replacements local to their integrations. Spec-Kit plus Superpowers workflow approved by Karim. | ADR-023 |
 | 2026-06-30 | GRADE-ENUM | 4-grade: `excellent/good/needs_improvement/repeat` (ARCHITECTURE.md) / 6-grade: `excellent/very_good/good/acceptable/needs_review/repeat` (FEATURES.md) | **5-grade canonical:** `excellent/good/acceptable/needs_review/repeat` | Resolved mismatch between ARCHITECTURE.md (4-grade) and FEATURES.md F-003 (6-grade). Merged `very_good` into `good`; renamed `needs_improvement` → `needs_review` for clarity. Approved by Karim 2026-06-30. | ADR-013 |
 | 2026-06-30 | OQ-027 | Open | Fixed globally — same Surah status threshold rules for all circles | Simpler to reason about; teacher customisation deferred | — |
 | 2026-06-30 | OQ-028 | Open | "Practiced" = only `completed` turns count; `skipped`/`opted_out` do NOT | Semantic correctness; a skipped turn is not a recitation event | — |

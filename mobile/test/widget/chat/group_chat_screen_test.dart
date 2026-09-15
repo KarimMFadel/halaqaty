@@ -686,6 +686,7 @@ class _FakeChatApi extends ChatApiClient {
     required String circleId,
     required String content,
     required String idempotencyKey,
+    String? replyToId,
   }) async {
     sentIdempotencyKeys.add(idempotencyKey);
     sentContents.add(content);

@@ -17,7 +17,24 @@ Every server event uses:
 
 ## `chat.message` (server to client)
 
-Emitted after durable acceptance. A group event is delivered only to currently authorized subscribers of `circle.{circle_id}`. A direct event is sent to the eligible pair's authenticated user connections without selecting or disclosing one qualifying circle. Immediately before every write, the server revalidates that connection's backend session and current group/DM authorization from PostgreSQL. The payload is the canonical REST `Message` projection and therefore uses only server-authoritative `delivered` or `read`; the client-local `sent` state ends when REST acceptance is confirmed.
+Emitted after durable acceptance. A group event is delivered only to currently authorized subscribers of `circle.{circle_id}`. A direct event is sent to the eligible pair's authenticated user connections without selecting or disclosing one qualifying circle. Immediately before every write, the server revalidates that connection's backend session and current group/DM authorization from PostgreSQL. The payload is the canonical redacted WebSocket projection: identifiers, message type, server timestamps, server-authoritative delivery state, and `content` for text messages only. It never includes media URLs, `read_receipts`, or sender names; the client-local `sent` state ends when REST acceptance is confirmed.
+
+```json
+{
+  "type": "chat.message",
+  "event_id": "uuid",
+  "occurred_at": "2026-09-03T12:00:00Z",
+  "payload": {
+    "id": "uuid",
+    "circle_id": "uuid",
+    "sender_id": "uuid",
+    "message_type": "text",
+    "content": "السلام عليكم",
+    "sent_at": "2026-09-03T12:00:00Z",
+    "delivery_status": "delivered"
+  }
+}
+```
 
 ## `chat.message_deleted` (server to client)
 

@@ -61,5 +61,10 @@ SELECT ` + messageColumns + `
 FROM messages m
 WHERE m.id = $1::uuid AND m.deleted_at IS NULL`
 
+const findDeletedMessageForProjectionQuery = `
+SELECT ` + messageColumns + `
+FROM messages m
+WHERE m.id = $1::uuid AND m.deleted_at IS NOT NULL`
+
 const releaseExpiredStagedUploadQuery = `UPDATE chat_uploads SET state = 'staged', updated_at = NOW() WHERE id = $1::uuid AND state = 'revoked'`
 const finalizeExpiredStagedUploadQuery = `DELETE FROM chat_uploads WHERE id = $1::uuid AND state = 'revoked'`

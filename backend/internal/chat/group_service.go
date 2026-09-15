@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -81,6 +82,9 @@ func (s *GroupService) History(ctx context.Context, viewerID, circleID uuid.UUID
 	if err := s.repo.hydrateSenderReadReceipts(ctx, viewerID, msgs); err != nil {
 		return nil, fmt.Errorf("load chat history read receipts: %w", err)
 	}
+	if err := s.repo.hydrateReplyPreviews(ctx, viewerID, msgs); err != nil {
+		return nil, fmt.Errorf("load chat history reply previews: %w", err)
+	}
 	outcome := metrics.ChatOutcomeAccepted
 	if len(msgs) == 0 {
 		outcome = metrics.ChatOutcomeNoResults
@@ -109,6 +113,9 @@ func (s *GroupService) Search(ctx context.Context, viewerID, circleID uuid.UUID,
 	}
 	if err := s.repo.hydrateSenderReadReceipts(ctx, viewerID, messages); err != nil {
 		return nil, fmt.Errorf("load chat search read receipts: %w", err)
+	}
+	if err := s.repo.hydrateReplyPreviews(ctx, viewerID, messages); err != nil {
+		return nil, fmt.Errorf("load chat search reply previews: %w", err)
 	}
 	outcome := metrics.ChatOutcomeAccepted
 	if len(messages) == 0 {
@@ -168,6 +175,149 @@ func (s *GroupService) SendText(ctx context.Context, senderID, circleID uuid.UUI
 		s.audit.LogChat(ctx, logging.ChatMessageAuditEvent(senderID.String(), circleID.String(), sent.ID.String(), logging.ChatOutcomeAccepted))
 	}
 	return sent, nil
+}
+
+// ReplyText sends a group text reply only after locking an active target in
+// the sender's current membership period.
+func (s *GroupService) ReplyText(ctx context.Context, senderID, circleID, replyToID uuid.UUID, content, idempotencyKey string) (Message, error) {
+	trimmed, err := ValidateText(content)
+	if err != nil {
+		return Message{}, err
+	}
+	if err := ValidateIdempotencyKey(idempotencyKey); err != nil {
+		return Message{}, err
+	}
+	if err := s.authorizeActiveMember(ctx, senderID, circleID); err != nil {
+		return Message{}, err
+	}
+	var reply Message
+	err = s.repo.WithTx(ctx, func(tx *Tx) error {
+		if err := tx.LockActiveCircleMember(ctx, circleID, senderID); err != nil {
+			return err
+		}
+		input := MessageInput{SenderID: senderID, CircleID: &circleID, Type: MessageTypeText, Content: trimmed, ReplyToID: &replyToID, IdempotencyKey: idempotencyKey}
+		existing, found, err := tx.FindMessageByIdempotency(ctx, senderID, idempotencyKey)
+		if err != nil {
+			return err
+		}
+		if found {
+			if !matchesMessageInput(existing, input) {
+				return ErrIdempotencyConflict
+			}
+			reply = existing
+			return nil
+		}
+		target, err := tx.LockVisibleGroupReplyTarget(ctx, circleID, senderID, replyToID)
+		if err != nil {
+			return err
+		}
+		message, inserted, err := tx.InsertMessage(ctx, input)
+		if err != nil {
+			return err
+		}
+		reply = message
+		reply.ReplyPreview = safeReplyPreview(target)
+		if !inserted {
+			return nil
+		}
+		return tx.InsertOutboxEvent(ctx, message.ID, realtime.EventChatMessage, nil)
+	})
+	if err != nil {
+		return Message{}, fmt.Errorf("reply to group message: %w", err)
+	}
+	messages := []Message{reply}
+	if err := s.repo.hydrateReplyPreviews(ctx, senderID, messages); err != nil {
+		return Message{}, fmt.Errorf("hydrate group reply preview: %w", err)
+	}
+	reply = messages[0]
+	return reply, nil
+}
+
+// ListPinned returns the current member's visible pinned group messages.
+func (s *GroupService) ListPinned(ctx context.Context, viewerID, circleID uuid.UUID) ([]Message, error) {
+	if err := authorizeRetainedCircleMember(ctx, s.membership, viewerID, circleID, func(reason metrics.ChatDenial) {
+		s.recordDenial(ctx, viewerID, circleID, reason)
+	}); err != nil {
+		return nil, err
+	}
+	messages, err := s.repo.ListPinnedMessages(ctx, circleID, viewerID)
+	if err != nil {
+		return nil, fmt.Errorf("list pinned chat messages: %w", err)
+	}
+	if err := s.repo.hydrateReplyPreviews(ctx, viewerID, messages); err != nil {
+		return nil, fmt.Errorf("load pinned chat reply previews: %w", err)
+	}
+	return messages, nil
+}
+
+// Pin pins an eligible group message. The transaction's circle lock prevents
+// concurrent callers from exceeding the five-message limit.
+func (s *GroupService) Pin(ctx context.Context, actorID, circleID, messageID uuid.UUID) (bool, error) {
+	return s.setPinned(ctx, actorID, circleID, messageID, true)
+}
+
+// Unpin removes an eligible group message pin under the same circle lock.
+func (s *GroupService) Unpin(ctx context.Context, actorID, circleID, messageID uuid.UUID) (bool, error) {
+	return s.setPinned(ctx, actorID, circleID, messageID, false)
+}
+
+func (s *GroupService) setPinned(ctx context.Context, actorID, circleID, messageID uuid.UUID, pin bool) (bool, error) {
+	if err := s.authorizeActiveMember(ctx, actorID, circleID); err != nil {
+		return false, err
+	}
+	changed := false
+	err := s.repo.WithTx(ctx, func(tx *Tx) error {
+		role, err := tx.LockCirclePinActor(ctx, circleID, actorID)
+		if err != nil {
+			return err
+		}
+		if role != rbac.RoleTeacher && role != rbac.RoleSupervisor {
+			return rbac.ErrForbidden
+		}
+		if pin {
+			alreadyPinned, err := tx.LockVisibleGroupMessagePinState(ctx, circleID, actorID, messageID)
+			if err != nil {
+				return err
+			}
+			if alreadyPinned {
+				return nil
+			}
+			count, err := tx.CountPinnedMessages(ctx, circleID)
+			if err != nil {
+				return err
+			}
+			if count >= 5 {
+				return ErrPinLimit
+			}
+			changed, err = tx.PinVisibleGroupMessage(ctx, circleID, actorID, messageID)
+			return err
+		}
+		pinned, err := tx.LockVisibleGroupMessagePinState(ctx, circleID, actorID, messageID)
+		if err != nil {
+			return err
+		}
+		if !pinned {
+			return nil
+		}
+		changed, err = tx.UnpinVisibleGroupMessage(ctx, circleID, actorID, messageID)
+		return err
+	})
+	if err != nil {
+		return false, fmt.Errorf("set group message pin: %w", err)
+	}
+	return changed, nil
+}
+
+func safeReplyPreview(target Message) *ReplyPreview {
+	preview := target.Content
+	if preview == "" {
+		preview = "Attachment"
+	}
+	runes := []rune(strings.TrimSpace(preview))
+	if len(runes) > 160 {
+		runes = runes[:160]
+	}
+	return &ReplyPreview{ID: target.ID, Preview: string(runes)}
 }
 
 // authorizeActiveMember rechecks current circle state from PostgreSQL for a

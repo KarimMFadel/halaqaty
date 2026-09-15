@@ -96,6 +96,7 @@ const (
 	ErrorMessageChatReplyUnsupported       = "reply_to_id is not supported yet"
 	ErrorMessageChatLimitInvalid           = "limit must be between 1 and 100"
 	ErrorMessageChatSearchInvalid          = "q must be between 2 and 200 characters"
+	ErrorMessageChatPinLimit               = "circle has reached the maximum of five pinned messages"
 
 	// Chat media (F-004 US3). User-safe: no filenames, object keys, URLs, or
 	// identifiers appear in these strings.

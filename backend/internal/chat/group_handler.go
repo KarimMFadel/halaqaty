@@ -50,15 +50,16 @@ type GroupMediaService interface {
 // decode, delegate to the service seam, and project responses; they contain
 // no SQL and no business logic.
 type GroupHandler struct {
-	service GroupChatService
-	media   GroupMediaService
+	service   GroupChatService
+	media     GroupMediaService
+	discovery *DiscoveryHandler
 }
 
 // NewGroupHandler constructs the group chat handler over the service seam.
 // A nil service reports internal server errors, matching the unconfigured
 // handler convention of the other route families.
 func NewGroupHandler(service GroupChatService) *GroupHandler {
-	return &GroupHandler{service: service}
+	return &GroupHandler{service: service, discovery: NewDiscoveryHandler(service)}
 }
 
 // SetMediaService wires the US3 media-send seam, mirroring the optional
@@ -89,8 +90,6 @@ func (r sendMessageRequest) validateTextSend() (field, message string, ok bool) 
 		return httpconst.FieldUploadID, httpconst.ErrorMessageChatUploadIDNotAllowed, false
 	case r.MediaKey != nil && strings.TrimSpace(*r.MediaKey) != "":
 		return httpconst.FieldMediaKey, httpconst.ErrorMessageChatMediaKeyUnsupported, false
-	case r.ReplyToID != nil:
-		return httpconst.FieldReplyToID, httpconst.ErrorMessageChatReplyUnsupported, false
 	}
 	return "", "", true
 }
@@ -101,7 +100,7 @@ func (r sendMessageRequest) validateTextSend() (field, message string, ok bool) 
 type messageResponse struct {
 	ID                   string                `json:"id"`
 	CircleID             string                `json:"circle_id,omitempty"`
-	DMRecipientID        string                `json:"dm_peer_id,omitempty"`
+	DMRecipientID        string                `json:"dm_recipient_id,omitempty"`
 	SenderID             string                `json:"sender_id"`
 	MessageType          string                `json:"message_type"`
 	Content              string                `json:"content,omitempty"`
@@ -111,7 +110,17 @@ type messageResponse struct {
 	MediaURLExpiresAt    string                `json:"media_url_expires_at,omitempty"`
 	FileName             string                `json:"file_name,omitempty"`
 	VoiceDurationSeconds int                   `json:"voice_duration_seconds,omitempty"`
+	ReplyToID            string                `json:"reply_to_id,omitempty"`
+	ReplyPreview         *replyPreviewResponse `json:"reply_preview,omitempty"`
+	PinnedAt             string                `json:"pinned_at,omitempty"`
+	PinnedBy             string                `json:"pinned_by,omitempty"`
 	ReadReceipts         []readReceiptResponse `json:"read_receipts,omitempty"`
+}
+
+type replyPreviewResponse struct {
+	ID      string `json:"id"`
+	Preview string `json:"preview,omitempty"`
+	Deleted bool   `json:"deleted"`
 }
 
 type readReceiptResponse struct {
@@ -136,6 +145,18 @@ func newMessageResponse(msg Message) messageResponse {
 	}
 	if msg.DMRecipientID != nil {
 		response.DMRecipientID = msg.DMRecipientID.String()
+	}
+	if msg.ReplyToID != nil {
+		response.ReplyToID = msg.ReplyToID.String()
+	}
+	if msg.ReplyPreview != nil {
+		response.ReplyPreview = &replyPreviewResponse{ID: msg.ReplyPreview.ID.String(), Preview: msg.ReplyPreview.Preview, Deleted: msg.ReplyPreview.Deleted}
+	}
+	if msg.PinnedAt != nil {
+		response.PinnedAt = msg.PinnedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if msg.PinnedBy != nil {
+		response.PinnedBy = msg.PinnedBy.String()
 	}
 	if len(msg.ReadReceipts) > 0 {
 		response.DeliveryStatus = string(DeliveryStatusRead)
@@ -285,8 +306,16 @@ func (h *GroupHandler) SearchCircleMessages(w http.ResponseWriter, r *http.Reque
 		writeHistoryError(w, err)
 		return
 	}
-	page := paginatedMessagesResponse{Data: make([]messageResponse, 0, len(messages)), HasMore: len(messages) == limit}
+	// Keep the transport projection fail-closed even when an alternate service
+	// implementation returns mixed-context or deleted rows.
+	visible := make([]Message, 0, len(messages))
 	for _, message := range messages {
+		if message.CircleID != nil && message.State != MessageStateDeleted && message.DeletedAt == nil {
+			visible = append(visible, message)
+		}
+	}
+	page := paginatedMessagesResponse{Data: make([]messageResponse, 0, len(visible)), HasMore: len(visible) == limit}
+	for _, message := range visible {
 		response, err := h.projectMessage(r.Context(), viewerID, message)
 		if err != nil {
 			writeMediaRenewalError(w, err)
@@ -337,9 +366,25 @@ func (h *GroupHandler) SendCircleMessage(w http.ResponseWriter, r *http.Request)
 			writeFieldUnprocessable(w, field, message)
 			return
 		}
-		sent, err := h.service.SendText(r.Context(), senderID, circleID, request.Content, r.Header.Get(httpconst.HeaderIdempotencyKey))
-		if err != nil {
-			writeSendError(w, err)
+		var sent Message
+		var sendErr error
+		if request.ReplyToID != nil {
+			replyToID, parseErr := uuid.Parse(*request.ReplyToID)
+			if parseErr != nil {
+				phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{httpconst.FieldReplyToID: httpconst.ErrorMessageChatMessageIDInvalid})
+				return
+			}
+			replier, ok := h.service.(GroupReplyService)
+			if !ok {
+				writeFieldUnprocessable(w, httpconst.FieldReplyToID, httpconst.ErrorMessageChatReplyUnsupported)
+				return
+			}
+			sent, sendErr = replier.ReplyText(r.Context(), senderID, circleID, replyToID, request.Content, r.Header.Get(httpconst.HeaderIdempotencyKey))
+		} else {
+			sent, sendErr = h.service.SendText(r.Context(), senderID, circleID, request.Content, r.Header.Get(httpconst.HeaderIdempotencyKey))
+		}
+		if sendErr != nil {
+			writeSendError(w, sendErr)
 			return
 		}
 		phttp.WriteJSON(w, http.StatusCreated, newMessageResponse(sent))
@@ -449,6 +494,10 @@ func writeHistoryError(w http.ResponseWriter, err error) {
 		phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{
 			httpconst.FieldBefore: httpconst.ErrorMessageCursorInvalid,
 		})
+	case errors.Is(err, ErrInvalidSearchQuery):
+		phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{
+			httpconst.FieldQuery: httpconst.ErrorMessageChatSearchInvalid,
+		})
 	default:
 		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
 	}
@@ -473,6 +522,8 @@ func writeSendError(w http.ResponseWriter, err error) {
 		phttp.WriteError(w, httpconst.ErrorCodeForbidden, httpconst.ErrorMessageForbidden, http.StatusForbidden)
 	case errors.Is(err, ErrCircleArchived):
 		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageCircleArchived, http.StatusConflict)
+	case errors.Is(err, ErrMessageNotVisible):
+		phttp.WriteError(w, httpconst.ErrorCodeNotFound, httpconst.ErrorMessageForbidden, http.StatusNotFound)
 	default:
 		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
 	}

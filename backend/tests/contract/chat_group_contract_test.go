@@ -72,6 +72,9 @@ type chatGroupServiceStub struct {
 	sendErr      error
 	sendCalls    []chatGroupSendCall
 	committed    chat.Message
+	pinned       map[uuid.UUID]chat.Message
+	pinErr       error
+	unpinErr     error
 }
 
 func (s *chatGroupServiceStub) History(_ context.Context, viewerID, circleID uuid.UUID, before *uuid.UUID, limit int) ([]chat.Message, error) {
@@ -107,6 +110,59 @@ func (s *chatGroupServiceStub) SendText(_ context.Context, senderID, circleID uu
 		}
 	}
 	return s.committed, nil
+}
+
+func (s *chatGroupServiceStub) ListPinned(context.Context, uuid.UUID, uuid.UUID) ([]chat.Message, error) {
+	messages := make([]chat.Message, 0, len(s.pinned))
+	for _, message := range s.pinned {
+		if message.PinnedAt != nil {
+			messages = append(messages, message)
+		}
+	}
+	return messages, nil
+}
+
+func (s *chatGroupServiceStub) Pin(_ context.Context, actorID, circleID, messageID uuid.UUID) (bool, error) {
+	if s.pinErr != nil {
+		return false, s.pinErr
+	}
+	if s.pinned == nil {
+		s.pinned = make(map[uuid.UUID]chat.Message)
+	}
+	if message, ok := s.pinned[messageID]; ok && message.PinnedAt != nil {
+		return false, nil
+	}
+	pinnedCount := 0
+	for _, message := range s.pinned {
+		if message.PinnedAt != nil {
+			pinnedCount++
+		}
+	}
+	if pinnedCount >= 5 {
+		return false, chat.ErrPinLimit
+	}
+	circle := circleID
+	actor := actorID
+	now := time.Now().UTC()
+	s.pinned[messageID] = chat.Message{ID: messageID, CircleID: &circle, SenderID: actorID, Type: chat.MessageTypeText, Content: "pinned", State: chat.MessageStateActive, SentAt: now, PinnedBy: &actor, PinnedAt: &now}
+	return true, nil
+}
+
+func (s *chatGroupServiceStub) Unpin(_ context.Context, _ uuid.UUID, _ uuid.UUID, messageID uuid.UUID) (bool, error) {
+	if s.unpinErr != nil {
+		return false, s.unpinErr
+	}
+	message, ok := s.pinned[messageID]
+	if !ok {
+		return false, chat.ErrMessageNotVisible
+	}
+	if message.PinnedAt == nil {
+		return false, nil
+	}
+	message.PinnedAt = nil
+	message.PinnedBy = nil
+	s.pinned[messageID] = message
+	return true, nil
 }
 
 // chatGroupRouter wires the production router with the real auth middleware

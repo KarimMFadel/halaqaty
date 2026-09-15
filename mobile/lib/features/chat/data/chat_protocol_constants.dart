@@ -20,6 +20,12 @@ abstract final class ChatApiPaths {
 
   static String deleteDirectMessage(String userId, String messageId) =>
       '/dm/$userId/messages/$messageId';
+
+  static String pinCircleMessage(String circleId, String messageId) =>
+      '/circles/$circleId/messages/$messageId/pin';
+
+  static String pinnedCircleMessages(String circleId) =>
+      '/circles/$circleId/messages/pinned';
 }
 
 abstract final class ChatMediaApiPaths {
@@ -81,6 +87,11 @@ abstract final class ChatJsonKeys {
   static const mediaUrlExpiresAt = 'media_url_expires_at';
   static const fileName = 'file_name';
   static const voiceDurationSeconds = 'voice_duration_seconds';
+  static const replyToId = 'reply_to_id';
+  static const replyPreview = 'reply_preview';
+  static const pinnedAt = 'pinned_at';
+  static const pinnedBy = 'pinned_by';
+  static const deletedAt = 'deleted_at';
 }
 
 abstract final class ChatRealtimeTypes {

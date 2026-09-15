@@ -12,6 +12,7 @@ package chat
 // deleted_at so callers never interpret timestamps to classify visibility.
 const messageColumns = `m.id, m.circle_id, m.dm_recipient_id, m.sender_id, m.message_type, m.content,
 	m.upload_id, m.reply_to_id,
+	m.pinned_by, m.pinned_at,
 	CASE WHEN m.deleted_at IS NULL THEN 'active' ELSE 'deleted' END AS state,
 	m.sent_at, m.deleted_at`
 
@@ -76,16 +77,123 @@ ORDER BY m.sent_at DESC, m.id DESC
 
 // groupSearchPageQuery searches only retained, non-deleted group messages.
 const groupSearchPageQuery = `
+WITH tokens AS (
+  SELECT token, ordinal, ordinal = count(*) OVER () AS is_final
+  FROM regexp_split_to_table(halaqaty_normalize_arabic($3), '[^[:alnum:]ء-ي]+') WITH ORDINALITY AS t(token, ordinal)
+  WHERE token <> ''
+),
+terms AS (
+  SELECT to_tsquery('simple', string_agg(
+    CASE
+      WHEN is_final AND token ~ '^[ء-ي]' AND token !~ '^ال'
+        THEN quote_literal(token) || ':* | ' || quote_literal('ال' || token) || ':*'
+      WHEN is_final THEN quote_literal(token) || ':*'
+      ELSE quote_literal(token)
+    END,
+    ' & ' ORDER BY ordinal
+  )) AS query
+  FROM tokens
+)
 SELECT ` + messageColumns + `
 FROM messages m
 JOIN circle_members cm ON cm.circle_id = m.circle_id AND cm.user_id = $2::uuid
+CROSS JOIN terms
+LEFT JOIN LATERAL (
+  SELECT ts_rank(anchor.search_vector, terms.query) AS rank, anchor.sent_at, anchor.id
+  FROM messages anchor
+  WHERE anchor.id = $4::uuid
+) anchor ON TRUE
 WHERE m.circle_id = $1::uuid
   AND m.deleted_at IS NULL
   AND m.sent_at >= cm.joined_at
-  AND m.search_vector @@ websearch_to_tsquery('simple', halaqaty_normalize_arabic($3))
-  AND ($4::timestamptz IS NULL OR (m.sent_at, m.id) < ($4::timestamptz, $5::uuid))
-ORDER BY m.sent_at DESC, m.id DESC
-LIMIT $6`
+  AND terms.query IS NOT NULL
+  AND m.search_vector @@ terms.query
+  AND ($4::uuid IS NULL OR (ts_rank(m.search_vector, terms.query), m.sent_at, m.id) < (anchor.rank, anchor.sent_at, anchor.id))
+ORDER BY ts_rank(m.search_vector, terms.query) DESC, m.sent_at DESC, m.id DESC
+LIMIT $5`
+
+const lockVisibleGroupReplyTargetQuery = `
+SELECT ` + messageColumns + `
+FROM messages m
+JOIN circle_members cm ON cm.circle_id = m.circle_id AND cm.user_id = $2::uuid
+WHERE m.circle_id = $1::uuid AND m.id = $3::uuid
+  AND m.deleted_at IS NULL AND m.sent_at >= cm.joined_at
+FOR SHARE OF m`
+
+const lockVisibleDirectReplyTargetQuery = `
+SELECT ` + messageColumns + `
+FROM messages m
+WHERE m.id = $3::uuid AND m.deleted_at IS NULL AND m.circle_id IS NULL
+  AND ((m.sender_id = $1::uuid AND m.dm_recipient_id = $2::uuid)
+    OR (m.sender_id = $2::uuid AND m.dm_recipient_id = $1::uuid))
+FOR SHARE OF m`
+
+const listPinnedMessagesQuery = `
+SELECT ` + messageColumns + `
+FROM messages m
+JOIN circle_members cm ON cm.circle_id = m.circle_id AND cm.user_id = $2::uuid
+WHERE m.circle_id = $1::uuid AND m.is_pinned AND m.deleted_at IS NULL
+  AND m.sent_at >= cm.joined_at
+ORDER BY m.pinned_at DESC, m.id DESC
+LIMIT 5`
+
+const lockCirclePinActorQuery = `
+SELECT c.is_archived, cm.role
+FROM circles c
+JOIN circle_members cm ON cm.circle_id = c.id AND cm.user_id = $2::uuid
+WHERE c.id = $1::uuid
+FOR UPDATE OF c, cm`
+
+const countPinnedMessagesQuery = `
+SELECT COUNT(*) FROM messages WHERE circle_id = $1::uuid AND is_pinned AND deleted_at IS NULL`
+
+const lockVisibleGroupMessagePinStateQuery = `
+SELECT m.is_pinned
+FROM messages m
+JOIN circle_members cm ON cm.circle_id = m.circle_id AND cm.user_id = $2::uuid
+WHERE m.id = $3::uuid AND m.circle_id = $1::uuid AND m.deleted_at IS NULL
+  AND m.sent_at >= cm.joined_at
+FOR UPDATE OF m`
+
+const findReplyPreviewQuery = `
+SELECT id, content, deleted_at IS NOT NULL
+FROM messages
+WHERE id = $1::uuid`
+
+const findVisibleGroupReplyPreviewQuery = `
+SELECT target.id, target.content, target.deleted_at IS NOT NULL
+FROM messages target
+JOIN circle_members viewer ON viewer.circle_id = target.circle_id AND viewer.user_id = $2::uuid
+WHERE target.id = $1::uuid AND target.circle_id = $3::uuid
+  AND target.sent_at >= viewer.joined_at`
+
+const findVisibleDirectReplyPreviewQuery = `
+SELECT id, content, deleted_at IS NOT NULL
+FROM messages
+WHERE id = $1::uuid AND circle_id IS NULL
+  AND ((sender_id = $2::uuid AND dm_recipient_id = $3::uuid)
+    OR (sender_id = $3::uuid AND dm_recipient_id = $2::uuid))`
+
+const findDeletedReplyPreviewQuery = `
+SELECT id
+FROM messages
+WHERE id = $1::uuid AND deleted_at IS NOT NULL`
+
+const pinVisibleGroupMessageQuery = `
+UPDATE messages AS m
+SET is_pinned = TRUE, pinned_by = $2::uuid, pinned_at = NOW()
+FROM circle_members cm
+WHERE m.id = $3::uuid AND m.circle_id = $1::uuid AND m.deleted_at IS NULL AND NOT m.is_pinned
+  AND cm.circle_id = m.circle_id AND cm.user_id = $2::uuid AND m.sent_at >= cm.joined_at
+RETURNING m.id`
+
+const unpinVisibleGroupMessageQuery = `
+UPDATE messages AS m
+SET is_pinned = FALSE, pinned_by = NULL, pinned_at = NULL
+FROM circle_members cm
+WHERE m.id = $3::uuid AND m.circle_id = $1::uuid AND m.deleted_at IS NULL AND m.is_pinned
+  AND cm.circle_id = m.circle_id AND cm.user_id = $2::uuid AND m.sent_at >= cm.joined_at
+RETURNING m.id`
 
 // dmHistoryPageQuery returns one unordered-pair DM history page in
 // (sent_at, id) DESC order, excluding deleted messages. Pair eligibility is
@@ -332,6 +440,20 @@ WHERE m.id = $1::uuid
   AND m.dm_recipient_id = $3::uuid
   AND m.circle_id IS NULL
 FOR UPDATE OF m, u`
+
+const lockMessageForModerationQuery = `
+SELECT ` + messageColumns + ` FROM messages m WHERE m.id = $1::uuid FOR UPDATE`
+
+const findMessageUploadForDeleteQuery = `
+SELECT ` + messageColumns + `, ` + uploadColumns + `
+FROM messages m JOIN chat_uploads u ON u.id = m.upload_id
+WHERE m.id = $1::uuid FOR UPDATE OF m, u`
+
+const softDeleteMessageQuery = `
+UPDATE messages AS m SET deleted_at = NOW(), is_pinned = FALSE, pinned_by = NULL, pinned_at = NULL
+WHERE m.id = $1::uuid AND m.deleted_at IS NULL
+  AND ($3::boolean OR (m.sender_id = $2::uuid AND m.sent_at >= NOW() - INTERVAL '10 minutes'))
+RETURNING m.id`
 
 // findMessageUploadQuery loads one message together with its attached upload
 // for media renewal. Text messages carry no upload row and match nothing, so

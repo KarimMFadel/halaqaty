@@ -386,6 +386,7 @@ class _LifecycleChatApi extends ChatApiClient {
     required String circleId,
     required String content,
     required String idempotencyKey,
+    String? replyToId,
   }) async {
     sentContents.add(content);
     sendStarted.complete();

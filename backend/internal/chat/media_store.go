@@ -38,6 +38,10 @@ type objectClient interface {
 
 var _ objectClient = (*minio.Client)(nil)
 
+type versionedObjectClient interface {
+	ListObjects(context.Context, string, minio.ListObjectsOptions) <-chan minio.ObjectInfo
+}
+
 // MediaStore is the narrow MinIO-backed private chat object store (ADR-021).
 // Object keys are derived solely from server-generated upload IDs; user
 // filenames never reach object paths or object metadata.
@@ -124,6 +128,28 @@ func (s *MediaStore) ApplyDeleteMarker(ctx context.Context, objectKey string) er
 	defer cancel()
 	if err := s.client.RemoveObject(ctx, s.bucket, objectKey, minio.RemoveObjectOptions{}); err != nil {
 		return fmt.Errorf("apply chat upload delete marker: %w", err)
+	}
+	return nil
+}
+
+// RemoveLatestDeleteMarker removes only the newest delete marker created by
+// this application, allowing an active message to recover after a crash.
+func (s *MediaStore) RemoveLatestDeleteMarker(ctx context.Context, objectKey string) error {
+	client, ok := s.client.(versionedObjectClient)
+	if !ok { return errors.New("remove chat upload delete marker: version listing is not configured") }
+	ctx, cancel := context.WithTimeout(ctx, s.opTimeout)
+	defer cancel()
+	var latest *minio.ObjectInfo
+	for object := range client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: objectKey, Recursive: true, WithVersions: true}) {
+		if object.Err != nil { return fmt.Errorf("list chat upload versions: %w", object.Err) }
+		if object.Key == objectKey && object.IsDeleteMarker && (latest == nil || object.LastModified.After(latest.LastModified)) {
+			copy := object
+			latest = &copy
+		}
+	}
+	if latest == nil { return nil }
+	if err := s.client.RemoveObject(ctx, s.bucket, objectKey, minio.RemoveObjectOptions{VersionID: latest.VersionID}); err != nil {
+		return fmt.Errorf("remove chat upload delete marker: %w", err)
 	}
 	return nil
 }

@@ -109,10 +109,21 @@ type Message struct {
 	Content       string
 	UploadID      *uuid.UUID
 	ReplyToID     *uuid.UUID
+	PinnedBy      *uuid.UUID
+	PinnedAt      *time.Time
 	State         MessageState
 	SentAt        time.Time
 	DeletedAt     *time.Time
 	ReadReceipts  []MessageRead
+	ReplyPreview  *ReplyPreview
+}
+
+// ReplyPreview is the safe, bounded projection of an accessible reply target.
+// It never carries a deleted target's content.
+type ReplyPreview struct {
+	ID      uuid.UUID
+	Preview string
+	Deleted bool
 }
 
 // Upload is the persistence-oriented private chat attachment value.
@@ -177,6 +188,8 @@ var (
 	ErrInvalidCursor = errors.New("chat: invalid cursor")
 	// ErrInvalidSearchQuery indicates a search query outside the contract range.
 	ErrInvalidSearchQuery = errors.New("chat: invalid search query")
+	// ErrPinLimit indicates a circle already has its maximum five active pins.
+	ErrPinLimit = errors.New("chat: pin limit reached")
 	// ErrInvalidIdempotencyKey indicates an empty or oversized retry key.
 	ErrInvalidIdempotencyKey = errors.New("chat: invalid idempotency key")
 	// ErrIdempotencyConflict indicates a retry key reused for a different payload.

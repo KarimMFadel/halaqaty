@@ -23,6 +23,8 @@ type directServiceStub struct {
 	eligible bool
 	message  chat.Message
 	sendErr  error
+	replyErr error
+	replyTo  uuid.UUID
 }
 
 func (s *directServiceStub) History(_ context.Context, _, _ uuid.UUID, _ *uuid.UUID, _ int) ([]chat.Message, error) {
@@ -40,6 +42,18 @@ func (s *directServiceStub) SendText(_ context.Context, senderID, peerID uuid.UU
 		return chat.Message{}, chat.ErrDMNotEligible
 	}
 	s.message = chat.Message{ID: uuid.New(), DMRecipientID: &peerID, SenderID: senderID, Type: chat.MessageTypeText, Content: content, State: chat.MessageStateActive, SentAt: time.Now().UTC()}
+	return s.message, nil
+}
+
+func (s *directServiceStub) ReplyText(_ context.Context, senderID, peerID, replyToID uuid.UUID, content, _ string) (chat.Message, error) {
+	if s.replyErr != nil {
+		return chat.Message{}, s.replyErr
+	}
+	if !s.eligible {
+		return chat.Message{}, chat.ErrDMNotEligible
+	}
+	s.replyTo = replyToID
+	s.message = chat.Message{ID: uuid.New(), DMRecipientID: &peerID, SenderID: senderID, Type: chat.MessageTypeText, Content: content, ReplyToID: &replyToID, State: chat.MessageStateActive, SentAt: time.Now().UTC()}
 	return s.message, nil
 }
 
@@ -89,6 +103,49 @@ func TestDirectContract_EligibleListAndSendAreResponseSafe(t *testing.T) {
 	handler.ServeHTTP(rec, request(http.MethodGet, "", ""))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("list status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDirectContract_TextReplyRoutesTargetAndProjectsCanonicalFields(t *testing.T) {
+	peerID := uuid.NewString()
+	targetID := uuid.New()
+	service := &directServiceStub{eligible: true}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/dm/"+peerID, strings.NewReader(`{"message_type":"text","content":"reply","reply_to_id":"`+targetID.String()+`"}`))
+	req.Header.Set(httpconst.HeaderAuthorization, bearerValid)
+	req.Header.Set(httpconst.HeaderSessionID, testSessionID)
+	req.Header.Set(httpconst.HeaderContentType, httpconst.ContentTypeApplicationJSON)
+	req.Header.Set(httpconst.HeaderIdempotencyKey, "dm-reply-contract-key")
+	directRouter(service).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("reply status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if service.replyTo != targetID {
+		t.Fatalf("reply target = %s, want %s", service.replyTo, targetID)
+	}
+	if strings.Contains(rec.Body.String(), "dm_peer_id") {
+		t.Fatalf("REST response used legacy DM projection name: %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"dm_recipient_id":"`+peerID+`"`) || !strings.Contains(rec.Body.String(), `"reply_to_id":"`+targetID.String()+`"`) {
+		t.Fatalf("reply response missing canonical fields: %s", rec.Body.String())
+	}
+}
+
+func TestDirectContract_MediaReplyIsExplicitlyUnsupported(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/dm/"+uuid.NewString(), strings.NewReader(`{"message_type":"voice","upload_id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","reply_to_id":"11111111-1111-1111-1111-111111111111"}`))
+	req.Header.Set(httpconst.HeaderAuthorization, bearerValid)
+	req.Header.Set(httpconst.HeaderSessionID, testSessionID)
+	req.Header.Set(httpconst.HeaderContentType, httpconst.ContentTypeApplicationJSON)
+	req.Header.Set(httpconst.HeaderIdempotencyKey, "dm-media-reply-contract-key")
+	directRouter(&directServiceStub{eligible: true}).ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("media reply status = %d, body=%s; want 422", rec.Code, rec.Body.String())
+	}
+	envelope := decodeErrorEnvelope(t, rec)
+	if envelope.Error.Fields[httpconst.FieldReplyToID] == "" {
+		t.Fatalf("media reply error missing %q field: %+v", httpconst.FieldReplyToID, envelope.Error)
 	}
 }
 

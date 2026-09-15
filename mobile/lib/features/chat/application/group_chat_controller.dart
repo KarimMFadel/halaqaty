@@ -223,7 +223,7 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
   ///
   /// Returns true only when the server accepted the message, so the composer
   /// can keep the draft on any failure (validation, credentials, REST).
-  Future<bool> sendText(String content) async {
+  Future<bool> sendText(String content, {String? replyToId}) async {
     final circleId = _circleId;
     if (circleId == null ||
         state.status != GroupChatStatus.ready ||
@@ -250,6 +250,7 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
       type: ChatMessageType.text,
       sentAt: DateTime.now().toUtc(),
       deliveryStatus: ChatDeliveryStatus.pending,
+      replyToId: replyToId,
     );
     state = state.copyWith(
       messages: mergeChatMessages(state.messages, [optimistic]),
@@ -268,13 +269,22 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
     state = state.copyWith(messages: _withLocalStatus(idempotencyKey, true));
 
     try {
-      final message = await _api.sendTextMessage(
-        token: credentials.token,
-        sessionId: credentials.sessionId,
-        circleId: circleId,
-        content: content,
-        idempotencyKey: idempotencyKey,
-      );
+      final message = replyToId == null
+          ? await _api.sendTextMessage(
+              token: credentials.token,
+              sessionId: credentials.sessionId,
+              circleId: circleId,
+              content: content,
+              idempotencyKey: idempotencyKey,
+            )
+          : await _api.sendReplyMessage(
+              token: credentials.token,
+              sessionId: credentials.sessionId,
+              circleId: circleId,
+              content: content,
+              replyToId: replyToId,
+              idempotencyKey: idempotencyKey,
+            );
       if (!_isCurrentLifecycle(circleId, lifecycleEpoch)) return false;
       // Drop the optimistic entry, then merge the server projection; if the
       // realtime echo already arrived, the merge deduplicates by message id.

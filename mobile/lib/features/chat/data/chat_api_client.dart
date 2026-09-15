@@ -220,6 +220,33 @@ class ChatApiClient {
     }
   }
 
+  Future<ChatMessage> sendReplyMessage({
+    required String token,
+    required String sessionId,
+    required String circleId,
+    required String content,
+    required String replyToId,
+    required String idempotencyKey,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        ChatApiPaths.circleMessages(circleId),
+        data: {
+          ChatJsonKeys.messageType: ChatRealtimeTypes.text,
+          ChatJsonKeys.content: content,
+          ChatJsonKeys.replyToId: replyToId,
+        },
+        options: Options(headers: {
+          ...sessionRequestHeaders(token, sessionId),
+          ChatHeaders.idempotencyKey: idempotencyKey,
+        }),
+      );
+      return ChatMessage.fromJson(response.data!);
+    } on DioException catch (error) {
+      throw mapChatApiException(error);
+    }
+  }
+
   /// Sends one staged direct media message for the currently eligible pair.
   Future<ChatMessage> sendDirectMediaMessage({
     required String token,

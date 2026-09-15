@@ -195,7 +195,8 @@ class _DeliveryApi extends ChatApiClient {
       required String sessionId,
       required String circleId,
       required String content,
-      required String idempotencyKey}) async {
+      required String idempotencyKey,
+      String? replyToId}) async {
     keys.add(idempotencyKey);
     if (nextResult != null) return nextResult!;
     if (attempts++ < failuresBeforeSuccess) {

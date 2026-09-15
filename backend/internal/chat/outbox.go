@@ -135,6 +135,10 @@ func (d *OutboxDispatcher) Dispatch(ctx context.Context, event OutboxEvent) erro
 	if err != nil {
 		return fmt.Errorf("reload chat outbox payload: %w", err)
 	}
+	if event.EventType != realtime.EventChatMessageDeleted && msg.State == MessageStateDeleted {
+		if err := d.store.MarkDelivered(ctx, event.EventID); err != nil { return fmt.Errorf("mark stale chat outbox event delivered: %w", err) }
+		return nil
+	}
 	start := d.now()
 	// The projection error is deliberately not propagated or logged: bounded
 	// retry owns recovery and the parked metric plus audit surface exhaustion,
@@ -297,10 +301,17 @@ func (s *PGOutboxStore) Park(ctx context.Context, eventID uuid.UUID) error {
 func (s *PGOutboxStore) LoadMessage(ctx context.Context, messageID uuid.UUID) (Message, error) {
 	msg, err := scanMessage(s.repo.pool.QueryRow(ctx, findMessageForProjectionQuery, messageID))
 	if errors.Is(err, pgx.ErrNoRows) {
+		msg, err = scanMessage(s.repo.pool.QueryRow(ctx, findDeletedMessageForProjectionQuery, messageID))
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
 		return Message{}, ErrMessageNotProjectable
 	}
 	if err != nil {
 		return Message{}, fmt.Errorf("load chat message for projection: %w", err)
 	}
-	return msg, nil
+	messages := []Message{msg}
+	if err := s.repo.hydrateDeletedReplyPreviews(ctx, messages); err != nil {
+		return Message{}, fmt.Errorf("load chat projection reply preview: %w", err)
+	}
+	return messages[0], nil
 }

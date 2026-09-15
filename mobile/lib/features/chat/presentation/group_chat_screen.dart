@@ -5,11 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/chat/application/group_chat_controller.dart';
 import 'package:halaqaty_mobile/features/chat/application/chat_presence_controller.dart';
+import 'package:halaqaty_mobile/features/chat/application/chat_discovery_controller.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_status_widgets.dart';
 import 'package:halaqaty_mobile/features/chat/domain/chat_models.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_ui_labels.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_widgets.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_media_widgets.dart';
+import 'package:halaqaty_mobile/features/chat/presentation/chat_discovery_widgets.dart';
 
 /// Arabic-first RTL-aware group thread for one circle. Owns no chat state:
 /// it projects the authoritative [GroupChatController] and renders
@@ -32,17 +34,23 @@ class GroupChatScreen extends ConsumerStatefulWidget {
 
 class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
   late final GroupChatController _controller;
+  late final ChatDiscoveryController _discovery;
 
   @override
   void initState() {
     super.initState();
     _controller =
         ref.read(groupChatControllerProvider(widget.circleId).notifier);
+    _discovery =
+        ref.read(chatDiscoveryControllerProvider(widget.circleId).notifier);
     _controller.presence?.addListener(_onPresenceChanged);
     // Riverpod forbids provider writes during mount; defer the projection
     // flag until the first frame while opening the authoritative history.
     Future<void>.microtask(() {
       if (mounted) _controller.setReadOnly(widget.readOnly);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_discovery.loadPinned(widget.circleId));
     });
     unawaited(_controller.open(widget.circleId));
   }
@@ -55,6 +63,23 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
 
   void _onPresenceChanged(ChatPresenceState _) {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _showSearch() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+            _ScreenLabels(Directionality.of(context) == TextDirection.rtl)
+                .search),
+        content: TextField(
+          autofocus: true,
+          textDirection: Directionality.of(context),
+          onChanged: (query) =>
+              unawaited(_discovery.search(widget.circleId, query)),
+        ),
+      ),
+    );
   }
 
   /// Opens the edit sheet for one terminally failed draft (FR-008): the
@@ -99,6 +124,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(groupChatControllerProvider(widget.circleId));
+    final discovery =
+        ref.watch(chatDiscoveryControllerProvider(widget.circleId));
     final currentUserId = ref.watch(authControllerProvider).user?.id;
     final labels =
         _ScreenLabels(Directionality.of(context) == TextDirection.rtl);
@@ -107,7 +134,20 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     final presence = _controller.presence;
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.circleName ?? labels.title)),
+      appBar: AppBar(
+        title: Text(widget.circleName ?? labels.title),
+        actions: [
+          Semantics(
+            button: true,
+            label: labels.search,
+            child: IconButton(
+              tooltip: labels.search,
+              onPressed: _showSearch,
+              icon: const Icon(Icons.search),
+            ),
+          ),
+        ],
+      ),
       body: switch (state.status) {
         GroupChatStatus.idle ||
         GroupChatStatus.loading =>
@@ -120,6 +160,13 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
             padding: const EdgeInsets.all(8),
             child: Column(
               children: [
+                if (discovery.pinnedMessages.isNotEmpty)
+                  ChatPinnedBar(messages: discovery.pinnedMessages),
+                if (discovery.searchResults.isNotEmpty)
+                  ChatSearchResults(messages: discovery.searchResults),
+                if (discovery.pinLimitReached) const ChatPinLimitNotice(),
+                if (discovery.failure != null)
+                  ChatDiscoveryErrorView(failure: discovery.failure),
                 if (presence != null)
                   ChatTypingIndicator(
                     userNames:
@@ -143,10 +190,44 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                                 state.terminalFailures[message.id];
                             return Column(
                               children: [
-                                ChatMessageBubble(
-                                  message: message,
-                                  isOwn: message.senderId == currentUserId,
+                                GestureDetector(
+                                  onLongPress: () =>
+                                      _discovery.selectReplyTarget(
+                                    ChatReplyPreview(
+                                      id: message.id,
+                                      senderName: message.senderName ??
+                                          labels.memberFallback,
+                                      preview: message.content,
+                                      deleted: message.deletedAt != null,
+                                    ),
+                                  ),
+                                  child: ChatMessageBubble(
+                                    message: message,
+                                    isOwn: message.senderId == currentUserId,
+                                  ),
                                 ),
+                                if (!state.readOnly)
+                                  Semantics(
+                                    button: true,
+                                    label: message.pinnedAt == null
+                                        ? labels.pin
+                                        : labels.unpin,
+                                    child: IconButton(
+                                      tooltip: message.pinnedAt == null
+                                          ? labels.pin
+                                          : labels.unpin,
+                                      icon: Icon(message.pinnedAt == null
+                                          ? Icons.push_pin_outlined
+                                          : Icons.push_pin),
+                                      onPressed: () => unawaited(
+                                        message.pinnedAt == null
+                                            ? _discovery.pin(
+                                                widget.circleId, message.id)
+                                            : _discovery.unpin(
+                                                widget.circleId, message.id),
+                                      ),
+                                    ),
+                                  ),
                                 if (terminalError != null)
                                   _TerminalFailureActions(
                                     labels: labels,
@@ -166,8 +247,17 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                 ),
                 if (!state.readOnly) ...[
                   ChatMediaComposerBar(circleId: widget.circleId),
+                  if (discovery.replyTarget != null)
+                    ChatReplyPreviewView(reply: discovery.replyTarget!),
                   ChatComposer(
-                    onSend: _controller.sendText,
+                    onSend: (content) async {
+                      final accepted = await _controller.sendText(
+                        content,
+                        replyToId: discovery.replyTarget?.id,
+                      );
+                      if (accepted) _discovery.clearReplyTarget();
+                      return accepted;
+                    },
                     onTyping: _controller.setTyping,
                   ),
                 ] else
@@ -356,4 +446,9 @@ class _ScreenLabels {
   String get saveEdit => rtl ? ChatUiLabels.send : ChatUiLabels.sendEn;
   String get readOnly =>
       rtl ? 'هذه المحادثة للقراءة فقط' : 'This conversation is read-only';
+  String get search => rtl ? ChatUiLabels.search : ChatUiLabels.searchEn;
+  String get memberFallback =>
+      rtl ? ChatUiLabels.memberFallback : ChatUiLabels.memberFallbackEn;
+  String get pin => rtl ? 'تثبيت الرسالة' : 'Pin message';
+  String get unpin => rtl ? 'إلغاء تثبيت الرسالة' : 'Unpin message';
 }

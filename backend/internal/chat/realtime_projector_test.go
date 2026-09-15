@@ -168,6 +168,12 @@ func TestRealtimeProjector_DuplicateEventIDDeliveredOnce(t *testing.T) {
 		members: map[string]bool{projectorMember(projectorCircleID, "member-user"): true},
 	}, hub, tickets, validProjectorSession)
 	msg, event := projectorTestMessage(t)
+	replyID, pinnedBy := uuid.New(), uuid.New()
+	pinnedAt := msg.SentAt.Add(time.Minute)
+	msg.ReplyToID = &replyID
+	msg.ReplyPreview = &ReplyPreview{ID: replyID, Preview: "reply"}
+	msg.PinnedBy = &pinnedBy
+	msg.PinnedAt = &pinnedAt
 	for i := 0; i < 2; i++ {
 		if err := projector.ProjectMessage(context.Background(), event, msg); err != nil {
 			t.Fatalf("projection %d: %v", i+1, err)
@@ -204,7 +210,7 @@ func TestRealtimeProjector_DuplicateEventIDDeliveredOnce(t *testing.T) {
 	if sentAt, _ := payload["sent_at"].(string); sentAt == "" || !strings.HasPrefix(sentAt, "2026-09-03T12:00:00") {
 		t.Fatalf("payload[sent_at] = %v, want the durable acceptance time", payload["sent_at"])
 	}
-	for _, forbidden := range []string{"object_key", "url", "token", "media_url"} {
+	for _, forbidden := range []string{"object_key", "url", "token", "media_url", "reply_to_id", "reply_preview", "pinned_at", "pinned_by"} {
 		if _, present := payload[forbidden]; present {
 			t.Fatalf("payload must never carry %q", forbidden)
 		}

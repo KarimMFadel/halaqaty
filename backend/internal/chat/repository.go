@@ -52,7 +52,7 @@ func scanMessage(row pgx.Row) (Message, error) {
 	var m Message
 	var content *string
 	err := row.Scan(&m.ID, &m.CircleID, &m.DMRecipientID, &m.SenderID, &m.Type, &content,
-		&m.UploadID, &m.ReplyToID, &m.State, &m.SentAt, &m.DeletedAt)
+		&m.UploadID, &m.ReplyToID, &m.PinnedBy, &m.PinnedAt, &m.State, &m.SentAt, &m.DeletedAt)
 	if content != nil {
 		m.Content = *content
 	}
@@ -126,9 +126,7 @@ func (t *Tx) InsertMessage(ctx context.Context, in MessageInput) (Message, bool,
 			// returning a zero message as a successful replay.
 			return Message{}, false, fmt.Errorf("resolve chat message replay for sender %s: %w", in.SenderID, ErrIdempotencyConflict)
 		}
-		if !sameUUID(existing.CircleID, in.CircleID) || !sameUUID(existing.DMRecipientID, in.DMRecipientID) || existing.Type != in.Type ||
-			existing.Content != in.Content || !sameUUID(existing.UploadID, in.UploadID) ||
-			!sameUUID(existing.ReplyToID, in.ReplyToID) {
+		if !matchesMessageInput(existing, in) {
 			return Message{}, false, ErrIdempotencyConflict
 		}
 		return existing, false, nil
@@ -137,6 +135,11 @@ func (t *Tx) InsertMessage(ctx context.Context, in MessageInput) (Message, bool,
 		return Message{}, false, fmt.Errorf("insert chat message: %w", err)
 	}
 	return msg, true, nil
+}
+
+func matchesMessageInput(existing Message, in MessageInput) bool {
+	return sameUUID(existing.CircleID, in.CircleID) && sameUUID(existing.DMRecipientID, in.DMRecipientID) && existing.Type == in.Type &&
+		existing.Content == in.Content && sameUUID(existing.UploadID, in.UploadID) && sameUUID(existing.ReplyToID, in.ReplyToID)
 }
 
 // FindMessageByIdempotency loads the committed message for one (sender,
@@ -166,6 +169,156 @@ func (t *Tx) LockActiveCircleMember(ctx context.Context, circleID, userID uuid.U
 	}
 	if archived {
 		return ErrCircleArchived
+	}
+	return nil
+}
+
+// LockVisibleGroupReplyTarget locks an active group message visible in the
+// actor's current membership period, without disclosing why it is unavailable.
+func (t *Tx) LockVisibleGroupReplyTarget(ctx context.Context, circleID, actorID, messageID uuid.UUID) (Message, error) {
+	message, err := scanMessage(t.tx.QueryRow(ctx, lockVisibleGroupReplyTargetQuery, circleID, actorID, messageID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Message{}, ErrMessageNotVisible
+	}
+	if err != nil {
+		return Message{}, fmt.Errorf("lock visible group reply target: %w", err)
+	}
+	return message, nil
+}
+
+// LockVisibleDirectReplyTarget locks an active message belonging to exactly
+// the current unordered direct pair.
+func (t *Tx) LockVisibleDirectReplyTarget(ctx context.Context, userA, userB, messageID uuid.UUID) (Message, error) {
+	message, err := scanMessage(t.tx.QueryRow(ctx, lockVisibleDirectReplyTargetQuery, userA, userB, messageID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Message{}, ErrMessageNotVisible
+	}
+	if err != nil {
+		return Message{}, fmt.Errorf("lock visible direct reply target: %w", err)
+	}
+	return message, nil
+}
+
+// LockCirclePinActor serializes pin state with other circle mutations and
+// returns the actor's current role.
+func (t *Tx) LockCirclePinActor(ctx context.Context, circleID, actorID uuid.UUID) (string, error) {
+	var archived bool
+	var role string
+	err := t.tx.QueryRow(ctx, lockCirclePinActorQuery, circleID, actorID).Scan(&archived, &role)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrCircleNotVisible
+	}
+	if err != nil {
+		return "", fmt.Errorf("lock circle pin actor: %w", err)
+	}
+	if archived {
+		return "", ErrCircleArchived
+	}
+	return role, nil
+}
+
+// PinVisibleGroupMessage pins one visible, active group message.
+func (t *Tx) PinVisibleGroupMessage(ctx context.Context, circleID, actorID, messageID uuid.UUID) (bool, error) {
+	var id uuid.UUID
+	err := t.tx.QueryRow(ctx, pinVisibleGroupMessageQuery, circleID, actorID, messageID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("pin visible group message: %w", err)
+	}
+	return true, nil
+}
+
+// UnpinVisibleGroupMessage removes one visible active group message pin.
+func (t *Tx) UnpinVisibleGroupMessage(ctx context.Context, circleID, actorID, messageID uuid.UUID) (bool, error) {
+	var id uuid.UUID
+	err := t.tx.QueryRow(ctx, unpinVisibleGroupMessageQuery, circleID, actorID, messageID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("unpin visible group message: %w", err)
+	}
+	return true, nil
+}
+
+// CountPinnedMessages counts active pins while the caller holds the circle row.
+func (t *Tx) CountPinnedMessages(ctx context.Context, circleID uuid.UUID) (int, error) {
+	var count int
+	if err := t.tx.QueryRow(ctx, countPinnedMessagesQuery, circleID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count pinned group messages: %w", err)
+	}
+	return count, nil
+}
+
+// LockVisibleGroupMessagePinState locks one eligible pin target and reports
+// whether it is already pinned, preserving retry idempotence at the limit.
+func (t *Tx) LockVisibleGroupMessagePinState(ctx context.Context, circleID, actorID, messageID uuid.UUID) (bool, error) {
+	var pinned bool
+	err := t.tx.QueryRow(ctx, lockVisibleGroupMessagePinStateQuery, circleID, actorID, messageID).Scan(&pinned)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, ErrMessageNotVisible
+	}
+	if err != nil {
+		return false, fmt.Errorf("lock group message pin state: %w", err)
+	}
+	return pinned, nil
+}
+
+// hydrateReplyPreviews loads current reply-target projections; deleted target
+// content is never retained in a response or realtime payload.
+func (r *Repository) hydrateReplyPreviews(ctx context.Context, viewerID uuid.UUID, messages []Message) error {
+	for i := range messages {
+		if messages[i].ReplyToID == nil {
+			continue
+		}
+		preview := ReplyPreview{ID: *messages[i].ReplyToID}
+		var content *string
+		query := findReplyPreviewQuery
+		args := []any{preview.ID}
+		if messages[i].CircleID != nil {
+			query = findVisibleGroupReplyPreviewQuery
+			args = append(args, viewerID, *messages[i].CircleID)
+		} else if messages[i].DMRecipientID != nil {
+			peerID := messages[i].SenderID
+			if peerID == viewerID {
+				peerID = *messages[i].DMRecipientID
+			}
+			query = findVisibleDirectReplyPreviewQuery
+			args = append(args, viewerID, peerID)
+		}
+		err := r.pool.QueryRow(ctx, query, args...).Scan(&preview.ID, &content, &preview.Deleted)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("load reply preview: %w", err)
+		}
+		if !preview.Deleted && content != nil {
+			preview.Preview = safeReplyPreview(Message{ID: preview.ID, Content: *content}).Preview
+		}
+		messages[i].ReplyPreview = &preview
+	}
+	return nil
+}
+
+// hydrateDeletedReplyPreviews avoids leaking an active target's content in a
+// shared realtime event whose recipients can have different join times.
+func (r *Repository) hydrateDeletedReplyPreviews(ctx context.Context, messages []Message) error {
+	for i := range messages {
+		if messages[i].ReplyToID == nil {
+			continue
+		}
+		preview := ReplyPreview{ID: *messages[i].ReplyToID, Deleted: true}
+		err := r.pool.QueryRow(ctx, findDeletedReplyPreviewQuery, preview.ID).Scan(&preview.ID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("load deleted reply preview: %w", err)
+		}
+		messages[i].ReplyPreview = &preview
 	}
 	return nil
 }
@@ -295,7 +448,7 @@ func (t *Tx) LoadDirectMessageUploadForDelete(ctx context.Context, messageID, se
 	var duration *int
 	err := t.tx.QueryRow(ctx, findDirectMessageUploadForDeleteQuery, messageID, senderID, peerID).Scan(
 		&message.ID, &message.CircleID, &message.DMRecipientID, &message.SenderID, &message.Type, &content,
-		&message.UploadID, &message.ReplyToID, &message.State, &message.SentAt, &message.DeletedAt,
+		&message.UploadID, &message.ReplyToID, &message.PinnedBy, &message.PinnedAt, &message.State, &message.SentAt, &message.DeletedAt,
 		&upload.ID, &upload.UploaderID, &upload.AuthorizationCircleID, &upload.DMPeerID, &upload.ObjectKey,
 		&upload.MIMEType, &upload.OriginalFileName, &upload.SizeBytes, &duration, &upload.State, &upload.CreatedAt, &upload.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -380,6 +533,39 @@ func (t *Tx) InsertModerationAudit(ctx context.Context, audit ModerationAudit) (
 	return recorded, nil
 }
 
+// LockMessageForModeration locks a message before checking authority and time.
+func (t *Tx) LockMessageForModeration(ctx context.Context, messageID uuid.UUID) (Message, error) {
+	message, err := scanMessage(t.tx.QueryRow(ctx, lockMessageForModerationQuery, messageID))
+	if errors.Is(err, pgx.ErrNoRows) { return Message{}, ErrMessageNotVisible }
+	if err != nil { return Message{}, fmt.Errorf("lock message for moderation: %w", err) }
+	return message, nil
+}
+
+// LoadMessageUploadForDelete locks an attached upload for marker-before-commit deletion.
+func (t *Tx) LoadMessageUploadForDelete(ctx context.Context, messageID uuid.UUID) (Upload, error) {
+	var message Message
+	var upload Upload
+	var content *string
+	var duration *int
+	err := t.tx.QueryRow(ctx, findMessageUploadForDeleteQuery, messageID).Scan(
+		&message.ID, &message.CircleID, &message.DMRecipientID, &message.SenderID, &message.Type, &content,
+		&message.UploadID, &message.ReplyToID, &message.PinnedBy, &message.PinnedAt, &message.State, &message.SentAt, &message.DeletedAt,
+		&upload.ID, &upload.UploaderID, &upload.AuthorizationCircleID, &upload.DMPeerID, &upload.ObjectKey, &upload.MIMEType,
+		&upload.OriginalFileName, &upload.SizeBytes, &duration, &upload.State, &upload.CreatedAt, &upload.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) { return Upload{}, ErrMessageNotVisible }
+	if err != nil { return Upload{}, fmt.Errorf("load message upload for deletion: %w", err) }
+	return upload, nil
+}
+
+// SoftDeleteMessage applies the authoritative database-time deadline and clears pins.
+func (t *Tx) SoftDeleteMessage(ctx context.Context, messageID, actorID uuid.UUID, teacher bool) (bool, error) {
+	var deletedID uuid.UUID
+	err := t.tx.QueryRow(ctx, softDeleteMessageQuery, messageID, actorID, teacher).Scan(&deletedID)
+	if errors.Is(err, pgx.ErrNoRows) { return false, nil }
+	if err != nil { return false, fmt.Errorf("soft-delete chat message: %w", err) }
+	return true, nil
+}
+
 // GroupHistoryPage returns one circle history page for a current member in
 // (sent_at, id) DESC order. Non-members get an empty page; messages sent
 // before the member's joined_at and soft-deleted messages are excluded. The
@@ -394,11 +580,11 @@ func (r *Repository) GroupHistoryPage(ctx context.Context, circleID, viewerID uu
 
 // GroupSearchPage returns one retained, non-deleted group-message search page.
 func (r *Repository) GroupSearchPage(ctx context.Context, circleID, viewerID uuid.UUID, query string, before *uuid.UUID, limit int) ([]Message, error) {
-	anchorSentAt, anchorID, err := r.messageCursor(ctx, before)
+	_, anchorID, err := r.messageCursor(ctx, before)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx, groupSearchPageQuery, circleID, viewerID, query, anchorSentAt, anchorID, limit)
+	rows, err := r.pool.Query(ctx, groupSearchPageQuery, circleID, viewerID, query, anchorID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query chat search page: %w", err)
 	}
@@ -413,6 +599,27 @@ func (r *Repository) GroupSearchPage(ctx context.Context, circleID, viewerID uui
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate chat search page: %w", err)
+	}
+	return messages, nil
+}
+
+// ListPinnedMessages returns the visible, active pinned bar for one group.
+func (r *Repository) ListPinnedMessages(ctx context.Context, circleID, viewerID uuid.UUID) ([]Message, error) {
+	rows, err := r.pool.Query(ctx, listPinnedMessagesQuery, circleID, viewerID)
+	if err != nil {
+		return nil, fmt.Errorf("list pinned group messages: %w", err)
+	}
+	defer rows.Close()
+	var messages []Message
+	for rows.Next() {
+		message, err := scanMessage(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan pinned group message: %w", err)
+		}
+		messages = append(messages, message)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate pinned group messages: %w", err)
 	}
 	return messages, nil
 }
@@ -556,7 +763,7 @@ func (r *Repository) FindMessageUpload(ctx context.Context, messageID uuid.UUID)
 	var duration *int
 	err := r.pool.QueryRow(ctx, findMessageUploadQuery, messageID).Scan(
 		&m.ID, &m.CircleID, &m.DMRecipientID, &m.SenderID, &m.Type, &content,
-		&m.UploadID, &m.ReplyToID, &m.State, &m.SentAt, &m.DeletedAt,
+		&m.UploadID, &m.ReplyToID, &m.PinnedBy, &m.PinnedAt, &m.State, &m.SentAt, &m.DeletedAt,
 		&u.ID, &u.UploaderID, &u.AuthorizationCircleID, &u.DMPeerID, &u.ObjectKey,
 		&u.MIMEType, &u.OriginalFileName, &u.SizeBytes, &duration, &u.State, &u.CreatedAt, &u.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {

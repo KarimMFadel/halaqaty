@@ -47,6 +47,7 @@ type MiddlewareSet struct {
 	RealtimeHub         *realtime.Hub
 	QueueHandler        *queue.Handler
 	ChatHandler         *chat.GroupHandler
+	ChatModerationHandler *chat.ModerationHandler
 	DirectChatHandler   *chat.DirectHandler
 	ChatPresenceHandler *chat.PresenceHandler
 	ChatSendLimiter     *chat.ChatSendLimiter
@@ -345,6 +346,15 @@ func (r *Router) registerRoutes() {
 			chatH := r.mw.ChatHandler
 			r.mux.Handle(routeCircleMessagesGet, r.requireWithUserLimit(http.HandlerFunc(chatH.ListCircleMessages)))
 			r.mux.Handle(routeCircleMessagesSearch, r.requireWithUserLimit(http.HandlerFunc(chatH.SearchCircleMessages)))
+			r.mux.Handle(routeCircleMessagesPinned, r.requireWithUserLimit(http.HandlerFunc(chatH.ListPinnedCircleMessages)))
+			pinHandler := http.Handler(http.HandlerFunc(chatH.PinCircleMessage))
+			unpinHandler := http.Handler(http.HandlerFunc(chatH.UnpinCircleMessage))
+			if r.mw.Role != nil {
+				pinHandler = r.mw.Role.RequireAny(rbac.RoleTeacher, rbac.RoleSupervisor)(pinHandler)
+				unpinHandler = r.mw.Role.RequireAny(rbac.RoleTeacher, rbac.RoleSupervisor)(unpinHandler)
+			}
+			r.mux.Handle(routeCircleMessagePin, r.requireWithUserLimit(pinHandler))
+			r.mux.Handle(routeCircleMessageUnpin, r.requireWithUserLimit(unpinHandler))
 			// Chat sends stack the FR-006 30-per-minute per-user-and-circle
 			// fixed window on top of the generic per-user budget.
 			var chatSend http.Handler = http.HandlerFunc(chatH.SendCircleMessage)
@@ -356,6 +366,9 @@ func (r *Router) registerRoutes() {
 				r.mux.Handle(routeCircleMessageRead, r.requireWithUserLimit(http.HandlerFunc(r.mw.ChatPresenceHandler.MarkCircleMessageRead)))
 				r.mux.Handle(routeDirectMessageRead, r.requireWithUserLimit(http.HandlerFunc(r.mw.ChatPresenceHandler.MarkDirectMessageRead)))
 			}
+		}
+		if r.mw.ChatModerationHandler != nil {
+			r.mux.Handle(routeCircleMessageDelete, r.requireWithUserLimit(http.HandlerFunc(r.mw.ChatModerationHandler.DeleteCircleMessage)))
 		}
 		if r.mw.DirectChatHandler != nil {
 			directH := r.mw.DirectChatHandler

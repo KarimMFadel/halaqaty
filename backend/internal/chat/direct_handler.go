@@ -16,6 +16,7 @@ import (
 type DirectChatService interface {
 	History(context.Context, uuid.UUID, uuid.UUID, *uuid.UUID, int) ([]Message, error)
 	SendText(context.Context, uuid.UUID, uuid.UUID, string, string) (Message, error)
+	ReplyText(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, string, string) (Message, error)
 	DeleteOwnMessage(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error
 }
 
@@ -88,8 +89,21 @@ func (h *DirectHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 			writeFieldUnprocessable(w, field, message)
 			return
 		}
-		sent, err = h.service.SendText(r.Context(), viewerID, peerID, request.Content, r.Header.Get(httpconst.HeaderIdempotencyKey))
+		if request.ReplyToID != nil {
+			replyToID, parseErr := uuid.Parse(*request.ReplyToID)
+			if parseErr != nil {
+				phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{httpconst.FieldReplyToID: httpconst.ErrorMessageChatMessageIDInvalid})
+				return
+			}
+			sent, err = h.service.ReplyText(r.Context(), viewerID, peerID, replyToID, request.Content, r.Header.Get(httpconst.HeaderIdempotencyKey))
+		} else {
+			sent, err = h.service.SendText(r.Context(), viewerID, peerID, request.Content, r.Header.Get(httpconst.HeaderIdempotencyKey))
+		}
 	case MessageTypeVoice, MessageTypeImage, MessageTypeFile:
+		if request.ReplyToID != nil {
+			writeFieldUnprocessable(w, httpconst.FieldReplyToID, httpconst.ErrorMessageChatReplyUnsupported)
+			return
+		}
 		if h.media == nil || request.UploadID == nil {
 			writeFieldUnprocessable(w, httpconst.FieldUploadID, httpconst.ErrorMessageChatUploadIDRequired)
 			return

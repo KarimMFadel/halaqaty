@@ -30,6 +30,10 @@
 - Q: How are the five-pin limit and MinIO marker-before-commit crash serialized/recovered? → A: Serialize pin/unpin/delete on the circle row; if a marker exists while the message remains active, reconciliation removes only the latest internal delete marker and restores versionless access.
 - Q: What is the reproducible MVP load and operational failure policy? → A: Use the fixed 50-user/10-circle dataset and bounded timeout/retry/degradation rules defined in requirements and planning; all F-004 P1/P2 stories are MVP scope.
 
+### Session 2026-09-14
+
+- Q: Which `chat.message` payload is authoritative when the feature overlay and canonical WebSocket catalog differ? → A: The canonical catalog's redacted projection: identifiers, type, server timestamps, server-authoritative delivery state, and text `content` only; never media URLs, `read_receipts`, or sender names.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Participate in a Circle Group Chat (Priority: P1)

@@ -85,6 +85,10 @@ const (
 	routeCircleMessagesGet    = "GET /api/v1/circles/{circleId}/messages"
 	routeCircleMessagesSend   = "POST /api/v1/circles/{circleId}/messages"
 	routeCircleMessagesSearch = "GET /api/v1/circles/{circleId}/messages/search"
+	routeCircleMessagesPinned = "GET /api/v1/circles/{circleId}/messages/pinned"
+	routeCircleMessagePin     = "POST /api/v1/circles/{circleId}/messages/{messageId}/pin"
+	routeCircleMessageUnpin   = "DELETE /api/v1/circles/{circleId}/messages/{messageId}/pin"
+	routeCircleMessageDelete  = "DELETE /api/v1/circles/{circleId}/messages/{messageId}"
 	routeCircleMessageRead    = "POST /api/v1/circles/{circleId}/messages/{messageId}/read"
 	routeDirectMessageRead    = "POST /api/v1/dm/{userId}/messages/{messageId}/read"
 	routeDirectMessagesGet    = "GET /api/v1/dm/{userId}"
@@ -111,6 +115,10 @@ const (
 	RouteCircleMessagesGet    = routeCircleMessagesGet
 	RouteCircleMessagesSend   = routeCircleMessagesSend
 	RouteCircleMessagesSearch = routeCircleMessagesSearch
+	RouteCircleMessagesPinned = routeCircleMessagesPinned
+	RouteCircleMessagePin     = routeCircleMessagePin
+	RouteCircleMessageUnpin   = routeCircleMessageUnpin
+	RouteCircleMessageDelete  = routeCircleMessageDelete
 	RouteCircleMessageRead    = routeCircleMessageRead
 	RouteDirectMessageRead    = routeDirectMessageRead
 	RouteDirectMessagesGet    = routeDirectMessagesGet

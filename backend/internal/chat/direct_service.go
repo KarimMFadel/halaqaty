@@ -41,6 +41,9 @@ func (s *DirectService) History(ctx context.Context, viewerID, peerID uuid.UUID,
 	if err := s.repo.hydrateSenderReadReceipts(ctx, viewerID, messages); err != nil {
 		return nil, fmt.Errorf("load direct chat read receipts: %w", err)
 	}
+	if err := s.repo.hydrateReplyPreviews(ctx, viewerID, messages); err != nil {
+		return nil, fmt.Errorf("load direct chat reply previews: %w", err)
+	}
 	return messages, nil
 }
 
@@ -91,30 +94,77 @@ func (s *DirectService) SendText(ctx context.Context, senderID, peerID uuid.UUID
 	return sent, nil
 }
 
+// ReplyText sends a direct reply only when its target belongs to the same
+// currently eligible unordered pair.
+func (s *DirectService) ReplyText(ctx context.Context, senderID, peerID, replyToID uuid.UUID, content, idempotencyKey string) (Message, error) {
+	if senderID == peerID {
+		return Message{}, ErrInvalidContext
+	}
+	trimmed, err := ValidateText(content)
+	if err != nil {
+		return Message{}, err
+	}
+	if err := ValidateIdempotencyKey(idempotencyKey); err != nil {
+		return Message{}, err
+	}
+	if err := s.authorize(ctx, senderID, peerID); err != nil {
+		return Message{}, err
+	}
+	var reply Message
+	err = s.repo.WithTx(ctx, func(tx *Tx) error {
+		if err := tx.LockQualifyingDMCircle(ctx, senderID, peerID); err != nil {
+			return err
+		}
+		input := MessageInput{SenderID: senderID, DMRecipientID: &peerID, Type: MessageTypeText, Content: trimmed, ReplyToID: &replyToID, IdempotencyKey: idempotencyKey}
+		existing, found, err := tx.FindMessageByIdempotency(ctx, senderID, idempotencyKey)
+		if err != nil {
+			return err
+		}
+		if found {
+			if !matchesMessageInput(existing, input) {
+				return ErrIdempotencyConflict
+			}
+			reply = existing
+			return nil
+		}
+		target, err := tx.LockVisibleDirectReplyTarget(ctx, senderID, peerID, replyToID)
+		if err != nil {
+			return err
+		}
+		message, inserted, err := tx.InsertMessage(ctx, input)
+		if err != nil {
+			return err
+		}
+		reply = message
+		reply.ReplyPreview = safeReplyPreview(target)
+		if !inserted {
+			return nil
+		}
+		if err := tx.InsertOutboxEvent(ctx, message.ID, realtime.EventChatMessage, &peerID); err != nil {
+			return err
+		}
+		return tx.InsertOutboxEvent(ctx, message.ID, realtime.EventChatMessage, &senderID)
+	})
+	if err != nil {
+		return Message{}, fmt.Errorf("reply to direct message: %w", err)
+	}
+	messages := []Message{reply}
+	if err := s.repo.hydrateReplyPreviews(ctx, senderID, messages); err != nil {
+		return Message{}, fmt.Errorf("hydrate direct reply preview: %w", err)
+	}
+	reply = messages[0]
+	return reply, nil
+}
+
 // DeleteOwnMessage soft-deletes one recent direct message after rechecking
 // current pair eligibility and emits a targeted deletion projection.
 func (s *DirectService) DeleteOwnMessage(ctx context.Context, senderID, peerID, messageID uuid.UUID) error {
 	if err := s.authorize(ctx, senderID, peerID); err != nil {
 		return err
 	}
-	return s.repo.WithTx(ctx, func(tx *Tx) error {
-		if err := tx.LockQualifyingDMCircle(ctx, senderID, peerID); err != nil {
-			return err
-		}
-		if s.media != nil {
-			if err := s.media.RevokeMessageMediaInTx(ctx, tx, messageID, senderID, peerID); err != nil {
-				return err
-			}
-		}
-		deleted, err := tx.DeleteOwnDirectMessage(ctx, messageID, senderID, peerID)
-		if err != nil {
-			return err
-		}
-		if !deleted {
-			return nil
-		}
-		return tx.InsertOutboxEvent(ctx, messageID, realtime.EventChatMessageDeleted, &peerID)
-	})
+	var store *MediaStore
+	if s.media != nil { store = s.media.store }
+	return NewModerationService(s.repo, store).Delete(ctx, senderID, uuid.Nil, messageID)
 }
 
 func (s *DirectService) authorize(ctx context.Context, viewerID, peerID uuid.UUID) error {

@@ -147,6 +147,7 @@ class _Api extends ChatApiClient {
     required String circleId,
     required String content,
     required String idempotencyKey,
+    String? replyToId,
   }) async {
     sent = true;
     throw StateError('must not be called');

@@ -346,6 +346,7 @@ class _FakeChatApi extends ChatApiClient {
     required String circleId,
     required String messageId,
     required String idempotencyKey,
+    String? replyToId,
   }) async =>
       groupReadIds.add(messageId);
 
@@ -373,6 +374,7 @@ class _FakeChatApi extends ChatApiClient {
     required String circleId,
     required String content,
     required String idempotencyKey,
+    String? replyToId,
   }) async {
     sentIdempotencyKeys.add(idempotencyKey);
     sentContents.add(content);

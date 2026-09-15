@@ -19,6 +19,7 @@ class ChatUiLabels {
   static const statusDelivered = 'تم التسليم';
   static const statusRead = 'تمت القراءة';
   static const memberFallback = 'عضو';
+  static const search = 'بحث في المحادثة';
 
   // Terminal send-failure affordances (FR-008 edit/discard/explicit retry).
   static const sendFailed = 'فشل الإرسال';
@@ -83,6 +84,7 @@ class ChatUiLabels {
   static const tooLongEn = 'Message is too long; limit is 4000 characters';
   static const loadOlderEn = 'Load older messages';
   static const memberFallbackEn = 'Member';
+  static const searchEn = 'Search chat';
   static const statusPendingEn = 'Sending';
   static const statusSentEn = 'Sent';
   static const statusDeliveredEn = 'Delivered';

@@ -36,6 +36,29 @@ ChatDeliveryStatus _deliveryStatusFromName(String? name) {
 DateTime? _parseNullableDate(String? raw) =>
     raw == null ? null : DateTime.parse(raw);
 
+class ChatReplyPreviewProjection {
+  const ChatReplyPreviewProjection({
+    required this.id,
+    required this.senderName,
+    required this.preview,
+    required this.deleted,
+  });
+
+  factory ChatReplyPreviewProjection.fromJson(Map<String, dynamic> json) =>
+      ChatReplyPreviewProjection(
+        id: json['id'] as String,
+        senderName: json['sender_name'] as String? ?? '',
+        preview:
+            json['deleted'] == true ? '' : json['preview'] as String? ?? '',
+        deleted: json['deleted'] as bool? ?? false,
+      );
+
+  final String id;
+  final String senderName;
+  final String preview;
+  final bool deleted;
+}
+
 /// Validates chat text before sending: non-empty after trimming and at most
 /// [ChatLimits.maxContentLength] characters (contract `content.maxLength`).
 ChatTextValidation validateChatText(String? content) {
@@ -74,6 +97,11 @@ class ChatMessage {
     this.mediaUrlExpiresAt,
     this.fileName,
     this.voiceDurationSeconds,
+    this.replyToId,
+    this.replyPreview,
+    this.pinnedAt,
+    this.pinnedBy,
+    this.deletedAt,
     this.readReceipts = const [],
   });
 
@@ -93,6 +121,15 @@ class ChatMessage {
             _parseNullableDate(json[ChatJsonKeys.mediaUrlExpiresAt] as String?),
         fileName: json[ChatJsonKeys.fileName] as String?,
         voiceDurationSeconds: json[ChatJsonKeys.voiceDurationSeconds] as int?,
+        replyToId: json[ChatJsonKeys.replyToId] as String?,
+        replyPreview: switch (json[ChatJsonKeys.replyPreview]) {
+          final Map<String, dynamic> value =>
+            ChatReplyPreviewProjection.fromJson(value),
+          _ => null,
+        },
+        pinnedAt: _parseNullableDate(json[ChatJsonKeys.pinnedAt] as String?),
+        pinnedBy: json[ChatJsonKeys.pinnedBy] as String?,
+        deletedAt: _parseNullableDate(json[ChatJsonKeys.deletedAt] as String?),
         readReceipts: (json['read_receipts'] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>()
             .map(ChatReadReceipt.fromJson)
@@ -121,6 +158,11 @@ class ChatMessage {
   final DateTime? mediaUrlExpiresAt;
   final String? fileName;
   final int? voiceDurationSeconds;
+  final String? replyToId;
+  final ChatReplyPreviewProjection? replyPreview;
+  final DateTime? pinnedAt;
+  final String? pinnedBy;
+  final DateTime? deletedAt;
   final List<ChatReadReceipt> readReceipts;
 }
 

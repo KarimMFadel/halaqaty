@@ -17,8 +17,12 @@ const (
 	routeRealtimeTicketsCreate    = apirouter.RouteRealtimeTicketsCreate
 	routeWebhookLiveKit           = apirouter.RouteWebhookLiveKit
 
-	routeCircleMessagesGet  = apirouter.RouteCircleMessagesGet
-	routeCircleMessagesSend = apirouter.RouteCircleMessagesSend
+	routeCircleMessagesGet    = apirouter.RouteCircleMessagesGet
+	routeCircleMessagesSend   = apirouter.RouteCircleMessagesSend
+	routeCircleMessagesSearch = apirouter.RouteCircleMessagesSearch
+	routeCircleMessagesPinned = apirouter.RouteCircleMessagesPinned
+	routeCircleMessagePin     = apirouter.RouteCircleMessagePin
+	routeCircleMessageUnpin   = apirouter.RouteCircleMessageUnpin
 
 	routeUploadsVoice    = apirouter.RouteUploadsVoice
 	routeUploadsImage    = apirouter.RouteUploadsImage

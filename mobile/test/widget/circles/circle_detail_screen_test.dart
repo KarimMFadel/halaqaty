@@ -81,6 +81,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // The chat entry (F-004) sits above management and can push it below
+    // the fold, so scroll it into view first — same as the retirement tile.
+    await tester.ensureVisible(find.byKey(const Key('openCircleManagement')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('openCircleManagement')));
     await tester.pumpAndSettle();
     expect(find.byType(CircleManagementScreen), findsOneWidget);

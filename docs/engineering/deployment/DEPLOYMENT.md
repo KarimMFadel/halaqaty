@@ -25,6 +25,8 @@
 
 **Start lean. Scale when needed. Never over-engineer early.**
 
+The API image is built from [`docker/api.Dockerfile`](../../../docker/api.Dockerfile). It installs FFprobe and QPDF because chat attachment validation rejects malformed audio and PDFs before staging (ADR-022).
+
 Our deployment strategy follows these principles:
 1. **Phase 1 runs on $8–12/month.** We will not invest in complex infrastructure before proving the product.
 2. **Docker Compose first.** Easy to manage, easy to debug, sufficient for hundreds of users.

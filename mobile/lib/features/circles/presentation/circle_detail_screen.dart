@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
+import 'package:halaqaty_mobile/features/chat/presentation/group_chat_screen.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_detail_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_management_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_members_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_retirement_screen.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_ui_labels.dart';
 
 class CircleDetailScreen extends ConsumerWidget {
   const CircleDetailScreen({
@@ -17,27 +19,28 @@ class CircleDetailScreen extends ConsumerWidget {
   final String circleId;
   final String? currentUserId;
 
-  String _privacyLabel(bool isPrivate, bool rtl) =>
-      isPrivate ? (rtl ? 'خاصة' : 'Private') : (rtl ? 'عامة' : 'Public');
+  String _privacyLabel(bool isPrivate, bool rtl) => isPrivate
+      ? (rtl ? CircleDetailLabels.privateAr : CircleDetailLabels.privateEn)
+      : (rtl ? CircleDetailLabels.publicAr : CircleDetailLabels.publicEn);
 
   String _genderLabel(String genderRestriction, bool rtl) {
     if (!rtl) {
       return switch (genderRestriction) {
-        'male' => 'Male',
-        'female' => 'Female',
-        'mixed' => 'Mixed',
-        _ => 'Unspecified',
+        'male' => CircleDetailLabels.maleEn,
+        'female' => CircleDetailLabels.femaleEn,
+        'mixed' => CircleDetailLabels.mixedEn,
+        _ => CircleDetailLabels.unspecifiedEn,
       };
     }
     switch (genderRestriction) {
       case 'male':
-        return 'ذكور';
+        return CircleDetailLabels.maleAr;
       case 'female':
-        return 'إناث';
+        return CircleDetailLabels.femaleAr;
       case 'mixed':
-        return 'مختلطة';
+        return CircleDetailLabels.mixedAr;
       default:
-        return 'غير محدد';
+        return CircleDetailLabels.unspecifiedAr;
     }
   }
 
@@ -61,7 +64,8 @@ class CircleDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(rtl ? 'تفاصيل الحلقة' : 'Circle details'),
+        title:
+            Text(rtl ? CircleDetailLabels.titleAr : CircleDetailLabels.titleEn),
       ),
       body: circleAsync.when(
         data: (circle) {
@@ -79,8 +83,8 @@ class CircleDetailScreen extends ConsumerWidget {
                       Expanded(
                         child: Text(
                           rtl
-                              ? 'هذه الحلقة مؤرشفة. القراءة فقط متاحة.'
-                              : 'This circle is archived and read-only.',
+                              ? CircleDetailLabels.archivedAr
+                              : CircleDetailLabels.archivedEn,
                           style: const TextStyle(color: Colors.black87),
                         ),
                       ),
@@ -102,29 +106,39 @@ class CircleDetailScreen extends ConsumerWidget {
                   children: [
                     ListTile(
                       leading: const Icon(Icons.group),
-                      title: Text(rtl ? 'السعة القصوى' : 'Maximum capacity'),
+                      title: Text(rtl
+                          ? CircleDetailLabels.capacityAr
+                          : CircleDetailLabels.capacityEn),
                       subtitle: Text('${circle.maxCapacity}'),
                     ),
                     ListTile(
                       leading: const Icon(Icons.lock_outline),
-                      title: Text(rtl ? 'نوع الحلقة' : 'Circle visibility'),
+                      title: Text(rtl
+                          ? CircleDetailLabels.visibilityAr
+                          : CircleDetailLabels.visibilityEn),
                       subtitle: Text(_privacyLabel(circle.isPrivate, rtl)),
                     ),
                     ListTile(
                       leading: const Icon(Icons.wc),
-                      title: Text(rtl ? 'الفئة المستهدفة' : 'Audience'),
+                      title: Text(rtl
+                          ? CircleDetailLabels.audienceAr
+                          : CircleDetailLabels.audienceEn),
                       subtitle:
                           Text(_genderLabel(circle.genderRestriction, rtl)),
                     ),
                     ListTile(
                       leading: const Icon(Icons.language),
-                      title: Text(rtl ? 'اللغة' : 'Language'),
+                      title: Text(rtl
+                          ? CircleDetailLabels.languageAr
+                          : CircleDetailLabels.languageEn),
                       subtitle: Text(circle.language),
                     ),
                     if (circle.rules != null && circle.rules!.isNotEmpty)
                       ListTile(
                         leading: const Icon(Icons.rule),
-                        title: Text(rtl ? 'قواعد الحلقة' : 'Circle rules'),
+                        title: Text(rtl
+                            ? CircleDetailLabels.rulesAr
+                            : CircleDetailLabels.rulesEn),
                         subtitle: Text(circle.rules!),
                       ),
                   ],
@@ -133,15 +147,40 @@ class CircleDetailScreen extends ConsumerWidget {
               const Divider(height: 32),
               ListTile(
                 leading: const Icon(Icons.people),
-                title: Text(rtl ? 'الأعضاء' : 'Members'),
+                title: Text(rtl
+                    ? CircleDetailLabels.membersAr
+                    : CircleDetailLabels.membersEn),
                 trailing: Icon(rtl ? Icons.chevron_left : Icons.chevron_right),
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => CircleMembersScreen(circleId: circle.id),
+                      builder: (_) => CircleMembersScreen(
+                        circleId: circle.id,
+                        currentUserId: userId,
+                      ),
                     ),
                   );
                 },
+              ),
+              // Archived circles keep their retained-read chat entry (US8 /
+              // FR-032): the chat opens read-only, mutations are denied
+              // server-side.
+              ListTile(
+                key: const Key('openCircleChat'),
+                leading: const Icon(Icons.chat_bubble_outline),
+                title: Text(rtl
+                    ? CircleDetailLabels.chatAr
+                    : CircleDetailLabels.chatEn),
+                trailing: Icon(rtl ? Icons.chevron_left : Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => GroupChatScreen(
+                      circleId: circle.id,
+                      circleName: circle.name,
+                      readOnly: circle.isArchived,
+                    ),
+                  ),
+                ),
               ),
               if (!circle.isArchived &&
                   userId != null &&
@@ -150,7 +189,9 @@ class CircleDetailScreen extends ConsumerWidget {
                 ListTile(
                   key: const Key('openCircleManagement'),
                   leading: const Icon(Icons.manage_accounts),
-                  title: Text(rtl ? 'إدارة الحلقة' : 'Manage circle'),
+                  title: Text(rtl
+                      ? CircleDetailLabels.manageAr
+                      : CircleDetailLabels.manageEn),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => CircleManagementScreen(
@@ -166,7 +207,9 @@ class CircleDetailScreen extends ConsumerWidget {
                 ListTile(
                   key: const Key('openCircleRetirement'),
                   leading: const Icon(Icons.archive_outlined),
-                  title: Text(rtl ? 'أرشفة الحلقة' : 'Archive circle'),
+                  title: Text(rtl
+                      ? CircleDetailLabels.archiveAr
+                      : CircleDetailLabels.archiveEn),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => CircleRetirementScreen(
@@ -183,8 +226,8 @@ class CircleDetailScreen extends ConsumerWidget {
         error: (error, stack) => Center(
           child: Text(
             rtl
-                ? 'حدث خطأ في تحميل بيانات الحلقة'
-                : 'Could not load circle details',
+                ? CircleDetailLabels.loadErrorAr
+                : CircleDetailLabels.loadErrorEn,
           ),
         ),
       ),

@@ -30,6 +30,10 @@ const (
 	// ErrorCodeInternalServerError is returned when an unexpected server error occurs.
 	ErrorCodeInternalServerError = "ERR_INTERNAL_SERVER_ERROR"
 	ErrorCodeMediaUnavailable    = "ERR_MEDIA_UNAVAILABLE"
+	// ErrorCodeUploadTooLarge is returned when an upload body or file exceeds its limit (413).
+	ErrorCodeUploadTooLarge = "ERR_UPLOAD_TOO_LARGE"
+	// ErrorCodeUnsupportedMediaType is returned when the detected upload media type is outside the approved allowlist (415).
+	ErrorCodeUnsupportedMediaType = "ERR_UNSUPPORTED_MEDIA_TYPE"
 )
 
 // Queue error codes for the F-003 recitation queue. Conflict codes map to
@@ -112,4 +116,17 @@ const (
 	FieldQueueOptOut          = "opt_out"
 	FieldQueueGradeVisibility = "grade_visibility"
 	FieldQueueGradeCorrection = "grade_correction"
+
+	// Chat request fields (F-004), named as in the canonical chat contracts.
+	FieldLimit           = "limit"
+	FieldBefore          = "before"
+	FieldMessageType     = "message_type"
+	FieldContent         = "content"
+	FieldUploadID        = "upload_id"
+	FieldMediaKey        = "media_key"
+	FieldReplyToID       = "reply_to_id"
+	FieldFile            = "file"
+	FieldDMPeerID        = "dm_peer_id"
+	FieldDurationSeconds = "duration_seconds"
+	FieldMessageID       = "message_id"
 )

@@ -1,0 +1,249 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:halaqaty_mobile/features/chat/domain/chat_models.dart';
+
+const _messageId = '11111111-1111-1111-1111-111111111111';
+const _circleId = '22222222-2222-2222-2222-222222222222';
+const _senderId = '33333333-3333-3333-3333-333333333333';
+
+Map<String, dynamic> _messageJson({
+  String id = _messageId,
+  String? circleId = _circleId,
+  String messageType = 'text',
+  String? content = 'السلام عليكم',
+  String deliveryStatus = 'delivered',
+  String sentAt = '2026-09-03T12:00:00Z',
+  String? mediaUrl,
+  String? mediaUrlExpiresAt,
+  String? fileName,
+  int? voiceDurationSeconds,
+}) =>
+    {
+      'id': id,
+      'circle_id': circleId,
+      'sender_id': _senderId,
+      'sender_name': 'مريم',
+      'message_type': messageType,
+      'content': content,
+      'sent_at': sentAt,
+      'delivery_status': deliveryStatus,
+      if (mediaUrl != null) 'media_url': mediaUrl,
+      if (mediaUrlExpiresAt != null) 'media_url_expires_at': mediaUrlExpiresAt,
+      if (fileName != null) 'file_name': fileName,
+      if (voiceDurationSeconds != null)
+        'voice_duration_seconds': voiceDurationSeconds,
+    };
+
+ChatMessage _message(
+  String id, {
+  DateTime? sentAt,
+  ChatDeliveryStatus status = ChatDeliveryStatus.delivered,
+}) =>
+    ChatMessage(
+      id: id,
+      senderId: _senderId,
+      circleId: _circleId,
+      content: 'نص',
+      type: ChatMessageType.text,
+      sentAt: sentAt ?? DateTime.utc(2026, 9, 3, 12),
+      deliveryStatus: status,
+    );
+
+void main() {
+  group('ChatMessage', () {
+    test('parses a contract Message projection with plain-text passthrough',
+        () {
+      final content = '<b>السلام</b> <script>alert(1)</script> & "quoted"';
+      final message = ChatMessage.fromJson(_messageJson(content: content));
+
+      expect(message.id, _messageId);
+      expect(message.circleId, _circleId);
+      expect(message.senderId, _senderId);
+      expect(message.senderName, 'مريم');
+      expect(message.type, ChatMessageType.text);
+      expect(message.sentAt, DateTime.utc(2026, 9, 3, 12));
+      expect(message.deliveryStatus, ChatDeliveryStatus.delivered);
+      // Safe text: the model never interprets markup; content is stored raw
+      // and rendering escapes it later in the presentation layer.
+      expect(message.content, content);
+    });
+
+    test('parses server-authoritative read status', () {
+      final message =
+          ChatMessage.fromJson(_messageJson(deliveryStatus: 'read'));
+
+      expect(message.deliveryStatus, ChatDeliveryStatus.read);
+    });
+
+    test('keeps client-local pending and sent statuses constructible', () {
+      // `pending` and `sent` never arrive from the server (contract enum is
+      // delivered/read); they exist for optimistic local projections only.
+      final pending = _message('local-1', status: ChatDeliveryStatus.pending);
+      final sent = _message('local-2', status: ChatDeliveryStatus.sent);
+
+      expect(pending.deliveryStatus, ChatDeliveryStatus.pending);
+      expect(sent.deliveryStatus, ChatDeliveryStatus.sent);
+    });
+
+    test('rejects values outside the contract enums', () {
+      expect(() => ChatMessage.fromJson(_messageJson(messageType: 'sticker')),
+          throwsFormatException);
+      expect(() => ChatMessage.fromJson(_messageJson(deliveryStatus: 'queued')),
+          throwsFormatException);
+    });
+
+    test('parses the media projection fields for a voice message', () {
+      final message = ChatMessage.fromJson(_messageJson(
+        messageType: 'voice',
+        content: null,
+        mediaUrl: 'https://media.example.com/chat/voice/abc.m4a?sig=1',
+        mediaUrlExpiresAt: '2026-09-18T12:00:00Z',
+        fileName: 'note.m4a',
+        voiceDurationSeconds: 42,
+      ));
+
+      expect(message.type, ChatMessageType.voice);
+      expect(message.mediaUrl,
+          'https://media.example.com/chat/voice/abc.m4a?sig=1');
+      expect(message.mediaUrlExpiresAt, DateTime.parse('2026-09-18T12:00:00Z'));
+      expect(message.fileName, 'note.m4a');
+      expect(message.voiceDurationSeconds, 42);
+    });
+
+    test('media fields default to absent for text messages', () {
+      final message = ChatMessage.fromJson(_messageJson());
+
+      expect(message.mediaUrl, isNull);
+      expect(message.mediaUrlExpiresAt, isNull);
+      expect(message.fileName, isNull);
+      expect(message.voiceDurationSeconds, isNull);
+    });
+  });
+
+  group('ChatMessagePage', () {
+    test('parses the cursor pagination envelope', () {
+      final page = ChatMessagePage.fromJson({
+        'data': [
+          _messageJson(),
+          _messageJson(id: '44444444-4444-4444-4444-444444444444')
+        ],
+        'has_more': true,
+        'next_before': '55555555-5555-5555-5555-555555555555',
+      });
+
+      expect(page.messages, hasLength(2));
+      expect(page.hasMore, isTrue);
+      expect(page.nextBefore, '55555555-5555-5555-5555-555555555555');
+    });
+
+    test('parses the terminal page without a cursor', () {
+      final page = ChatMessagePage.fromJson({
+        'data': [_messageJson()],
+        'has_more': false,
+        'next_before': null,
+      });
+
+      expect(page.hasMore, isFalse);
+      expect(page.nextBefore, isNull);
+    });
+  });
+
+  group('validateChatText', () {
+    test('rejects empty and whitespace-only text', () {
+      expect(validateChatText(null), ChatTextValidation.empty);
+      expect(validateChatText(''), ChatTextValidation.empty);
+      expect(validateChatText('   \n\t'), ChatTextValidation.empty);
+    });
+
+    test('accepts 4000 characters and rejects 4001', () {
+      final arabic = 'س' * 4000;
+      expect(validateChatText(arabic), ChatTextValidation.valid);
+      expect(validateChatText('س' * 4001), ChatTextValidation.tooLong);
+      expect(validateChatText('a' * 4001), ChatTextValidation.tooLong);
+    });
+  });
+
+  group('mergeChatMessages', () {
+    test('deduplicates by message id with incoming winning', () {
+      final existing = [_message('a'), _message('b')];
+      final incoming = [
+        _message('a', status: ChatDeliveryStatus.read),
+        _message('c'),
+      ];
+
+      final merged = mergeChatMessages(existing, incoming);
+
+      expect(merged.map((m) => m.id), ['c', 'b', 'a']);
+      final replaced = merged.firstWhere((m) => m.id == 'a');
+      expect(replaced.deliveryStatus, ChatDeliveryStatus.read);
+    });
+
+    test('orders deterministically by sent_at then id, newest first', () {
+      final noon = DateTime.utc(2026, 9, 3, 12);
+      final merged = mergeChatMessages(
+        [
+          _message('b', sentAt: noon),
+        ],
+        [
+          _message('a', sentAt: noon), // same instant, lower id sorts after
+          _message('z', sentAt: noon.add(const Duration(minutes: 5))),
+        ],
+      );
+
+      expect(merged.map((m) => m.id), ['z', 'b', 'a']);
+    });
+  });
+
+  group('reconcileChatMessages', () {
+    final noon = DateTime.utc(2026, 9, 3, 12);
+
+    test('removes a server message absent from its authoritative window', () {
+      // 'gone' sits between the page's oldest and newest entries, so the
+      // page would have returned it; absence means server-side deletion.
+      final reconciled = reconcileChatMessages(
+        [
+          _message('newest', sentAt: noon.add(const Duration(minutes: 2))),
+          _message('gone', sentAt: noon.add(const Duration(minutes: 1))),
+          _message('oldest', sentAt: noon),
+        ],
+        [
+          _message('newest', sentAt: noon.add(const Duration(minutes: 2))),
+          _message('oldest', sentAt: noon),
+        ],
+      );
+
+      expect(reconciled.map((m) => m.id), ['newest', 'oldest']);
+    });
+
+    test('keeps messages outside the page window and local pending items', () {
+      final reconciled = reconcileChatMessages(
+        [
+          // Newer than the page's newest: committed after the snapshot.
+          _message('post-snapshot',
+              sentAt: noon.add(const Duration(minutes: 5))),
+          // Older than the page's oldest: owned by older pages.
+          _message('ancient', sentAt: noon.subtract(const Duration(hours: 1))),
+          // Local optimistic item: never removable by server pages.
+          _message('local-key', status: ChatDeliveryStatus.pending),
+          _message('in-window-gone',
+              sentAt: noon.add(const Duration(minutes: 1))),
+        ],
+        [
+          _message('newest', sentAt: noon.add(const Duration(minutes: 2))),
+          _message('oldest', sentAt: noon),
+        ],
+      );
+
+      expect(reconciled.map((m) => m.id),
+          ['post-snapshot', 'newest', 'oldest', 'local-key', 'ancient']);
+    });
+
+    test('an empty page cannot establish a window, so nothing is removed', () {
+      final reconciled = reconcileChatMessages(
+        [_message('m1'), _message('m2')],
+        const [],
+      );
+
+      expect(reconciled.map((m) => m.id), ['m2', 'm1']);
+    });
+  });
+}

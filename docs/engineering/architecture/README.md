@@ -35,6 +35,12 @@ The `adr/` subdirectory records the key architectural decisions made for Halaqat
 | [ADR-013](adr/ADR-013-recitation-grade-scale.md) | Canonical Five-Grade Recitation Scale | Accepted | 2026-08-09 |
 | [ADR-014](adr/ADR-014-mvp-deployment.md) | Single-Server Docker Compose Deployment for MVP | Accepted | 2026-08-09 |
 | [ADR-015](adr/ADR-015-session-media-provider-boundary.md) | Replaceable Session-Media Provider Boundary | Accepted | 2026-08-15 |
+| [ADR-016](adr/ADR-016-session-realtime-and-presence-foundation.md) | Shared Realtime Tickets and Session Presence Boundary | Accepted | 2026-08-15 |
+| [ADR-017](adr/ADR-017-session-recovery-and-reconciliation.md) | Session Recovery and Reconciliation | Accepted | 2026-08-19 |
+| [ADR-018](adr/ADR-018-configurable-session-queue-policy.md) | Configurable Session Recitation Queue Policy | Accepted | 2026-08-23 |
+| [ADR-019](adr/ADR-019-no-cascade-student-history.md) | No Cascading Deletes on Student History Tables | Accepted | 2026-08-23 |
+| [ADR-020](adr/ADR-020-voluntary-recitation-queue.md) | Voluntary Recitation Queue and Open Student Audio | Accepted | 2026-08-28 |
+| [ADR-021](adr/ADR-021-chat-persistence-media-and-delivery.md) | Chat Persistence, Media Revocation, and Delivery Boundaries | Accepted | 2026-09-06 |
 
 ---
 

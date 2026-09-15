@@ -81,4 +81,37 @@ const (
 	ErrorMessageQueueInvalidOrder      = "ordered_ids must list every candidate exactly once"
 	ErrorMessageQueueInvalidGrade      = "grade must be one of the five accepted grades"
 	ErrorMessageQueueInvalidNote       = "note must be at most 500 characters"
+
+	// Chat messages (F-004 US1/US3). User-safe: no content, keys, URLs, or
+	// identifiers appear in these strings.
+	ErrorMessageChatIdempotencyKeyInvalid  = "Idempotency-Key header is required and must be at most 128 characters"
+	ErrorMessageChatTextInvalid            = "content must be between 1 and 4000 characters"
+	ErrorMessageChatMessageTypeInvalid     = "message_type must be one of: text, image, file, voice"
+	ErrorMessageChatUploadIDNotAllowed     = "text messages must not include upload_id"
+	ErrorMessageChatUploadIDRequired       = "upload_id is required for image, file, and voice messages"
+	ErrorMessageChatUploadIDInvalid        = "upload_id must be a valid UUID"
+	ErrorMessageChatMediaContentNotAllowed = "media messages must not include content"
+	ErrorMessageChatUploadNotAttachable    = "upload cannot be attached to this message"
+	ErrorMessageChatMediaKeyUnsupported    = "media_key is not supported"
+	ErrorMessageChatReplyUnsupported       = "reply_to_id is not supported yet"
+	ErrorMessageChatLimitInvalid           = "limit must be between 1 and 100"
+	ErrorMessageChatSearchInvalid          = "q must be between 2 and 200 characters"
+	ErrorMessageChatPinLimit               = "circle has reached the maximum of five pinned messages"
+
+	// Chat media (F-004 US3). User-safe: no filenames, object keys, URLs, or
+	// identifiers appear in these strings.
+	ErrorMessageUploadTooLarge          = "file exceeds its size limit"
+	ErrorMessageUnsupportedMediaType    = "detected media type is not supported"
+	ErrorMessageChatFileRequired        = "a multipart file field is required"
+	ErrorMessageChatDMPeerIDInvalid     = "dm_peer_id must be a valid UUID"
+	ErrorMessageChatDurationInvalid     = "duration_seconds must be between 1 and 300 for voice"
+	ErrorMessageChatDurationMalformed   = "duration_seconds must be an integer"
+	ErrorMessageChatUploadTargetInvalid = "exactly one of circle_id or dm_peer_id is required"
+	ErrorMessageChatMessageIDInvalid    = "message_id must be a valid UUID"
 )
+
+// ErrorMessageChatIdempotencyConflict describes a conflicting chat retry.
+const ErrorMessageChatIdempotencyConflict = "idempotency key was already used for different input"
+
+// ErrorMessageChatMalformedMedia describes supported media that cannot be parsed.
+const ErrorMessageChatMalformedMedia = "media content is malformed"

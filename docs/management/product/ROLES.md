@@ -28,6 +28,7 @@ The primary power user of Halaqaty.
 
 - Create and configure circles (name, rules, capacity, privacy settings)
 - Generate and share invite codes/links
+- Invite a person to an active circle as a teacher or student
 - Conduct live audio sessions (video is post-MVP behind feature flag)
 - Manage the recitation queue during sessions (order, skip, grade)
 - Assign another member as teacher, supervisor, or student, while retaining at least one teacher
@@ -46,6 +47,7 @@ The primary power user of Halaqaty.
 **Capabilities:**
 
 - Join multiple circles with different teachers
+- Invite another person to an active circle as a student only
 - Participate in live sessions; join recitation queue
 - Send and receive messages (group and private)
 - View own progress via F-007: Quran Map (114 Surahs), attendance vs practiced history, recitation log, and progress analytics
@@ -63,6 +65,7 @@ A trusted member appointed during circle creation or by a circle manager to help
 **Capabilities (granted by a circle manager):**
 
 - Manage the recitation queue (reorder, skip, add late joiners)
+- Invite a person to an active circle as a teacher or student
 - Mute/unmute participants in live sessions
 - Track attendance
 - Change another member's teacher, supervisor, or student assignment
@@ -97,6 +100,7 @@ A trusted member appointed during circle creation or by a circle manager to help
 | Circle creation | Any authenticated user may create a circle; their role in an existing circle does not restrict it |
 | Multi-circle participation | A user can be a Teacher in one circle and a Student in another |
 | Initial assignments | Creator may select existing registered users as one or more teachers and one optional backup supervisor; without a selected teacher, the creator becomes teacher |
+| Invitations | In an active circle, teachers and supervisors may invite a teacher or student; students may invite a student only. The invitation's role cannot be altered during acceptance |
 | Role management | A teacher or supervisor may change another member's role among teacher, supervisor, and student; they cannot change their own role or remove the final teacher |
 | Supervisor timing | Can be assigned before session creation, before session start, or during a live session |
 | Teacher count | A circle may have multiple teachers and must always retain at least one |
@@ -108,7 +112,7 @@ A trusted member appointed during circle creation or by a circle manager to help
 | Capability | Teacher | Student | Supervisor |
 |-----------|---------|---------|------------|
 | Create circle | Account-level (any authenticated user) | Account-level (any authenticated user) | Account-level (any authenticated user) |
-| Invite members | ✅ | ❌ | ❌ |
+| Invite members | ✅ Teacher/student | ✅ Student only | ✅ Teacher/student |
 | Start live session | ✅ | ❌ | ❌ |
 | Manage queue (reorder/skip) | ✅ | ❌ | ✅ |
 | Grade recitation | ✅ | ❌ | ❌ |

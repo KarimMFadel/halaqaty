@@ -1,0 +1,9 @@
+.git
+.github
+.codex
+backend/.gocache
+mobile/.dart_tool
+mobile/build
+coverage.out
+**/*.log
+.env*

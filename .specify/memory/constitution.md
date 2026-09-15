@@ -41,7 +41,7 @@ These rules are never broken, in any environment, under any circumstances:
 2. **Firebase Auth is for identity only**. All authorization checks query PostgreSQL `circle_members`. A valid Firebase JWT does not grant any action without a matching role record.
 3. **Roles are per-circle**. A user can be teacher in one circle and student in another simultaneously.
 4. **Student audio publishing is open within authorized live sessions**. Authorized students receive audio-publish permission for the session; F-003 queue actions never grant, revoke, mute, or otherwise change it. Teachers and supervisors retain explicit F-005 moderation controls, and video publishing remains disabled ([ADR-020](../../docs/engineering/architecture/adr/ADR-020-voluntary-recitation-queue.md)).
-5. **Recording is DISABLED in MVP**. The `FEATURE_RECORDING_ENABLED` flag must stay `false` until a privacy/legal framework is formally documented and approved. This is not negotiable.
+5. **Live-session recording is DISABLED in MVP**. The `FEATURE_RECORDING_ENABLED` flag controls capture/storage of live-session audio or video and must stay `false` until a privacy/legal framework is formally documented and approved. User-initiated F-004 chat voice notes are discrete message attachments with explicit record/preview/send actions, fixed size/duration limits, and access-controlled storage; they are not live-session recording and are permitted in MVP.
 6. **All input is validated server-side**. The Flutter client is never trusted. Ayah numbers, file types, MIME types, and sizes are re-validated on the Go backend.
 7. **Parameterized queries only**. No string-interpolated SQL. Use `pgx` named or positional parameters exclusively.
 8. **Rate limiting is enforced**. REST API: per IP and per user ID. WebSocket: max 3 active connections per user. Messages: max 30/min per user per circle.
@@ -91,11 +91,11 @@ Quran recitation demands pristine, unprocessed audio. Every LiveKit room configu
 ### Feature Flags
 - Post-MVP capabilities live behind boolean feature flags in Go configuration (environment variables):
   - `FEATURE_VIDEO_ENABLED` (default: `false`)
-  - `FEATURE_RECORDING_ENABLED` (default: `false`)
+  - `FEATURE_RECORDING_ENABLED` (default: `false`; live-session recording only, not chat voice notes)
   - `FEATURE_AI_TAJWEED_ENABLED` (default: `false`)
   - `FEATURE_ANALYTICS_ENABLED` (default: `false`)
   - `FEATURE_WEB_ENABLED` (default: `false`)
-- Activating `FEATURE_RECORDING_ENABLED` requires a signed-off privacy framework document merged to `main`.
+- Activating live-session recording through `FEATURE_RECORDING_ENABLED` requires a signed-off privacy framework document merged to `main`.
 - Flutter clients must read feature flags from a backend endpoint — never hardcoded in the app binary.
 
 ---
@@ -176,4 +176,6 @@ This constitution supersedes all other practices, preferences, or conventions in
 
 All Copilot agents must verify constitutional compliance before generating code. When uncertain, do less and ask. Complexity must be justified. Simplicity is the default.
 
-**Version**: 1.1.0 | **Ratified**: 2026-04-26 | **Last Amended**: 2026-08-30
+**Amendment 1.2.0 (2026-09-06)**: Clarified that the recording prohibition and `FEATURE_RECORDING_ENABLED` apply to live-session capture/storage, while explicitly initiated F-004 chat voice notes remain permitted message attachments. Accepted through ADR-021 by Karim.
+
+**Version**: 1.2.0 | **Ratified**: 2026-04-26 | **Last Amended**: 2026-09-06

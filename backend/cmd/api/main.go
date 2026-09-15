@@ -10,11 +10,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
+
 	firebaseAdmin "firebase.google.com/go/v4"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 
 	apirouter "github.com/KarimMFadel/halaqaty/backend/internal/api"
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
+	"github.com/KarimMFadel/halaqaty/backend/internal/chat"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/config"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/logging"
@@ -31,6 +36,9 @@ import (
 const (
 	queueOutboxPollInterval = 100 * time.Millisecond
 	queueOutboxBatchSize    = 100
+
+	chatOutboxDispatchInterval = 100 * time.Millisecond
+	chatOutboxBatchSize        = 100
 )
 
 type slogOutboxParkedAlerter struct {
@@ -181,22 +189,112 @@ func main() {
 		realtimeHub.SetSessionCommandHandler(liveSessionService.HandleRealtimeCommand)
 	}
 
+	// ── Chat (F-004 US1) ──────────────────────────────────────────────────────
+	// Group chat reuses F-002 memberships (rbacRepo) and the F-005 realtime
+	// transport; the outbox dispatcher projects committed chat events with
+	// bounded retry and parking.
+	chatRepo := chat.NewRepository(pool)
+	chatMetrics := new(metrics.ChatMetrics)
+	chatService := chat.NewGroupService(chatRepo, rbacRepo, chatMetrics, auditLogger)
+	chatProjector := chat.NewRealtimeProjector(rbacRepo, realtimeHub, ticketService, func(ctx context.Context, sessionID, userID string) (bool, error) {
+		session, err := sessionRepo.GetByIDAndUserID(ctx, sessionID, userID)
+		if err != nil {
+			return false, err
+		}
+		return session.RevokedAt == nil && time.Now().Before(session.ExpiresAt), nil
+	})
+	chatProjector.SetDMEligibilityChecker(func(ctx context.Context, userA, userB uuid.UUID) (bool, error) {
+		_, eligible, err := chatRepo.FindQualifyingDMCircle(ctx, userA, userB)
+		return eligible, err
+	})
+	chatProjector.SetReadReceiptLoader(chatRepo.FindMessageRead)
+	chatDispatcher := chat.NewOutboxDispatcher(
+		chat.NewPGOutboxStore(chatRepo),
+		chatProjector,
+		chatMetrics,
+		auditLogger,
+		nil,
+		nil,
+	)
+	chatHandler := chat.NewGroupHandler(chatService)
+	directService := chat.NewDirectService(chatRepo, nil)
+	directHandler := chat.NewDirectHandler(directService)
+	chatPresenceHandler := chat.NewPresenceHandler(chat.NewPresenceService(chatRepo, rbacRepo))
+	realtimeHub.SetChatCommandHandler(chat.NewTypingCommandHandler(chatProjector))
+
+	// ── Chat media (F-004 US3) ──────────────────────────────────────────────
+	// Gated like LiveKit: an absent CHAT_MEDIA_* configuration leaves the
+	// upload routes unregistered, but present-but-broken configuration must
+	// stop startup — a misconfigured bucket would silently degrade the
+	// delete-marker revocation guarantees (ADR-021).
+	var chatUploadHandler *chat.UploadHandler
+	var chatMediaHandler *chat.MediaHandler
+	var chatCleaner *chat.Cleaner
+	var chatMediaStore *chat.MediaStore
+	var chatMediaReconciler *chat.MediaReconciler
+	chatMediaCfg, err := config.LoadChatMediaConfig()
+	if err != nil {
+		logger.Error("failed to load chat media config", "error", err)
+		os.Exit(1)
+	}
+	if chatMediaCfg != (config.ChatMediaConfig{}) {
+		minioClient, err := minio.New(chatMediaCfg.Endpoint, &minio.Options{
+			Creds:  credentials.NewStaticV4(chatMediaCfg.AccessKeyID, chatMediaCfg.SecretAccessKey, ""),
+			Secure: chatMediaCfg.UseSSL,
+		})
+		if err != nil {
+			logger.Error("failed to init chat media object-store client", "error", err)
+			os.Exit(1)
+		}
+		chatMediaStore = chat.NewMediaStore(minioClient, chatMediaCfg.Bucket, chatMediaCfg.OperationTimeout)
+		if err := chatMediaStore.EnsureChatBucketVersioned(ctx); err != nil {
+			logger.Error("chat media bucket is missing, unversioned, or unreachable", "error", err)
+			os.Exit(1)
+		}
+		chatCleaner = chat.NewCleaner(chat.NewPoolStagedUploadSource(pool), chatMediaStore)
+		chatMediaReconciler = chat.NewMediaReconciler(chatRepo, chatMediaStore)
+		chatUploadService := chat.NewUploadService(
+			chatRepo,
+			rbacRepo,
+			chatMediaStore,
+			chatCleaner,
+			chatMetrics,
+			auditLogger,
+		)
+		chatHandler.SetMediaService(chatUploadService)
+		directService.SetMediaService(chatUploadService)
+		directHandler.SetMediaService(chatUploadService)
+		chatUploadHandler = chat.NewUploadHandler(chatUploadService)
+		chatMediaHandler = chat.NewMediaHandler(chatUploadService)
+	}
+	chatModerationHandler := chat.NewModerationHandler(chat.NewModerationService(chatRepo, chatMediaStore))
+
 	mwSet := apirouter.MiddlewareSet{
-		Auth:            authMW,
-		Role:            roleMW,
-		RateLimit:       rateLimitMW,
-		AuthHandler:     authHandler,
-		ProfileHandler:  profileHandler,
-		RBACHandler:     rbacHandler,
-		SessionHandler:  sessionHandler,
-		RealtimeHandler: realtimeHandler,
-		RealtimeHub:     realtimeHub,
-		QueueHandler:    queueHandler,
-		Timeout:         cfg.RequestTimeout,
-		Logger:          logger,
-		Metrics:         authMetrics,
-		QueueMetrics:    queueMetrics,
-		MetricsToken:    cfg.MetricsToken,
+		Auth:                  authMW,
+		Role:                  roleMW,
+		RateLimit:             rateLimitMW,
+		AuthHandler:           authHandler,
+		ProfileHandler:        profileHandler,
+		RBACHandler:           rbacHandler,
+		SessionHandler:        sessionHandler,
+		RealtimeHandler:       realtimeHandler,
+		RealtimeHub:           realtimeHub,
+		QueueHandler:          queueHandler,
+		ChatHandler:           chatHandler,
+		ChatModerationHandler: chatModerationHandler,
+		DirectChatHandler:     directHandler,
+		ChatPresenceHandler:   chatPresenceHandler,
+		ChatSendLimiter:       chat.NewChatSendLimiter(chat.MaxSendsPerMinute),
+		// Nil when chat media is unconfigured; the router leaves the
+		// upload/renewal routes unregistered in that case.
+		ChatUploadHandler: chatUploadHandler,
+		ChatMediaHandler:  chatMediaHandler,
+		Timeout:           cfg.RequestTimeout,
+		Logger:            logger,
+		Metrics:           authMetrics,
+		QueueMetrics:      queueMetrics,
+		ChatMetrics:       chatMetrics,
+		MetricsToken:      cfg.MetricsToken,
 	}
 
 	// ── Router ────────────────────────────────────────────────────────────────
@@ -243,6 +341,48 @@ func main() {
 		go func() {
 			if err := sessionReconciler.Run(reconcilerCtx); err != nil && !errors.Is(err, context.Canceled) {
 				logger.Error("session reconciliation stopped", "error", err)
+			}
+		}()
+	}
+	// Chat outbox lifecycle: startup replay of pending and parked events, then
+	// periodic dispatch until shutdown; Run honors reconcilerCtx cancellation.
+	go func() {
+		if err := chatDispatcher.Run(reconcilerCtx, chatOutboxBatchSize, chatOutboxDispatchInterval); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Error("chat outbox dispatch stopped", "error", err)
+		}
+	}()
+	if chatCleaner != nil {
+		go func() {
+			ticker := time.NewTicker(time.Hour)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-reconcilerCtx.Done():
+					return
+				case <-ticker.C:
+					if err := chatCleaner.CleanStaged(reconcilerCtx, 100); err != nil {
+						logger.Error("chat staged-upload cleanup failed", "error", err)
+					}
+				}
+			}
+		}()
+	}
+	if chatMediaReconciler != nil {
+		if err := chatMediaReconciler.Sweep(reconcilerCtx, chat.DefaultMediaReconciliationLimit); err != nil {
+			logger.Error("chat media startup reconciliation failed", "error", err)
+		}
+		go func() {
+			ticker := time.NewTicker(chat.DefaultMediaReconciliationInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-reconcilerCtx.Done():
+					return
+				case <-ticker.C:
+					if err := chatMediaReconciler.Sweep(reconcilerCtx, chat.DefaultMediaReconciliationLimit); err != nil {
+						logger.Error("chat media reconciliation failed", "error", err)
+					}
+				}
 			}
 		}()
 	}

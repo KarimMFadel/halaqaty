@@ -689,14 +689,50 @@ erDiagram
     messages {
         uuid id PK
         uuid circle_id FK
+        uuid dm_recipient_id FK
         uuid sender_id FK
+        varchar idempotency_key UK
         text content
         varchar message_type
-        text media_url
+        uuid upload_id FK-UK
         uuid reply_to_id FK
         bool is_pinned
+        uuid pinned_by FK
+        timestamptz pinned_at
         timestamptz sent_at
         timestamptz deleted_at
+    }
+    chat_uploads {
+        uuid id PK
+        uuid uploader_id FK
+        uuid authorization_circle_id FK
+        uuid dm_peer_id FK
+        text object_key UK
+        varchar mime_type
+        bigint size_bytes
+        varchar state
+    }
+    message_reads {
+        uuid message_id PK,FK
+        uuid user_id PK,FK
+        timestamptz read_at
+    }
+    chat_event_outbox {
+        uuid event_id PK
+        uuid message_id FK
+        varchar event_type
+        uuid recipient_id FK
+        int attempt_count
+        timestamptz delivered_at
+        timestamptz parked_at
+    }
+    message_moderation_audits {
+        uuid id PK
+        uuid message_id FK
+        uuid circle_id FK
+        uuid actor_id FK
+        varchar action
+        timestamptz occurred_at
     }
     memorization_progress {
         uuid id PK
@@ -760,6 +796,10 @@ erDiagram
     users ||--o{ circles : "teaches (teacher_id)"
     circles ||--o{ sessions : "hosts"
     circles ||--o{ messages : "has messages"
+    messages ||--o| chat_uploads : "attaches upload"
+    messages ||--o{ message_reads : "has read facts"
+    messages ||--o{ chat_event_outbox : "projects events"
+    messages ||--o{ message_moderation_audits : "has moderation audit"
     circles ||--o{ schedules : "has schedules"
     sessions ||--o{ session_participant_presence : "tracks live presence"
     sessions ||--o{ recitation_queue : "has rounds"
@@ -983,31 +1023,43 @@ end; a queue failure cannot delay or roll back the
 ended session.
 
 #### `messages`
+
+> **F-004 approval:** ADR-021 was accepted by Karim on 2026-09-06. Migration `000018_real_time_chat` remains subject to Spec-Kit analysis, contract validation, migration tests, and manual security review.
+
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | UUID | PK | |
 | circle_id | UUID | FK → circles.id | NULL for direct messages |
-| CHECK | (circle_id IS NOT NULL OR dm_recipient_id IS NOT NULL) | | At least one must be set |
+| CHECK | exactly one of circle_id, dm_recipient_id | | One group or direct context |
 | dm_recipient_id | UUID | FK → users.id | For direct messages |
 | sender_id | UUID | FK → users.id NOT NULL | |
+| idempotency_key | VARCHAR(128) | NOT NULL, UNIQUE with sender_id | Stable retry identity |
 | content | TEXT | | Text content (empty for voice/image/file) |
 | message_type | VARCHAR(20) | CHECK IN ('text','voice','image','file') NOT NULL | |
-| media_url | TEXT | | MinIO presigned URL (expires 7 days); NULL for text messages |
-| file_name | VARCHAR(255) | | Original filename for file/image/voice attachments |
-| file_size_bytes | INTEGER | | File size in bytes |
+| upload_id | UUID | UNIQUE FK → chat_uploads.id | Required for media; signed URLs are never persisted |
 | reply_to_id | UUID | FK → messages.id | Threaded reply target |
 | is_pinned | BOOLEAN | DEFAULT FALSE | |
+| pinned_by | UUID | FK → users.id | Current teacher/supervisor; group only |
+| pinned_at | TIMESTAMPTZ | | Present with pinned_by |
 | sent_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | Message send timestamp; maps to API field `sent_at` |
 | deleted_at | TIMESTAMPTZ | | Soft delete |
 
 #### `message_reads`
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| id | UUID | PK | |
-| message_id | UUID | FK → messages.id NOT NULL | |
-| user_id | UUID | FK → users.id NOT NULL | |
-| read_at | TIMESTAMPTZ | DEFAULT NOW() | |
-| UNIQUE | (message_id, user_id) | | |
+| message_id | UUID | PK, FK → messages.id | |
+| user_id | UUID | PK, FK → users.id | Cannot equal sender |
+| read_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | |
+
+#### F-004 chat support tables
+
+- `chat_uploads` binds a private MinIO object key to its uploader and validated group or DM target. It records server-detected MIME, sanitized display name, size, optional voice duration, single-use attachment, and `staged → attached → revoked` state. New chat clients use the opaque upload ID; legacy unbound uploads cannot attach to F-004 messages.
+- `chat_event_outbox` stores identifier-only `chat.message`, `chat.message_read`, and `chat.message_deleted` work in the same transaction as authoritative state. Workers claim with `FOR UPDATE SKIP LOCKED`, apply bounded backoff with jitter, rebuild the current audience, reauthorize each target user/session immediately before socket write, and park after five failures. Group events use `circle.{id}`; DM events target eligible authenticated-user connections directly and never select a qualifying circle. (Implementation status: the schema and dispatcher accept all three types; the current backend only projects `chat.message` — read/deleted projection lands with F-004 Phases 8/10.)
+- `message_moderation_audits` is an append-only, content-free record of teacher deletions. It is the narrow F-004 exception to ADR-012's deferred durable audit and requires ADR-021 acceptance.
+- Circle history and search require current or retained membership and `messages.sent_at >= circle_members.joined_at`. A rejoin starts a new visibility period. A DM is the unordered user pair and exposes its complete retained history only while a currently active shared circle has a teacher-student or supervisor-student role pairing.
+- Text search uses an Arabic-normalized generated `tsvector`, PostgreSQL `simple` configuration, and a partial GIN index over non-deleted group text.
+- Pin, unpin, and pinned-message deletion lock the owning `circles` row before counting/updating active pins, serializing the five-pin invariant.
+- Attachment deletion creates a MinIO delete marker before database soft deletion. Reconciliation removes only the latest internal marker when the message remains active, restoring versionless access, and creates a marker when a deleted message lacks one. Version IDs never leave the backend.
 
 #### `memorization_progress`
 | Column | Type | Constraints | Description |
@@ -1196,11 +1248,16 @@ does not expose separate add/delete entry controls.
 | GET | `/circles/{id}/messages` | ✅ | List circle messages (paginated) |
 | POST | `/circles/{id}/messages` | ✅ | Send a message |
 | DELETE | `/circles/{id}/messages/{msgId}` | ✅ | Delete a message |
-| POST | `/circles/{id}/messages/{msgId}/pin` | 🔲 | Pin a message |
-| DELETE | `/circles/{id}/messages/{msgId}/pin` | 🔲 | Unpin a message |
-| POST | `/circles/{id}/messages/{msgId}/read` | 🔲 | Mark message as read |
-| GET | `/dm/{userId}` | 🔲 | List DM conversation with a user |
-| POST | `/dm/{userId}` | 🔲 | Send a direct message |
+| GET | `/circles/{id}/messages/pinned` | ✅ | List active pinned messages |
+| POST | `/circles/{id}/messages/{msgId}/pin` | ✅ | Pin a message |
+| DELETE | `/circles/{id}/messages/{msgId}/pin` | ✅ | Unpin a message |
+| POST | `/circles/{id}/messages/{msgId}/read` | ✅ | Mark message as read in an active circle |
+| GET | `/circles/{id}/messages/search` | ✅ | Search visible circle history |
+| GET | `/dm/{userId}` | ✅ | List DM conversation with a user |
+| POST | `/dm/{userId}` | ✅ | Send a direct message |
+| DELETE | `/dm/{userId}/messages/{msgId}` | ✅ | Delete own direct message within 10 minutes |
+| POST | `/dm/{userId}/messages/{msgId}/read` | ✅ | Mark direct message as read |
+| POST | `/messages/{msgId}/media-url` | ✅ | Reauthorize and renew short-lived media access |
 
 ### `/progress`
 | Method | Path | Status | Description |
@@ -1371,10 +1428,10 @@ idx_<table>_<col>_partial_<condition>   -- partial (e.g., idx_messages_circle_id
 
 ### 6.6 Data Privacy
 
-- Voice messages (chat voice notes) stored in MinIO with access-controlled bucket policies
-- File URLs are pre-signed and expire after 7 days (renewable on access)
+- Chat media is stored by private object key in a versioned MinIO bucket; signed URLs and version IDs are never persisted or logged
+- Message media URLs are short-lived projections renewed only after current group/DM authorization; attachment deletion fails closed unless a delete marker revokes versionless access, and reconciliation repairs marker-before-database-commit crashes while retained bytes await parent cleanup
 - Personal data (email, phone) not returned in group-visible APIs
-- Live-session recording is disabled in MVP (no session audio/video storage)
+- Live-session recording is disabled in MVP (no session audio/video capture/storage). User-initiated F-004 chat voice notes are discrete access-controlled message attachments and do not use `FEATURE_RECORDING_ENABLED`.
 
 ### 6.7 Transport Security
 
@@ -1387,14 +1444,14 @@ idx_<table>_<col>_partial_<condition>   -- partial (e.g., idx_messages_circle_id
 
 - **End-to-end encryption** for direct messages (P3)
 - **Two-factor authentication** for teacher accounts (P2)
-- **Audit logging** for sensitive actions (remove member, delete messages)
+- **Broader audit logging** for sensitive actions beyond F-004's required durable teacher-deletion record
 - **GDPR data export** — allow users to download all their data
 
-### 6.9 Privacy Risk Register for Recording (Post-MVP)
+### 6.9 Privacy Risk Register for Live-Session Recording (Post-MVP)
 
-- Recording introduces high privacy sensitivity, especially for circles with minors.
-- Any future recording rollout requires explicit participant consent UX, retention limits, and strict access controls.
-- Recording feature flag must remain OFF until privacy/legal framework is approved.
+- Live-session recording introduces high privacy sensitivity, especially for circles with minors.
+- Any future live-session recording rollout requires explicit participant consent UX, retention limits, and strict access controls.
+- `FEATURE_RECORDING_ENABLED` must remain OFF until that privacy/legal framework is approved; it does not govern F-004 voice-note attachments.
 
 ### 6.10 Firebase Auth Availability & Degraded Mode
 
@@ -1432,6 +1489,10 @@ Pin versions here. Update this table when bumping a dependency.
 | `firebase_messaging` | `^15.1.0` | FCM push notifications |
 | `flutter_riverpod` | `^2.6.0` | State management (ADR-003) |
 | `go_router` | `^14.6.0` | Navigation |
+| `record` | `^7.1.1` | User-initiated chat voice-note capture and amplitude samples |
+| `just_audio` | `^0.10.6` | Foreground chat voice-note preview and playback |
+| `image_picker` | `^1.2.3` | Native JPEG/PNG selection |
+| `file_picker` | `^12.2.0` | Native PDF selection |
 
 ### Go Backend
 
@@ -1443,6 +1504,7 @@ Pin versions here. Update this table when bumping a dependency.
 | `jackc/pgx/v5` | `v5.7.x` | PostgreSQL driver |
 | `golang-migrate/migrate/v4` | `v4.18.x` | Schema migrations (ADR-006) |
 | `firebase.google.com/go/v4` | `v4.14.x` | Firebase Admin SDK (FCM) |
+| `minio/minio-go/v7` | `v7.x` | Narrow S3-compatible chat object/versioning client |
 
 ### Infrastructure
 
@@ -1450,6 +1512,7 @@ Pin versions here. Update this table when bumping a dependency.
 |-----------|----------------|-------|
 | LiveKit Server | `v1.8.x` | Must match `server-sdk-go` major version |
 | PostgreSQL | `16.x` | Requires `gen_random_uuid()` (PG 13+) |
+| MinIO Server | `RELEASE.2025-10-15T17-29-55Z` | Built from the official source tag via `docker/minio.Dockerfile`; private chat bucket uses versioning |
 | Docker | `26.x` | Local dev and production |
 
 > **Policy:** Use `^` (caret) pinning in `pubspec.yaml` and `go.mod`. Pin LiveKit Server version explicitly in `docker-compose.yml`. Version bumps require test run and PR description callout.

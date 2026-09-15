@@ -11,6 +11,9 @@ const (
 	HeaderForwardedFor  = "X-Forwarded-For"
 	HeaderSessionID     = "X-Halaqaty-Session-ID"
 	HeaderRequestID     = "X-Request-ID"
+	// HeaderIdempotencyKey is the required retry-identity header of the
+	// idempotent chat send contracts (F-003, F-004).
+	HeaderIdempotencyKey = "Idempotency-Key"
 )
 
 const (

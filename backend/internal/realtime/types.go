@@ -34,6 +34,45 @@ const (
 	EventQueueRoundFinalized  = "queue.round_finalized"
 )
 
+// ConnectionIdentity identifies one authenticated realtime connection to an
+// injected authorizer without exposing WebSocket implementation details.
+type ConnectionIdentity struct {
+	UserID         string
+	RealtimeTicket string
+}
+
+// DeliveryAuthorizer decides whether one connection remains eligible for a
+// delivery. A false result suppresses the write; an error aborts delivery.
+type DeliveryAuthorizer func(context.Context, ConnectionIdentity) (bool, error)
+
+// AuthorizedDelivery is an already-redacted event plus its per-write
+// authorization callback.
+type AuthorizedDelivery struct {
+	EventID   string
+	Payload   any
+	Authorize DeliveryAuthorizer
+}
+
+// ChatCommand is an ephemeral client command delegated to the chat domain.
+type ChatCommand struct {
+	Connection ConnectionIdentity
+	RequestID  string
+	Payload    map[string]any
+}
+
+// ChatCommandHandler handles an ephemeral chat command. The realtime hub does
+// not persist commands or interpret their domain payload.
+type ChatCommandHandler func(context.Context, ChatCommand) error
+
+// Chat event and command names registered on the shared transport.
+const (
+	EventChatMessage        = "chat.message"
+	EventChatMessageDeleted = "chat.message_deleted"
+	EventChatMessageRead    = "chat.message_read"
+	EventChatTyping         = "chat.typing"
+	CommandChatTyping       = "cmd.chat.typing"
+)
+
 // SessionEventProvider supplies one already-authorized event after a session
 // topic subscription succeeds. A nil event means the provider has no state for
 // that subscription.
@@ -112,6 +151,7 @@ type Ticket struct {
 	UserID    string
 	CircleIDs []string
 	ExpiresAt time.Time
+	SessionID string
 }
 
 // ExpiredAt reports whether the ticket is no longer valid at the given time.

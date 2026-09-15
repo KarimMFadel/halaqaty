@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
+	"github.com/KarimMFadel/halaqaty/backend/internal/chat"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
 	phttp "github.com/KarimMFadel/halaqaty/backend/internal/platform/http"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
@@ -19,6 +20,7 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/queue"
 	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
+	"github.com/google/uuid"
 )
 
 const (
@@ -79,6 +81,13 @@ func (wiringSessionRepo) GetLocalUserIDByFirebaseUID(_ context.Context, firebase
 
 type wiringRoleRepo struct{}
 
+type wiringModerationService struct{ called bool }
+
+func (s *wiringModerationService) Delete(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error {
+	s.called = true
+	return nil
+}
+
 func (wiringRoleRepo) RoleForUserInCircle(context.Context, string, string) (string, error) {
 	return "student", nil
 }
@@ -134,13 +143,17 @@ func wiringAuthenticatedRequest(method, path, body string) *http.Request {
 // registration branches in registerRoutes execute.
 func fullWiringMiddlewareSet(authMW *middleware.AuthMiddleware, extras ...func(*MiddlewareSet)) MiddlewareSet {
 	mw := MiddlewareSet{
-		Auth:            authMW,
-		Role:            middleware.NewRoleMiddleware(wiringRoleRepo{}),
-		ProfileHandler:  wiringProfileHandler(),
-		SessionHandler:  sessions.NewHandler(nil),
-		RealtimeHandler: realtime.NewHandler(nil),
-		RealtimeHub:     realtime.NewHub(nil, nil),
-		QueueHandler:    queue.NewHandler(nil, nil, nil, nil, nil),
+		Auth:              authMW,
+		Role:              middleware.NewRoleMiddleware(wiringRoleRepo{}),
+		ProfileHandler:    wiringProfileHandler(),
+		SessionHandler:    sessions.NewHandler(nil),
+		RealtimeHandler:   realtime.NewHandler(nil),
+		RealtimeHub:       realtime.NewHub(nil, nil),
+		QueueHandler:      queue.NewHandler(nil, nil, nil, nil, nil),
+		ChatHandler:       chat.NewGroupHandler(nil),
+		ChatSendLimiter:   chat.NewChatSendLimiter(30),
+		ChatUploadHandler: chat.NewUploadHandler(nil),
+		ChatMediaHandler:  chat.NewMediaHandler(nil),
 	}
 	for _, apply := range extras {
 		apply(&mw)
@@ -190,6 +203,12 @@ func TestRegisterRoutes_EveryProtectedRouteRejectsUnauthenticatedRequests(t *tes
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/participants/" + wiringOtherUserID + "/unmute"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/participants/" + wiringOtherUserID + "/remove"},
 		{http.MethodPost, "/api/v1/realtime/tickets"},
+		{http.MethodGet, "/api/v1/circles/" + wiringCircleID + "/messages"},
+		{http.MethodPost, "/api/v1/circles/" + wiringCircleID + "/messages"},
+		{http.MethodPost, "/api/v1/uploads/voice"},
+		{http.MethodPost, "/api/v1/uploads/image"},
+		{http.MethodPost, "/api/v1/uploads/file"},
+		{http.MethodPost, "/api/v1/messages/" + wiringSessionIDPath + "/media-url"},
 		{http.MethodGet, "/api/v1/sessions/" + wiringSessionIDPath + "/queue"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/queue/rounds"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/queue/reset"},
@@ -220,6 +239,23 @@ func TestRegisterRoutes_EveryProtectedRouteRejectsUnauthenticatedRequests(t *tes
 				t.Fatalf("error code: got %q, want %q", envelope.Error.Code, httpconst.ErrorCodeUnauthorized)
 			}
 		})
+	}
+}
+
+func TestRegisterRoutes_WiresAuthenticatedGroupMessageDelete(t *testing.T) {
+	service := &wiringModerationService{}
+	router := NewRouter(fullWiringMiddlewareSet(wiringAuthMiddleware(), func(mw *MiddlewareSet) {
+		mw.ChatModerationHandler = chat.NewModerationHandler(service)
+	}))
+	req := wiringAuthenticatedRequest(http.MethodDelete, "/api/v1/circles/"+wiringCircleID+"/messages/"+wiringEntryID, "")
+	req.Header.Set(httpconst.HeaderIdempotencyKey, "wiring-delete-key")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status: got %d want %d body=%s", rec.Code, http.StatusNoContent, rec.Body.String())
+	}
+	if !service.called {
+		t.Fatal("group message delete service was not called")
 	}
 }
 
@@ -267,6 +303,24 @@ func TestRegisterRoutes_UnconfiguredHandlersReturnTypedInternalErrors(t *testing
 			path:        "/api/v1/circles",
 			body:        `{"name":"Wiring Circle"}`,
 			wantMessage: httpconst.ErrorMessageRBACHandlerNotConfigured,
+		},
+		{
+			name:        "chat list without service reports internal server error",
+			method:      http.MethodGet,
+			path:        "/api/v1/circles/" + wiringCircleID + "/messages",
+			wantMessage: httpconst.ErrorMessageInternalServerError,
+		},
+		{
+			name:        "chat upload without service reports internal server error",
+			method:      http.MethodPost,
+			path:        "/api/v1/uploads/voice",
+			wantMessage: httpconst.ErrorMessageInternalServerError,
+		},
+		{
+			name:        "media renewal without service reports internal server error",
+			method:      http.MethodPost,
+			path:        "/api/v1/messages/" + wiringSessionIDPath + "/media-url",
+			wantMessage: httpconst.ErrorMessageInternalServerError,
 		},
 	}
 
@@ -395,9 +449,12 @@ func TestRouter_MetricsHandler_RequiresBearerToken(t *testing.T) {
 	authMetrics.RecordRequest(time.Millisecond)
 	queueMetrics := new(metrics.QueueMetrics)
 	queueMetrics.RecordOutboxParked()
+	chatMetrics := new(metrics.ChatMetrics)
+	chatMetrics.RecordOutbox(metrics.ChatOutboxDelivered)
 	router := NewRouter(MiddlewareSet{
 		Metrics:      authMetrics,
 		QueueMetrics: queueMetrics,
+		ChatMetrics:  chatMetrics,
 		MetricsToken: "wiring-metrics-token",
 	})
 
@@ -423,7 +480,7 @@ func TestRouter_MetricsHandler_RequiresBearerToken(t *testing.T) {
 		}
 	})
 
-	t.Run("valid token returns auth and queue summaries", func(t *testing.T) {
+	t.Run("valid token returns auth, queue, and chat summaries", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 		req.Header.Set(httpconst.HeaderAuthorization, "Bearer wiring-metrics-token")
 		rec := httptest.NewRecorder()
@@ -435,6 +492,7 @@ func TestRouter_MetricsHandler_RequiresBearerToken(t *testing.T) {
 		var summary struct {
 			metrics.MetricsSummary
 			Queue metrics.QueueMetricsSummary `json:"queue"`
+			Chat  metrics.ChatMetricsSummary  `json:"chat"`
 		}
 		if err := json.Unmarshal(rec.Body.Bytes(), &summary); err != nil {
 			t.Fatalf("decode metrics response: %v", err)
@@ -444,6 +502,25 @@ func TestRouter_MetricsHandler_RequiresBearerToken(t *testing.T) {
 		}
 		if summary.Queue.OutboxParkedTotal != 1 {
 			t.Fatalf("queue parked total: got %d, want 1", summary.Queue.OutboxParkedTotal)
+		}
+		if summary.Chat.Outbox[metrics.ChatOutboxDelivered] != 1 {
+			t.Fatalf("chat delivered total: got %d, want 1", summary.Chat.Outbox[metrics.ChatOutboxDelivered])
+		}
+	})
+
+	t.Run("nil chat metrics set does not panic", func(t *testing.T) {
+		nilChatRouter := NewRouter(MiddlewareSet{
+			Metrics:      new(metrics.AuthMetrics),
+			QueueMetrics: new(metrics.QueueMetrics),
+			MetricsToken: "wiring-metrics-token",
+		})
+		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		req.Header.Set(httpconst.HeaderAuthorization, "Bearer wiring-metrics-token")
+		rec := httptest.NewRecorder()
+		nilChatRouter.Handler().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status: got %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
 		}
 	})
 }

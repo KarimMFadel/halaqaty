@@ -153,6 +153,24 @@ func TestConnectionStateValues(t *testing.T) {
 	}
 }
 
+func TestChatEventAndCommandValues(t *testing.T) {
+	tests := []struct {
+		got  string
+		want string
+	}{
+		{got: EventChatMessage, want: "chat.message"},
+		{got: EventChatMessageDeleted, want: "chat.message_deleted"},
+		{got: EventChatMessageRead, want: "chat.message_read"},
+		{got: EventChatTyping, want: "chat.typing"},
+		{got: CommandChatTyping, want: "cmd.chat.typing"},
+	}
+	for _, test := range tests {
+		if test.got != test.want {
+			t.Fatalf("chat realtime value: got %q, want %q", test.got, test.want)
+		}
+	}
+}
+
 // mustTopic builds a topic with a known-valid kind for table expectations.
 func mustTopic(t *testing.T, kind TopicKind, id string) Topic {
 	t.Helper()

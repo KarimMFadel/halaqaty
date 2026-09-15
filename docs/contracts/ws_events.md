@@ -491,22 +491,27 @@ Broadcast to all session participants.
 
 ## Chat Events
 
+F-004 reuses this authenticated socket and the authorized `circle.{circle_id}` topics; LiveKit remains audio-only. Every durable chat event includes `event_id` and `occurred_at`. Delivery is at least once, and clients reconcile authoritative state through the REST chat endpoints. F-004 emits no Firebase/FCM trigger; F-008 owns all background and closed-app notifications.
+
+**Emission status:** `chat.message`, `chat.message_read`, `chat.message_deleted`, and best-effort `chat.typing` are implemented and live; `cmd.chat.typing` is accepted by the backend. Clients still reconcile authoritative deletion state through REST after reconnects or event gaps.
+
 ### `chat.message` (Server → Client)
 
-Delivered to all circle members who are online. Offline members receive FCM push.
+Emitted after durable acceptance. Group messages go only to currently authorized circle-topic subscribers. Direct messages go to the currently eligible pair's authenticated user connections without selecting or disclosing one qualifying circle. Immediately before every write, the server revalidates the connection's backend session and current PostgreSQL group/DM authorization; a stale audience snapshot never grants delivery. The payload is a redacted subset of the REST `Message` projection — identifiers, type, server timestamps, delivery state, and `content` for text messages only. Media URLs, read receipts, and sender names are REST-only and never broadcast (SR-006).
 
 ```json
 {
   "type": "chat.message",
+  "event_id": "uuid",
+  "occurred_at": "2026-09-03T10:30:00Z",
   "payload": {
-    "message_id": "uuid",
+    "id": "uuid",
     "circle_id": "uuid",
     "sender_id": "uuid",
-    "sender_name": "Sheikh Abdullah",
     "message_type": "text",
     "content": "السلام عليكم",
-    "reply_to_id": null,
-    "sent_at": "2024-01-15T10:30:00Z"
+    "sent_at": "2026-09-03T10:30:00Z",
+    "delivery_status": "delivered"
   }
 }
 ```
@@ -515,17 +520,39 @@ Delivered to all circle members who are online. Offline members receive FCM push
 
 ---
 
+### `chat.message_deleted` (Server → Client)
+
+```json
+{
+  "type": "chat.message_deleted",
+  "event_id": "uuid",
+  "occurred_at": "2026-09-03T10:31:00Z",
+  "payload": {
+    "message_id": "uuid",
+    "circle_id": "uuid-or-null",
+    "dm_peer_id": "uuid-or-null",
+    "deleted_at": "2026-09-03T10:31:00Z"
+  }
+}
+```
+
+Clients immediately remove message, media, and quoted reply content. Object keys and moderation reasons are never broadcast.
+
+---
+
 ### `chat.message_read` (Server → Client)
 
-Sent to the message sender when the recipient reads a message.
+Targeted to the message sender after the read fact is stored idempotently.
 
 ```json
 {
   "type": "chat.message_read",
+  "event_id": "uuid",
+  "occurred_at": "2026-09-03T10:32:00Z",
   "payload": {
     "message_id": "uuid",
-    "read_by": "uuid",
-    "read_at": "2024-01-15T10:31:00Z"
+    "reader_id": "uuid",
+    "read_at": "2026-09-03T10:32:00Z"
   }
 }
 ```
@@ -534,14 +561,21 @@ Sent to the message sender when the recipient reads a message.
 
 ### `chat.typing` (Server → Client)
 
+For a direct indicator, `dm_peer_id` is receiver-relative: it equals
+`user_id` (the typing peer), not the receiving user's ID. In the client
+command, `dm_peer_id` instead identifies the intended recipient.
+
 ```json
 {
   "type": "chat.typing",
+  "event_id": "uuid",
+  "occurred_at": "2026-09-03T10:32:05Z",
   "payload": {
-    "circle_id": "uuid",
     "user_id": "uuid",
-    "display_name": "Ali Hassan",
-    "is_typing": true
+    "circle_id": "uuid-or-null",
+    "dm_peer_id": "uuid-or-null",
+    "is_typing": true,
+    "expires_at": "2026-09-03T10:32:10Z"
   }
 }
 ```
@@ -551,6 +585,22 @@ Sent to the message sender when the recipient reads a message.
 ## Client → Server Commands
 
 Clients can send hand commands over the WebSocket as an alternative to REST for low-latency actions. Any active session participant may send them.
+
+### `cmd.chat.typing`
+
+Exactly one context field is required. The server rechecks current authorization, rate limits the command, and does not persist it. Receivers clear the indicator after five seconds even when a stop event is lost.
+
+```json
+{
+  "type": "cmd.chat.typing",
+  "request_id": "uuid",
+  "payload": {
+    "circle_id": "uuid-or-null",
+    "dm_peer_id": "uuid-or-null",
+    "is_typing": true
+  }
+}
+```
 
 ### `cmd.raise_hand`
 
@@ -603,7 +653,8 @@ Sent when the server cannot process a client command.
 |-------|----------|---------------|
 | `queue.*` | At-least-once (authorized broadcast or targeted delivery) | Client deduplicates by `event_id`, ignores stale versions, and re-fetches on gaps |
 | `session.*` | At-least-once | Client deduplicates by event ID when supplied, otherwise by `session_id`, type, affected user, and monotonic state version |
-| `chat.message` | At-least-once | Client deduplicates by `message_id` |
+| `chat.message`, `chat.message_deleted`, `chat.message_read` | At-least-once via transactional chat outbox; per-client session/authorization recheck immediately before write | Client deduplicates by `event_id` and re-fetches REST state on gaps |
+| `chat.typing` | Best effort; expires after 5 seconds | Latest state per user and chat context wins |
 | `queue.your_turn` | At-least-once; F-008 may add FCM projection | Client shows once per `event_id` and re-fetches authoritative state |
 
-> **Source of truth:** PostgreSQL is always the source of truth. On F-005 reconnection, clients obtain a fresh realtime ticket and re-fetch the authorized session participant snapshot; F-003 queue clients re-fetch `GET /sessions/{id}/queue` rather than relying solely on WebSocket events.
+> **Source of truth:** PostgreSQL is always the source of truth. On F-005 reconnection, clients obtain a fresh realtime ticket and re-fetch the authorized session participant snapshot; F-003 queue clients re-fetch `GET /sessions/{id}/queue`; F-004 chat clients re-fetch the appropriate circle or direct-message REST history rather than relying solely on WebSocket events. Group chat uses circle topics; DM delivery targets authenticated eligible-user connections directly and does not route through an arbitrary qualifying circle.

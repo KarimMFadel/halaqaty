@@ -111,6 +111,7 @@ Circles are the core organizational unit. A circle is a Quran memorization group
 
 - As a teacher, I can create a circle with a name, description, and rules so students know what to expect
 - As a teacher, I can generate an invite code/link to share with students
+- As a teacher or supervisor, I can invite a teacher or student; as a student, I can invite another student
 - As a student, I can join multiple circles simultaneously with different teachers
 - As a teacher, I can assign the Supervisor role to a trusted member at any time
 - As a teacher, I can set circle privacy (public/discoverable vs private/invite-only)
@@ -120,6 +121,8 @@ Circles are the core organizational unit. A circle is a Quran memorization group
 - [ ] Create circle: name (required, max 100 chars), description (optional, max 500 chars), circle rules (optional, max 1000 chars), max capacity (default 50, max 200)
 - [ ] Auto-generate unique 8-character invite code on creation
 - [ ] Shareable deep link: `halaqaty.app/join/{code}`
+- [ ] In an active circle, teachers and supervisors can invite a person as teacher or student; students can invite a person as student only
+- [ ] The selected role is bound to the invitation and cannot be changed during acceptance
 - [ ] Invite code can be regenerated (old code invalidated) by teacher
 - [ ] Student can join up to **5 circles** simultaneously (configurable limit)
 - [ ] Teacher can assign Supervisor role to any circle member at any time (before session, during session, after session)
@@ -289,7 +292,7 @@ Full-featured messaging within circles, replacing WhatsApp/Telegram group chats 
 - [ ] Pin messages: teacher/supervisor only; max 5 pinned per circle; pinned bar shown above chat
 - [ ] Reply to specific message (shows quoted preview)
 - [ ] Delete own messages within 10 minutes; teachers can delete any message
-- [ ] WebSocket delivery when app is open; FCM push when app is in background
+- [ ] WebSocket delivery when app is open; F-008 owns all background/closed-state notifications and FCM delivery
 - [ ] Offline mode: messages queued locally and sent when connection restored
 
 > **F-005 transport dependency:** F-005 establishes the shared authenticated

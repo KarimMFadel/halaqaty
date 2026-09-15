@@ -134,6 +134,7 @@ Rules:
 - An implementer brief contains only: task IDs, goal, acceptance criteria, binding constraints, relevant paths, dependencies already produced, and verification commands.
 - A reviewer receives: acceptance criteria, base/head or prepared diff path, implementation report, and relevant constraints. It does not receive the whole conversation.
 - Store large diffs, logs, and reports in files or tool output; do not paste them repeatedly between agents.
+- Environment-specific run recipes (Docker Flutter/Spectral fallbacks, integration-test scaffold) live in `docs/engineering/development/LOCAL_ENVIRONMENT_RUNBOOKS.md`. Read that file on demand instead of carrying its content in every session's injected instructions.
 
 ### B. Task batching and delegation
 
@@ -152,6 +153,7 @@ Rules:
 - Multi-file integration, debugging, security, concurrency, architecture, and final review require stronger reasoning.
 - Do not use a weak model when repeated turns are likely to cost more than one correct stronger-model pass.
 - Do not run an agent solely to restate a result already established by deterministic tools.
+- Route mechanical gate/verification runs through the `gate-runner` subagent (minimal prompt, filtered output) instead of a full role agent; pin a cheaper model to it when the provider allows.
 
 ### D. Questions and communication
 
@@ -171,6 +173,7 @@ Rules:
 - A finding is closed only after its implementation and smallest useful regression coverage are present and the affected checks have been rerun. Do not restate an assigned finding as if that completed the fix.
 - Review endpoint changes at all affected boundaries: service behavior, HTTP handler, production router/middleware, response projection, canonical contract, and feature-local contract when present.
 - Before any commit containing Flutter changes, run the complete unit/widget suite (`flutter test test`), integration suite (`flutter test integration_test/`), analyzer, and formatter from `mobile/`. Missing SDK/device/backend prerequisites block the commit and must be reported.
+- Keep verbose suite output out of agent context: redirect to a file and grep for failures; report counts and failure lines only.
 - Never claim success from old output; completion evidence must match the current tree.
 
 ### F. State and recovery

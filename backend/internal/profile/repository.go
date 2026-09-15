@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Record is the profile persistence projection used by the service layer.

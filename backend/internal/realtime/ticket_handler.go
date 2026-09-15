@@ -26,7 +26,7 @@ func (h *Handler) CreateTicket(w http.ResponseWriter, r *http.Request) {
 		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
 		return
 	}
-	ticket, err := h.tickets.Issue(r.Context(), principal.UserID)
+	ticket, err := h.tickets.IssueForSession(r.Context(), principal.UserID, r.Header.Get(httpconst.HeaderSessionID))
 	if err != nil {
 		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
 		return

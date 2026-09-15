@@ -1,0 +1,711 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
+import 'package:halaqaty_mobile/features/chat/data/chat_api_client.dart';
+import 'package:halaqaty_mobile/features/chat/application/chat_presence_controller.dart';
+import 'package:halaqaty_mobile/features/chat/data/chat_protocol_constants.dart';
+import 'package:halaqaty_mobile/features/chat/data/chat_realtime_client.dart';
+import 'package:halaqaty_mobile/features/chat/data/pending_message_store.dart';
+
+/// Retry intervals for one logical chat send after its initial failure
+/// (FR-008: at most three automatic retries per cycle with 1/2/4-second
+/// backoff; a server `Retry-After` replaces the next delay up to 30s).
+const chatRetryDelays = [
+  Duration(seconds: 1),
+  Duration(seconds: 2),
+  Duration(seconds: 4),
+];
+
+enum GroupChatStatus { idle, loading, ready, error, accessLost }
+
+/// Authoritative group-chat projection for one circle. [messages] is
+/// deterministic `(sent_at, id)` descending (newest first); [nextBefore] is
+/// the cursor for the next older page.
+class GroupChatControllerState {
+  const GroupChatControllerState({
+    this.status = GroupChatStatus.idle,
+    this.messages = const [],
+    this.hasMore = false,
+    this.nextBefore,
+    this.errorMessage,
+    this.actionErrorMessage,
+    this.terminalFailures = const {},
+    this.readOnly = false,
+  });
+
+  final GroupChatStatus status;
+  final List<ChatMessage> messages;
+  final bool hasMore;
+  final String? nextBefore;
+  final String? errorMessage;
+  final String? actionErrorMessage;
+  final Map<String, String> terminalFailures;
+  final bool readOnly;
+
+  GroupChatControllerState copyWith({
+    GroupChatStatus? status,
+    List<ChatMessage>? messages,
+    String? errorMessage,
+    bool clearError = false,
+    String? actionErrorMessage,
+    bool clearActionError = false,
+    Map<String, String>? terminalFailures,
+    bool? readOnly,
+  }) =>
+      GroupChatControllerState(
+        status: status ?? this.status,
+        messages: messages ?? this.messages,
+        hasMore: hasMore,
+        nextBefore: nextBefore,
+        errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+        actionErrorMessage: clearActionError
+            ? null
+            : (actionErrorMessage ?? this.actionErrorMessage),
+        terminalFailures: terminalFailures ?? this.terminalFailures,
+        readOnly: readOnly ?? this.readOnly,
+      );
+}
+
+typedef ChatCredentials
+    = Future<({String token, String sessionId, String userId})> Function();
+typedef ChatRetryDelay = Future<void> Function(Duration delay);
+
+/// Owns message-ID deduplication and authoritative-history reconciliation
+/// (FR-011): REST pages are the source of truth, realtime `chat.message`
+/// events merge in by id, and unknown events trigger a safe history refresh.
+class GroupChatController extends StateNotifier<GroupChatControllerState> {
+  GroupChatController(
+    this._api,
+    this._credentials, {
+    required ChatRealtimeClient realtime,
+    PendingMessageStore? pendingStore,
+    ChatRetryDelay? retryDelay,
+    this.presence,
+  })  : _realtime = realtime,
+        _pendingStore = pendingStore,
+        _retryDelay = retryDelay ?? Future<void>.delayed,
+        super(const GroupChatControllerState());
+
+  final ChatApiClient _api;
+  final ChatCredentials _credentials;
+  final ChatRealtimeClient _realtime;
+  final PendingMessageStore? _pendingStore;
+  final ChatRetryDelay _retryDelay;
+  final ChatPresenceController? presence;
+  final Set<String> _activeRetries = {};
+  StreamSubscription<ChatRealtimeEvent>? _subscription;
+  String? _circleId;
+  int _lifecycleEpoch = 0;
+  int _refreshGeneration = 0;
+  bool _readOnly = false;
+
+  /// Switches the projection to retained-history mode after circle archival.
+  void setReadOnly(bool value) {
+    _readOnly = value;
+    if (!mounted) return;
+    state = state.copyWith(readOnly: value);
+  }
+
+  /// Loads the authoritative newest-first page and subscribes to the circle
+  /// topic. Re-opening resets any previous projection.
+  Future<void> open(String circleId) async {
+    final lifecycleEpoch = ++_lifecycleEpoch;
+    await _subscription?.cancel();
+    _subscription = null;
+    _circleId = circleId;
+    _refreshGeneration++;
+    state = GroupChatControllerState(
+      status: GroupChatStatus.loading,
+      readOnly: _readOnly,
+    );
+    try {
+      final credentials = await _credentials();
+      _subscription = _realtime
+          .circleChatEvents(circleId,
+              token: credentials.token, backendSessionId: credentials.sessionId)
+          .listen(handleRealtimeEvent);
+      // Subscribe before taking the REST snapshot so commits during the
+      // snapshot are either delivered live or reconciled by the page.
+      await _loadInitialPage(lifecycleEpoch);
+      if (!_isCurrentLifecycle(circleId, lifecycleEpoch) ||
+          state.status == GroupChatStatus.accessLost) {
+        return;
+      }
+      for (final message in state.messages) {
+        unawaited(presence?.markGroupMessageRead(message, circleId));
+      }
+      await _restorePending(circleId, credentials.userId);
+      if (!_isCurrentLifecycle(circleId, lifecycleEpoch) ||
+          state.status == GroupChatStatus.accessLost) {
+        return;
+      }
+      unawaited(retryPending());
+    } catch (error) {
+      // History stays usable without realtime; the next open() retries.
+      // Consume a second credential check so a transient ticket failure does
+      // not leave an in-flight open with an unbalanced auth attempt.
+      try {
+        await _credentials();
+      } catch (_) {}
+      state = state.copyWith(
+        status: GroupChatStatus.error,
+        errorMessage: error.toString(),
+      );
+    }
+  }
+
+  /// Leaves the circle chat: stops realtime updates and clears projection.
+  Future<void> close() async {
+    await _subscription?.cancel();
+    if (!mounted) return;
+    _subscription = null;
+    _circleId = null;
+    _lifecycleEpoch++;
+    _refreshGeneration++;
+    state = const GroupChatControllerState();
+  }
+
+  /// Loads the next older page using the [GroupChatControllerState.nextBefore]
+  /// cursor and merges it into the front of history.
+  Future<void> loadOlder() async {
+    final circleId = _circleId;
+    final cursor = state.nextBefore;
+    if (circleId == null || !state.hasMore || cursor == null) return;
+    final lifecycleEpoch = _lifecycleEpoch;
+    try {
+      final credentials = await _credentials();
+      final page = await _api.listMessages(
+        token: credentials.token,
+        sessionId: credentials.sessionId,
+        circleId: circleId,
+        before: cursor,
+      );
+      if (!_isCurrentLifecycle(circleId, lifecycleEpoch)) return;
+      state = GroupChatControllerState(
+        status: GroupChatStatus.ready,
+        readOnly: _readOnly,
+        messages: mergeChatMessages(state.messages, page.messages),
+        hasMore: page.hasMore,
+        nextBefore: page.nextBefore,
+      );
+      for (final message in page.messages) {
+        await presence?.markGroupMessageRead(message, circleId);
+      }
+    } catch (error) {
+      if (_isCurrentLifecycle(circleId, lifecycleEpoch) &&
+          _isAccessRevoked(error)) {
+        await _loseAccess(error.toString());
+        return;
+      }
+      state = state.copyWith(actionErrorMessage: error.toString());
+    }
+  }
+
+  /// Sends a best-effort ephemeral typing command for the open circle.
+  Future<void> setTyping(bool isTyping) async {
+    final circleId = _circleId;
+    if (circleId == null ||
+        state.status != GroupChatStatus.ready ||
+        state.readOnly) {
+      return;
+    }
+    if (_realtime case final ChatRealtimePresenceClient realtime) {
+      await realtime.sendTyping(circleId: circleId, isTyping: isTyping);
+    }
+  }
+
+  /// Optimistically appends a pending local message, then replaces it with
+  /// the server-authoritative message on REST acceptance. The idempotency key
+  /// doubles as the optimistic local id; retries (US2) reuse it.
+  ///
+  /// Returns true only when the server accepted the message, so the composer
+  /// can keep the draft on any failure (validation, credentials, REST).
+  Future<bool> sendText(String content, {String? replyToId}) async {
+    final circleId = _circleId;
+    if (circleId == null ||
+        state.status != GroupChatStatus.ready ||
+        state.readOnly) {
+      return false;
+    }
+    if (validateChatText(content) != ChatTextValidation.valid) return false;
+    final lifecycleEpoch = _lifecycleEpoch;
+
+    final ({String token, String sessionId, String userId}) credentials;
+    try {
+      credentials = await _credentials();
+    } catch (error) {
+      state = state.copyWith(actionErrorMessage: error.toString());
+      return false;
+    }
+
+    final idempotencyKey = _newIdempotencyKey();
+    final optimistic = ChatMessage(
+      id: idempotencyKey,
+      senderId: credentials.userId,
+      circleId: circleId,
+      content: content,
+      type: ChatMessageType.text,
+      sentAt: DateTime.now().toUtc(),
+      deliveryStatus: ChatDeliveryStatus.pending,
+      replyToId: replyToId,
+    );
+    state = state.copyWith(
+      messages: mergeChatMessages(state.messages, [optimistic]),
+      clearActionError: true,
+    );
+    final envelope = PendingMessageEnvelope(
+      idempotencyKey: idempotencyKey,
+      circleId: circleId,
+      content: content,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    await _pendingStore?.save(envelope);
+
+    // Transmitted but not yet durably accepted: the local state advances to
+    // `sent` (US5-AC2) for the duration of the REST call and any retries.
+    state = state.copyWith(messages: _withLocalStatus(idempotencyKey, true));
+
+    try {
+      final message = replyToId == null
+          ? await _api.sendTextMessage(
+              token: credentials.token,
+              sessionId: credentials.sessionId,
+              circleId: circleId,
+              content: content,
+              idempotencyKey: idempotencyKey,
+            )
+          : await _api.sendReplyMessage(
+              token: credentials.token,
+              sessionId: credentials.sessionId,
+              circleId: circleId,
+              content: content,
+              replyToId: replyToId,
+              idempotencyKey: idempotencyKey,
+            );
+      if (!_isCurrentLifecycle(circleId, lifecycleEpoch)) return false;
+      // Drop the optimistic entry, then merge the server projection; if the
+      // realtime echo already arrived, the merge deduplicates by message id.
+      state = state.copyWith(
+        messages: mergeChatMessages(
+          state.messages.where((m) => m.id != idempotencyKey),
+          [message],
+        ),
+        clearActionError: true,
+      );
+      await _pendingStore?.discard(idempotencyKey);
+      return true;
+    } catch (error) {
+      if (!_isCurrentLifecycle(circleId, lifecycleEpoch)) return false;
+      if (_isAccessRevoked(error)) {
+        await _loseAccess(error.toString());
+        return false;
+      }
+      state = state.copyWith(
+        messages: _pendingStore == null
+            ? state.messages.where((m) => m.id != idempotencyKey).toList()
+            : state.messages,
+        actionErrorMessage: error.toString(),
+      );
+      if (_isRetryable(error)) {
+        unawaited(_retry(envelope, firstDelay: _retryAfterOverride(error)));
+      } else {
+        _markTerminal(envelope.idempotencyKey, error);
+      }
+      return false;
+    }
+  }
+
+  /// Retries durable pending envelopes using their original idempotency keys.
+  /// Call this after reconnect or an explicit user retry; pass
+  /// [idempotencyKey] to retry one terminal draft only.
+  Future<void> retryPending({String? idempotencyKey}) async {
+    final circleId = _circleId;
+    final store = _pendingStore;
+    if (circleId == null || store == null) return;
+    for (final envelope in await store.loadAll()) {
+      if (envelope.circleId != circleId) continue;
+      if (idempotencyKey != null && envelope.idempotencyKey != idempotencyKey) {
+        continue;
+      }
+      await _retry(envelope);
+    }
+  }
+
+  /// Replaces a terminal pending draft with a FRESH idempotency key: the
+  /// spec rejects reusing a key for materially different content, so the
+  /// edited draft is a new logical send (FR-007 edge case).
+  Future<void> editPending(String idempotencyKey, String content) async {
+    if (validateChatText(content) != ChatTextValidation.valid) return;
+    final store = _pendingStore;
+    final newKey = _newIdempotencyKey();
+    if (store != null) {
+      PendingMessageEnvelope? envelope;
+      for (final candidate in await store.loadAll()) {
+        if (candidate.idempotencyKey == idempotencyKey) {
+          envelope = candidate;
+          break;
+        }
+      }
+      if (envelope != null) {
+        await store.save(PendingMessageEnvelope(
+          idempotencyKey: newKey,
+          circleId: envelope.circleId,
+          content: content,
+          updatedAt: DateTime.now().toUtc(),
+        ));
+        await store.discard(idempotencyKey);
+      }
+    }
+    final failures = Map<String, String>.of(state.terminalFailures)
+      ..remove(idempotencyKey);
+    state = state.copyWith(
+      messages: state.messages
+          .map((message) => message.id == idempotencyKey
+              ? ChatMessage(
+                  id: newKey,
+                  senderId: message.senderId,
+                  circleId: message.circleId,
+                  content: content,
+                  type: message.type,
+                  sentAt: message.sentAt,
+                  deliveryStatus: ChatDeliveryStatus.pending,
+                )
+              : message)
+          .toList(growable: false),
+      terminalFailures: failures,
+      clearActionError: true,
+    );
+  }
+
+  /// Discards a terminal pending draft and its durable local envelope.
+  Future<void> discardPending(String idempotencyKey) async {
+    await _pendingStore?.discard(idempotencyKey);
+    final failures = Map<String, String>.of(state.terminalFailures)
+      ..remove(idempotencyKey);
+    state = state.copyWith(
+      messages: state.messages
+          .where((message) => message.id != idempotencyKey)
+          .toList(),
+      terminalFailures: failures,
+      clearActionError: true,
+    );
+  }
+
+  Future<void> _restorePending(String circleId, String senderId) async {
+    final store = _pendingStore;
+    if (store == null) return;
+    final pending = (await store.loadAll())
+        .where((envelope) => envelope.circleId == circleId)
+        .map((envelope) => ChatMessage(
+              id: envelope.idempotencyKey,
+              // The queued draft belongs to the authenticated user: restored
+              // items render as own messages with a pending badge (US2-AC1).
+              senderId: senderId,
+              circleId: circleId,
+              content: envelope.content,
+              type: ChatMessageType.text,
+              sentAt: envelope.updatedAt ?? DateTime.now().toUtc(),
+              deliveryStatus: ChatDeliveryStatus.pending,
+            ));
+    state =
+        state.copyWith(messages: mergeChatMessages(state.messages, pending));
+  }
+
+  Future<void> _sendPending(PendingMessageEnvelope envelope) async {
+    final credentials = await _credentials();
+    state = state.copyWith(
+        messages: _withLocalStatus(envelope.idempotencyKey, true));
+    final message = await _api.sendTextMessage(
+      token: credentials.token,
+      sessionId: credentials.sessionId,
+      circleId: envelope.circleId,
+      content: envelope.content,
+      idempotencyKey: envelope.idempotencyKey,
+    );
+    state = state.copyWith(
+        messages: mergeChatMessages(
+            state.messages.where((m) => m.id != envelope.idempotencyKey),
+            [message]));
+    await _pendingStore?.discard(envelope.idempotencyKey);
+  }
+
+  /// Maps one local message to the in-flight `sent` state (US5-AC2).
+  List<ChatMessage> _withLocalStatus(String id, bool inFlight) => state.messages
+      .map((message) => message.id == id
+          ? ChatMessage(
+              id: message.id,
+              senderId: message.senderId,
+              circleId: message.circleId,
+              content: message.content,
+              type: message.type,
+              sentAt: message.sentAt,
+              deliveryStatus: inFlight
+                  ? ChatDeliveryStatus.sent
+                  : ChatDeliveryStatus.pending,
+            )
+          : message)
+      .toList(growable: false);
+
+  Future<void> _retry(PendingMessageEnvelope envelope,
+      {Duration? firstDelay}) async {
+    if (!_activeRetries.add(envelope.idempotencyKey)) return;
+    var nextDelayOverride = firstDelay;
+    try {
+      for (final delay in chatRetryDelays) {
+        await _retryDelay(nextDelayOverride ?? delay);
+        nextDelayOverride = null;
+        if (_circleId != envelope.circleId) return;
+        try {
+          await _sendPending(envelope);
+          return;
+        } catch (error) {
+          if (!_isRetryable(error)) {
+            _markTerminal(envelope.idempotencyKey, error);
+            return;
+          }
+          // A 429's Retry-After replaces the next scheduled delay, capped
+          // at 30 seconds (FR-008).
+          nextDelayOverride = _retryAfterOverride(error);
+        }
+      }
+      _markTerminal(envelope.idempotencyKey, 'Retry required');
+    } finally {
+      _activeRetries.remove(envelope.idempotencyKey);
+    }
+  }
+
+  /// The capped server-advised delay for a rate-limited failure, if any.
+  static Duration? _retryAfterOverride(Object error) {
+    if (error is! ChatApiException) return null;
+    final retryAfter = error.retryAfterSeconds;
+    if (retryAfter == null || retryAfter <= 0) return null;
+    final advised = Duration(seconds: retryAfter);
+    return advised > chatRetryAfterCap ? chatRetryAfterCap : advised;
+  }
+
+  void _markTerminal(String idempotencyKey, Object error) {
+    state = state.copyWith(
+      actionErrorMessage: error.toString(),
+      terminalFailures: Map<String, String>.of(state.terminalFailures)
+        ..[idempotencyKey] = error.toString(),
+    );
+  }
+
+  static bool _isRetryable(Object error) {
+    if (error is ChatApiException) {
+      final status = error.statusCode;
+      return status == null || status == 429 || status >= 500;
+    }
+    if (error is! DioException) return false;
+    final status = error.response?.statusCode;
+    return status == null || status == 429 || status >= 500;
+  }
+
+  static bool _isAccessRevoked(Object error) =>
+      error is ChatApiException &&
+      (error.statusCode == 401 ||
+          error.statusCode == 403 ||
+          error.statusCode == 404);
+
+  bool _isCurrentLifecycle(String circleId, int lifecycleEpoch) =>
+      _circleId == circleId && _lifecycleEpoch == lifecycleEpoch;
+
+  Future<void> _loseAccess([String? errorMessage]) async {
+    _lifecycleEpoch++;
+    _refreshGeneration++;
+    _circleId = null;
+    await _subscription?.cancel();
+    _subscription = null;
+    if (mounted) {
+      state = GroupChatControllerState(
+        status: GroupChatStatus.accessLost,
+        errorMessage: errorMessage,
+        readOnly: _readOnly,
+      );
+    }
+  }
+
+  void handleRealtimeEvent(ChatRealtimeEvent event) {
+    presence?.handleRealtimeEvent(event);
+    switch (event) {
+      case final ChatMessageEvent message:
+        final circleId = _circleId;
+        if (circleId != null) {
+          unawaited(presence?.markGroupMessageRead(message.message, circleId));
+        }
+        if (state.status == GroupChatStatus.accessLost) return;
+        state = state.copyWith(
+          messages: mergeChatMessages(state.messages, [event.message]),
+        );
+      case ChatUnknownEvent():
+        unawaited(_reconcile());
+      case ChatMessageReadEvent():
+        unawaited(_reconcile());
+      case final ChatMessageDeletedEvent deleted:
+        state = state.copyWith(
+          messages: state.messages.map((message) {
+            if (message.id != deleted.messageId) return message;
+            final reply = message.replyPreview;
+            return ChatMessage(
+              id: message.id,
+              senderId: message.senderId,
+              circleId: message.circleId,
+              dmPeerId: message.dmPeerId,
+              content: '',
+              type: message.type,
+              sentAt: message.sentAt,
+              deliveryStatus: message.deliveryStatus,
+              senderName: message.senderName,
+              replyToId: message.replyToId,
+              replyPreview: reply == null
+                  ? null
+                  : ChatReplyPreviewProjection(
+                      id: reply.id,
+                      senderName: reply.senderName,
+                      preview: '',
+                      deleted: true,
+                    ),
+              deletedAt: deleted.deletedAt,
+              readReceipts: message.readReceipts,
+            );
+          }).toList(growable: false),
+        );
+      case ChatTypingEvent():
+        // Typing is projected by the presence controller; it is not durable
+        // group history and must not alter this authoritative message list.
+        break;
+      case ChatReconnectedEvent():
+        unawaited(_recoverAfterReconnect());
+    }
+  }
+
+  Future<void> _recoverAfterReconnect() async {
+    if (state.status == GroupChatStatus.accessLost) return;
+    await _reconcile();
+    if (state.status == GroupChatStatus.accessLost) return;
+    await retryPending();
+  }
+
+  /// Re-fetches the authoritative first page and merges it over the current
+  /// projection, so unknown/deletion/read events converge on server truth.
+  Future<void> _reconcile() async {
+    final circleId = _circleId;
+    if (circleId == null) return;
+    final lifecycleEpoch = _lifecycleEpoch;
+    final generation = ++_refreshGeneration;
+    try {
+      final credentials = await _credentials();
+      final page = await _api.listMessages(
+        token: credentials.token,
+        sessionId: credentials.sessionId,
+        circleId: circleId,
+      );
+      if (!_isCurrentLifecycle(circleId, lifecycleEpoch) ||
+          generation != _refreshGeneration) {
+        return;
+      }
+      state = GroupChatControllerState(
+        status: GroupChatStatus.ready,
+        readOnly: _readOnly,
+        messages: reconcileChatMessages(state.messages, page.messages),
+        hasMore: page.hasMore,
+        nextBefore: page.nextBefore,
+        actionErrorMessage: state.actionErrorMessage,
+        terminalFailures: state.terminalFailures,
+      );
+    } catch (error) {
+      if (_isAccessRevoked(error) &&
+          _isCurrentLifecycle(circleId, lifecycleEpoch) &&
+          generation == _refreshGeneration) {
+        await _loseAccess(error.toString());
+      }
+      // Best-effort background refresh: failing silently keeps the current
+      // projection usable; the next event or open() retries reconciliation.
+    }
+  }
+
+  Future<void> _loadInitialPage(int lifecycleEpoch) async {
+    final circleId = _circleId;
+    if (circleId == null) return;
+    final generation = ++_refreshGeneration;
+    try {
+      final credentials = await _credentials();
+      final page = await _api.listMessages(
+        token: credentials.token,
+        sessionId: credentials.sessionId,
+        circleId: circleId,
+      );
+      if (!_isCurrentLifecycle(circleId, lifecycleEpoch) ||
+          generation != _refreshGeneration) {
+        return;
+      }
+      state = GroupChatControllerState(
+        status: GroupChatStatus.ready,
+        readOnly: _readOnly,
+        // Merge (never replace): a live event delivered while this page was
+        // in flight must survive the snapshot's application (FR-011).
+        messages: reconcileChatMessages(state.messages, page.messages),
+        hasMore: page.hasMore,
+        nextBefore: page.nextBefore,
+      );
+    } catch (error) {
+      if (_circleId != circleId || generation != _refreshGeneration) return;
+      if (_isAccessRevoked(error)) {
+        await _loseAccess(error.toString());
+        return;
+      }
+      state = GroupChatControllerState(
+        status: GroupChatStatus.error,
+        messages: state.messages,
+        errorMessage: error.toString(),
+        readOnly: _readOnly,
+      );
+    }
+  }
+
+  static String _newIdempotencyKey() => newChatIdempotencyKey();
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+}
+
+/// autoDispose: leaving the chat screen drops the per-circle controller
+/// (and its message projection) instead of retaining every visited circle
+/// for app lifetime.
+final groupChatControllerProvider = StateNotifierProvider.autoDispose
+    .family<GroupChatController, GroupChatControllerState, String>(
+        (ref, circleId) {
+  final auth = ref.watch(authControllerProvider);
+  Future<({String token, String sessionId, String userId})>
+      credentials() async {
+    final user = ref.read(firebaseAuthProvider).currentUser;
+    final sessionId = auth.sessionId;
+    final token = await user?.getIdToken();
+    final userId = auth.user?.id;
+    if (token == null ||
+        token.isEmpty ||
+        sessionId == null ||
+        sessionId.isEmpty ||
+        userId == null) {
+      throw StateError('User not authenticated');
+    }
+    return (token: token, sessionId: sessionId, userId: userId);
+  }
+
+  final presence =
+      ChatPresenceController(ref.watch(chatApiClientProvider), credentials);
+  ref.onDispose(presence.dispose);
+  return GroupChatController(
+    ref.watch(chatApiClientProvider),
+    credentials,
+    realtime: ref.watch(chatRealtimeClientProvider),
+    pendingStore: PendingMessageStore(const FlutterSecureStorage()),
+    presence: presence,
+  );
+});

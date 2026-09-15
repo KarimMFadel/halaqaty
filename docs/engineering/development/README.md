@@ -5,3 +5,4 @@ Developer setup, Spec-Kit workflow, execution playbooks, and development guideli
 **Key Documents:**
 - `EXECUTION_PLAYBOOK.md` - Step-by-step execution workflow for feature development
 - `TESTING_STRATEGY.md` - Test pyramid, tooling, coverage targets, and CI quality gates
+- `LOCAL_ENVIRONMENT_RUNBOOKS.md` - On-demand Docker recipes (Flutter fallback, integration-test scaffold, Spectral) and focused-test examples

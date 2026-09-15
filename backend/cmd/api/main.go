@@ -14,12 +14,11 @@ import (
 
 	firebaseAdmin "firebase.google.com/go/v4"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 
 	apirouter "github.com/KarimMFadel/halaqaty/backend/internal/api"
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/chat"
+	chatminio "github.com/KarimMFadel/halaqaty/backend/internal/chat/minio"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/config"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/logging"
@@ -30,7 +29,6 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions/livekit"
-	lksdk "github.com/livekit/server-sdk-go/v2"
 )
 
 const (
@@ -145,8 +143,7 @@ func main() {
 			logger.Error("failed to load LiveKit audio policy", "error", err)
 			os.Exit(1)
 		}
-		rooms := lksdk.NewRoomServiceClient(mediaCfg.Endpoint, mediaCfg.APIKey, mediaCfg.APISecret)
-		media := livekit.NewAdapter(mediaCfg, policy, rooms)
+		media := livekit.NewConfiguredAdapter(mediaCfg, policy)
 		liveVerifier := livekit.NewHandlerVerifier(mediaCfg.APIKey, mediaCfg.APISecret)
 		liveSessionRepo := sessions.NewSessionRepository(pool)
 		liveSessionService, err = sessions.NewServiceWithRoomKey(liveSessionRepo, media, rbacRepo, roomKey)
@@ -238,15 +235,12 @@ func main() {
 		os.Exit(1)
 	}
 	if chatMediaCfg != (config.ChatMediaConfig{}) {
-		minioClient, err := minio.New(chatMediaCfg.Endpoint, &minio.Options{
-			Creds:  credentials.NewStaticV4(chatMediaCfg.AccessKeyID, chatMediaCfg.SecretAccessKey, ""),
-			Secure: chatMediaCfg.UseSSL,
-		})
+		chatObjectStore, err := chatminio.NewAdapter(chatMediaCfg)
 		if err != nil {
 			logger.Error("failed to init chat media object-store client", "error", err)
 			os.Exit(1)
 		}
-		chatMediaStore = chat.NewMediaStore(minioClient, chatMediaCfg.Bucket, chatMediaCfg.OperationTimeout)
+		chatMediaStore = chat.NewMediaStore(chatObjectStore, chatMediaCfg.OperationTimeout)
 		if err := chatMediaStore.EnsureChatBucketVersioned(ctx); err != nil {
 			logger.Error("chat media bucket is missing, unversioned, or unreachable", "error", err)
 			os.Exit(1)

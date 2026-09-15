@@ -14,6 +14,7 @@ import (
 	"github.com/livekit/protocol/auth"
 	lkmodel "github.com/livekit/protocol/livekit"
 	"github.com/livekit/psrpc"
+	lksdk "github.com/livekit/server-sdk-go/v2"
 )
 
 // maxCredentialLifetime is the one-hour maximum lifetime of every media
@@ -59,6 +60,14 @@ type Adapter struct {
 // an injected RoomService client.
 func NewAdapter(cfg config.LiveKitConfig, policy config.AudioPolicy, rooms roomClient) *Adapter {
 	return &Adapter{cfg: cfg, policy: policy, rooms: rooms}
+}
+
+// NewConfiguredAdapter constructs the production LiveKit adapter from
+// validated configuration, building the SDK RoomService client internally so
+// application composition stays free of provider SDK types (ADR-023).
+func NewConfiguredAdapter(cfg config.LiveKitConfig, policy config.AudioPolicy) *Adapter {
+	rooms := lksdk.NewRoomServiceClient(cfg.Endpoint, cfg.APIKey, cfg.APISecret)
+	return NewAdapter(cfg, policy, rooms)
 }
 
 // EnsureRoom makes the room exist with the F-005 room policy. CreateRoom is

@@ -9,28 +9,28 @@
 
 ## Phase 2: Foundation
 
-- [ ] T002 Extend the approved architecture guard in backend/tests/contract/livekit_boundary_contract_test.go to scan backend/cmd/api plus backend/internal, and add production MinIO confinement in backend/tests/contract/minio_boundary_contract_test.go; run focused contract tests and record the current composition/storage violations as red evidence (FR-001, FR-005, FR-009).
+- [X] T002 Extend the approved architecture guard in backend/tests/contract/livekit_boundary_contract_test.go to scan backend/cmd/api plus backend/internal, and add production MinIO confinement in backend/tests/contract/minio_boundary_contract_test.go; run focused contract tests and record the current composition/storage violations as red evidence (FR-001, FR-005, FR-009).
 
 ## Phase 3: US1 - Private Attachment Lifecycle
 
 **Goal**: Preserve validation, access revocation, retained bytes and crash recovery behind a neutral chat contract.  
 **Independent test**: Existing real-MinIO chat media/revocation scenarios plus chat policy and concrete adapter unit suites.
 
-- [ ] T003 [US1] Adapt backend/internal/chat/media_store_test.go to a neutral ObjectStore fake and preserve key derivation, MIME normalization/allowlist, nonpositive-size rejection, deadlines and error propagation; add a runnable failing interface test before production edits (FR-001, FR-002, FR-007).
-- [ ] T004 [US1] Add adapter behavior tests in backend/internal/chat/minio/adapter_test.go by relocating relevant SDK fakes/assertions from backend/internal/chat/media_store_test.go; cover bucket existence/versioning failures without new bucket-policy behavior, signing TTL/versionlessness, marker idempotency, exact marker removal, latest-marker recovery/no-op and listing/removal failures (FR-003, FR-007).
-- [ ] T005 [US1] Implement chat.ObjectStore/ObjectPutInput and retain chat.MediaStore policy in backend/internal/chat/media_store.go; add backend/internal/chat/minio/adapter.go implementing the proposed contract with current SDK/config behavior, internal version IDs and retained-byte semantics; update existing chat test helpers as needed and run affected unit suites (FR-001–FR-004, FR-007).
-- [ ] T006 [US1] Replace MinIO SDK construction in backend/cmd/api/main.go with direct storage-adapter construction and policy-wrapper injection, preserving config validation, disabled behavior, startup error paths and cleanup/reconciliation workers (FR-001, FR-007, FR-008).
-- [ ] T007 [US1] Adapt only required fixtures in backend/tests/integration/chat_media_test.go and chat_media_revocation_test.go; retain all existing upload, versionless-link revocation, deletion retry, cleanup and marker-before-commit/reconciler recovery checks, and run the affected real PostgreSQL/MinIO scenarios (FR-003, FR-004, FR-008; SC-001).
+- [X] T003 [US1] Adapt backend/internal/chat/media_store_test.go to a neutral ObjectStore fake and preserve key derivation, MIME normalization/allowlist, nonpositive-size rejection, deadlines and error propagation; add a runnable failing interface test before production edits (FR-001, FR-002, FR-007).
+- [X] T004 [US1] Add adapter behavior tests in backend/internal/chat/minio/adapter_test.go by relocating relevant SDK fakes/assertions from backend/internal/chat/media_store_test.go; cover bucket existence/versioning failures without new bucket-policy behavior, signing TTL/versionlessness, marker idempotency, exact marker removal, latest-marker recovery/no-op and listing/removal failures (FR-003, FR-007).
+- [X] T005 [US1] Implement chat.ObjectStore/ObjectPutInput and retain chat.MediaStore policy in backend/internal/chat/media_store.go; add backend/internal/chat/minio/adapter.go implementing the proposed contract with current SDK/config behavior, internal version IDs and retained-byte semantics; update existing chat test helpers as needed and run affected unit suites (FR-001–FR-004, FR-007).
+- [X] T006 [US1] Replace MinIO SDK construction in backend/cmd/api/main.go with direct storage-adapter construction and policy-wrapper injection, preserving config validation, disabled behavior, startup error paths and cleanup/reconciliation workers (FR-001, FR-007, FR-008).
+- [X] T007 [US1] Adapt only required fixtures in backend/tests/integration/chat_media_test.go and chat_media_revocation_test.go; retain all existing upload, versionless-link revocation, deletion retry, cleanup and marker-before-commit/reconciler recovery checks, and run the affected real PostgreSQL/MinIO scenarios (FR-003, FR-004, FR-008; SC-001).
 
 ## Phase 4: US2 - Authorized Live Audio
 
 **Goal**: Complete backend/mobile media dependency direction without changing lifecycle or user flows.  
 **Independent test**: Existing adapter/session/model/controller/lifecycle suites and strengthened boundary guards.
 
-- [ ] T008 [US2] Preserve injected room-client behavior coverage in backend/internal/sessions/livekit/adapter_test.go and document the T002 composition violation as the failing architectural check before moving production construction (FR-005, FR-007).
-- [ ] T009 [US2] Add NewConfiguredAdapter inside backend/internal/sessions/livekit/adapter.go and remove LiveKit SDK construction/imports from backend/cmd/api/main.go; preserve direct injection, existing config/audio policy, webhook verification and lifecycle recovery; run affected session/adapter suites and the extended contract guard (FR-005, FR-007, FR-008).
-- [ ] T010 [US2] Strengthen the existing mobile/test/features/sessions/livekit_boundary_test.dart to cover interface/type import direction (including transitive API-client dependencies) and reuse existing connection serialization and session controller/lifecycle tests; run a meaningful failing guard before mobile production edits (FR-006, FR-009).
-- [ ] T011 [US2] Extract MediaConnection into mobile/lib/features/sessions/domain/media_connection.dart with compatibility reexports in session_models.dart; leave application/media_session.dart interface-only, move its unchanged Riverpod declaration to application/media_session_provider.dart, update adapter/provider consumer imports, and preserve serialization/lifecycle behavior; run affected mobile tests (FR-006, FR-008; SC-002).
+- [X] T008 [US2] Preserve injected room-client behavior coverage in backend/internal/sessions/livekit/adapter_test.go and document the T002 composition violation as the failing architectural check before moving production construction (FR-005, FR-007).
+- [X] T009 [US2] Add NewConfiguredAdapter inside backend/internal/sessions/livekit/adapter.go and remove LiveKit SDK construction/imports from backend/cmd/api/main.go; preserve direct injection, existing config/audio policy, webhook verification and lifecycle recovery; run affected session/adapter suites and the extended contract guard (FR-005, FR-007, FR-008).
+- [X] T010 [US2] Strengthen the existing mobile/test/features/sessions/livekit_boundary_test.dart to cover interface/type import direction (including transitive API-client dependencies) and reuse existing connection serialization and session controller/lifecycle tests; run a meaningful failing guard before mobile production edits (FR-006, FR-009).
+- [X] T011 [US2] Extract MediaConnection into mobile/lib/features/sessions/domain/media_connection.dart with compatibility reexports in session_models.dart; leave application/media_session.dart interface-only, move its unchanged Riverpod declaration to application/media_session_provider.dart, update adapter/provider consumer imports, and preserve serialization/lifecycle behavior; run affected mobile tests (FR-006, FR-008; SC-002).
 
 ## Phase 5: Cross-cutting Verification and Review
 

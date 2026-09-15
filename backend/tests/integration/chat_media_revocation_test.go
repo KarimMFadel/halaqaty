@@ -15,13 +15,16 @@ import (
 	"github.com/minio/minio-go/v7"
 )
 
-type failingChatMediaClient struct {
-	*minio.Client
+// failingMarkerStore delegates every operation to the real adapter except
+// ApplyDeleteMarker, which fails — the exact revocation seam moderation
+// deletion calls, whose failure must leave the PostgreSQL message active.
+type failingMarkerStore struct {
+	chat.ObjectStore
 	err error
 }
 
-func (c *failingChatMediaClient) RemoveObject(context.Context, string, string, minio.RemoveObjectOptions) error {
-	return c.err
+func (s failingMarkerStore) ApplyDeleteMarker(context.Context, string) error {
+	return s.err
 }
 
 func TestChatMediaRevocation_ReconcilesLatestMarkerByMessageState(t *testing.T) {
@@ -95,7 +98,7 @@ func TestChatMediaRevocation_RecoveryRemovesExactMarkerAndRetainsBytes(t *testin
 	if markerID == "" {
 		t.Fatal("missing internal marker version ID")
 	}
-	if err := env.store.RemoveDeleteMarker(ctx, key, markerID); err != nil {
+	if err := env.adapter.RemoveDeleteMarker(ctx, key, markerID); err != nil {
 		t.Fatalf("remove exact marker: %v", err)
 	}
 	if _, err := env.minio.StatObject(ctx, env.bucket, key, minio.StatObjectOptions{}); err != nil {
@@ -112,7 +115,7 @@ func TestChatMediaRevocation_DeletionMarkerFailureLeavesPostgresMessageActive(t 
 	_, message := stageAndSendChatMedia(t, env, ctx, sender, circle, chat.MessageTypeImage, chatMediaPNG(t), 0, "marker-failure.png", "marker-failure")
 
 	mediaErr := errors.New("minio marker failure")
-	failingStore := chat.NewMediaStore(&failingChatMediaClient{Client: env.minio, err: mediaErr}, env.bucket, 10*time.Second)
+	failingStore := chat.NewMediaStore(failingMarkerStore{ObjectStore: env.adapter, err: mediaErr}, 10*time.Second)
 	if err := chat.NewModerationService(env.repo, failingStore).Delete(ctx, sender, circle, message.ID); !errors.Is(err, mediaErr) {
 		t.Fatalf("delete error=%v, want wrapped MinIO error", err)
 	}

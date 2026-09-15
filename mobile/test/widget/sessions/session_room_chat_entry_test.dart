@@ -13,7 +13,6 @@ import 'package:halaqaty_mobile/features/sessions/application/media_session.dart
 import 'package:halaqaty_mobile/features/sessions/application/session_room_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/data/realtime_session_client.dart';
 import 'package:halaqaty_mobile/features/sessions/data/session_api_client.dart';
-import 'package:halaqaty_mobile/features/sessions/domain/session_models.dart';
 import 'package:halaqaty_mobile/features/sessions/presentation/session_room_screen.dart';
 import '../../helpers/stub_auth_notifier.dart';
 

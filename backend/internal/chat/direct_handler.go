@@ -61,7 +61,11 @@ func (h *DirectHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	page := paginatedMessagesResponse{Data: make([]messageResponse, 0, len(messages)), HasMore: len(messages) == limit}
 	for _, message := range messages {
-		response := newMessageResponseForViewer(message, viewerID)
+		response, err := projectMessageMedia(r.Context(), viewerID, message, h.media)
+		if err != nil {
+			writeDirectError(w, err)
+			return
+		}
 		page.Data = append(page.Data, response)
 	}
 	if page.HasMore && len(page.Data) > 0 {
@@ -122,7 +126,12 @@ func (h *DirectHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		writeDirectError(w, err)
 		return
 	}
-	phttp.WriteJSON(w, http.StatusCreated, newMessageResponse(sent))
+	response, err := projectMessageMedia(r.Context(), viewerID, sent, h.media)
+	if err != nil {
+		writeDirectError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusCreated, response)
 }
 
 // DeleteMessage deletes only the caller's own recent direct message.

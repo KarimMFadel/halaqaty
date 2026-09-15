@@ -107,7 +107,10 @@ class DirectChatController extends StateNotifier<DirectChatControllerState> {
     if (peerId == null) return;
     switch (event) {
       case final ChatMessageEvent message
-          when message.message.dmPeerId == peerId:
+          when message.message.circleId == null &&
+              message.message.dmPeerId != null &&
+              (message.message.dmPeerId == peerId ||
+                  message.message.senderId == peerId):
         presence?.handleRealtimeEvent(event);
         state = state.copyWith(
             messages: mergeChatMessages(state.messages, [message.message]));

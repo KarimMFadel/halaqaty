@@ -109,12 +109,15 @@ func (s *GroupService) Search(ctx context.Context, viewerID, circleID uuid.UUID,
 	messages, err := s.repo.GroupSearchPage(ctx, circleID, viewerID, trimmed, before, clampHistoryLimit(limit))
 	if err != nil {
 		s.metrics.RecordLatencyOutcome(metrics.ChatOperationSearch, metrics.ChatOutcomeFailure, time.Since(start))
+		s.metrics.RecordSearch(metrics.ChatSearchFailure, time.Since(start))
 		return nil, fmt.Errorf("search chat history: %w", err)
 	}
 	if err := s.repo.hydrateSenderReadReceipts(ctx, viewerID, messages); err != nil {
+		s.metrics.RecordSearch(metrics.ChatSearchFailure, time.Since(start))
 		return nil, fmt.Errorf("load chat search read receipts: %w", err)
 	}
 	if err := s.repo.hydrateReplyPreviews(ctx, viewerID, messages); err != nil {
+		s.metrics.RecordSearch(metrics.ChatSearchFailure, time.Since(start))
 		return nil, fmt.Errorf("load chat search reply previews: %w", err)
 	}
 	outcome := metrics.ChatOutcomeAccepted
@@ -122,6 +125,11 @@ func (s *GroupService) Search(ctx context.Context, viewerID, circleID uuid.UUID,
 		outcome = metrics.ChatOutcomeNoResults
 	}
 	s.metrics.RecordLatencyOutcome(metrics.ChatOperationSearch, outcome, time.Since(start))
+	searchOutcome := metrics.ChatSearchResults
+	if len(messages) == 0 {
+		searchOutcome = metrics.ChatSearchNoResults
+	}
+	s.metrics.RecordSearch(searchOutcome, time.Since(start))
 	return messages, nil
 }
 

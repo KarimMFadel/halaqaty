@@ -1501,7 +1501,10 @@ paths:
           format: uuid
     delete:
       operationId: deleteCircleMessage
-      description: Delete a message (own messages within 10 min; teacher can delete any)
+      description: |
+        Delete an own message within 10 minutes, or any message as the current
+        circle teacher. Idempotent retries still require current authority in
+        the requested conversation; deleted state does not bypass authorization.
       tags: [Chat]
       summary: Delete a message (own messages within 10 min; teacher can delete any)
       parameters:
@@ -1599,7 +1602,10 @@ paths:
       operationId: listDirectMessages
       tags: [Chat]
       summary: List the complete eligible direct conversation with a peer
-      description: List the retained pair history only while a qualifying active-circle role relationship exists.
+      description: |
+        List the retained pair history only while a qualifying active-circle role
+        relationship exists. Active media includes a freshly authorized URL and
+        safe display metadata; private object keys are never returned.
       parameters:
         - name: limit
           in: query
@@ -1623,7 +1629,10 @@ paths:
       operationId: sendDirectMessage
       tags: [Chat]
       summary: Send to an eligible teacher-student or supervisor-student peer
-      description: Durably send one idempotent direct message after rechecking the current pair relationship.
+      description: |
+        Durably send one idempotent direct message after rechecking the current
+        pair relationship. Media responses include freshly authorized media
+        access using the canonical Message projection.
       parameters:
         - $ref: '#/components/parameters/RequiredIdempotencyKey'
       requestBody:
@@ -1660,7 +1669,10 @@ paths:
       operationId: deleteDirectMessage
       tags: [Chat]
       summary: Soft-delete an own direct message within 10 minutes
-      description: Soft-delete the caller's direct message within the allowed window and revoke its media access.
+      description: |
+        Soft-delete the caller's direct message within the allowed window and
+        revoke its media access. Idempotent retries still require the sender's
+        current eligible pair relationship.
       parameters:
         - $ref: '#/components/parameters/RequiredIdempotencyKey'
       responses:

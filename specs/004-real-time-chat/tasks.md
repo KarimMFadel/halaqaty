@@ -193,13 +193,13 @@
 
 **Purpose**: Prove complete security, reliability, performance, compatibility, and release readiness without expanding MVP scope.
 
-- [ ] T089 [P] Add an architecture-boundary contract test proving no chat LiveKit/Firebase Messaging imports, no notification triggers, no global roles, and no second socket transport in `backend/tests/contract/chat_architecture_boundary_test.go` and `mobile/test/features/chat/chat_architecture_boundary_test.dart`
-- [ ] T090 [P] Add integration coverage for redacted audit/metrics, upload/outbox/search failure attribution, backlog/parking, and reconnect recovery counters in `backend/tests/integration/chat_observability_test.go`
-- [ ] T091 [P] Add the shared fixed fixture's 1,000-sample p95 ≤2-second commit-to-client delivery test plus intentional realtime-suppression REST recovery run in `backend/tests/performance/chat_delivery_performance_test.go`
-- [ ] T092 Run focused Go race, security, contract, integration, migration, and fixed-fixture performance suites from `backend/`; resolve scoped defects in `backend/` and keep immutable commands in `specs/004-real-time-chat/quickstart.md`
-- [ ] T093 Run `$docs-guard`, Spectral, canonical/feature parity, link checks, and secret scanning; resolve documentation-only defects in `docs/contracts/openapi.yaml`, `docs/contracts/ws_events.md`, `docs/engineering/architecture/ARCHITECTURE.md`, and `specs/004-real-time-chat/`
-- [ ] T094 Run full Go unit, contract, integration, coverage, lint, format, and race gates from `backend/` and resolve scoped failures in `backend/`
-- [ ] T095 Run Flutter unit/widget, per-file Linux integration, analyze, and format gates from `mobile/`; verify Arabic/RTL and LTR accessibility and resolve scoped failures in `mobile/`
+- [X] T089 [P] Add an architecture-boundary contract test proving no chat LiveKit/Firebase Messaging imports, no notification triggers, no global roles, and no second socket transport in `backend/tests/contract/chat_architecture_boundary_test.go` and `mobile/test/features/chat/chat_architecture_boundary_test.dart`
+- [X] T090 [P] Add integration coverage for redacted audit/metrics, upload/outbox/search failure attribution, backlog/parking, and reconnect recovery counters in `backend/tests/integration/chat_observability_test.go`
+- [X] T091 [P] Add the shared fixed fixture's 1,000-sample p95 ≤2-second commit-to-client delivery test plus intentional realtime-suppression REST recovery run in `backend/tests/performance/chat_delivery_performance_test.go`
+- [X] T092 Run focused Go race, security, contract, integration, migration, and fixed-fixture performance suites from `backend/`; resolve scoped defects in `backend/` and keep immutable commands in `specs/004-real-time-chat/quickstart.md`
+- [X] T093 Run `$docs-guard`, Spectral, canonical/feature parity, link checks, and secret scanning; resolve documentation-only defects in `docs/contracts/openapi.yaml`, `docs/contracts/ws_events.md`, `docs/engineering/architecture/ARCHITECTURE.md`, and `specs/004-real-time-chat/`
+- [X] T094 Run full Go unit, contract, integration, coverage, lint, format, and race gates from `backend/` and resolve scoped failures in `backend/`
+- [X] T095 Run Flutter unit/widget, per-file Linux integration, analyze, and format gates from `mobile/`; verify Arabic/RTL and LTR accessibility and resolve scoped failures in `mobile/`
 - [ ] T096 Complete Tech Lead review plus Karim's mandatory manual deep review of Firebase authentication, RBAC, deletion, MinIO/upload, response safety, and rollback boundaries for `backend/internal/chat/`, `backend/internal/realtime/`, `backend/internal/api/`, `backend/migrations/000018_real_time_chat.up.sql`, and `backend/migrations/000018_real_time_chat.down.sql`; record approval in the GitHub PR review, not `specs/004-real-time-chat/checklists/requirements.md`
 
 ---

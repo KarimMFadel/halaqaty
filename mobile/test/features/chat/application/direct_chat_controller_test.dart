@@ -27,6 +27,33 @@ ChatMessage _directMessage(String id,
     );
 
 void main() {
+  test('projects incoming direct messages addressed to the current user',
+      () async {
+    final api = _FakeDirectApi()
+      ..pages.add(const ChatMessagePage(messages: [], hasMore: false));
+    final controller = DirectChatController(
+      api,
+      () async => (token: 'token', sessionId: 'session', userId: 'user'),
+    );
+    addTearDown(controller.dispose);
+    await controller.open(_peerId);
+    controller.handleRealtimeEvent(ChatMessageEvent(
+      eventId: 'incoming-event',
+      message: ChatMessage(
+        id: 'incoming',
+        senderId: _peerId,
+        circleId: null,
+        dmPeerId: 'user',
+        content: 'سلام',
+        type: ChatMessageType.text,
+        sentAt: DateTime.utc(2026, 9, 3),
+        deliveryStatus: ChatDeliveryStatus.delivered,
+      ),
+    ));
+    expect(
+        controller.state.messages.map((message) => message.id), ['incoming']);
+  });
+
   test('active read event refreshes the peer history authoritatively',
       () async {
     final api = _FakeDirectApi()

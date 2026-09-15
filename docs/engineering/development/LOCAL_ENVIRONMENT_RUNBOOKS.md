@@ -31,13 +31,33 @@ docker run --rm -e FLUTTER_SUPPRESS_ANALYTICS=true -v "<repo-root>:/workspace" -
    (cirruslabs/flutter:stable + `clang cmake ninja-build pkg-config
    libgtk-3-dev libsecret-1-dev xvfb`; rebuild via the Dockerfile in this
    repo's CI docs if absent).
-2. Run `flutter create --platforms=linux --project-name halaqaty_mobile .` as
-   an ephemeral scaffold, then delete afterwards: `linux/`,
-   `mobile/.gitignore`, `mobile/README.md`, `lib/main.dart`,
-   `analysis_options.yaml`, `test/widget_test.dart`.
+2. Copy `mobile/` into a temporary directory outside the checkout. In that
+   copy, run `flutter create --platforms=linux --project-name halaqaty_mobile .`.
+   Restore any overwritten application/configuration files from the checkout
+   (including `lib/main.dart`, `analysis_options.yaml`, and existing tests).
+   Keep the generated Linux scaffold only in the temporary copy; never delete
+   or replace the checkout's application files to prepare this gate.
 3. Run each file sequentially, up to 3 retries each (batch launches flake on
    the debug connection):
    `xvfb-run -a flutter test integration_test/<file> -d linux`
+
+Real-stack fixtures must be configured before the run; a skipped fixture is
+not a passing gate. `chat_direct_flow_test.dart` needs four distinct isolated
+accounts with `T064_{TEACHER,STUDENT,SUPERVISOR,OPERATOR}_{TOKEN,SESSION,USER_ID}`.
+The operator performs role changes without attempting forbidden self-role
+changes. `chat_media_flow_test.dart` needs
+`T052_{MEMBER,OUTSIDER}_{TOKEN,SESSION,USER_ID}`. Configure `T064_API_BASE_URL`
+and `T052_API_BASE_URL` to the API with chat media enabled and a versioned
+MinIO bucket. Real queue tests also need their `T048_*` and `T062_*` fixtures
+and the API's configured LiveKit service. Use disposable accounts so existing
+memberships and rolling upload quotas cannot contaminate the results. Never
+print fixture tokens or session identifiers in gate logs.
+
+Run only one API dispatcher against the fixture database. Multiple local API
+processes have separate in-memory WebSocket hubs and can consume each other's
+outbox events, causing targeted realtime checks to time out despite successful
+REST requests. Stop only a verified temporary API process before the gate;
+never stop an unrelated service or weaken the realtime assertions.
 
 ## Spectral (OpenAPI lint) via Docker
 

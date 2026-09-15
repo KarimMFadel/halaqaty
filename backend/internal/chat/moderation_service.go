@@ -36,9 +36,6 @@ func (s *ModerationServiceImpl) Delete(ctx context.Context, actorID, circleID, m
 		if err != nil {
 			return err
 		}
-		if message.State == MessageStateDeleted {
-			return nil
-		}
 		teacher := false
 		if message.CircleID != nil {
 			if circleID != *message.CircleID {
@@ -59,6 +56,9 @@ func (s *ModerationServiceImpl) Delete(ctx context.Context, actorID, circleID, m
 			if err := tx.LockQualifyingDMCircle(ctx, message.SenderID, *message.DMRecipientID); err != nil {
 				return err
 			}
+		}
+		if message.State == MessageStateDeleted {
+			return nil
 		}
 		serverNow, allowed, err := tx.moderationDeleteWindow(ctx, messageID, actorID, teacher)
 		if err != nil {

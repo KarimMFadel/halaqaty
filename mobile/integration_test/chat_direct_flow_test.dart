@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_api_client.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_media_api.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
+import 'package:halaqaty_mobile/features/sessions/data/session_api_client.dart';
 import 'package:integration_test/integration_test.dart';
 
 void main() {
@@ -16,13 +17,24 @@ void main() {
     final teacher = _Credentials.fromEnv(env, 'TEACHER');
     final student = _Credentials.fromEnv(env, 'STUDENT');
     final supervisor = _Credentials.fromEnv(env, 'SUPERVISOR');
-    if (teacher == null || student == null || supervisor == null) {
+    final operator = _Credentials.fromEnv(env, 'OPERATOR');
+    if (teacher == null ||
+        student == null ||
+        supervisor == null ||
+        operator == null) {
       markTestSkipped(
         'T064_* env vars missing; provide Firebase ID tokens, backend sessions, '
-        'and user IDs for teacher, student, and supervisor.',
+        'and user IDs for four isolated teacher, student, supervisor, and '
+        'operator fixture accounts.',
       );
       return;
     }
+    expect({
+      teacher.userId,
+      student.userId,
+      supervisor.userId,
+      operator.userId
+    }, hasLength(4), reason: 'T064 requires four distinct fixture accounts');
 
     final dio = Dio(BaseOptions(
       baseUrl:
@@ -49,13 +61,6 @@ void main() {
       }
     });
 
-    // Circle creators start as supervisors. Make the fixture's named teacher
-    // an actual teacher before asserting the teacher-student authorization.
-    await _assignRole(
-        circles, teacher, circleA, teacher.userId, CircleRole.teacher);
-    await _assignRole(
-        circles, teacher, circleB, teacher.userId, CircleRole.teacher);
-
     await _join(circles, student, circleA.inviteCode);
     await _join(circles, student, circleB.inviteCode);
 
@@ -66,26 +71,13 @@ void main() {
     await _send(chat, student, supervisor, 'student to supervisor');
 
     // Every disallowed role pairing is denied without conversation enumeration.
-    final prohibitedCircles = await _assertAllProhibitedPairs(
+    await _assertAllProhibitedPairs(
       circles,
       chat,
       teacher,
       supervisor,
+      operator,
     );
-    addTearDown(() async {
-      for (final circle in prohibitedCircles) {
-        try {
-          await circles.archiveCircle(
-            firebaseIdToken: teacher.token,
-            sessionId: teacher.sessionId,
-            circleId: circle.id,
-          );
-        } on DioException {
-          // Best-effort cleanup; the assertions are already complete.
-        }
-      }
-    });
-
     // A DM upload is bound to the peer, not either qualifying circle.
     final fixture = await _imageFixture();
     addTearDown(() async {
@@ -109,7 +101,19 @@ void main() {
       uploadId: upload.uploadId!,
       idempotencyKey: 't064-media-${DateTime.now().microsecondsSinceEpoch}',
     );
-    expect(mediaMessage.dmPeerId, student.userId);
+    // REST identifies the recipient; realtime dm_peer_id is receiver-relative.
+    final mediaHistory = await dio.get<Map<String, dynamic>>(
+      '/dm/${student.userId}',
+      options: Options(
+          headers: sessionRequestHeaders(teacher.token, teacher.sessionId)),
+    );
+    final mediaProjection = (mediaHistory.data!['data'] as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .singleWhere((message) => message['id'] == mediaMessage.id);
+    expect(mediaProjection['dm_recipient_id'], student.userId);
+    expect(mediaMessage.circleId, isNull);
+    expect(mediaMessage.type, ChatMessageType.image);
+    expect(mediaProjection['media_url'], isNotEmpty);
 
     // Losing one qualifying circle preserves the conversation and its media.
     await _remove(circles, teacher, circleA.id, student.userId);
@@ -188,11 +192,12 @@ Future<void> _assignRole(
       request: AssignCircleRoleRequest(role: role),
     );
 
-Future<List<CircleResponse>> _assertAllProhibitedPairs(
+Future<void> _assertAllProhibitedPairs(
   CircleApiClient circles,
   ChatApiClient chat,
   _Credentials teacher,
   _Credentials supervisor,
+  _Credentials operator,
 ) async {
   const pairs = [
     (CircleRole.teacher, CircleRole.teacher),
@@ -200,24 +205,25 @@ Future<List<CircleResponse>> _assertAllProhibitedPairs(
     (CircleRole.supervisor, CircleRole.supervisor),
     (CircleRole.student, CircleRole.student),
   ];
-  final circlesToArchive = <CircleResponse>[];
+  // Reuse one managed circle so role variants cannot exhaust the five-circle
+  // membership budget. The separate creator remains its teacher throughout.
+  final circle = await _createCircle(circles, operator, supervisor, 'denied');
+  addTearDown(() => circles.archiveCircle(
+        firebaseIdToken: operator.token,
+        sessionId: operator.sessionId,
+        circleId: circle.id,
+      ));
+  await _join(circles, teacher, circle.inviteCode);
   for (final pair in pairs) {
-    final circle = await _createCircle(
-      circles,
-      teacher,
-      supervisor,
-      'denied-${pair.$1.name}-${pair.$2.name}',
-    );
-    circlesToArchive.add(circle);
-    // The creator initially has supervisor authority, so change its peer first.
-    await _assignRole(circles, teacher, circle, supervisor.userId, pair.$2);
-    await _assignRole(circles, teacher, circle, teacher.userId, pair.$1);
+    // A separate teacher manager sets both target roles, preserving the
+    // self-role-change and final-teacher safeguards under test.
+    await _assignRole(circles, operator, circle, supervisor.userId, pair.$2);
+    await _assignRole(circles, operator, circle, teacher.userId, pair.$1);
     await _expectDenied(() => _list(chat, teacher, supervisor));
     await _expectDenied(
       () => _send(chat, teacher, supervisor, 'must be denied'),
     );
   }
-  return circlesToArchive;
 }
 
 Future<ChatMessagePage> _list(
@@ -250,7 +256,7 @@ Future<void> _expectDenied(Future<Object> Function() action) async {
     await action();
     fail('Expected the direct conversation operation to be denied');
   } on ChatApiException catch (error) {
-    expect(error.statusCode, anyOf(401, 403, 404));
+    expect(error.statusCode, 403);
   }
 }
 

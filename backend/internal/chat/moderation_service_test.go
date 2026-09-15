@@ -128,6 +128,38 @@ func TestModerationService_DMOwnDelete(t *testing.T) {
 	}
 }
 
+// Regression: an idempotent deletion replay must not bypass current authority.
+func TestModerationService_DeletedMessageReplayStillRequiresAuthority(t *testing.T) {
+	repo := newChatRepo(t)
+	ctx := context.Background()
+	teacher := seedUser(t, repo, "moderation-replay-teacher")
+	sender := seedUser(t, repo, "moderation-replay-sender")
+	stranger := seedUser(t, repo, "moderation-replay-stranger")
+	circle := seedCircle(t, repo, "Moderation replay authority", teacher)
+	joined := time.Now().UTC().Add(-time.Hour)
+	seedMember(t, repo, circle, teacher, "teacher", joined)
+	seedMember(t, repo, circle, sender, "student", joined)
+	seedMember(t, repo, circle, stranger, "student", joined)
+	message := seedMessage(t, repo, sender, &circle, nil, time.Now().UTC(), "deleted")
+	service := NewModerationService(repo, nil)
+	if err := service.Delete(ctx, teacher, circle, message); err != nil {
+		t.Fatalf("teacher deletion: %v", err)
+	}
+	for _, tc := range []struct {
+		name          string
+		actor, circle uuid.UUID
+	}{
+		{"unrelated member", stranger, circle},
+		{"wrong conversation", teacher, uuid.New()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := service.Delete(ctx, tc.actor, tc.circle, message); !errors.Is(err, ErrMessageNotVisible) {
+				t.Fatalf("unauthorized replay error=%v, want non-enumerating denial", err)
+			}
+		})
+	}
+}
+
 func TestModerationService_AttachedMediaWithoutStoreFailsClosed(t *testing.T) {
 	repo := newChatRepo(t)
 	ctx := context.Background()

@@ -182,14 +182,22 @@ func newMessageResponseForViewer(msg Message, viewerID uuid.UUID) messageRespons
 
 // projectMessage adds freshly authorized media only to REST media responses.
 func (h *GroupHandler) projectMessage(ctx context.Context, viewerID uuid.UUID, msg Message) (messageResponse, error) {
+	return projectMessageMedia(ctx, viewerID, msg, h.media)
+}
+
+type messageMediaSource interface {
+	RenewMediaURL(context.Context, uuid.UUID, uuid.UUID) (MediaAccess, error)
+}
+
+func projectMessageMedia(ctx context.Context, viewerID uuid.UUID, msg Message, media messageMediaSource) (messageResponse, error) {
 	response := newMessageResponseForViewer(msg, viewerID)
-	if msg.Type == MessageTypeText {
+	if msg.Type == MessageTypeText || msg.DeletedAt != nil {
 		return response, nil
 	}
-	if h.media == nil {
+	if media == nil {
 		return messageResponse{}, fmt.Errorf("chat media projection is not configured")
 	}
-	access, err := h.media.RenewMediaURL(ctx, viewerID, msg.ID)
+	access, err := media.RenewMediaURL(ctx, viewerID, msg.ID)
 	if err != nil {
 		return messageResponse{}, err
 	}

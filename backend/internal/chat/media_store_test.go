@@ -127,10 +127,13 @@ func TestMediaStore_Stage_SanitizesContentTypeFromAllowlist(t *testing.T) {
 	}
 }
 func TestMediaStore_Stage_RejectsNonPositiveSize(t *testing.T) {
-	for _, size := range []int64{0, -1} {
-		t.Run(string(rune(size+65)), func(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		size int64
+	}{{"size 0", 0}, {"size -1", -1}} {
+		t.Run(tc.name, func(t *testing.T) {
 			fake := &fakeObjectClient{}
-			_, err := newTestMediaStore(fake).Stage(context.Background(), StageInput{UploadID: uuid.New(), Type: MessageTypeImage, MIMEType: "image/png", SizeBytes: size, Body: strings.NewReader("")})
+			_, err := newTestMediaStore(fake).Stage(context.Background(), StageInput{UploadID: uuid.New(), Type: MessageTypeImage, MIMEType: "image/png", SizeBytes: tc.size, Body: strings.NewReader("")})
 			if !errors.Is(err, ErrUploadTooLarge) || len(fake.puts) != 0 {
 				t.Fatalf("err=%v puts=%v", err, fake.puts)
 			}

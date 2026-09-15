@@ -15,14 +15,9 @@ import (
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/chat"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/config"
-	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
-
-// chatObjectKeyPrefix namespaces every private chat attachment object; it
-// mirrors the chat package's server-side key derivation.
-const chatObjectKeyPrefix = "chat"
 
 // objectClient is the narrow MinIO surface the adapter needs; it is
 // satisfied by *minio.Client and by SDK fakes in tests.
@@ -103,7 +98,7 @@ func (a *Adapter) EnsureChatBucketVersioned(ctx context.Context) error {
 // ApplyDeleteMarker ensures objectKey is shadowed by one versionless delete
 // marker. It is idempotent when the latest version is already a marker.
 func (a *Adapter) ApplyDeleteMarker(ctx context.Context, objectKey string) error {
-	if isInternalChatObjectKey(objectKey) {
+	if chat.IsInternalObjectKey(objectKey) {
 		if marker, err := a.latestDeleteMarker(ctx, objectKey); err != nil {
 			return err
 		} else if marker != "" {
@@ -117,7 +112,7 @@ func (a *Adapter) ApplyDeleteMarker(ctx context.Context, objectKey string) error
 // exists for infrastructure fixtures and adapter-internal recovery; version
 // IDs never cross the neutral chat.ObjectStore contract.
 func (a *Adapter) RemoveDeleteMarker(ctx context.Context, objectKey, versionID string) error {
-	if !isInternalChatObjectKey(objectKey) {
+	if !chat.IsInternalObjectKey(objectKey) {
 		return errors.New("remove chat upload delete marker: object key is not an internal chat upload")
 	}
 	if strings.TrimSpace(versionID) == "" {
@@ -145,7 +140,7 @@ func (a *Adapter) RemoveLatestDeleteMarker(ctx context.Context, objectKey string
 // marker on objectKey, or "" when none exists. It deletes nothing and is the
 // only place provider version identities are observed.
 func (a *Adapter) latestDeleteMarker(ctx context.Context, objectKey string) (string, error) {
-	if !isInternalChatObjectKey(objectKey) {
+	if !chat.IsInternalObjectKey(objectKey) {
 		return "", errors.New("find chat upload delete marker: object key is not an internal chat upload")
 	}
 	var latest *minio.ObjectInfo
@@ -162,15 +157,4 @@ func (a *Adapter) latestDeleteMarker(ctx context.Context, objectKey string) (str
 		return "", nil
 	}
 	return latest.VersionID, nil
-}
-
-// isInternalChatObjectKey reports whether objectKey is a server-generated
-// chat upload key (never a client-supplied path).
-func isInternalChatObjectKey(objectKey string) bool {
-	const prefix = chatObjectKeyPrefix + "/"
-	if !strings.HasPrefix(objectKey, prefix) {
-		return false
-	}
-	_, err := uuid.Parse(strings.TrimPrefix(objectKey, prefix))
-	return err == nil
 }

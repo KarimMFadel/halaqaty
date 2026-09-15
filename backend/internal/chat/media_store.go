@@ -126,7 +126,7 @@ func (s *MediaStore) ApplyDeleteMarker(ctx context.Context, objectKey string) er
 // RemoveLatestDeleteMarker recovers only server-generated chat upload keys.
 // Exact marker version identity never crosses this policy boundary.
 func (s *MediaStore) RemoveLatestDeleteMarker(ctx context.Context, objectKey string) error {
-	if !isInternalChatObjectKey(objectKey) {
+	if !IsInternalObjectKey(objectKey) {
 		return errors.New("find chat upload delete marker: object key is not an internal chat upload")
 	}
 	ctx, cancel := context.WithTimeout(ctx, s.opTimeout)
@@ -136,7 +136,11 @@ func (s *MediaStore) RemoveLatestDeleteMarker(ctx context.Context, objectKey str
 	}
 	return nil
 }
-func isInternalChatObjectKey(objectKey string) bool {
+
+// IsInternalObjectKey reports whether objectKey is a server-generated chat
+// upload key (never a client-supplied path). The MinIO adapter reuses it to
+// keep delete-marker mechanics confined to server-derived keys.
+func IsInternalObjectKey(objectKey string) bool {
 	const prefix = chatObjectKeyPrefix + "/"
 	if !strings.HasPrefix(objectKey, prefix) {
 		return false

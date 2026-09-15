@@ -118,10 +118,42 @@ class DirectChatController extends StateNotifier<DirectChatControllerState> {
         unawaited(_reconcile(peerId));
       case final ChatTypingEvent typing when typing.dmPeerId == peerId:
         presence?.handleRealtimeEvent(event);
+      case final ChatMessageDeletedEvent deleted
+          when state.messages.any((message) => message.id == deleted.messageId):
+        state = state.copyWith(
+          messages: state.messages
+              .map((message) => message.id == deleted.messageId
+                  ? _redacted(message, deleted.deletedAt)
+                  : message)
+              .toList(growable: false),
+        );
       default:
         break;
     }
   }
+
+  ChatMessage _redacted(ChatMessage message, DateTime deletedAt) => ChatMessage(
+        id: message.id,
+        senderId: message.senderId,
+        circleId: message.circleId,
+        dmPeerId: message.dmPeerId,
+        content: '',
+        type: message.type,
+        sentAt: message.sentAt,
+        deliveryStatus: message.deliveryStatus,
+        senderName: message.senderName,
+        replyToId: message.replyToId,
+        replyPreview: message.replyPreview == null
+            ? null
+            : ChatReplyPreviewProjection(
+                id: message.replyPreview!.id,
+                senderName: message.replyPreview!.senderName,
+                preview: '',
+                deleted: true,
+              ),
+        deletedAt: message.deletedAt ?? deletedAt,
+        readReceipts: message.readReceipts,
+      );
 
   Future<void> _reconcile(String peerId) async {
     try {

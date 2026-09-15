@@ -7,6 +7,19 @@ import 'package:halaqaty_mobile/features/sessions/data/session_api_client.dart';
 
 export 'package:halaqaty_mobile/features/chat/domain/chat_models.dart';
 
+abstract interface class ChatModerationApi {
+  Future<void> deleteCircleMessage(
+      {required String token,
+      required String sessionId,
+      required String circleId,
+      required String messageId});
+  Future<void> deleteDirectMessage(
+      {required String token,
+      required String sessionId,
+      required String userId,
+      required String messageId});
+}
+
 /// Contract error envelope (`{error: {code, message}}`) surfaced as a typed
 /// exception; presentation maps it to localized copy, never raw strings.
 class ChatApiException implements Exception {
@@ -48,7 +61,7 @@ ChatApiException mapChatApiException(DioException error) {
 
 /// Dio client for the F-004 group chat REST surface. Reuses the shared
 /// authenticated `dioProvider` and session headers; it owns no transport.
-class ChatApiClient {
+class ChatApiClient implements ChatModerationApi {
   ChatApiClient(this._dio);
 
   final Dio _dio;
@@ -185,6 +198,50 @@ class ChatApiClient {
         options: Options(headers: {
           ...sessionRequestHeaders(token, sessionId),
           ChatHeaders.idempotencyKey: idempotencyKey,
+        }),
+      );
+    } on DioException catch (error) {
+      throw mapChatApiException(error);
+    }
+  }
+
+  /// Soft-deletes a group message; authority and the ten-minute deadline are
+  /// enforced by the backend using server time.
+  @override
+  Future<void> deleteCircleMessage({
+    required String token,
+    required String sessionId,
+    required String circleId,
+    required String messageId,
+  }) async {
+    try {
+      await _dio.delete<void>(
+        '${ChatApiPaths.circleMessages(circleId)}/$messageId',
+        options: Options(headers: {
+          ...sessionRequestHeaders(token, sessionId),
+          ChatHeaders.idempotencyKey: newChatIdempotencyKey(),
+        }),
+      );
+    } on DioException catch (error) {
+      throw mapChatApiException(error);
+    }
+  }
+
+  /// Soft-deletes an own direct message; authority and deadline are backend
+  /// decisions and conflicts remain safe to retry after refreshing history.
+  @override
+  Future<void> deleteDirectMessage({
+    required String token,
+    required String sessionId,
+    required String userId,
+    required String messageId,
+  }) async {
+    try {
+      await _dio.delete<void>(
+        ChatApiPaths.deleteDirectMessage(userId, messageId),
+        options: Options(headers: {
+          ...sessionRequestHeaders(token, sessionId),
+          ChatHeaders.idempotencyKey: newChatIdempotencyKey(),
         }),
       );
     } on DioException catch (error) {

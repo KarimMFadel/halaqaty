@@ -144,6 +144,45 @@ void main() {
     expect(api.groupReadIds, ['incoming']);
   });
 
+  test('projects deletion events as an idempotent redaction', () async {
+    final realtime = _FakeChatRealtimeClient();
+    final controller = _controller(
+      _FakeChatApi()
+        ..pages.add(_page([
+          _message('deleted', content: 'private', senderId: 'other').copyWith(
+            mediaUrl: 'https://media.example/private',
+            pinnedAt: DateTime.utc(2026, 9, 3, 12),
+            replyPreview: const ChatReplyPreviewProjection(
+              id: 'reply',
+              senderName: 'other',
+              preview: 'quoted private text',
+              deleted: false,
+            ),
+          ),
+        ])),
+      realtime,
+    );
+    addTearDown(controller.dispose);
+
+    await controller.open(_circleId);
+    final event = ChatMessageDeletedEvent(
+      eventId: 'group-deleted-event',
+      messageId: 'deleted',
+      deletedAt: DateTime.utc(2026, 9, 3, 12, 1),
+    );
+    realtime.emit(event);
+    realtime.emit(event);
+    await Future<void>.delayed(Duration.zero);
+
+    final deleted = controller.state.messages.single;
+    expect(deleted.content, isEmpty);
+    expect(deleted.mediaUrl, isNull);
+    expect(deleted.pinnedAt, isNull);
+    expect(deleted.replyPreview?.preview, isEmpty);
+    expect(deleted.replyPreview?.deleted, isTrue);
+    expect(deleted.deletedAt, event.deletedAt);
+  });
+
   test('sendText is optimistic pending then replaces with the server message',
       () async {
     final api = _FakeChatApi()..pages.add(_page([_message('m1')]));

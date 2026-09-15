@@ -27,7 +27,7 @@ class ChatReplyPreview {
       id: message.replyToId ?? projection?.id ?? message.id,
       senderName: projection?.senderName ?? message.senderName ?? '',
       preview: projection?.preview ?? '',
-      deleted: projection?.deleted ?? false,
+      deleted: message.deletedAt != null || (projection?.deleted ?? false),
     ).redactedIfDeleted();
   }
 

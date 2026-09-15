@@ -230,6 +230,8 @@ func main() {
 	var chatUploadHandler *chat.UploadHandler
 	var chatMediaHandler *chat.MediaHandler
 	var chatCleaner *chat.Cleaner
+	var chatMediaStore *chat.MediaStore
+	var chatMediaReconciler *chat.MediaReconciler
 	chatMediaCfg, err := config.LoadChatMediaConfig()
 	if err != nil {
 		logger.Error("failed to load chat media config", "error", err)
@@ -244,12 +246,13 @@ func main() {
 			logger.Error("failed to init chat media object-store client", "error", err)
 			os.Exit(1)
 		}
-		chatMediaStore := chat.NewMediaStore(minioClient, chatMediaCfg.Bucket, chatMediaCfg.OperationTimeout)
+		chatMediaStore = chat.NewMediaStore(minioClient, chatMediaCfg.Bucket, chatMediaCfg.OperationTimeout)
 		if err := chatMediaStore.EnsureChatBucketVersioned(ctx); err != nil {
 			logger.Error("chat media bucket is missing, unversioned, or unreachable", "error", err)
 			os.Exit(1)
 		}
 		chatCleaner = chat.NewCleaner(chat.NewPoolStagedUploadSource(pool), chatMediaStore)
+		chatMediaReconciler = chat.NewMediaReconciler(chatRepo, chatMediaStore)
 		chatUploadService := chat.NewUploadService(
 			chatRepo,
 			rbacRepo,
@@ -264,22 +267,24 @@ func main() {
 		chatUploadHandler = chat.NewUploadHandler(chatUploadService)
 		chatMediaHandler = chat.NewMediaHandler(chatUploadService)
 	}
+	chatModerationHandler := chat.NewModerationHandler(chat.NewModerationService(chatRepo, chatMediaStore))
 
 	mwSet := apirouter.MiddlewareSet{
-		Auth:                authMW,
-		Role:                roleMW,
-		RateLimit:           rateLimitMW,
-		AuthHandler:         authHandler,
-		ProfileHandler:      profileHandler,
-		RBACHandler:         rbacHandler,
-		SessionHandler:      sessionHandler,
-		RealtimeHandler:     realtimeHandler,
-		RealtimeHub:         realtimeHub,
-		QueueHandler:        queueHandler,
-		ChatHandler:         chatHandler,
-		DirectChatHandler:   directHandler,
-		ChatPresenceHandler: chatPresenceHandler,
-		ChatSendLimiter:     chat.NewChatSendLimiter(chat.MaxSendsPerMinute),
+		Auth:                  authMW,
+		Role:                  roleMW,
+		RateLimit:             rateLimitMW,
+		AuthHandler:           authHandler,
+		ProfileHandler:        profileHandler,
+		RBACHandler:           rbacHandler,
+		SessionHandler:        sessionHandler,
+		RealtimeHandler:       realtimeHandler,
+		RealtimeHub:           realtimeHub,
+		QueueHandler:          queueHandler,
+		ChatHandler:           chatHandler,
+		ChatModerationHandler: chatModerationHandler,
+		DirectChatHandler:     directHandler,
+		ChatPresenceHandler:   chatPresenceHandler,
+		ChatSendLimiter:       chat.NewChatSendLimiter(chat.MaxSendsPerMinute),
 		// Nil when chat media is unconfigured; the router leaves the
 		// upload/renewal routes unregistered in that case.
 		ChatUploadHandler: chatUploadHandler,
@@ -357,6 +362,25 @@ func main() {
 				case <-ticker.C:
 					if err := chatCleaner.CleanStaged(reconcilerCtx, 100); err != nil {
 						logger.Error("chat staged-upload cleanup failed", "error", err)
+					}
+				}
+			}
+		}()
+	}
+	if chatMediaReconciler != nil {
+		if err := chatMediaReconciler.Sweep(reconcilerCtx, chat.DefaultMediaReconciliationLimit); err != nil {
+			logger.Error("chat media startup reconciliation failed", "error", err)
+		}
+		go func() {
+			ticker := time.NewTicker(chat.DefaultMediaReconciliationInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-reconcilerCtx.Done():
+					return
+				case <-ticker.C:
+					if err := chatMediaReconciler.Sweep(reconcilerCtx, chat.DefaultMediaReconciliationLimit); err != nil {
+						logger.Error("chat media reconciliation failed", "error", err)
 					}
 				}
 			}

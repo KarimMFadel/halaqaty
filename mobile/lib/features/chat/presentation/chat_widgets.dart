@@ -14,10 +14,14 @@ class ChatMessageBubble extends StatelessWidget {
     super.key,
     required this.message,
     required this.isOwn,
+    this.canDelete = false,
+    this.onDelete,
   });
 
   final ChatMessage message;
   final bool isOwn;
+  final bool canDelete;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -59,10 +63,34 @@ class ChatMessageBubble extends StatelessWidget {
                   ),
                 ),
               ),
-            if (message.type == ChatMessageType.text)
+            if (message.deletedAt != null)
+              Text(Directionality.of(context) == TextDirection.rtl
+                  ? 'الرسالة محذوفة'
+                  : 'Message deleted')
+            else if (message.type == ChatMessageType.text)
               Text(message.content)
             else
               ChatMediaMessageBody(key: ValueKey(message.id), message: message),
+            if (canDelete && onDelete != null)
+              Semantics(
+                button: true,
+                container: true,
+                explicitChildNodes: true,
+                label: Directionality.of(context) == TextDirection.rtl
+                    ? 'حذف الرسالة'
+                    : 'Delete message',
+                child: ConstrainedBox(
+                  constraints:
+                      const BoxConstraints(minWidth: 48, minHeight: 48),
+                  child: IconButton(
+                    tooltip: Directionality.of(context) == TextDirection.rtl
+                        ? 'حذف الرسالة'
+                        : 'Delete message',
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ),
+              ),
             if (isOwn)
               _DeliveryStatusBadge(
                 status: message.deliveryStatus,

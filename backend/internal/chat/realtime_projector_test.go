@@ -326,6 +326,73 @@ func TestRealtimeProjector_RejectsUnsupportedEventAndDirectMessages(t *testing.T
 	}
 }
 
+func TestRealtimeProjector_DeletedGroupEventRedactsAndReauthorizesAudience(t *testing.T) {
+	tickets := realtime.NewTicketService(fixedCircleReader{
+		"member-user": {projectorCircleID}, "removed-user": {projectorCircleID},
+	})
+	hub := realtime.NewHub(tickets, nil)
+	server := httptest.NewServer(hub)
+	defer server.Close()
+	memberTicket, _ := tickets.IssueForSession(context.Background(), "member-user", "session-1")
+	removedTicket, _ := tickets.IssueForSession(context.Background(), "removed-user", "session-1")
+	member := dialProjectorClient(t, server, memberTicket.Token)
+	removed := dialProjectorClient(t, server, removedTicket.Token)
+	defer member.Close()
+	defer removed.Close()
+	subscribeProjectorCircle(t, member, projectorCircleID)
+	subscribeProjectorCircle(t, removed, projectorCircleID)
+	deletedAt := time.Date(2026, 9, 3, 12, 5, 0, 0, time.UTC)
+	msg, event := projectorTestMessage(t)
+	msg.DeletedAt = &deletedAt
+	event.EventType = realtime.EventChatMessageDeleted
+	projector := NewRealtimeProjector(fakeMembershipReader{members: map[string]bool{projectorMember(projectorCircleID, "member-user"): true}}, hub, tickets, validProjectorSession)
+	if err := projector.ProjectMessage(context.Background(), event, msg); err != nil {
+		t.Fatalf("projection: %v", err)
+	}
+	envelope := readProjectorJSON(t, member)
+	if envelope["type"] != realtime.EventChatMessageDeleted {
+		t.Fatalf("event = %v", envelope)
+	}
+	payload, _ := envelope["payload"].(map[string]any)
+	for _, forbidden := range []string{"content", "object_key", "media_url", "reason"} {
+		if _, ok := payload[forbidden]; ok {
+			t.Fatalf("deleted payload leaks %q: %v", forbidden, payload)
+		}
+	}
+	assertNoProjectorEvent(t, removed)
+}
+
+func TestRealtimeProjector_DeletedDMEventTargetsOnlyEligiblePair(t *testing.T) {
+	senderID := uuid.New()
+	peerID := uuid.New()
+	otherID := uuid.New()
+	tickets := realtime.NewTicketService(fixedCircleReader{senderID.String(): {}, peerID.String(): {}, otherID.String(): {}})
+	hub := realtime.NewHub(tickets, nil)
+	server := httptest.NewServer(hub)
+	defer server.Close()
+	connections := make([]*websocket.Conn, 0, 3)
+	for _, id := range []uuid.UUID{senderID, peerID, otherID} {
+		ticket, _ := tickets.IssueForSession(context.Background(), id.String(), "session-1")
+		conn := dialProjectorClient(t, server, ticket.Token)
+		connections = append(connections, conn)
+		defer conn.Close()
+	}
+	deletedAt := time.Now().UTC()
+	msg := Message{ID: uuid.New(), SenderID: senderID, DMRecipientID: &peerID, Type: MessageTypeText, Content: "secret", SentAt: deletedAt.Add(-time.Minute), DeletedAt: &deletedAt, State: MessageStateDeleted}
+	projector := NewRealtimeProjector(fakeMembershipReader{}, hub, tickets, validProjectorSession)
+	projector.SetDMEligibilityChecker(func(context.Context, uuid.UUID, uuid.UUID) (bool, error) { return true, nil })
+	if err := projector.ProjectMessage(context.Background(), OutboxEvent{EventID: uuid.New(), MessageID: msg.ID, EventType: realtime.EventChatMessageDeleted}, msg); err != nil {
+		t.Fatalf("projection: %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		envelope := readProjectorJSON(t, connections[i])
+		if envelope["type"] != realtime.EventChatMessageDeleted {
+			t.Fatalf("pair event = %v", envelope)
+		}
+	}
+	assertNoProjectorEvent(t, connections[2])
+}
+
 func TestRealtimeProjector_ProjectsReadEventOnlyToSender(t *testing.T) {
 	senderID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	readerID := uuid.MustParse("22222222-2222-2222-2222-222222222222")

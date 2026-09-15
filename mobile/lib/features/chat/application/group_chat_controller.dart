@@ -544,6 +544,35 @@ class GroupChatController extends StateNotifier<GroupChatControllerState> {
         unawaited(_reconcile());
       case ChatMessageReadEvent():
         unawaited(_reconcile());
+      case final ChatMessageDeletedEvent deleted:
+        state = state.copyWith(
+          messages: state.messages.map((message) {
+            if (message.id != deleted.messageId) return message;
+            final reply = message.replyPreview;
+            return ChatMessage(
+              id: message.id,
+              senderId: message.senderId,
+              circleId: message.circleId,
+              dmPeerId: message.dmPeerId,
+              content: '',
+              type: message.type,
+              sentAt: message.sentAt,
+              deliveryStatus: message.deliveryStatus,
+              senderName: message.senderName,
+              replyToId: message.replyToId,
+              replyPreview: reply == null
+                  ? null
+                  : ChatReplyPreviewProjection(
+                      id: reply.id,
+                      senderName: reply.senderName,
+                      preview: '',
+                      deleted: true,
+                    ),
+              deletedAt: deleted.deletedAt,
+              readReceipts: message.readReceipts,
+            );
+          }).toList(growable: false),
+        );
       case ChatTypingEvent():
         // Typing is projected by the presence controller; it is not durable
         // group history and must not alter this authoritative message list.

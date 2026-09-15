@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:halaqaty_mobile/features/chat/application/direct_chat_controller.dart';
+import 'package:halaqaty_mobile/features/chat/application/chat_moderation_controller.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_api_client.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_realtime_client.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/direct_chat_screen.dart';
@@ -79,10 +80,65 @@ void main() {
     expect(find.text('This conversation is unavailable'), findsOneWidget);
     expect(find.textContaining('private'), findsNothing);
   });
+
+  testWidgets('wires the authorized delete action into the direct screen',
+      (tester) async {
+    final message = ChatMessage(
+      id: 'own-message',
+      senderId: 'user',
+      circleId: null,
+      dmPeerId: 'peer',
+      content: 'حذفني',
+      type: ChatMessageType.text,
+      sentAt: DateTime.now().toUtc().subtract(const Duration(minutes: 1)),
+      deliveryStatus: ChatDeliveryStatus.delivered,
+    );
+    final api = _FakeReadyApi(message: message);
+    final chat = DirectChatController(
+      api,
+      () async => (token: 'token', sessionId: 'session', userId: 'user'),
+    );
+    final moderation = ChatModerationController(
+      api,
+      () async => (token: 'token', sessionId: 'session', userId: 'user'),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith((_) => StubAuthNotifier(
+                initialState: AuthState(
+                  status: AuthStatus.authenticated,
+                  sessionId: 'session',
+                  user: BackendUser(
+                    id: 'user',
+                    firebaseUid: 'firebase-user',
+                    preferredLanguage: 'en',
+                    createdAt: DateTime.utc(2026),
+                  ),
+                ),
+              )),
+          directChatControllerProvider('peer').overrideWith((_) => chat),
+          chatModerationControllerProvider.overrideWith((_) => moderation),
+        ],
+        child: const MaterialApp(home: DirectChatScreen(peerId: 'peer')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.bySemanticsLabel('Delete message'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Delete message'));
+    await tester.pumpAndSettle();
+
+    expect(api.deletedMessageId, 'own-message');
+    expect(find.text('Message deleted'), findsOneWidget);
+  });
 }
 
-class _FakeReadyApi extends ChatApiClient {
-  _FakeReadyApi() : super(Dio());
+class _FakeReadyApi extends ChatApiClient implements ChatModerationApi {
+  _FakeReadyApi({this.message}) : super(Dio());
+
+  final ChatMessage? message;
+  String? deletedMessageId;
 
   @override
   Future<ChatMessagePage> listDirectMessages({
@@ -92,7 +148,26 @@ class _FakeReadyApi extends ChatApiClient {
     int? limit,
     String? before,
   }) async =>
-      const ChatMessagePage(messages: [], hasMore: false);
+      ChatMessagePage(
+          messages: [if (message != null) message!], hasMore: false);
+
+  @override
+  Future<void> deleteDirectMessage({
+    required String token,
+    required String sessionId,
+    required String userId,
+    required String messageId,
+  }) async {
+    deletedMessageId = messageId;
+  }
+
+  @override
+  Future<void> deleteCircleMessage({
+    required String token,
+    required String sessionId,
+    required String circleId,
+    required String messageId,
+  }) async {}
 }
 
 class _FakeRealtime implements ChatRealtimePresenceClient {

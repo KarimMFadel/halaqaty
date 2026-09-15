@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/google/uuid"
 	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
+	"github.com/google/uuid"
 )
 
 // ModerationService is the transport seam for message deletion.
@@ -56,9 +56,21 @@ func (s *ModerationServiceImpl) Delete(ctx context.Context, actorID, circleID, m
 			if message.DMRecipientID == nil || actorID != message.SenderID {
 				return ErrMessageNotVisible
 			}
-			if err := tx.LockQualifyingDMCircle(ctx, message.SenderID, *message.DMRecipientID); err != nil { return err }
+			if err := tx.LockQualifyingDMCircle(ctx, message.SenderID, *message.DMRecipientID); err != nil {
+				return err
+			}
 		}
-		if s.media != nil && message.UploadID != nil {
+		serverNow, allowed, err := tx.moderationDeleteWindow(ctx, messageID, actorID, teacher)
+		if err != nil {
+			return err
+		}
+		if !allowed {
+			return ErrDirectDeleteConflict
+		}
+		if message.UploadID != nil {
+			if s.media == nil {
+				return errors.New("delete chat message: media store is not configured")
+			}
 			upload, err := tx.LoadMessageUploadForDelete(ctx, messageID)
 			if err != nil {
 				return err
@@ -67,7 +79,7 @@ func (s *ModerationServiceImpl) Delete(ctx context.Context, actorID, circleID, m
 				return err
 			}
 		}
-		changed, err := tx.SoftDeleteMessage(ctx, messageID, actorID, teacher)
+		changed, err := tx.SoftDeleteMessage(ctx, messageID, actorID, teacher, serverNow)
 		if err != nil {
 			return err
 		}

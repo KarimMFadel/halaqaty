@@ -34,6 +34,14 @@ Map<String, dynamic> _messagePayload({String circleId = _circleId}) => {
     };
 
 void main() {
+  test('decodes chat.message_deleted and deduplicates its event id', () {
+    final decoder = ChatRealtimeEventDecoder('circle');
+    const frame =
+        '{"type":"chat.message_deleted","event_id":"e1","payload":{"message_id":"m1","deleted_at":"2026-09-15T10:00:00Z"}}';
+    final event = decoder.decode(frame);
+    expect(event, isA<ChatMessageDeletedEvent>());
+    expect(decoder.decode(frame), isNull);
+  });
   test('decodes chat.message into a ChatMessageEvent for this circle', () {
     final decoder = ChatRealtimeEventDecoder(_circleId);
 

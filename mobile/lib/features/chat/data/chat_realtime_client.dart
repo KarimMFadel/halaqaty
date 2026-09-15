@@ -37,6 +37,19 @@ class ChatMessageReadEvent extends ChatRealtimeEvent {
   final DateTime readAt;
 }
 
+/// Durable deletion projection. The server intentionally sends no content,
+/// media key, URL, or moderation reason.
+class ChatMessageDeletedEvent extends ChatRealtimeEvent {
+  const ChatMessageDeletedEvent({
+    required super.eventId,
+    required this.messageId,
+    required this.deletedAt,
+  });
+
+  final String messageId;
+  final DateTime deletedAt;
+}
+
 /// An ephemeral typing projection. Consumers must expire it locally.
 class ChatTypingEvent extends ChatRealtimeEvent {
   const ChatTypingEvent(
@@ -102,6 +115,23 @@ class ChatRealtimeEventDecoder {
           messageId: payload[ChatJsonKeys.messageId] as String,
           readerId: payload[ChatJsonKeys.readerId] as String,
           readAt: DateTime.parse(payload[ChatJsonKeys.readAt] as String),
+        );
+      } on FormatException {
+        return ChatUnknownEvent(eventId: eventId, type: type);
+      } on TypeError {
+        return ChatUnknownEvent(eventId: eventId, type: type);
+      }
+    }
+    if (type == ChatRealtimeTypes.messageDeleted) {
+      final payload = decoded[ChatJsonKeys.payload];
+      if (payload is! Map<String, dynamic>) {
+        return ChatUnknownEvent(eventId: eventId, type: type);
+      }
+      try {
+        return ChatMessageDeletedEvent(
+          eventId: eventId,
+          messageId: payload[ChatJsonKeys.messageId] as String,
+          deletedAt: DateTime.parse(payload[ChatJsonKeys.deletedAt] as String),
         );
       } on FormatException {
         return ChatUnknownEvent(eventId: eventId, type: type);

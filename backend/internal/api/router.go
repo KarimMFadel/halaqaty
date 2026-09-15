@@ -36,24 +36,24 @@ const defaultMaxRequestBodyBytes = 1 << 20
 
 // MiddlewareSet defines all cross-cutting middleware dependencies.
 type MiddlewareSet struct {
-	Auth                *middleware.AuthMiddleware
-	Role                *middleware.RoleMiddleware
-	RateLimit           *middleware.RateLimitMiddleware
-	AuthHandler         *auth.Handler
-	ProfileHandler      *profile.Handler
-	RBACHandler         *rbac.Handler
-	SessionHandler      *sessions.Handler
-	RealtimeHandler     *realtime.Handler
-	RealtimeHub         *realtime.Hub
-	QueueHandler        *queue.Handler
-	ChatHandler         *chat.GroupHandler
+	Auth                  *middleware.AuthMiddleware
+	Role                  *middleware.RoleMiddleware
+	RateLimit             *middleware.RateLimitMiddleware
+	AuthHandler           *auth.Handler
+	ProfileHandler        *profile.Handler
+	RBACHandler           *rbac.Handler
+	SessionHandler        *sessions.Handler
+	RealtimeHandler       *realtime.Handler
+	RealtimeHub           *realtime.Hub
+	QueueHandler          *queue.Handler
+	ChatHandler           *chat.GroupHandler
 	ChatModerationHandler *chat.ModerationHandler
-	DirectChatHandler   *chat.DirectHandler
-	ChatPresenceHandler *chat.PresenceHandler
-	ChatSendLimiter     *chat.ChatSendLimiter
-	ChatUploadHandler   *chat.UploadHandler
-	ChatMediaHandler    *chat.MediaHandler
-	Timeout             time.Duration
+	DirectChatHandler     *chat.DirectHandler
+	ChatPresenceHandler   *chat.PresenceHandler
+	ChatSendLimiter       *chat.ChatSendLimiter
+	ChatUploadHandler     *chat.UploadHandler
+	ChatMediaHandler      *chat.MediaHandler
+	Timeout               time.Duration
 	// ChatUploadTimeout overrides Timeout on the upload routes; zero selects
 	// DefaultChatUploadTimeout.
 	ChatUploadTimeout time.Duration

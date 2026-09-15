@@ -102,6 +102,46 @@ void main() {
     expect(presence.state.typing, isEmpty);
   });
 
+  test('projects deletion events as an idempotent redaction', () async {
+    final message =
+        _directMessage('deleted', mediaUrl: 'https://media').copyWith(
+      pinnedAt: DateTime.utc(2026, 9, 3, 12),
+      replyPreview: const ChatReplyPreviewProjection(
+        id: 'reply',
+        senderName: 'A',
+        preview: 'quoted',
+        deleted: false,
+      ),
+    );
+    final api = _FakeDirectApi()
+      ..pages.add(ChatMessagePage(messages: [message], hasMore: false));
+    final realtime = _FakeDirectRealtimeClient();
+    final controller = DirectChatController(
+      api,
+      () async => (token: 'token', sessionId: 'session', userId: 'user'),
+      realtime: realtime,
+    );
+    addTearDown(controller.dispose);
+
+    await controller.open(_peerId);
+    final event = ChatMessageDeletedEvent(
+      eventId: 'deleted-event',
+      messageId: 'deleted',
+      deletedAt: DateTime.utc(2026, 9, 3, 12, 1),
+    );
+    realtime.emit(event);
+    realtime.emit(event);
+    await Future<void>.delayed(Duration.zero);
+
+    final deleted = controller.state.messages.single;
+    expect(deleted.content, isEmpty);
+    expect(deleted.mediaUrl, isNull);
+    expect(deleted.pinnedAt, isNull);
+    expect(deleted.replyPreview?.preview, isEmpty);
+    expect(deleted.replyPreview?.deleted, isTrue);
+    expect(deleted.deletedAt, event.deletedAt);
+  });
+
   test('dispose cancels the active direct realtime subscription', () async {
     final api = _FakeDirectApi()
       ..pages.add(const ChatMessagePage(messages: [], hasMore: false));

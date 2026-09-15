@@ -61,6 +61,9 @@ func (p *RealtimeProjector) ProjectMessage(ctx context.Context, event OutboxEven
 	if event.EventType == realtime.EventChatMessageRead {
 		return p.projectRead(ctx, event, msg)
 	}
+	if event.EventType == realtime.EventChatMessageDeleted {
+		return p.projectDeletedMessage(ctx, event, msg)
+	}
 	if event.EventType != realtime.EventChatMessage {
 		return fmt.Errorf("project chat event %q: unsupported event type", event.EventType)
 	}
@@ -89,6 +92,45 @@ func (p *RealtimeProjector) ProjectMessage(ctx context.Context, event OutboxEven
 		return fmt.Errorf("broadcast chat message: %w", err)
 	}
 	return nil
+}
+
+func (p *RealtimeProjector) projectDeletedMessage(ctx context.Context, event OutboxEvent, msg Message) error {
+	if msg.DeletedAt == nil {
+		return errors.New("project deleted chat message: missing deletion time")
+	}
+	eventID := event.EventID.String()
+	payload := map[string]any{"message_id": msg.ID.String(), "circle_id": nil, "dm_peer_id": nil, "deleted_at": msg.DeletedAt.UTC().Format(time.RFC3339Nano)}
+	envelope := map[string]any{"type": realtime.EventChatMessageDeleted, "event_id": eventID, "occurred_at": msg.DeletedAt.UTC().Format(time.RFC3339Nano), "payload": payload}
+	if msg.CircleID != nil {
+		payload["circle_id"] = msg.CircleID.String()
+		topic, err := realtime.NewCircleTopic(msg.CircleID.String())
+		if err != nil {
+			return fmt.Errorf("build deleted chat circle topic: %w", err)
+		}
+		return p.hub.BroadcastAuthorized(ctx, topic, realtime.AuthorizedDelivery{EventID: eventID, Payload: envelope, Authorize: p.authorizeCircleDelivery(*msg.CircleID, msg.SentAt)})
+	}
+	if msg.DMRecipientID == nil || p.dmEligible == nil {
+		return errors.New("project deleted direct message: invalid context")
+	}
+	payload["dm_peer_id"] = msg.DMRecipientID.String()
+	return p.hub.SendToUsers(ctx, []string{msg.SenderID.String(), msg.DMRecipientID.String()}, realtime.AuthorizedDelivery{EventID: eventID, Payload: envelope, Authorize: func(ctx context.Context, connection realtime.ConnectionIdentity) (bool, error) {
+		if connection.UserID != msg.SenderID.String() && connection.UserID != msg.DMRecipientID.String() {
+			return false, nil
+		}
+		allowed, err := p.authorizeSession(ctx, connection)
+		if err != nil || !allowed {
+			return allowed, err
+		}
+		viewer, err := uuid.Parse(connection.UserID)
+		if err != nil {
+			return false, nil
+		}
+		other := msg.SenderID
+		if viewer == other {
+			other = *msg.DMRecipientID
+		}
+		return p.dmEligible(ctx, viewer, other)
+	}})
 }
 
 func (p *RealtimeProjector) projectRead(ctx context.Context, event OutboxEvent, msg Message) error {

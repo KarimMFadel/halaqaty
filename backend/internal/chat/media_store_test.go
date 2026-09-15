@@ -25,12 +25,22 @@ type fakeObjectClient struct {
 	putErr        error
 	presignErr    error
 	removeErrs    []error // consumed per RemoveObject call; exhausted means nil
+	versions      []minio.ObjectInfo
 
 	bucketCtx context.Context
 
 	puts     []recordedPut
 	presigns []recordedPresign
 	removes  []recordedRemove
+}
+
+func (f *fakeObjectClient) ListObjects(_ context.Context, _ string, _ minio.ListObjectsOptions) <-chan minio.ObjectInfo {
+	out := make(chan minio.ObjectInfo, len(f.versions))
+	for _, version := range f.versions {
+		out <- version
+	}
+	close(out)
+	return out
 }
 
 type recordedPut struct {
@@ -439,6 +449,32 @@ func TestMediaStore_ApplyDeleteMarker_UsesVersionlessRemove(t *testing.T) {
 	}
 }
 
+func TestMediaStore_ApplyDeleteMarker_IsIdempotentWhenLatestVersionIsMarker(t *testing.T) {
+	fake := &fakeObjectClient{versions: []minio.ObjectInfo{{
+		Key: "chat/" + uuid.New().String(), IsDeleteMarker: true, VersionID: "marker-1", LastModified: time.Now(),
+	}}}
+	key := fake.versions[0].Key
+	if err := newTestMediaStore(fake).ApplyDeleteMarker(context.Background(), key); err != nil {
+		t.Fatalf("ApplyDeleteMarker: %v", err)
+	}
+	if len(fake.removes) != 0 {
+		t.Fatalf("idempotent marker application issued %d remove calls", len(fake.removes))
+	}
+}
+
+func TestMediaStore_RemoveDeleteMarker_RemovesExactInternalVersion(t *testing.T) {
+	fake := &fakeObjectClient{}
+	store := newTestMediaStore(fake)
+	key := "chat/" + uuid.New().String()
+
+	if err := store.RemoveDeleteMarker(context.Background(), key, "marker-2"); err != nil {
+		t.Fatalf("RemoveDeleteMarker: %v", err)
+	}
+	if len(fake.removes) != 1 || fake.removes[0].opts.VersionID != "marker-2" {
+		t.Fatalf("remove version=%q, want marker-2", fake.removes[0].opts.VersionID)
+	}
+}
+
 func TestMediaStore_ApplyDeleteMarker_WrapsClientErrors(t *testing.T) {
 	underlying := errors.New("object store down")
 
@@ -446,6 +482,22 @@ func TestMediaStore_ApplyDeleteMarker_WrapsClientErrors(t *testing.T) {
 
 	if !errors.Is(err, underlying) {
 		t.Fatalf("ApplyDeleteMarker error must wrap the client failure, got %v", err)
+	}
+}
+
+func TestMediaStore_RemoveLatestDeleteMarker_RejectsNonInternalObjectKey(t *testing.T) {
+	fake := &fakeObjectClient{versions: []minio.ObjectInfo{{
+		Key:            "chat/not-a-server-upload",
+		IsDeleteMarker: true,
+		LastModified:   time.Now(),
+		VersionID:      "marker",
+	}}}
+
+	if err := newTestMediaStore(fake).RemoveLatestDeleteMarker(context.Background(), "chat/not-a-server-upload"); err == nil {
+		t.Fatal("recovery must reject object keys that are not server-generated chat upload keys")
+	}
+	if len(fake.removes) != 0 {
+		t.Fatal("recovery must not remove a marker for an unverified object key")
 	}
 }
 

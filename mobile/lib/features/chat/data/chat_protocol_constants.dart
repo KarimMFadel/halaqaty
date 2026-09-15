@@ -98,6 +98,7 @@ abstract final class ChatRealtimeTypes {
   /// Durable group/DM message projection (server to client).
   static const message = 'chat.message';
   static const messageRead = 'chat.message_read';
+  static const messageDeleted = 'chat.message_deleted';
   static const typing = 'chat.typing';
   static const text = 'text';
 }

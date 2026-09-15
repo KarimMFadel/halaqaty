@@ -119,11 +119,16 @@ func (s *MediaStore) PresignGet(ctx context.Context, objectKey string, ttl time.
 	return signed, nil
 }
 
-// ApplyDeleteMarker writes a delete marker to objectKey by issuing a
-// versionless delete on the versioned bucket. This immediately revokes every
-// previously issued versionless presigned URL; physical bytes remain as an
-// older version until a future approved retention feature (ADR-021).
+// ApplyDeleteMarker ensures objectKey is shadowed by one versionless delete
+// marker. It is idempotent when the latest version is already a marker.
 func (s *MediaStore) ApplyDeleteMarker(ctx context.Context, objectKey string) error {
+	if isInternalChatObjectKey(objectKey) {
+		if marker, err := s.latestDeleteMarker(ctx, objectKey); err != nil {
+			return err
+		} else if marker != "" {
+			return nil
+		}
+	}
 	ctx, cancel := context.WithTimeout(ctx, s.opTimeout)
 	defer cancel()
 	if err := s.client.RemoveObject(ctx, s.bucket, objectKey, minio.RemoveObjectOptions{}); err != nil {
@@ -132,26 +137,67 @@ func (s *MediaStore) ApplyDeleteMarker(ctx context.Context, objectKey string) er
 	return nil
 }
 
-// RemoveLatestDeleteMarker removes only the newest delete marker created by
-// this application, allowing an active message to recover after a crash.
+// RemoveDeleteMarker removes exactly the supplied internal MinIO version ID.
+// Version IDs are obtained from the store and never cross the API boundary.
+func (s *MediaStore) RemoveDeleteMarker(ctx context.Context, objectKey, versionID string) error {
+	if !isInternalChatObjectKey(objectKey) {
+		return errors.New("remove chat upload delete marker: object key is not an internal chat upload")
+	}
+	if strings.TrimSpace(versionID) == "" {
+		return errors.New("remove chat upload delete marker: version id is required")
+	}
+	ctx, cancel := context.WithTimeout(ctx, s.opTimeout)
+	defer cancel()
+	if err := s.client.RemoveObject(ctx, s.bucket, objectKey, minio.RemoveObjectOptions{VersionID: versionID}); err != nil {
+		return fmt.Errorf("remove chat upload delete marker: %w", err)
+	}
+	return nil
+}
+
+// RemoveLatestDeleteMarker removes the latest internal marker by first
+// resolving its exact version ID, allowing an active message to recover after
+// a marker-before-commit crash without deleting an older object version.
 func (s *MediaStore) RemoveLatestDeleteMarker(ctx context.Context, objectKey string) error {
+	marker, err := s.latestDeleteMarker(ctx, objectKey)
+	if err != nil || marker == "" {
+		return err
+	}
+	return s.RemoveDeleteMarker(ctx, objectKey, marker)
+}
+
+func (s *MediaStore) latestDeleteMarker(ctx context.Context, objectKey string) (string, error) {
+	if !isInternalChatObjectKey(objectKey) {
+		return "", errors.New("find chat upload delete marker: object key is not an internal chat upload")
+	}
 	client, ok := s.client.(versionedObjectClient)
-	if !ok { return errors.New("remove chat upload delete marker: version listing is not configured") }
+	if !ok {
+		return "", errors.New("find chat upload delete marker: version listing is not configured")
+	}
 	ctx, cancel := context.WithTimeout(ctx, s.opTimeout)
 	defer cancel()
 	var latest *minio.ObjectInfo
 	for object := range client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: objectKey, Recursive: true, WithVersions: true}) {
-		if object.Err != nil { return fmt.Errorf("list chat upload versions: %w", object.Err) }
+		if object.Err != nil {
+			return "", fmt.Errorf("list chat upload versions: %w", object.Err)
+		}
 		if object.Key == objectKey && object.IsDeleteMarker && (latest == nil || object.LastModified.After(latest.LastModified)) {
 			copy := object
 			latest = &copy
 		}
 	}
-	if latest == nil { return nil }
-	if err := s.client.RemoveObject(ctx, s.bucket, objectKey, minio.RemoveObjectOptions{VersionID: latest.VersionID}); err != nil {
-		return fmt.Errorf("remove chat upload delete marker: %w", err)
+	if latest == nil {
+		return "", nil
 	}
-	return nil
+	return latest.VersionID, nil
+}
+
+func isInternalChatObjectKey(objectKey string) bool {
+	const prefix = chatObjectKeyPrefix + "/"
+	if !strings.HasPrefix(objectKey, prefix) {
+		return false
+	}
+	_, err := uuid.Parse(strings.TrimPrefix(objectKey, prefix))
+	return err == nil
 }
 
 // EnsureChatBucketVersioned fails fast at startup unless the configured

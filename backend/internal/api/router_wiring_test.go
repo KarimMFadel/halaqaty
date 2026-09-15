@@ -20,6 +20,7 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/queue"
 	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
+	"github.com/google/uuid"
 )
 
 const (
@@ -79,6 +80,13 @@ func (wiringSessionRepo) GetLocalUserIDByFirebaseUID(_ context.Context, firebase
 }
 
 type wiringRoleRepo struct{}
+
+type wiringModerationService struct{ called bool }
+
+func (s *wiringModerationService) Delete(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error {
+	s.called = true
+	return nil
+}
 
 func (wiringRoleRepo) RoleForUserInCircle(context.Context, string, string) (string, error) {
 	return "student", nil
@@ -231,6 +239,23 @@ func TestRegisterRoutes_EveryProtectedRouteRejectsUnauthenticatedRequests(t *tes
 				t.Fatalf("error code: got %q, want %q", envelope.Error.Code, httpconst.ErrorCodeUnauthorized)
 			}
 		})
+	}
+}
+
+func TestRegisterRoutes_WiresAuthenticatedGroupMessageDelete(t *testing.T) {
+	service := &wiringModerationService{}
+	router := NewRouter(fullWiringMiddlewareSet(wiringAuthMiddleware(), func(mw *MiddlewareSet) {
+		mw.ChatModerationHandler = chat.NewModerationHandler(service)
+	}))
+	req := wiringAuthenticatedRequest(http.MethodDelete, "/api/v1/circles/"+wiringCircleID+"/messages/"+wiringEntryID, "")
+	req.Header.Set(httpconst.HeaderIdempotencyKey, "wiring-delete-key")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status: got %d want %d body=%s", rec.Code, http.StatusNoContent, rec.Body.String())
+	}
+	if !service.called {
+		t.Fatal("group message delete service was not called")
 	}
 }
 

@@ -450,10 +450,15 @@ FROM messages m JOIN chat_uploads u ON u.id = m.upload_id
 WHERE m.id = $1::uuid FOR UPDATE OF m, u`
 
 const softDeleteMessageQuery = `
-UPDATE messages AS m SET deleted_at = NOW(), is_pinned = FALSE, pinned_by = NULL, pinned_at = NULL
+UPDATE messages AS m SET deleted_at = $4::timestamptz, is_pinned = FALSE, pinned_by = NULL, pinned_at = NULL
 WHERE m.id = $1::uuid AND m.deleted_at IS NULL
-  AND ($3::boolean OR (m.sender_id = $2::uuid AND m.sent_at >= NOW() - INTERVAL '10 minutes'))
+  AND ($3::boolean OR (m.sender_id = $2::uuid AND m.sent_at >= $4::timestamptz - INTERVAL '10 minutes'))
 RETURNING m.id`
+
+const moderationDeleteAllowedQuery = `
+SELECT NOW(), $3::boolean OR (m.sender_id = $2::uuid AND m.sent_at >= NOW() - INTERVAL '10 minutes')
+FROM messages m
+WHERE m.id = $1::uuid AND m.deleted_at IS NULL`
 
 // findMessageUploadQuery loads one message together with its attached upload
 // for media renewal. Text messages carry no upload row and match nothing, so
@@ -463,6 +468,13 @@ SELECT ` + messageColumns + `, ` + uploadColumns + `
 FROM messages m
 JOIN chat_uploads u ON u.id = m.upload_id
 WHERE m.id = $1::uuid`
+
+const findMediaReconciliationMessageIDsQuery = `
+SELECT m.id
+FROM messages m
+JOIN chat_uploads u ON u.id = m.upload_id
+ORDER BY m.id
+LIMIT $1`
 
 // findUploadForUpdateQuery loads one upload row locked by the enclosing
 // transaction so concurrent attach attempts serialize on the row before the

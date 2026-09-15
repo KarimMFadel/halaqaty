@@ -165,7 +165,7 @@
 - [X] T076 [P] [US6] Add mobile controller/widget tests for reply previews, deleted-target redaction, Arabic/Latin search, pinned bar ordering, five-pin conflict, and archived search in `mobile/test/features/chat/application/chat_discovery_controller_test.dart` and `mobile/test/widget/chat/chat_discovery_widgets_test.dart`
 - [X] T077 [US6] Implement reply composer/preview, search results, and pinned bar flows in `mobile/lib/features/chat/application/chat_discovery_controller.dart` and `mobile/lib/features/chat/presentation/chat_discovery_widgets.dart`
 - [X] T078 [P] [US6] Add reproducible 10-circle/50-user/10,000-message-per-circle fixtures with 10% deletion, two membership periods, 100 warm-ups, 1,000 samples, and p95 ≤2-second history/search assertions in `backend/tests/performance/chat_fixture_test.go` and `backend/tests/performance/chat_history_search_performance_test.go`
-- [ ] T079 [US6] Add reply/search/pin/unpin/deletion/archive acceptance coverage in `mobile/integration_test/chat_discovery_flow_test.dart`
+- [X] T079 [US6] Add reply/search/pin/unpin/deletion/archive acceptance coverage in `mobile/integration_test/chat_discovery_flow_test.dart`
 
 ---
 
@@ -175,15 +175,15 @@
 
 **Independent test**: Exercise timely/late/concurrent self-delete and teacher delete, then prove absence from every projection, immediate versionless media revocation, safe crash reconciliation, and exactly-once effective teacher audit.
 
-- [ ] T080 [P] [US7] Add service/repository tests for authoritative 10-minute self-delete, late conflict, current-teacher group deletion, DM own-delete, idempotent races, and effective teacher audit facts in `backend/internal/chat/moderation_service_test.go`
-- [ ] T081 [US7] Implement soft-delete transactions, server-time enforcement, teacher authorization, and append-only moderation audit persistence in `backend/internal/chat/moderation_service.go`, `backend/internal/chat/repository.go`, and `backend/internal/chat/queries.go`
-- [ ] T082 [P] [US7] Add real-MinIO integration tests for immediate versionless revocation, retained prior bytes, marker failure rejection, active-message restoration by removing only the latest internal marker after marker-before-commit crash, deleted-message marker repair, and unauthorized renewal denial in `backend/tests/integration/chat_media_revocation_test.go`
-- [ ] T083 [US7] Implement fail-closed marker-before-database ordering and reconciliation that removes only the latest matching internal marker for active messages or creates a missing marker for deleted messages in `backend/internal/chat/media_store.go` and `backend/internal/chat/media_reconciler.go`
-- [ ] T084 [P] [US7] Add group/DM delete contract tests for sender/teacher RBAC, non-teacher and non-member denial, deadline conflict, idempotency, audit response safety, and hidden content/key/URL fields in `backend/tests/contract/chat_moderation_contract_test.go`
-- [ ] T085 [US7] Implement delete handlers, routes, `chat.message_deleted` outbox events, and deleted-content filtering across history/search/pins/replies/media in `backend/internal/chat/moderation_handler.go`, `backend/internal/chat/realtime_projector.go`, `backend/internal/api/routes.go`, and `backend/internal/api/router.go`
-- [ ] T086 [P] [US7] Add mobile controller/widget tests for delete authority/deadline, conflict recovery, duplicate deletion events, media removal, pin removal, and reply-preview redaction in `mobile/test/features/chat/application/chat_moderation_controller_test.dart` and `mobile/test/widget/chat/chat_moderation_test.dart`
-- [ ] T087 [US7] Implement delete actions and deletion-event projection cleanup in `mobile/lib/features/chat/application/chat_moderation_controller.dart` and `mobile/lib/features/chat/presentation/chat_widgets.dart`
-- [ ] T088 [US7] Add sender/teacher deletion, race, audit, projection redaction, and media-revocation acceptance coverage in `mobile/integration_test/chat_moderation_flow_test.dart`
+- [X] T080 [P] [US7] Add service/repository tests for authoritative 10-minute self-delete, late conflict, current-teacher group deletion, DM own-delete, idempotent races, and effective teacher audit facts in `backend/internal/chat/moderation_service_test.go`
+- [X] T081 [US7] Implement soft-delete transactions, server-time enforcement, teacher authorization, and append-only moderation audit persistence in `backend/internal/chat/moderation_service.go`, `backend/internal/chat/repository.go`, and `backend/internal/chat/queries.go`
+- [X] T082 [P] [US7] Add real-MinIO integration tests for immediate versionless revocation, retained prior bytes, marker failure rejection, active-message restoration by removing only the latest internal marker after marker-before-commit crash, deleted-message marker repair, and unauthorized renewal denial in `backend/tests/integration/chat_media_revocation_test.go`
+- [X] T083 [US7] Implement fail-closed marker-before-database ordering and reconciliation that removes only the latest matching internal marker for active messages or creates a missing marker for deleted messages in `backend/internal/chat/media_store.go` and `backend/internal/chat/media_reconciler.go`
+- [X] T084 [P] [US7] Add group/DM delete contract tests for sender/teacher RBAC, non-teacher and non-member denial, deadline conflict, idempotency, audit response safety, and hidden content/key/URL fields in `backend/tests/contract/chat_moderation_contract_test.go`
+- [X] T085 [US7] Implement delete handlers, routes, `chat.message_deleted` outbox events, and deleted-content filtering across history/search/pins/replies/media in `backend/internal/chat/moderation_handler.go`, `backend/internal/chat/realtime_projector.go`, `backend/internal/api/routes.go`, and `backend/internal/api/router.go`
+- [X] T086 [P] [US7] Add mobile controller/widget tests for delete authority/deadline, conflict recovery, duplicate deletion events, media removal, pin removal, and reply-preview redaction in `mobile/test/features/chat/application/chat_moderation_controller_test.dart` and `mobile/test/widget/chat/chat_moderation_test.dart`
+- [X] T087 [US7] Implement delete actions and deletion-event projection cleanup in `mobile/lib/features/chat/application/chat_moderation_controller.dart` and `mobile/lib/features/chat/presentation/chat_widgets.dart`
+- [X] T088 [US7] Add sender/teacher deletion, race, audit, projection redaction, and media-revocation acceptance coverage in `mobile/integration_test/chat_moderation_flow_test.dart`
 
 **P2 checkpoint**: T058–T088 complete all P2 stories. There are no P3 stories in F-004.
 

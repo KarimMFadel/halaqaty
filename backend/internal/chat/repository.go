@@ -28,6 +28,31 @@ type Repository struct{ pool *pgxpool.Pool }
 // Tx is one chat mutation transaction.
 type Tx struct{ tx pgx.Tx }
 
+// FindMediaReconciliationMessageIDs returns attached-message IDs whose media
+// state must be checked after an interrupted marker/database transition.
+func (r *Repository) FindMediaReconciliationMessageIDs(ctx context.Context, limit int) ([]uuid.UUID, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	rows, err := r.pool.Query(ctx, findMediaReconciliationMessageIDsQuery, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list chat media reconciliation targets: %w", err)
+	}
+	defer rows.Close()
+	ids := make([]uuid.UUID, 0, limit)
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan chat media reconciliation target: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate chat media reconciliation targets: %w", err)
+	}
+	return ids, nil
+}
+
 // NewRepository constructs a chat repository from a PostgreSQL pool.
 func NewRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
 
@@ -536,8 +561,12 @@ func (t *Tx) InsertModerationAudit(ctx context.Context, audit ModerationAudit) (
 // LockMessageForModeration locks a message before checking authority and time.
 func (t *Tx) LockMessageForModeration(ctx context.Context, messageID uuid.UUID) (Message, error) {
 	message, err := scanMessage(t.tx.QueryRow(ctx, lockMessageForModerationQuery, messageID))
-	if errors.Is(err, pgx.ErrNoRows) { return Message{}, ErrMessageNotVisible }
-	if err != nil { return Message{}, fmt.Errorf("lock message for moderation: %w", err) }
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Message{}, ErrMessageNotVisible
+	}
+	if err != nil {
+		return Message{}, fmt.Errorf("lock message for moderation: %w", err)
+	}
 	return message, nil
 }
 
@@ -552,18 +581,45 @@ func (t *Tx) LoadMessageUploadForDelete(ctx context.Context, messageID uuid.UUID
 		&message.UploadID, &message.ReplyToID, &message.PinnedBy, &message.PinnedAt, &message.State, &message.SentAt, &message.DeletedAt,
 		&upload.ID, &upload.UploaderID, &upload.AuthorizationCircleID, &upload.DMPeerID, &upload.ObjectKey, &upload.MIMEType,
 		&upload.OriginalFileName, &upload.SizeBytes, &duration, &upload.State, &upload.CreatedAt, &upload.UpdatedAt)
-	if errors.Is(err, pgx.ErrNoRows) { return Upload{}, ErrMessageNotVisible }
-	if err != nil { return Upload{}, fmt.Errorf("load message upload for deletion: %w", err) }
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Upload{}, ErrMessageNotVisible
+	}
+	if err != nil {
+		return Upload{}, fmt.Errorf("load message upload for deletion: %w", err)
+	}
 	return upload, nil
 }
 
 // SoftDeleteMessage applies the authoritative database-time deadline and clears pins.
-func (t *Tx) SoftDeleteMessage(ctx context.Context, messageID, actorID uuid.UUID, teacher bool) (bool, error) {
+func (t *Tx) SoftDeleteMessage(ctx context.Context, messageID, actorID uuid.UUID, teacher bool, serverNow time.Time) (bool, error) {
 	var deletedID uuid.UUID
-	err := t.tx.QueryRow(ctx, softDeleteMessageQuery, messageID, actorID, teacher).Scan(&deletedID)
-	if errors.Is(err, pgx.ErrNoRows) { return false, nil }
-	if err != nil { return false, fmt.Errorf("soft-delete chat message: %w", err) }
+	err := t.tx.QueryRow(ctx, softDeleteMessageQuery, messageID, actorID, teacher, serverNow).Scan(&deletedID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("soft-delete chat message: %w", err)
+	}
 	return true, nil
+}
+
+// ModerationDeleteAllowed evaluates the self-delete deadline using the
+// authoritative PostgreSQL clock while the message lock is held.
+func (t *Tx) ModerationDeleteAllowed(ctx context.Context, messageID, actorID uuid.UUID, teacher bool) (bool, error) {
+	_, allowed, err := t.moderationDeleteWindow(ctx, messageID, actorID, teacher)
+	return allowed, err
+}
+
+func (t *Tx) moderationDeleteWindow(ctx context.Context, messageID, actorID uuid.UUID, teacher bool) (time.Time, bool, error) {
+	var allowed bool
+	var serverNow time.Time
+	if err := t.tx.QueryRow(ctx, moderationDeleteAllowedQuery, messageID, actorID, teacher).Scan(&serverNow, &allowed); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return time.Time{}, false, nil
+		}
+		return time.Time{}, false, fmt.Errorf("check chat moderation deadline: %w", err)
+	}
+	return serverNow, allowed, nil
 }
 
 // GroupHistoryPage returns one circle history page for a current member in

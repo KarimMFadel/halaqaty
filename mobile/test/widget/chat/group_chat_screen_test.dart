@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/auth/data/auth_api_client.dart';
 import 'package:halaqaty_mobile/features/chat/application/group_chat_controller.dart';
+import 'package:halaqaty_mobile/features/chat/application/chat_moderation_controller.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_api_client.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_realtime_client.dart';
 import 'package:halaqaty_mobile/features/chat/data/pending_message_store.dart';
@@ -91,6 +92,51 @@ void main() {
       expect(find.textContaining(_otherId), findsNothing);
     }
     semantics.dispose();
+  });
+
+  testWidgets('teacher can delete another member message', (tester) async {
+    final message = _message('other-message');
+    final api = _FakeChatApi()..pages.add(_page([message]));
+    final chat = GroupChatController(
+      api,
+      () async => (token: 'token', sessionId: 'backend-session', userId: _meId),
+      realtime: _FakeChatRealtimeClient(),
+    );
+    final moderation = ChatModerationController(
+      api,
+      () async => (token: 'token', sessionId: 'backend-session', userId: _meId),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith((_) => _authenticatedAuth()),
+          circleMembersProvider(_circleId).overrideWith(
+            (_) => Future.value([
+              CircleMember(
+                userId: _meId,
+                displayName: 'Teacher',
+                role: CircleRole.teacher,
+                joinedAt: DateTime.utc(2026, 1, 1),
+              ),
+            ]),
+          ),
+          groupChatControllerProvider(_circleId).overrideWith((_) => chat),
+          chatModerationControllerProvider.overrideWith((_) => moderation),
+        ],
+        child: const MaterialApp(
+          home: GroupChatScreen(circleId: _circleId),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.bySemanticsLabel('Delete message'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Delete message'));
+    await tester.pumpAndSettle();
+
+    expect(api.deletedCircleMessageId, message.id);
+    expect(find.text('Message deleted'), findsOneWidget);
   });
 
   testWidgets(
@@ -654,6 +700,7 @@ class _FakeChatApi extends ChatApiClient {
   final sentContents = <String>[];
   ChatMessage? nextSendResult;
   Object? sendFailure;
+  String? deletedCircleMessageId;
 
   /// When set, the next send call waits on this completer (in-flight send).
   Completer<ChatMessage>? pendingSend;
@@ -697,6 +744,16 @@ class _FakeChatApi extends ChatApiClient {
       return pending.future;
     }
     return nextSendResult!;
+  }
+
+  @override
+  Future<void> deleteCircleMessage({
+    required String token,
+    required String sessionId,
+    required String circleId,
+    required String messageId,
+  }) async {
+    deletedCircleMessageId = messageId;
   }
 }
 

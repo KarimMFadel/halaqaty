@@ -4,14 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/chat/application/group_chat_controller.dart';
+import 'package:halaqaty_mobile/features/chat/application/chat_moderation_controller.dart';
 import 'package:halaqaty_mobile/features/chat/application/chat_presence_controller.dart';
 import 'package:halaqaty_mobile/features/chat/application/chat_discovery_controller.dart';
+import 'package:halaqaty_mobile/features/chat/data/chat_realtime_client.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_status_widgets.dart';
 import 'package:halaqaty_mobile/features/chat/domain/chat_models.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_ui_labels.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_widgets.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_media_widgets.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_discovery_widgets.dart';
+import 'package:halaqaty_mobile/features/circles/application/circle_detail_controller.dart';
+import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 
 /// Arabic-first RTL-aware group thread for one circle. Owns no chat state:
 /// it projects the authoritative [GroupChatController] and renders
@@ -127,6 +131,14 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     final discovery =
         ref.watch(chatDiscoveryControllerProvider(widget.circleId));
     final currentUserId = ref.watch(authControllerProvider).user?.id;
+    final isTeacher = ref
+            .watch(circleMembersProvider(widget.circleId))
+            .valueOrNull
+            ?.any((member) =>
+                member.userId == currentUserId &&
+                member.role == CircleRole.teacher) ??
+        false;
+    final moderation = ref.read(chatModerationControllerProvider.notifier);
     final labels =
         _ScreenLabels(Directionality.of(context) == TextDirection.rtl);
     // Oldest-first view of the newest-first controller projection.
@@ -204,6 +216,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                                   child: ChatMessageBubble(
                                     message: message,
                                     isOwn: message.senderId == currentUserId,
+                                    canDelete: moderation.canDelete(message,
+                                        userId: currentUserId ?? '',
+                                        isTeacher: isTeacher,
+                                        now: DateTime.now().toUtc()),
+                                    onDelete: () => unawaited(_deleteMessage(
+                                        moderation, message, isTeacher)),
                                   ),
                                 ),
                                 if (!state.readOnly)
@@ -274,6 +292,21 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
           ),
       },
     );
+  }
+
+  Future<void> _deleteMessage(ChatModerationController moderation,
+      ChatMessage message, bool isTeacher) async {
+    final deletedAt = DateTime.now().toUtc();
+    final deleted = await moderation.deleteCircleMessage(
+        widget.circleId, message,
+        now: deletedAt, isTeacher: isTeacher);
+    if (deleted && mounted) {
+      _controller.handleRealtimeEvent(ChatMessageDeletedEvent(
+        eventId: 'local-delete-${message.id}',
+        messageId: message.id,
+        deletedAt: deletedAt,
+      ));
+    }
   }
 }
 

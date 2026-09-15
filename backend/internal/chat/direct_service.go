@@ -163,7 +163,9 @@ func (s *DirectService) DeleteOwnMessage(ctx context.Context, senderID, peerID, 
 		return err
 	}
 	var store *MediaStore
-	if s.media != nil { store = s.media.store }
+	if s.media != nil {
+		store = s.media.store
+	}
 	return NewModerationService(s.repo, store).Delete(ctx, senderID, uuid.Nil, messageID)
 }
 

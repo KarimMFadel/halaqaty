@@ -12,6 +12,7 @@ import (
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/logging"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
+	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
 )
 
 const (
@@ -136,7 +137,9 @@ func (d *OutboxDispatcher) Dispatch(ctx context.Context, event OutboxEvent) erro
 		return fmt.Errorf("reload chat outbox payload: %w", err)
 	}
 	if event.EventType != realtime.EventChatMessageDeleted && msg.State == MessageStateDeleted {
-		if err := d.store.MarkDelivered(ctx, event.EventID); err != nil { return fmt.Errorf("mark stale chat outbox event delivered: %w", err) }
+		if err := d.store.MarkDelivered(ctx, event.EventID); err != nil {
+			return fmt.Errorf("mark stale chat outbox event delivered: %w", err)
+		}
 		return nil
 	}
 	start := d.now()

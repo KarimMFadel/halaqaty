@@ -493,7 +493,7 @@ Broadcast to all session participants.
 
 F-004 reuses this authenticated socket and the authorized `circle.{circle_id}` topics; LiveKit remains audio-only. Every durable chat event includes `event_id` and `occurred_at`. Delivery is at least once, and clients reconcile authoritative state through the REST chat endpoints. F-004 emits no Firebase/FCM trigger; F-008 owns all background and closed-app notifications.
 
-**Emission status:** `chat.message`, `chat.message_read`, and best-effort `chat.typing` are implemented and live; `cmd.chat.typing` is accepted by the backend. `chat.message_deleted` remains a contract target and is not emitted yet, so clients reconcile deletion through REST until it ships.
+**Emission status:** `chat.message`, `chat.message_read`, `chat.message_deleted`, and best-effort `chat.typing` are implemented and live; `cmd.chat.typing` is accepted by the backend. Clients still reconcile authoritative deletion state through REST after reconnects or event gaps.
 
 ### `chat.message` (Server → Client)
 

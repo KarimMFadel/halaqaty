@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/chat/application/chat_presence_controller.dart';
 import 'package:halaqaty_mobile/features/chat/application/direct_chat_controller.dart';
+import 'package:halaqaty_mobile/features/chat/application/chat_moderation_controller.dart';
+import 'package:halaqaty_mobile/features/chat/data/chat_realtime_client.dart';
+import 'package:halaqaty_mobile/features/chat/domain/chat_models.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_widgets.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_status_widgets.dart';
@@ -36,6 +39,7 @@ class _DirectChatScreenState extends ConsumerState<DirectChatScreen> {
     final state = ref.watch(directChatControllerProvider(widget.peerId));
     final rtl = Directionality.of(context) == TextDirection.rtl;
     final currentUserId = ref.watch(authControllerProvider).user?.id;
+    final moderation = ref.read(chatModerationControllerProvider.notifier);
     return Scaffold(
       appBar: AppBar(title: Text(rtl ? 'محادثة مباشرة' : 'Direct chat')),
       body: switch (state.status) {
@@ -59,6 +63,11 @@ class _DirectChatScreenState extends ConsumerState<DirectChatScreen> {
                   itemBuilder: (context, index) => ChatMessageBubble(
                     message: state.messages[index],
                     isOwn: state.messages[index].senderId == currentUserId,
+                    canDelete: moderation.canDelete(state.messages[index],
+                        userId: currentUserId ?? '',
+                        now: DateTime.now().toUtc()),
+                    onDelete: () => unawaited(
+                        _deleteMessage(moderation, state.messages[index])),
                   ),
                 ),
               ),
@@ -106,5 +115,19 @@ class _DirectChatScreenState extends ConsumerState<DirectChatScreen> {
 
   void _onPresenceChanged(ChatPresenceState _) {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _deleteMessage(
+      ChatModerationController moderation, ChatMessage message) async {
+    final deletedAt = DateTime.now().toUtc();
+    final deleted = await moderation.deleteDirectMessage(widget.peerId, message,
+        now: deletedAt);
+    if (deleted && mounted) {
+      _controller.handleRealtimeEvent(ChatMessageDeletedEvent(
+        eventId: 'local-delete-${message.id}',
+        messageId: message.id,
+        deletedAt: deletedAt,
+      ));
+    }
   }
 }

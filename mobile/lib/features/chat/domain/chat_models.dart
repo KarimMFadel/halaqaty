@@ -164,6 +164,39 @@ class ChatMessage {
   final String? pinnedBy;
   final DateTime? deletedAt;
   final List<ChatReadReceipt> readReceipts;
+
+  ChatMessage copyWith({
+    String? content,
+    String? mediaUrl,
+    DateTime? mediaUrlExpiresAt,
+    String? fileName,
+    int? voiceDurationSeconds,
+    DateTime? pinnedAt,
+    String? pinnedBy,
+    DateTime? deletedAt,
+    ChatReplyPreviewProjection? replyPreview,
+  }) =>
+      ChatMessage(
+        id: id,
+        senderId: senderId,
+        circleId: circleId,
+        dmPeerId: dmPeerId,
+        content: content ?? this.content,
+        type: type,
+        sentAt: sentAt,
+        deliveryStatus: deliveryStatus,
+        senderName: senderName,
+        mediaUrl: mediaUrl,
+        mediaUrlExpiresAt: mediaUrlExpiresAt,
+        fileName: fileName,
+        voiceDurationSeconds: voiceDurationSeconds,
+        replyToId: replyToId,
+        replyPreview: replyPreview ?? this.replyPreview,
+        pinnedAt: pinnedAt ?? this.pinnedAt,
+        pinnedBy: pinnedBy ?? this.pinnedBy,
+        deletedAt: deletedAt ?? this.deletedAt,
+        readReceipts: readReceipts,
+      );
 }
 
 /// One sender-visible, currently authorized read fact.

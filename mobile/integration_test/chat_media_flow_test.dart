@@ -783,7 +783,7 @@ Future<List<int>> _httpGetBytes(String url) async {
     final response = await (await client.getUrl(Uri.parse(url))).close();
     expect(response.statusCode, 200,
         reason: 'presigned URL must serve content');
-    return response
+    return await response
         .fold<List<int>>(<int>[], (all, chunk) => all..addAll(chunk));
   } finally {
     client.close(force: true);

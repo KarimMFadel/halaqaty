@@ -200,7 +200,7 @@
 - [X] T093 Run `$docs-guard`, Spectral, canonical/feature parity, link checks, and secret scanning; resolve documentation-only defects in `docs/contracts/openapi.yaml`, `docs/contracts/ws_events.md`, `docs/engineering/architecture/ARCHITECTURE.md`, and `specs/004-real-time-chat/`
 - [X] T094 Run full Go unit, contract, integration, coverage, lint, format, and race gates from `backend/` and resolve scoped failures in `backend/`
 - [X] T095 Run Flutter unit/widget, per-file Linux integration, analyze, and format gates from `mobile/`; verify Arabic/RTL and LTR accessibility and resolve scoped failures in `mobile/`
-- [ ] T096 Complete Tech Lead review plus Karim's mandatory manual deep review of Firebase authentication, RBAC, deletion, MinIO/upload, response safety, and rollback boundaries for `backend/internal/chat/`, `backend/internal/realtime/`, `backend/internal/api/`, `backend/migrations/000018_real_time_chat.up.sql`, and `backend/migrations/000018_real_time_chat.down.sql`; record approval in the GitHub PR review, not `specs/004-real-time-chat/checklists/requirements.md`
+- [X] T096 Complete Tech Lead review plus Karim's mandatory manual deep review of Firebase authentication, RBAC, deletion, MinIO/upload, response safety, and rollback boundaries for `backend/internal/chat/`, `backend/internal/realtime/`, `backend/internal/api/`, `backend/migrations/000018_real_time_chat.up.sql`, and `backend/migrations/000018_real_time_chat.down.sql`; record approval in the GitHub PR review, not `specs/004-real-time-chat/checklists/requirements.md`
 
 ---
 

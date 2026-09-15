@@ -244,12 +244,12 @@ func writeMediaTempFile(data []byte) (string, func(), error) {
 	}
 	path := file.Name()
 	if _, err := file.Write(data); err != nil {
-		file.Close()
-		os.Remove(path)
+		_ = file.Close()
+		_ = os.Remove(path)
 		return "", nil, err
 	}
 	if err := file.Close(); err != nil {
-		os.Remove(path)
+		_ = os.Remove(path)
 		return "", nil, err
 	}
 	return path, func() { _ = os.Remove(path) }, nil

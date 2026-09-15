@@ -337,8 +337,8 @@ func TestRealtimeProjector_DeletedGroupEventRedactsAndReauthorizesAudience(t *te
 	removedTicket, _ := tickets.IssueForSession(context.Background(), "removed-user", "session-1")
 	member := dialProjectorClient(t, server, memberTicket.Token)
 	removed := dialProjectorClient(t, server, removedTicket.Token)
-	defer member.Close()
-	defer removed.Close()
+	defer func() { _ = member.Close() }()
+	defer func() { _ = removed.Close() }()
 	subscribeProjectorCircle(t, member, projectorCircleID)
 	subscribeProjectorCircle(t, removed, projectorCircleID)
 	deletedAt := time.Date(2026, 9, 3, 12, 5, 0, 0, time.UTC)
@@ -375,7 +375,7 @@ func TestRealtimeProjector_DeletedDMEventTargetsOnlyEligiblePair(t *testing.T) {
 		ticket, _ := tickets.IssueForSession(context.Background(), id.String(), "session-1")
 		conn := dialProjectorClient(t, server, ticket.Token)
 		connections = append(connections, conn)
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 	}
 	deletedAt := time.Now().UTC()
 	msg := Message{ID: uuid.New(), SenderID: senderID, DMRecipientID: &peerID, Type: MessageTypeText, Content: "secret", SentAt: deletedAt.Add(-time.Minute), DeletedAt: &deletedAt, State: MessageStateDeleted}

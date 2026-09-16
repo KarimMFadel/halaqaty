@@ -34,8 +34,8 @@
 
 ## Phase 5: Cross-cutting Verification and Review
 
-- [ ] T012 Run clean-code-guard and test-guard on the completed production/test diff and docs-guard on docs/engineering/architecture/adr/ADR-023-provider-adapter-boundaries.md plus specs/018-provider-adapter-boundaries/; confirm canonical docs/contracts/openapi.yaml, ws_events.md, persistence and deployment configuration behavior are unchanged; obtain Tech Lead review and resolve verified findings (FR-004, FR-007–FR-010; SC-003).
-- [ ] T013 Run all final applicable gates in specs/018-provider-adapter-boundaries/plan.md on the final tree: Go unit/full contract/full integration/combined coverage/lint/fmt; Flutter full unit-widget/integration/analyze/format; OpenAPI lint and secret scan; record commands, final exits and blocked/skipped distinctions (SC-001–SC-004).
+- [X] T012 Run clean-code-guard and test-guard on the completed production/test diff and docs-guard on docs/engineering/architecture/adr/ADR-023-provider-adapter-boundaries.md plus specs/018-provider-adapter-boundaries/; confirm canonical docs/contracts/openapi.yaml, ws_events.md, persistence and deployment configuration behavior are unchanged; obtain Tech Lead review and resolve verified findings (FR-004, FR-007–FR-010; SC-003).
+- [X] T013 Run all final applicable gates in specs/018-provider-adapter-boundaries/plan.md on the final tree: Go unit/full contract/full integration/combined coverage/lint/fmt; Flutter full unit-widget/integration/analyze/format; OpenAPI lint and secret scan; record commands, final exits and blocked/skipped distinctions (SC-001–SC-004).
 - [ ] T014 Obtain Karim's mandatory manual storage/upload/deletion security review before merge and record its approval separately in the F-018 review handoff; no automatic merge or completion claim while this gate is pending (SC-004; docs/engineering/architecture/adr/ADR-023-provider-adapter-boundaries.md).
 
 ## Dependencies and Parallel Opportunities

@@ -3,6 +3,34 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('media interface dependencies exclude adapters and API clients', () {
+    final violations = <String>[];
+    final visited = <String>{};
+    void visit(String path) {
+      if (!visited.add(path)) return;
+      final source = File(path).readAsStringSync();
+      final imports = RegExp(r'''(?:import|export)\s+['"]([^'"]+)['"]''');
+      for (final match in imports.allMatches(source)) {
+        final uri = match.group(1)!;
+        if (uri.contains('livekit') ||
+            uri.contains('flutter_riverpod') ||
+            uri.endsWith('_api_client.dart')) {
+          violations.add('$path depends on $uri');
+        }
+        const prefix = 'package:halaqaty_mobile/';
+        if (uri.startsWith(prefix)) {
+          visit('lib/${uri.substring(prefix.length)}');
+        } else if (!uri.contains(':')) {
+          visit('${File(path).parent.path}/$uri');
+        }
+      }
+    }
+
+    visit('lib/features/sessions/application/media_session.dart');
+    expect(violations, isEmpty,
+        reason: 'ADR-023 keeps media contracts independent of composition');
+  });
+
   test('LiveKit SDK import is confined to the media adapter', () {
     final violations = <String>[];
     for (final file in _dartFiles(Directory('lib'))) {

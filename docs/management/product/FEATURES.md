@@ -861,13 +861,15 @@ Keep secure file attachments and live audio independent of the currently selecte
 
 #### Acceptance Criteria
 
-- [ ] Chat attachments preserve upload, renewable access, deletion, and recovery behavior through a replaceable storage integration.
-- [ ] Live audio preserves connection, microphone, moderation, and recovery behavior through the existing replaceable media integration.
-- [ ] Provider-specific dependencies remain confined to their integrations; application contracts and mobile screens remain provider-neutral.
-- [ ] Deployment configuration retains the current enable/disable behavior and fails safely when incomplete.
-- [ ] Current providers remain MinIO and LiveKit; replacement vendors and live switching require a separately approved feature.
+- [X] Chat attachments preserve upload, renewable access, deletion, and recovery behavior through a replaceable storage integration.
+- [X] Live audio preserves connection, microphone, moderation, and recovery behavior through the existing replaceable media integration.
+- [X] Provider-specific dependencies remain confined to their integrations; application contracts and mobile screens remain provider-neutral.
+- [X] Deployment configuration retains the current enable/disable behavior and fails safely when incomplete.
+- [X] Current providers remain MinIO and LiveKit; replacement vendors and live switching require a separately approved feature.
 
 **Approval:** Karim approved the reviewed scope and requested recording and execution on 2026-09-16 after F-004 completion. Follow Spec-Kit for specification, planning, tasks, and analysis; use Superpowers for test-first implementation, review, and current verification evidence.
+
+**Completion:** All implementation and verification tasks passed, and Karim approved the mandatory storage/upload/deletion security review on 2026-09-16.
 
 ---
 

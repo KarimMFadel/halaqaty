@@ -1,7 +1,7 @@
 # ADR-023: Complete Feature-local Provider Adapter Boundaries
 
-**Status:** Accepted scope; implementation pending  
-**Date:** 2026-09-16  
+**Status:** Accepted and implemented
+**Date:** 2026-09-16
 **Decider:** Karim (product owner)
 
 ## Context

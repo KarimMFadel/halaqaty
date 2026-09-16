@@ -1,6 +1,6 @@
 # Tasks: Provider Adapter Boundaries
 
-**Input**: Approved [spec.md](spec.md), [plan.md](plan.md), research, data model and internal contracts.  
+**Input**: Approved [spec.md](spec.md), [plan.md](plan.md), research, data model and internal contracts.
 **Tests**: Required task-first red/green under constitution §VI. Implementation tasks remain unchecked until named deliverables and fresh verification exist.
 
 ## Phase 1: Setup
@@ -13,7 +13,7 @@
 
 ## Phase 3: US1 - Private Attachment Lifecycle
 
-**Goal**: Preserve validation, access revocation, retained bytes and crash recovery behind a neutral chat contract.  
+**Goal**: Preserve validation, access revocation, retained bytes and crash recovery behind a neutral chat contract.
 **Independent test**: Existing real-MinIO chat media/revocation scenarios plus chat policy and concrete adapter unit suites.
 
 - [X] T003 [US1] Adapt backend/internal/chat/media_store_test.go to a neutral ObjectStore fake and preserve key derivation, MIME normalization/allowlist, nonpositive-size rejection, deadlines and error propagation; add a runnable failing interface test before production edits (FR-001, FR-002, FR-007).
@@ -24,7 +24,7 @@
 
 ## Phase 4: US2 - Authorized Live Audio
 
-**Goal**: Complete backend/mobile media dependency direction without changing lifecycle or user flows.  
+**Goal**: Complete backend/mobile media dependency direction without changing lifecycle or user flows.
 **Independent test**: Existing adapter/session/model/controller/lifecycle suites and strengthened boundary guards.
 
 - [X] T008 [US2] Preserve injected room-client behavior coverage in backend/internal/sessions/livekit/adapter_test.go and document the T002 composition violation as the failing architectural check before moving production construction (FR-005, FR-007).
@@ -36,11 +36,11 @@
 
 - [X] T012 Run clean-code-guard and test-guard on the completed production/test diff and docs-guard on docs/engineering/architecture/adr/ADR-023-provider-adapter-boundaries.md plus specs/018-provider-adapter-boundaries/; confirm canonical docs/contracts/openapi.yaml, ws_events.md, persistence and deployment configuration behavior are unchanged; obtain Tech Lead review and resolve verified findings (FR-004, FR-007–FR-010; SC-003).
 - [X] T013 Run all final applicable gates in specs/018-provider-adapter-boundaries/plan.md on the final tree: Go unit/full contract/full integration/combined coverage/lint/fmt; Flutter full unit-widget/integration/analyze/format; OpenAPI lint and secret scan; record commands, final exits and blocked/skipped distinctions (SC-001–SC-004).
-- [ ] T014 Obtain Karim's mandatory manual storage/upload/deletion security review before merge and record its approval separately in the F-018 review handoff; no automatic merge or completion claim while this gate is pending (SC-004; docs/engineering/architecture/adr/ADR-023-provider-adapter-boundaries.md).
+- [X] T014 Karim's mandatory manual storage/upload/deletion security review was approved and recorded in the F-018 review handoff on 2026-09-16; merge remains a separate explicit action (SC-004; docs/engineering/architecture/adr/ADR-023-provider-adapter-boundaries.md).
 
 ## Dependencies and Parallel Opportunities
 
-T001 → T002 → storage batch T003–T005 → composition/real-test batch T006–T007. US2 T008–T011 is behaviorally independent of US1 but T009 must follow T006 to avoid shared main.go ownership conflicts. T010–T011 may run independently of backend implementation with exclusively mobile paths once T001 completes. No [P] markers are assigned inside the serial canonical sequence: test-before-production ordering and shared files require explicit coordinator scheduling. For optional parallel work, mobile T010–T011 and backend T003–T007 have disjoint paths; they need one owner each and their own red/green evidence. T012 follows both stories; T013 follows any review fixes; T014 follows successful gates and remains approval-gated.
+T001 → T002 → storage batch T003–T005 → composition/real-test batch T006–T007. US2 T008–T011 is behaviorally independent of US1 but T009 must follow T006 to avoid shared main.go ownership conflicts. T010–T011 may run independently of backend implementation with exclusively mobile paths once T001 completes. No [P] markers are assigned inside the serial canonical sequence: test-before-production ordering and shared files require explicit coordinator scheduling. For optional parallel work, mobile T010–T011 and backend T003–T007 have disjoint paths; they need one owner each and their own red/green evidence. T012 follows both stories; T013 follows any review fixes; T014 followed successful gates and was approved by Karim on 2026-09-16.
 
 ## Implementation Strategy
 

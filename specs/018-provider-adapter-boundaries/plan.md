@@ -8,14 +8,14 @@ Complete feature-local storage and session-media adapter seams while preserving 
 
 ## Technical Context
 
-**Language/Version**: Existing Go 1.26; Flutter/Dart versions pinned by the repository and authorized Docker runtime.  
-**Primary Dependencies**: Existing MinIO SDK, LiveKit server/mobile SDKs, Riverpod, pgx; no additions or upgrades.  
-**Storage**: Existing PostgreSQL and versioned private MinIO bucket; no schema change.  
-**Testing**: Go unit/contract/integration; Flutter unit/widget/integration, existing architecture guards.  
-**Target Platform**: Current Docker Compose backend and Android/iOS Flutter app; Linux/Xvfb fallback for authorized verification.  
-**Project Type**: Modular Go service and Flutter mobile app.  
-**Performance Goals**: Preserve current timeout/capacity behavior; no new performance claim or benchmark work.  
-**Constraints**: Public REST/WS, persistence, auth, revocation, recovery, config, secret redaction, audio policy unchanged.  
+**Language/Version**: Existing Go 1.26; Flutter/Dart versions pinned by the repository and authorized Docker runtime.
+**Primary Dependencies**: Existing MinIO SDK, LiveKit server/mobile SDKs, Riverpod, pgx; no additions or upgrades.
+**Storage**: Existing PostgreSQL and versioned private MinIO bucket; no schema change.
+**Testing**: Go unit/contract/integration; Flutter unit/widget/integration, existing architecture guards.
+**Target Platform**: Current Docker Compose backend and Android/iOS Flutter app; Linux/Xvfb fallback for authorized verification.
+**Project Type**: Modular Go service and Flutter mobile app.
+**Performance Goals**: Preserve current timeout/capacity behavior; no new performance claim or benchmark work.
+**Constraints**: Public REST/WS, persistence, auth, revocation, recovery, config, secret redaction, audio policy unchanged.
 **Scale/Scope**: MVP 50 concurrent users and ≤10 live sessions; MinIO/LiveKit only.
 
 ## Constitution Check

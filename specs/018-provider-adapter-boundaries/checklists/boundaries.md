@@ -1,7 +1,7 @@
 # Boundary Requirements Checklist: Provider Adapter Boundaries
 
-**Purpose**: Reviewer readiness for privacy, recovery, and bounded provider seams.  
-**Created**: 2026-09-16  
+**Purpose**: Reviewer readiness for privacy, recovery, and bounded provider seams.
+**Created**: 2026-09-16
 **Feature**: [spec.md](../spec.md)
 
 ## Completeness and Clarity

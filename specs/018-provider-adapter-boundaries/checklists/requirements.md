@@ -1,7 +1,7 @@
 # Specification Quality Checklist: Provider Adapter Boundaries
 
-**Purpose**: Validate specification readiness before planning.  
-**Created**: 2026-09-16  
+**Purpose**: Validate specification readiness before planning.
+**Created**: 2026-09-16
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality

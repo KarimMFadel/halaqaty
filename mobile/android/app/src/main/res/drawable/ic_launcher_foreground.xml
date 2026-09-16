@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 8-pointed khatam star (union of two squares rotated 45 degrees) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M84,54 L75.22,45.22 L75.22,32.78 L62.78,32.78 L54,24 L45.22,32.78 L32.78,32.78 L32.78,45.22 L24,54 L32.78,62.78 L32.78,75.22 L45.22,75.22 L54,84 L62.78,75.22 L75.22,75.22 L75.22,62.78 Z" />
+    <!-- open book (Mushaf) -->
+    <path
+        android:fillColor="#D4A574"
+        android:pathData="M45.04,37.33 Q37.33,32.75 29.83,34.83 L29.83,51.5 Q37.33,49.42 45.04,55.25 Z" />
+    <path
+        android:fillColor="#D4A574"
+        android:pathData="M46.29,37.33 Q54,32.75 61.5,34.83 L61.5,51.5 Q54,49.42 46.29,55.25 Z" />
+</vector>

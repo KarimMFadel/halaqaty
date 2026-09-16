@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/profile/application/profile_controller.dart';
 import 'package:halaqaty_mobile/features/profile/data/profile_api_client.dart';
 import 'package:halaqaty_mobile/features/profile/presentation/profile_screen.dart';
+import '../../helpers/stub_auth_notifier.dart';
 
 class _StubProfileNotifier extends StateNotifier<ProfileState>
     implements ProfileController {
@@ -63,7 +65,16 @@ class _StubProfileNotifier extends StateNotifier<ProfileState>
 
 Widget _buildScreen(_StubProfileNotifier stub) {
   return ProviderScope(
-    overrides: [profileControllerProvider.overrideWith((_) => stub)],
+    overrides: [
+      profileControllerProvider.overrideWith((_) => stub),
+      // ProfileScreen embeds LogoutButton, which reads the auth controller;
+      // stub it so no Firebase initialization is required.
+      authControllerProvider.overrideWith((_) => StubAuthNotifier(
+              initialState: AuthState(
+            status: AuthStatus.authenticated,
+            sessionId: 'session-1',
+          ))),
+    ],
     child: const MaterialApp(home: ProfileScreen()),
   );
 }

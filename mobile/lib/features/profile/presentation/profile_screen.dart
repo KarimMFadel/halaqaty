@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:halaqaty_mobile/features/auth/presentation/auth_screens.dart';
 import 'package:halaqaty_mobile/features/profile/application/profile_controller.dart';
 import 'package:halaqaty_mobile/features/profile/data/profile_api_client.dart';
 
@@ -216,6 +217,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               color: Theme.of(context).colorScheme.error),
                         ),
                       ],
+                      const SizedBox(height: 32),
+                      const LogoutButton(),
                     ],
                   ),
                 ),

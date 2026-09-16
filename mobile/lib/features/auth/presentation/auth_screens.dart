@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 
 import '../application/auth_controller.dart';
 
@@ -101,6 +102,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const Center(child: HalaqatyLogo(size: 56)),
+                const SizedBox(height: 24),
                 // Display name
                 TextFormField(
                   key: const Key('displayNameField'),
@@ -292,6 +295,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const Center(child: HalaqatyLogo(size: 56)),
+                const SizedBox(height: 24),
                 TextFormField(
                   key: const Key('emailField'),
                   controller: _emailController,

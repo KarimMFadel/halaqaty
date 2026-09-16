@@ -2,14 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
-import 'package:halaqaty_mobile/app/implemented_features_app.dart';
+import 'package:halaqaty_mobile/app/chats_screen.dart';
+import 'package:halaqaty_mobile/app/home_screen.dart';
+import 'package:halaqaty_mobile/app/router.dart';
+import 'package:halaqaty_mobile/app/welcome_screen.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 import 'package:halaqaty_mobile/features/circles/application/create_circle_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/auth/presentation/auth_screens.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_discovery_screen.dart';
-import 'package:halaqaty_mobile/features/circles/presentation/create_circle_screen.dart';
 import 'package:halaqaty_mobile/features/profile/application/profile_controller.dart';
 import 'package:halaqaty_mobile/features/profile/data/profile_api_client.dart';
 import 'package:halaqaty_mobile/features/profile/presentation/profile_screen.dart';
@@ -92,9 +94,9 @@ class _TestCircleApiClient extends CircleApiClient {
 
 Future<void> _pumpApp(
   WidgetTester tester,
-  _TestAuthController controller,
-  {List<_TestProfileController>? profileControllers},
-) {
+  _TestAuthController controller, {
+  List<_TestProfileController>? profileControllers,
+}) {
   return tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -127,7 +129,7 @@ Future<void> _pumpApp(
 }
 
 void main() {
-  testWidgets('shows startup progress while authentication initializes',
+  testWidgets('shows branded splash while authentication initializes',
       (WidgetTester tester) async {
     await _pumpApp(
       tester,
@@ -135,20 +137,22 @@ void main() {
     );
 
     expect(find.byKey(const Key('authInitializing')), findsOneWidget);
+    expect(find.byType(HalaqatySplash), findsOneWidget);
   });
 
-  testWidgets('shows authentication entry actions when unauthenticated',
+  testWidgets('shows welcome actions when unauthenticated',
       (WidgetTester tester) async {
     await _pumpApp(
       tester,
       _TestAuthController(const AuthState(status: AuthStatus.unauthenticated)),
     );
 
+    expect(find.byType(WelcomeScreen), findsOneWidget);
     expect(find.byKey(const Key('openLogin')), findsOneWidget);
     expect(find.byKey(const Key('openRegister')), findsOneWidget);
   });
 
-  testWidgets('opens the existing login form', (WidgetTester tester) async {
+  testWidgets('opens the login form', (WidgetTester tester) async {
     await _pumpApp(
       tester,
       _TestAuthController(const AuthState(status: AuthStatus.unauthenticated)),
@@ -160,8 +164,7 @@ void main() {
     expect(find.byType(LoginScreen), findsOneWidget);
   });
 
-  testWidgets('opens the existing registration form',
-      (WidgetTester tester) async {
+  testWidgets('opens the registration form', (WidgetTester tester) async {
     await _pumpApp(
       tester,
       _TestAuthController(const AuthState(status: AuthStatus.unauthenticated)),
@@ -173,94 +176,68 @@ void main() {
     expect(find.byType(RegisterScreen), findsOneWidget);
   });
 
-  testWidgets('shows implemented feature entries when authenticated',
+  testWidgets('shows the four-tab shell when authenticated',
       (WidgetTester tester) async {
     await _pumpApp(
       tester,
       _TestAuthController(const AuthState(status: AuthStatus.authenticated)),
     );
-
-    expect(find.byKey(const Key('openProfile')), findsOneWidget);
-    expect(find.byKey(const Key('openCircleDiscovery')), findsOneWidget);
-    expect(find.byKey(const Key('openCreateCircle')), findsOneWidget);
-    expect(find.byKey(const Key('logoutButton')), findsOneWidget);
-    expect(find.text('Implemented features'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_right), findsNWidgets(3));
-  });
-
-  testWidgets('uses Arabic labels and left-facing chevrons in RTL',
-      (WidgetTester tester) async {
-    final controller = _TestAuthController(
-      const AuthState(status: AuthStatus.authenticated),
-    );
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          authControllerProvider.overrideWith((_) => controller),
-        ],
-        child: const MaterialApp(
-          home: Directionality(
-            textDirection: TextDirection.rtl,
-            child: ImplementedFeaturesScreen(),
-          ),
-        ),
-      ),
-    );
-
-    expect(find.text('الميزات المتاحة'), findsOneWidget);
-    expect(find.text('الملف الشخصي'), findsOneWidget);
-    expect(find.text('اكتشاف الحلقات'), findsOneWidget);
-    expect(find.text('إنشاء حلقة'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_left), findsNWidgets(3));
-  });
-
-  testWidgets('opens the profile screen', (WidgetTester tester) async {
-    await _pumpApp(
-      tester,
-      _TestAuthController(const AuthState(status: AuthStatus.authenticated)),
-    );
-
-    await tester.tap(find.byKey(const Key('openProfile')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(ProfileScreen), findsOneWidget);
+    expect(find.byKey(const Key('appNavigationBar')), findsOneWidget);
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.byKey(const Key('homeNoCircles')), findsOneWidget);
+    expect(find.text('Circles'), findsOneWidget);
+    expect(find.text('Chats'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
   });
 
-  testWidgets('opens the circle discovery screen', (WidgetTester tester) async {
+  testWidgets('switches to the chats tab', (WidgetTester tester) async {
     await _pumpApp(
       tester,
       _TestAuthController(const AuthState(status: AuthStatus.authenticated)),
     );
+    await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('openCircleDiscovery')));
+    await tester.tap(find.text('Chats'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatsScreen), findsOneWidget);
+    expect(find.byKey(const Key('chatsEmpty')), findsOneWidget);
+  });
+
+  testWidgets('switches to the circles tab', (WidgetTester tester) async {
+    await _pumpApp(
+      tester,
+      _TestAuthController(const AuthState(status: AuthStatus.authenticated)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Circles'));
     await tester.pumpAndSettle();
 
     expect(find.byType(CircleDiscoveryScreen), findsOneWidget);
   });
 
-  testWidgets('opens the create circle screen', (WidgetTester tester) async {
+  testWidgets('switches to the profile tab and logs out',
+      (WidgetTester tester) async {
     await _pumpApp(
       tester,
       _TestAuthController(const AuthState(status: AuthStatus.authenticated)),
     );
-
-    await tester.tap(find.byKey(const Key('openCreateCircle')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(CreateCircleScreen), findsOneWidget);
-  });
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ProfileScreen), findsOneWidget);
 
-  testWidgets('returns to authentication entry after logout',
-      (WidgetTester tester) async {
-    final controller = _TestAuthController(
-      const AuthState(status: AuthStatus.authenticated),
-    );
-    await _pumpApp(tester, controller);
-
+    await tester.ensureVisible(find.byKey(const Key('logoutButton')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('logoutButton')));
     await tester.pump();
 
     expect(find.byKey(const Key('openLogin')), findsOneWidget);
+    expect(find.byType(ProfileScreen), findsNothing);
   });
 
   testWidgets('auth loss clears the protected route stack',
@@ -269,34 +246,13 @@ void main() {
       const AuthState(status: AuthStatus.authenticated),
     );
     await _pumpApp(tester, controller);
-
-    await tester.tap(find.byKey(const Key('openProfile')));
     await tester.pumpAndSettle();
-    expect(find.byType(ProfileScreen), findsOneWidget);
 
     controller.becomeUnauthenticated();
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('openLogin')), findsOneWidget);
-    expect(find.byType(ProfileScreen), findsNothing);
-  });
-
-  testWidgets('system back pops the protected route stack',
-      (WidgetTester tester) async {
-    await _pumpApp(
-      tester,
-      _TestAuthController(const AuthState(status: AuthStatus.authenticated)),
-    );
-
-    await tester.tap(find.byKey(const Key('openProfile')));
-    await tester.pumpAndSettle();
-    expect(find.byType(ProfileScreen), findsOneWidget);
-
-    await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
-
-    expect(find.text('Implemented features'), findsOneWidget);
-    expect(find.byType(ProfileScreen), findsNothing);
+    expect(find.byKey(const Key('appNavigationBar')), findsNothing);
   });
 
   testWidgets('auth transition resets profile state for the next session',
@@ -313,8 +269,9 @@ void main() {
       controller,
       profileControllers: profileControllers,
     );
+    await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('openProfile')));
+    await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
     final profileControllerForSessionA = profileControllers.single;
 
@@ -325,10 +282,39 @@ void main() {
 
     controller.becomeAuthenticated('session-b');
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('openProfile')));
+    await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
 
     expect(profileControllers, hasLength(2));
     expect(profileControllers.last, isNot(same(profileControllerForSessionA)));
+  });
+
+  testWidgets('welcome screen uses Arabic labels in RTL',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: Directionality(
+            textDirection: TextDirection.rtl,
+            child: WelcomeScreen(),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('حلقاتي'), findsOneWidget);
+    expect(find.text('تسجيل الدخول'), findsOneWidget);
+    expect(find.text('إنشاء حساب'), findsOneWidget);
+  });
+
+  testWidgets('router builds with halaqaty light theme by default',
+      (WidgetTester tester) async {
+    await _pumpApp(
+      tester,
+      _TestAuthController(const AuthState(status: AuthStatus.unauthenticated)),
+    );
+
+    final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(materialApp.theme?.colorScheme.primary, const Color(0xFF1B7E3C));
   });
 }

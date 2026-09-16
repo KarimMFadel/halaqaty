@@ -67,6 +67,8 @@ Switch to the appropriate agent based on the task domain:
 |---|---|
 | Backend / Go code | `senior-golang-developer` |
 | Mobile / Flutter code | `senior-flutter-mobile-engineer` |
+| UX: flows, navigation, IA, accessibility | `ux-designer` |
+| UI: visual design, tokens, components, brand | `ui-designer` |
 | Architecture / system design | `architect` |
 | Code review / security / performance | `tech-lead` |
 | Sprint planning / coordination | `team-leader` |

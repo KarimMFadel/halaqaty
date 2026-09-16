@@ -81,6 +81,8 @@ Use the smallest sufficient team:
 | Architecture, boundaries, ADR implications | `architect` | Tech Lead and affected implementers |
 | Go backend, REST, WebSocket, LiveKit backend | `senior-golang-developer` | Database Optimizer for query/schema risk; Tech Lead for review |
 | Flutter, Riverpod, RTL/Arabic UI | `senior-flutter-mobile-engineer` | Architect for contract/state-boundary changes; Tech Lead for review |
+| UX flows, navigation, IA, accessibility, state coverage | `ux-designer` | ui-designer for visual treatment; senior-flutter-mobile-engineer for feasibility |
+| UI visual design, tokens, components, brand/logo usage | `ui-designer` | ux-designer for flows/states; senior-flutter-mobile-engineer for feasibility |
 | PostgreSQL query/index optimization | `database-optimizer` | Go Developer and Architect |
 | CI/CD and deployment automation | `devops-automator` | SRE for operational risk |
 | Reliability, observability, incidents | `sre` | DevOps and affected domain owner |

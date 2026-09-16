@@ -28,6 +28,13 @@ class _TestAuthController extends StateNotifier<AuthState>
     state = const AuthState(status: AuthStatus.unauthenticated);
   }
 
+  void becomeAuthenticated(String sessionId) {
+    state = AuthState(
+      status: AuthStatus.authenticated,
+      sessionId: sessionId,
+    );
+  }
+
   @override
   Future<void> register({
     required String email,
@@ -46,6 +53,14 @@ class _TestAuthController extends StateNotifier<AuthState>
 class _TestProfileController extends StateNotifier<ProfileState>
     implements ProfileController {
   _TestProfileController() : super(const ProfileState());
+
+  bool isDisposed = false;
+
+  @override
+  void dispose() {
+    isDisposed = true;
+    super.dispose();
+  }
 
   @override
   Future<void> loadProfile() async {}
@@ -78,12 +93,17 @@ class _TestCircleApiClient extends CircleApiClient {
 Future<void> _pumpApp(
   WidgetTester tester,
   _TestAuthController controller,
+  {List<_TestProfileController>? profileControllers},
 ) {
   return tester.pumpWidget(
     ProviderScope(
       overrides: [
         authControllerProvider.overrideWith((_) => controller),
-        profileControllerProvider.overrideWith((_) => _TestProfileController()),
+        profileControllerProvider.overrideWith((_) {
+          final profileController = _TestProfileController();
+          profileControllers?.add(profileController);
+          return profileController;
+        }),
         circleDiscoveryControllerProvider.overrideWith(
           (_) => CircleDiscoveryController(
             apiClient: _TestCircleApiClient(),
@@ -259,5 +279,56 @@ void main() {
 
     expect(find.byKey(const Key('openLogin')), findsOneWidget);
     expect(find.byType(ProfileScreen), findsNothing);
+  });
+
+  testWidgets('system back pops the protected route stack',
+      (WidgetTester tester) async {
+    await _pumpApp(
+      tester,
+      _TestAuthController(const AuthState(status: AuthStatus.authenticated)),
+    );
+
+    await tester.tap(find.byKey(const Key('openProfile')));
+    await tester.pumpAndSettle();
+    expect(find.byType(ProfileScreen), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Implemented features'), findsOneWidget);
+    expect(find.byType(ProfileScreen), findsNothing);
+  });
+
+  testWidgets('auth transition resets profile state for the next session',
+      (WidgetTester tester) async {
+    final profileControllers = <_TestProfileController>[];
+    final controller = _TestAuthController(
+      const AuthState(
+        status: AuthStatus.authenticated,
+        sessionId: 'session-a',
+      ),
+    );
+    await _pumpApp(
+      tester,
+      controller,
+      profileControllers: profileControllers,
+    );
+
+    await tester.tap(find.byKey(const Key('openProfile')));
+    await tester.pumpAndSettle();
+    final profileControllerForSessionA = profileControllers.single;
+
+    controller.becomeUnauthenticated();
+    await tester.pumpAndSettle();
+
+    expect(profileControllerForSessionA.isDisposed, isTrue);
+
+    controller.becomeAuthenticated('session-b');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('openProfile')));
+    await tester.pumpAndSettle();
+
+    expect(profileControllers, hasLength(2));
+    expect(profileControllers.last, isNot(same(profileControllerForSessionA)));
   });
 }

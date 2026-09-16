@@ -59,6 +59,7 @@ This is a **living document**. It tracks every feature from proposal through del
 | [F-015](#f-015-certificate-system) | Certificate System | P3 | 🔵 Proposed | 4 | Full Stack |
 | [F-016](#f-016-desktop-app) | Desktop App (Flutter) | P3 | 🔵 Proposed | 5 | Mobile |
 | [F-017](#f-017-institutional-platform) | 🏢 Institutional Platform | P3 | 🔵 Proposed | 5 | Full Stack |
+| [F-018](#f-018-provider-adapter-boundaries) | Provider Adapter Boundaries | P1 | 🟡 Approved | Platform | Full Stack |
 
 ---
 
@@ -847,6 +848,28 @@ The most significant long-term business feature. Enables Quran memorization inst
 #### Business Impact
 
 This single feature could generate more revenue than all individual subscriptions combined, while serving the organizations that most need a solution.
+
+---
+
+### F-018: Provider Adapter Boundaries
+
+**Priority:** P1 | **Status:** 🟡 Approved | **Phase:** Platform
+
+#### Description
+
+Keep secure file attachments and live audio independent of the currently selected infrastructure. MinIO currently stores chat attachments and LiveKit currently powers live audio. A development-time replacement should be confined to the provider integration and its configuration while preserving the user experience and security rules.
+
+#### Acceptance Criteria
+
+- [X] Chat attachments preserve upload, renewable access, deletion, and recovery behavior through a replaceable storage integration.
+- [X] Live audio preserves connection, microphone, moderation, and recovery behavior through the existing replaceable media integration.
+- [X] Provider-specific dependencies remain confined to their integrations; application contracts and mobile screens remain provider-neutral.
+- [X] Deployment configuration retains the current enable/disable behavior and fails safely when incomplete.
+- [X] Current providers remain MinIO and LiveKit; replacement vendors and live switching require a separately approved feature.
+
+**Approval:** Karim approved the reviewed scope and requested recording and execution on 2026-09-16 after F-004 completion. Follow Spec-Kit for specification, planning, tasks, and analysis; use Superpowers for test-first implementation, review, and current verification evidence.
+
+**Completion:** All implementation and verification tasks passed, and Karim approved the mandatory storage/upload/deletion security review on 2026-09-16.
 
 ---
 

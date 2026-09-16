@@ -39,6 +39,8 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/chat"
+	chatminio "github.com/KarimMFadel/halaqaty/backend/internal/chat/minio"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/config"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
 )
@@ -101,6 +103,7 @@ type chatMediaEnv struct {
 	repo    *chat.Repository
 	members *rbac.Repository
 	store   *chat.MediaStore
+	adapter *chatminio.Adapter
 	cleaner *chat.Cleaner
 	service *chat.UploadService
 	minio   *minio.Client
@@ -131,8 +134,13 @@ func setupChatMediaEnv(t *testing.T) *chatMediaEnv {
 	pool := openSchemaPool(t, ctx, schema)
 	t.Cleanup(pool.Close)
 
-	client, bucket := setupChatMediaMinio(t)
-	store := chat.NewMediaStore(client, bucket, 10*time.Second)
+	client, bucket, mediaCfg := setupChatMediaMinio(t)
+	mediaCfg.Bucket = bucket
+	adapter, err := chatminio.NewAdapter(mediaCfg)
+	if err != nil {
+		t.Fatalf("init MinIO adapter for %s: %v", mediaCfg.Endpoint, err)
+	}
+	store := chat.NewMediaStore(adapter, 10*time.Second)
 	// The same startup gate main.go fail-fasts on must pass for the fresh
 	// bucket: versioned, reachable, private by default.
 	if err := store.EnsureChatBucketVersioned(ctx); err != nil {
@@ -147,6 +155,7 @@ func setupChatMediaEnv(t *testing.T) *chatMediaEnv {
 		repo:    repo,
 		members: members,
 		store:   store,
+		adapter: adapter,
 		cleaner: cleaner,
 		service: chat.NewUploadService(repo, members, store, cleaner, new(metrics.ChatMetrics), nil),
 		minio:   client,
@@ -155,9 +164,10 @@ func setupChatMediaEnv(t *testing.T) *chatMediaEnv {
 }
 
 // setupChatMediaMinio creates one isolated versioned bucket per test and
-// returns the raw client and bucket name. Unreachable object storage skips the
-// test instead of failing CI.
-func setupChatMediaMinio(t *testing.T) (*minio.Client, string) {
+// returns the raw admin client, bucket name, and the chat-media configuration
+// the adapter is built from. Unreachable object storage skips the test
+// instead of failing CI.
+func setupChatMediaMinio(t *testing.T) (*minio.Client, string, config.ChatMediaConfig) {
 	t.Helper()
 	endpoint := os.Getenv("CHAT_MEDIA_ENDPOINT")
 	if endpoint == "" {
@@ -171,10 +181,16 @@ func setupChatMediaMinio(t *testing.T) (*minio.Client, string) {
 	if secret == "" {
 		secret = "minioadmin"
 	}
+	mediaCfg := config.ChatMediaConfig{
+		Endpoint:        endpoint,
+		UseSSL:          strings.EqualFold(os.Getenv("CHAT_MEDIA_USE_SSL"), "true"),
+		AccessKeyID:     accessKeyID,
+		SecretAccessKey: secret,
+	}
 
 	client, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(accessKeyID, secret, ""),
-		Secure: strings.EqualFold(os.Getenv("CHAT_MEDIA_USE_SSL"), "true"),
+		Creds:  credentials.NewStaticV4(mediaCfg.AccessKeyID, mediaCfg.SecretAccessKey, ""),
+		Secure: mediaCfg.UseSSL,
 	})
 	if err != nil {
 		t.Fatalf("init MinIO client for %s: %v", endpoint, err)
@@ -199,7 +215,7 @@ func setupChatMediaMinio(t *testing.T) (*minio.Client, string) {
 		defer cleanupCancel()
 		_ = client.RemoveBucketWithOptions(cleanupCtx, bucket, minio.RemoveBucketOptions{ForceDelete: true})
 	})
-	return client, bucket
+	return client, bucket, mediaCfg
 }
 
 // seedChatMediaUser inserts one user row and returns its id.

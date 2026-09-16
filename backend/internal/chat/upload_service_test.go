@@ -889,7 +889,7 @@ func TestUploadService_StageReturnsURLOfPresigner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stage: %v", err)
 	}
-	want := &url.URL{Scheme: "http", Host: "minio.test", Path: fmt.Sprintf("/halaqaty-chat/%s", staged.ObjectKey)}
+	want := &url.URL{Scheme: "http", Host: "storage.test", Path: fmt.Sprintf("/halaqaty-chat/%s", staged.ObjectKey)}
 	if *staged.URL != *want {
 		t.Fatalf("preview URL: got %v want %v", staged.URL, want)
 	}

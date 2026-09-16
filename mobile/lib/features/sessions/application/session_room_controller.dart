@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/application/media_session.dart';
+import 'package:halaqaty_mobile/features/sessions/application/media_session_provider.dart';
 import 'package:halaqaty_mobile/features/sessions/application/queue_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/data/realtime_session_client.dart';
 import 'package:halaqaty_mobile/features/sessions/data/session_api_client.dart';

@@ -18,37 +18,45 @@ import (
 // session-media types.
 func TestLiveKitSDKImportsAreConfinedToTheAdapter(t *testing.T) {
 	root := repositoryRoot(t)
-	internal := filepath.Join(root, "backend", "internal")
-	allowed := filepath.Join("sessions", "livekit")
+	assertProviderImportsConfined(t, root, "github.com/livekit/", filepath.Join("backend", "internal", "sessions", "livekit"))
+}
 
-	err := filepath.Walk(internal, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() || !strings.HasSuffix(path, ".go") {
+// assertProviderImportsConfined is a bounded ADR-023 dependency guard, not
+// behavioral proof. It scans production Go imports in internal and cmd/api;
+// infrastructure test imports are intentionally outside this policy.
+func assertProviderImportsConfined(t *testing.T, root, providerPrefix, allowed string) {
+	t.Helper()
+	for _, base := range []string{filepath.Join(root, "backend", "internal"), filepath.Join(root, "backend", "cmd", "api")} {
+
+		err := filepath.Walk(base, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			file, parseErr := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+			if parseErr != nil {
+				return parseErr
+			}
+			for _, spec := range file.Imports {
+				importPath := strings.Trim(spec.Path.Value, `"`)
+				if !strings.HasPrefix(importPath, providerPrefix) {
+					continue
+				}
+				rel, relErr := filepath.Rel(root, filepath.Dir(path))
+				if relErr != nil {
+					return relErr
+				}
+				if rel != allowed {
+					t.Errorf("%s imports provider SDK %q outside %s", filepath.ToSlash(filepath.Join(rel, filepath.Base(path))), importPath, filepath.ToSlash(allowed))
+				}
+			}
 			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", base, err)
 		}
-		file, parseErr := parser.ParseFile(token.NewFileSet(), path, nil, 0)
-		if parseErr != nil {
-			return parseErr
-		}
-		for _, spec := range file.Imports {
-			importPath := strings.Trim(spec.Path.Value, `"`)
-			if !strings.Contains(importPath, "github.com/livekit/") {
-				continue
-			}
-			rel, relErr := filepath.Rel(internal, filepath.Dir(path))
-			if relErr != nil {
-				return relErr
-			}
-			if rel != allowed {
-				t.Errorf("%s imports provider SDK %q outside backend/internal/sessions/livekit", filepath.ToSlash(filepath.Join("backend", "internal", rel, filepath.Base(path))), importPath)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("walk backend/internal: %v", err)
 	}
 }
 

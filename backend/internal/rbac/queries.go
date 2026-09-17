@@ -20,6 +20,17 @@ VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING id::text, created_at
 `
 
+const listUserCirclesQuery = `
+SELECT c.id::text, c.name, c.description, c.max_capacity,
+       c.gender_restriction, c.language, c.created_at
+FROM circle_members cm
+JOIN circles c ON c.id = cm.circle_id
+WHERE cm.user_id = $1::uuid
+  AND c.is_archived = FALSE
+  AND ($2 = '' OR cm.role = $2)
+ORDER BY cm.joined_at ASC, c.id ASC
+`
+
 // insertCircleMemberQuery adds one membership; replays keep the existing role.
 const insertCircleMemberQuery = `
 INSERT INTO circle_members (circle_id, user_id, role)

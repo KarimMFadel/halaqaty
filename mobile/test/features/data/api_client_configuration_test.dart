@@ -5,7 +5,23 @@ import 'package:halaqaty_mobile/features/auth/data/auth_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 
 void main() {
-  test('dioProvider defaults to the versioned API base URL', () {
+  test('default API base URL targets the emulator host alias on Android', () {
+    expect(
+      defaultApiBaseUrl(isAndroid: true),
+      'http://10.0.2.2:8080/api/v1',
+    );
+  });
+
+  test('default API base URL targets localhost on other platforms', () {
+    expect(
+      defaultApiBaseUrl(isAndroid: false),
+      'http://localhost:8080/api/v1',
+    );
+  });
+
+  test('dioProvider honors an explicit API_BASE_URL define when provided', () {
+    // The define is compile-time; on the test host (non-Android) the provider
+    // must resolve to the localhost default.
     final container = ProviderContainer();
     addTearDown(container.dispose);
 

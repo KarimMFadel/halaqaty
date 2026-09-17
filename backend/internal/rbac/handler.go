@@ -14,6 +14,25 @@ type Handler struct {
 	service *Service
 }
 
+// ListCircles handles GET /circles.
+func (h *Handler) ListCircles(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.service == nil {
+		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		return
+	}
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	circles, err := h.service.ListCircles(r.Context(), principal.UserID, r.URL.Query().Get("role"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusOK, map[string]any{"data": circles})
+}
+
 // NewHandler constructs a circle RBAC HTTP handler.
 func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}

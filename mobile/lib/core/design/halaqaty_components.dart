@@ -1,0 +1,134 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+
+/// Path of the primary brand logo asset.
+const String halaqatyLogoAsset = 'assets/brand/logo.svg';
+
+/// Shows an action failure as a floating M3 SnackBar.
+///
+/// Soft error colors (not raw red inline text), dismissible, announced to
+/// screen readers by the SnackBar itself. Field-level validation errors stay
+/// inline in their forms; this is for action failures (join, load, send...).
+void showHalaqatyError(BuildContext context, String message) {
+  final scheme = Theme.of(context).colorScheme;
+  final isRtl = Directionality.of(context) == TextDirection.rtl;
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        key: const Key('halaqatyErrorSnackBar'),
+        content: Text(
+          message,
+          style: TextStyle(color: scheme.onErrorContainer),
+        ),
+        backgroundColor: scheme.errorContainer,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          textColor: scheme.onErrorContainer,
+          label: isRtl ? 'إغلاق' : 'Dismiss',
+          onPressed: ScaffoldMessenger.of(context).hideCurrentSnackBar,
+        ),
+      ),
+    );
+}
+
+/// The Halaqaty logo (8-point khatam star with open book).
+///
+/// The asset is a replaceable placeholder; keep this path stable.
+class HalaqatyLogo extends StatelessWidget {
+  const HalaqatyLogo({super.key, this.size = 64, this.monochrome = false});
+
+  /// Logical size (width and height) of the logo.
+  final double size;
+
+  /// Whether to use the monochrome variant (for empty states/tinting).
+  final bool monochrome;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Halaqaty',
+      image: true,
+      child: SvgPicture.asset(
+        monochrome ? 'assets/brand/logo_monochrome.svg' : halaqatyLogoAsset,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+      ),
+    );
+  }
+}
+
+/// Section title with optional trailing action, per DESIGN.md type scale.
+class SectionHeader extends StatelessWidget {
+  const SectionHeader({super.key, required this.title, this.action});
+
+  /// Section title text (already localized by the caller).
+  final String title;
+
+  /// Optional trailing action (e.g. "See all").
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
+          if (action != null) action!,
+        ],
+      ),
+    );
+  }
+}
+
+/// Branded empty state: monochrome logo mark, title, and a hint.
+class EmptyStateCard extends StatelessWidget {
+  const EmptyStateCard({
+    super.key,
+    required this.title,
+    required this.hint,
+  });
+
+  /// What is empty (e.g. "No circles yet").
+  final String title;
+
+  /// What to do next (e.g. "Discover public circles").
+  final String hint;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            HalaqatyLogo(size: 72, monochrome: true),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              hint,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

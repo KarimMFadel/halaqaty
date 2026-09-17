@@ -751,7 +751,11 @@ void main() {
 }
 
 Future<File> _tempFile(String name) async {
-  final file = File('${Directory.systemTemp.path}/$name');
+  // Use the platform separator so basename extraction behaves identically
+  // to real picker paths on both Windows and POSIX.
+  final file = File(
+    '${Directory.systemTemp.path}${Platform.pathSeparator}$name',
+  );
   file.writeAsBytesSync(name.endsWith('.png')
       ? base64Decode(
           'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL1GQAAAABJRU5ErkJggg==')

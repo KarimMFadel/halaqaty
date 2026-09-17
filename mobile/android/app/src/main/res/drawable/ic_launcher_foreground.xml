@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 8-pointed khatam star, sharp points (outer R=26, inner r=15.08) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M80,54 L67.94,48.23 L72.38,35.62 L59.77,40.06 L54,28 L48.23,40.06 L35.62,35.62 L40.06,48.23 L28,54 L40.06,59.77 L35.62,72.38 L48.23,67.94 L54,80 L59.77,67.94 L72.38,72.38 L67.94,59.77 Z" />
+    <!-- open book (Mushaf), bold pages -->
+    <path
+        android:fillColor="#D4A574"
+        android:pathData="M53.18,46.13 Q46.48,42.71 39.98,44.42 L39.98,59.13 Q46.48,57.42 53.18,61.52 Z" />
+    <path
+        android:fillColor="#D4A574"
+        android:pathData="M54.82,46.13 Q61.52,42.71 68.02,44.42 L68.02,59.13 Q61.52,57.42 54.82,61.52 Z" />
+</vector>

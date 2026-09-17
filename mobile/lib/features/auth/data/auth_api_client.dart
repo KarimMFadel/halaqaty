@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -134,13 +136,22 @@ class AuthApiClient {
       {'Authorization': 'Bearer $token'};
 }
 
+/// Dev default API base URL.
+///
+/// On Android this must be the emulator's host-loopback alias (`10.0.2.2`);
+/// `localhost` on an emulator is the emulator itself and yields
+/// connection-refused. An explicit `--dart-define=API_BASE_URL=...` always
+/// wins (production builds and integration fixtures pass their own value).
+String defaultApiBaseUrl({required bool isAndroid}) =>
+    isAndroid ? 'http://10.0.2.2:8080/api/v1' : 'http://localhost:8080/api/v1';
+
 final dioProvider = Provider<Dio>((ref) {
+  const apiBaseUrlDefine = String.fromEnvironment('API_BASE_URL');
   return Dio(
     BaseOptions(
-      baseUrl: const String.fromEnvironment(
-        'API_BASE_URL',
-        defaultValue: 'http://localhost:8080/api/v1',
-      ),
+      baseUrl: apiBaseUrlDefine.isNotEmpty
+          ? apiBaseUrlDefine
+          : defaultApiBaseUrl(isAndroid: Platform.isAndroid),
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 15),
     ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_detail_screen.dart';
@@ -32,6 +33,14 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(circleDiscoveryControllerProvider);
     final rtl = Directionality.of(context) == TextDirection.rtl;
+    ref.listen(
+      circleDiscoveryControllerProvider.select((s) => s.failure),
+      (previous, next) {
+        if (next != null) {
+          showHalaqatyError(context, circleFailureText(next, rtl));
+        }
+      },
+    );
     return Scaffold(
       appBar: AppBar(title: Text(rtl ? 'اكتشاف الحلقات' : 'Discover circles')),
       body: SafeArea(
@@ -63,20 +72,6 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
                 ),
               ),
             ),
-            if (state.failure case final failure?)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    circleFailureText(failure, rtl),
-                    key: const Key('circleDiscoveryError'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
-              ),
             Expanded(child: _content(state, rtl)),
           ],
         ),

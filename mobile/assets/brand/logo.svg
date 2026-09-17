@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Halaqaty logo">
-  <!-- 8-pointed khatam star: union of two squares rotated 45 degrees -->
-  <path fill="#1B7E3C" d="M86 50 L75.46 39.46 L75.46 24.54 L60.54 24.54 L50 14 L39.46 24.54 L24.54 24.54 L24.54 39.46 L14 50 L24.54 60.54 L24.54 75.46 L39.46 75.46 L50 86 L60.54 75.46 L75.46 75.46 L75.46 60.54 Z"/>
-  <!-- open book (Mushaf) -->
-  <path fill="#D4A574" d="M49.25 40 Q40 34.5 31 37 L31 57 Q40 54.5 49.25 61.5 Z"/>
-  <path fill="#D4A574" d="M50.75 40 Q60 34.5 69 37 L69 57 Q60 54.5 50.75 61.5 Z"/>
+  <!-- 8-pointed khatam star, sharp points (outer R=38, inner r=22) -->
+  <path fill="#1B7E3C" d="M88 50 L70.33 41.59 L76.87 23.13 L58.41 29.67 L50 12 L41.59 29.67 L23.13 23.13 L29.67 41.59 L12 50 L29.67 58.41 L23.13 76.87 L41.59 70.33 L50 88 L58.41 70.33 L76.87 76.87 L70.33 58.41 Z"/>
+  <!-- open book (Mushaf), bold pages -->
+  <path fill="#D4A574" d="M48.8 38.5 Q39 33.5 29.5 36 L29.5 57.5 Q39 55 48.8 61 Z"/>
+  <path fill="#D4A574" d="M51.2 38.5 Q61 33.5 70.5 36 L70.5 57.5 Q61 55 51.2 61 Z"/>
 </svg>

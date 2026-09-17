@@ -221,6 +221,13 @@ void main() {
 
   testWidgets('switches to the profile tab and logs out',
       (WidgetTester tester) async {
+    // Tall viewport keeps the logout button on-screen without scrolling —
+    // deterministic across Flutter versions and the IndexedStack branches.
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await _pumpApp(
       tester,
       _TestAuthController(const AuthState(status: AuthStatus.authenticated)),
@@ -231,8 +238,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ProfileScreen), findsOneWidget);
 
-    await tester.ensureVisible(find.byKey(const Key('logoutButton')));
-    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('logoutButton')));
     await tester.pump();
 

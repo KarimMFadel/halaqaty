@@ -34,6 +34,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final state = ref.watch(circleDiscoveryControllerProvider);
     final isRtl = Directionality.of(context) == TextDirection.rtl;
     final scheme = Theme.of(context).colorScheme;
+    ref.listen(
+      circleDiscoveryControllerProvider.select((s) => s.failure),
+      (previous, next) {
+        if (next != null) {
+          showHalaqatyError(
+            context,
+            isRtl ? 'تعذّر تحميل الحلقات' : 'Failed to load circles',
+          );
+        }
+      },
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -63,19 +74,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ],
               ),
               const SizedBox(height: 24),
-              if (state.failure != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      isRtl ? 'تعذّر تحميل الحلقات' : 'Failed to load circles',
-                      key: const Key('homeCirclesError'),
-                      style:
-                          TextStyle(color: Theme.of(context).colorScheme.error),
-                    ),
-                  ),
-                ),
               SectionHeader(
                 title: isRtl ? 'حلقاتي' : 'My circles',
               ),

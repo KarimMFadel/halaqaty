@@ -9,8 +9,10 @@ session.
 
 ## Flutter unit/widget tests, analyze, format (Docker fallback)
 
-This machine has no local Flutter/Dart/Node. Karim pre-authorized the Docker
-fallback — use it without asking:
+A local Flutter SDK exists (`C:\myPersonalData\programs\flutterSDK\flutter`,
+3.47.4) with the Android SDK at `C:\Users\karim.fadel\AppData\Local\Android\Sdk`
+— prefer it for daily builds, tests, and emulator runs. The Docker fallback
+below remains for matching CI's pinned Flutter (3.44.0) exactly:
 
 ```powershell
 docker run --rm -e FLUTTER_SUPPRESS_ANALYTICS=true -v "<repo-root>:/workspace" -v halaqaty-pub-cache:/root/.pub-cache -w /workspace/mobile ghcr.io/cirruslabs/flutter:stable <cmd>

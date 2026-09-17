@@ -4,6 +4,35 @@ import 'package:flutter_svg/flutter_svg.dart';
 /// Path of the primary brand logo asset.
 const String halaqatyLogoAsset = 'assets/brand/logo.svg';
 
+/// Shows an action failure as a floating M3 SnackBar.
+///
+/// Soft error colors (not raw red inline text), dismissible, announced to
+/// screen readers by the SnackBar itself. Field-level validation errors stay
+/// inline in their forms; this is for action failures (join, load, send...).
+void showHalaqatyError(BuildContext context, String message) {
+  final scheme = Theme.of(context).colorScheme;
+  final isRtl = Directionality.of(context) == TextDirection.rtl;
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        key: const Key('halaqatyErrorSnackBar'),
+        content: Text(
+          message,
+          style: TextStyle(color: scheme.onErrorContainer),
+        ),
+        backgroundColor: scheme.errorContainer,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          textColor: scheme.onErrorContainer,
+          label: isRtl ? 'إغلاق' : 'Dismiss',
+          onPressed: ScaffoldMessenger.of(context).hideCurrentSnackBar,
+        ),
+      ),
+    );
+}
+
 /// The Halaqaty logo (8-point khatam star with open book).
 ///
 /// The asset is a replaceable placeholder; keep this path stable.

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 
 class CircleJoinScreen extends ConsumerStatefulWidget {
@@ -23,6 +24,14 @@ class _CircleJoinScreenState extends ConsumerState<CircleJoinScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(circleDiscoveryControllerProvider);
     final rtl = Directionality.of(context) == TextDirection.rtl;
+    ref.listen(
+      circleDiscoveryControllerProvider.select((s) => s.failure),
+      (previous, next) {
+        if (next != null) {
+          showHalaqatyError(context, circleFailureText(next, rtl));
+        }
+      },
+    );
     return Scaffold(
       appBar: AppBar(title: Text(rtl ? 'الانضمام إلى حلقة' : 'Join a circle')),
       body: SafeArea(child: _inviteForm(state, rtl)),
@@ -42,7 +51,6 @@ class _CircleJoinScreenState extends ConsumerState<CircleJoinScreen> {
           _inviteField(rtl),
           const SizedBox(height: 16),
           _submitButton(state, rtl),
-          if (state.failure case final failure?) _error(failure, rtl),
         ],
       ),
     );
@@ -81,20 +89,6 @@ class _CircleJoinScreenState extends ConsumerState<CircleJoinScreen> {
               dimension: 20,
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
-    );
-  }
-
-  Widget _error(CircleJoinFailure failure, bool rtl) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: Semantics(
-        liveRegion: true,
-        child: Text(
-          circleFailureText(failure, rtl),
-          key: const Key('circleJoinError'),
-          style: TextStyle(color: Theme.of(context).colorScheme.error),
-        ),
-      ),
     );
   }
 

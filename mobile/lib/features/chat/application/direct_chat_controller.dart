@@ -76,7 +76,9 @@ class DirectChatController extends StateNotifier<DirectChatControllerState> {
       );
       state = DirectChatControllerState(
         status: DirectChatStatus.ready,
-        messages: page.messages,
+        // A realtime event may arrive after subscription and before the REST
+        // snapshot completes. Merge the snapshot so that message is not lost.
+        messages: reconcileChatMessages(state.messages, page.messages),
         hasMore: page.hasMore,
         nextBefore: page.nextBefore,
       );

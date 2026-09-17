@@ -72,6 +72,7 @@ type Store interface {
 	FindCircleByID(ctx context.Context, circleID string) (Circle, error)
 	FindCircleByIDForUpdate(ctx context.Context, circleID string) (Circle, error)
 	ListPublicCircles(ctx context.Context, query, cursor string, limit int) ([]PublicCircleSummary, error)
+	ListUserCircles(ctx context.Context, userID, role string) ([]PublicCircleSummary, error)
 	UpdateCircle(ctx context.Context, circleID, name string, settings CircleSettings) (Circle, error)
 	RefreshInviteCode(ctx context.Context, circleID, inviteCode string) error
 	RemoveMember(ctx context.Context, circleID, userID string) error
@@ -83,6 +84,21 @@ type Store interface {
 	CountActiveMemberships(ctx context.Context, userID string) (int, error)
 	UpdateMemberRole(ctx context.Context, circleID, userID, role string) error
 	SearchUsers(ctx context.Context, query string, limit int) ([]UserSearchResult, error)
+}
+
+// ListCircles returns the authenticated user's active circle memberships.
+func (s *Service) ListCircles(ctx context.Context, userID, role string) ([]PublicCircleSummary, error) {
+	if role != "" && role != RoleStudent && role != RoleTeacher && role != RoleSupervisor {
+		return nil, &ValidationError{Fields: map[string]string{"role": "invalid role"}}
+	}
+	circles, err := s.store.ListUserCircles(ctx, userID, role)
+	if err != nil {
+		return nil, fmt.Errorf("list user circles: %w", err)
+	}
+	if circles == nil {
+		circles = []PublicCircleSummary{}
+	}
+	return circles, nil
 }
 
 // JoinCircle adds the authenticated user as a student using a circle invite code.

@@ -54,6 +54,27 @@ func (r *Repository) ListCircleIDs(ctx context.Context, userID string) ([]string
 	return ids, nil
 }
 
+// ListUserCircles returns the active circles a user belongs to.
+func (r *Repository) ListUserCircles(ctx context.Context, userID, role string) ([]PublicCircleSummary, error) {
+	rows, err := r.q.Query(ctx, listUserCirclesQuery, userID, role)
+	if err != nil {
+		return nil, fmt.Errorf("list user circles: %w", err)
+	}
+	defer rows.Close()
+	result := []PublicCircleSummary{}
+	for rows.Next() {
+		var circle PublicCircleSummary
+		if err := rows.Scan(&circle.ID, &circle.Name, &circle.Description, &circle.MaxCapacity, &circle.GenderRestriction, &circle.Language, &circle.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan user circle: %w", err)
+		}
+		result = append(result, circle)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate user circles: %w", err)
+	}
+	return result, nil
+}
+
 // FindCircleByInviteCode returns the circle associated with an invite code.
 func (r *Repository) FindCircleByInviteCode(ctx context.Context, inviteCode string) (Circle, error) {
 	var circle Circle

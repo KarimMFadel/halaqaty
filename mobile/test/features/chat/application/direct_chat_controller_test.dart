@@ -27,6 +27,30 @@ ChatMessage _directMessage(String id,
     );
 
 void main() {
+  test('keeps a realtime message received while history is loading', () async {
+    final history = Completer<ChatMessagePage>();
+    final api = _FakeDirectApi()..nextPage = history.future;
+    final realtime = _FakeDirectRealtimeClient();
+    final controller = DirectChatController(
+      api,
+      () async => (token: 'token', sessionId: 'session', userId: 'user'),
+      realtime: realtime,
+    );
+    addTearDown(controller.dispose);
+
+    final opening = controller.open(_peerId);
+    await Future<void>.delayed(Duration.zero);
+    realtime.emit(ChatMessageEvent(
+      eventId: 'live-during-open',
+      message: _directMessage('live-during-open'),
+    ));
+    history.complete(const ChatMessagePage(messages: [], hasMore: false));
+    await opening;
+
+    expect(controller.state.messages.map((message) => message.id),
+        ['live-during-open']);
+  });
+
   test('projects incoming direct messages addressed to the current user',
       () async {
     final api = _FakeDirectApi()
@@ -338,6 +362,7 @@ class _FakeDirectApi extends ChatApiClient {
   _FakeDirectApi() : super(Dio());
 
   final pages = <ChatMessagePage>[];
+  Future<ChatMessagePage>? nextPage;
   int listCalls = 0;
   final sentPeerIds = <String>[];
   Object? openError;
@@ -362,6 +387,10 @@ class _FakeDirectApi extends ChatApiClient {
   }) async {
     listCalls++;
     if (openError != null) throw openError!;
+    if (nextPage case final page?) {
+      nextPage = null;
+      return page;
+    }
     return pages.removeAt(0);
   }
 

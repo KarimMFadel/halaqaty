@@ -49,6 +49,14 @@ class _CircleJoinScreenState extends ConsumerState<CircleJoinScreen> {
               : 'Enter the invite code or link shared by your teacher.'),
           const SizedBox(height: 16),
           _inviteField(rtl),
+          if (state.failure case final failure?) ...[
+            const SizedBox(height: 12),
+            Text(
+              key: const Key('circleJoinError'),
+              circleFailureText(failure, rtl),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
           const SizedBox(height: 16),
           _submitButton(state, rtl),
         ],

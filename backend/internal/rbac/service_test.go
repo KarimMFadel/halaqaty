@@ -156,6 +156,10 @@ func (s *stubStore) ListPublicCircles(_ context.Context, _, _ string, _ int) ([]
 	return nil, nil
 }
 
+func (s *stubStore) ListUserCircles(_ context.Context, _, _ string) ([]PublicCircleSummary, error) {
+	return nil, nil
+}
+
 func (s *stubStore) SearchUsers(_ context.Context, query string, limit int) ([]UserSearchResult, error) {
 	s.searchQuery = query
 	s.searchLimit = limit

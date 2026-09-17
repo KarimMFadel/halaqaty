@@ -139,6 +139,10 @@ func (s *circleStoreStub) FindCircleByIDForUpdate(ctx context.Context, circleID 
 func (s *circleStoreStub) ListPublicCircles(_ context.Context, _, _ string, _ int) ([]rbac.PublicCircleSummary, error) {
 	return nil, nil
 }
+
+func (s *circleStoreStub) ListUserCircles(_ context.Context, _, _ string) ([]rbac.PublicCircleSummary, error) {
+	return nil, nil
+}
 func (s *circleStoreStub) SearchUsers(_ context.Context, _ string, _ int) ([]rbac.UserSearchResult, error) {
 	return s.searchResults, nil
 }

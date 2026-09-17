@@ -15,6 +15,7 @@ const (
 
 const (
 	routeCirclesCreate       = "POST /api/v1/circles"
+	routeCirclesList         = "GET /api/v1/circles"
 	routeCirclesJoin         = "POST /api/v1/circles/join"
 	routeCirclesDiscover     = "GET /api/v1/circles/discover"
 	routeCircleJoin          = "POST /api/v1/circles/{circleId}/join"

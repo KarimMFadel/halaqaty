@@ -1,0 +1,298 @@
+<style>
+  #halaqaty-screen-samples {
+    --hq-ivory: #f8f6f0;
+    --hq-paper: #fffdf8;
+    --hq-emerald: #17633a;
+    --hq-emerald-deep: #10492c;
+    --hq-emerald-soft: #e4efe8;
+    --hq-gold: #e8c88b;
+    --hq-gold-soft: #f4e7cb;
+    --hq-ink: #173b2b;
+    --hq-muted: #68766e;
+    --hq-line: #dce4df;
+    --hq-danger: #b5443c;
+    color: var(--hq-ink);
+  }
+  #halaqaty-screen-samples * { box-sizing: border-box; }
+  #halaqaty-screen-samples .sample-grid {
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:18px;
+    align-items:start;
+  }
+  #halaqaty-screen-samples .sample-title { margin:0 0 10px; font-size:14px; font-weight:500; text-align:center; }
+  #halaqaty-screen-samples .phone {
+    width:100%; min-width:0; height:640px; overflow:hidden;
+    border-radius:30px; background:var(--hq-ivory); color:var(--hq-ink);
+    box-shadow:0 14px 34px rgb(21 58 42 / .16);
+    display:flex; flex-direction:column;
+    font-family:Cairo,"Segoe UI",sans-serif;
+  }
+  #halaqaty-screen-samples .status {
+    height:28px; padding:8px 15px 0; display:flex; justify-content:space-between;
+    font-size:10px; font-weight:600; flex:0 0 auto;
+  }
+  #halaqaty-screen-samples .topbar {
+    min-height:52px; padding:8px 15px 10px; display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  #halaqaty-screen-samples .brand { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:700; }
+  #halaqaty-screen-samples .brand-mark,
+  #halaqaty-screen-samples .avatar {
+    width:32px; height:32px; border-radius:11px; display:grid; place-items:center;
+    background:var(--hq-emerald-soft); color:var(--hq-emerald); font-weight:700;
+  }
+  #halaqaty-screen-samples .avatar { border-radius:50%; font-size:11px; }
+  #halaqaty-screen-samples .back { font-size:20px; color:var(--hq-ink); }
+  #halaqaty-screen-samples .top-title { font-size:16px; font-weight:700; }
+  #halaqaty-screen-samples .screen {
+    flex:1; min-height:0; overflow:hidden; padding:4px 15px 12px;
+  }
+  #halaqaty-screen-samples .greeting { font-size:21px; line-height:1.35; font-weight:700; margin:5px 0 1px; }
+  #halaqaty-screen-samples .hint { color:var(--hq-muted); font-size:11px; line-height:1.5; }
+  #halaqaty-screen-samples .hero {
+    margin-top:13px; padding:15px; border-radius:19px; background:var(--hq-emerald); color:#fffdf8;
+  }
+  #halaqaty-screen-samples .hero-label { font-size:9px; font-weight:700; opacity:.78; }
+  #halaqaty-screen-samples .hero-title { font-size:17px; font-weight:700; margin:4px 0; }
+  #halaqaty-screen-samples .hero-meta { font-size:10px; opacity:.78; display:flex; gap:7px; flex-wrap:wrap; }
+  #halaqaty-screen-samples .primary {
+    width:100%; min-height:40px; border:0; border-radius:12px; margin-top:12px;
+    background:var(--hq-gold); color:#263520; font-family:inherit; font-size:12px; font-weight:700;
+  }
+  #halaqaty-screen-samples .primary-green {
+    width:100%; min-height:42px; border:0; border-radius:12px;
+    background:var(--hq-emerald); color:#fffdf8; font-family:inherit; font-size:12px; font-weight:700;
+  }
+  #halaqaty-screen-samples .section-head {
+    display:flex; justify-content:space-between; align-items:center; margin:16px 0 8px;
+  }
+  #halaqaty-screen-samples .section-head strong { font-size:13px; }
+  #halaqaty-screen-samples .section-head span { color:var(--hq-emerald); font-size:10px; }
+  #halaqaty-screen-samples .quick-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  #halaqaty-screen-samples .quick-item {
+    min-height:55px; padding:10px; border-radius:14px; background:var(--hq-paper);
+    display:flex; align-items:center; gap:8px; box-shadow:0 3px 12px rgb(21 58 42 / .07);
+    font-size:11px; font-weight:700;
+  }
+  #halaqaty-screen-samples .quick-icon,
+  #halaqaty-screen-samples .circle-icon {
+    width:33px; height:33px; border-radius:11px; display:grid; place-items:center;
+    background:var(--hq-emerald-soft); color:var(--hq-emerald); flex:0 0 auto; font-weight:700;
+  }
+  #halaqaty-screen-samples .circle-row {
+    padding:9px 0; display:grid; grid-template-columns:36px 1fr auto; gap:9px; align-items:center;
+    border-bottom:1px solid var(--hq-line);
+  }
+  #halaqaty-screen-samples .circle-row:last-child { border-bottom:0; }
+  #halaqaty-screen-samples .circle-row strong { display:block; font-size:11px; }
+  #halaqaty-screen-samples .circle-row small { display:block; font-size:9px; color:var(--hq-muted); margin-top:2px; }
+  #halaqaty-screen-samples .chevron { color:var(--hq-muted); font-size:16px; }
+  #halaqaty-screen-samples .bottom-nav {
+    min-height:61px; padding:8px 6px 10px; display:grid; grid-template-columns:repeat(4,1fr);
+    background:var(--hq-paper); border-top:1px solid var(--hq-line); flex:0 0 auto;
+  }
+  #halaqaty-screen-samples .bottom-nav span {
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+    color:var(--hq-muted); font-size:8px; margin:0 3px; padding:5px 2px; border-radius:14px;
+  }
+  #halaqaty-screen-samples .bottom-nav b { font-size:16px; line-height:1; }
+  #halaqaty-screen-samples .bottom-nav .active {
+    background:var(--hq-gold-soft); color:#694d18; font-weight:700;
+  }
+  #halaqaty-screen-samples .search {
+    min-height:42px; border:1px solid var(--hq-line); border-radius:13px; background:var(--hq-paper);
+    display:flex; align-items:center; gap:8px; padding:0 12px; color:var(--hq-muted); font-size:11px;
+  }
+  #halaqaty-screen-samples .segments {
+    margin:10px 0 12px; padding:3px; border-radius:12px; background:var(--hq-emerald-soft);
+    display:grid; grid-template-columns:1fr 1fr; gap:3px;
+  }
+  #halaqaty-screen-samples .segments span { padding:7px; text-align:center; font-size:10px; border-radius:9px; color:var(--hq-muted); }
+  #halaqaty-screen-samples .segments .selected { background:var(--hq-paper); color:var(--hq-emerald); font-weight:700; }
+  #halaqaty-screen-samples .circle-card {
+    background:var(--hq-paper); border-radius:16px; padding:12px; margin-bottom:9px;
+    box-shadow:0 3px 12px rgb(21 58 42 / .07);
+  }
+  #halaqaty-screen-samples .circle-card-head { display:grid; grid-template-columns:39px 1fr auto; gap:9px; align-items:center; }
+  #halaqaty-screen-samples .circle-card h4 { margin:0; font-size:12px; }
+  #halaqaty-screen-samples .circle-card p { margin:2px 0 0; font-size:9px; color:var(--hq-muted); }
+  #halaqaty-screen-samples .tag { padding:4px 7px; border-radius:999px; background:var(--hq-gold-soft); color:#694d18; font-size:8px; font-weight:700; }
+  #halaqaty-screen-samples .card-foot { margin-top:10px; display:flex; align-items:center; justify-content:space-between; font-size:9px; color:var(--hq-muted); }
+  #halaqaty-screen-samples .card-link { color:var(--hq-emerald); font-weight:700; }
+  #halaqaty-screen-samples .invite {
+    min-height:42px; margin-bottom:12px; border:1px solid var(--hq-emerald); border-radius:12px;
+    display:flex; align-items:center; justify-content:center; gap:7px; color:var(--hq-emerald); font-size:11px; font-weight:700;
+  }
+  #halaqaty-screen-samples .detail-head {
+    background:var(--hq-emerald); color:#fffdf8; margin:0 -15px; padding:12px 15px 19px;
+  }
+  #halaqaty-screen-samples .detail-head .mini { font-size:9px; opacity:.72; }
+  #halaqaty-screen-samples .detail-head h3 { margin:3px 0 5px; font-size:20px; }
+  #halaqaty-screen-samples .detail-head p { margin:0; font-size:10px; opacity:.82; }
+  #halaqaty-screen-samples .detail-session {
+    margin-top:-9px; background:var(--hq-paper); border-radius:16px; padding:12px;
+    box-shadow:0 5px 18px rgb(21 58 42 / .10);
+  }
+  #halaqaty-screen-samples .detail-session strong { font-size:12px; }
+  #halaqaty-screen-samples .detail-session p { font-size:9px; color:var(--hq-muted); margin:3px 0 8px; }
+  #halaqaty-screen-samples .progress-wrap { margin:8px 0 12px; }
+  #halaqaty-screen-samples .progress-label { display:flex; justify-content:space-between; font-size:9px; margin-bottom:5px; }
+  #halaqaty-screen-samples .progress-track { height:6px; border-radius:999px; background:var(--hq-emerald-soft); overflow:hidden; }
+  #halaqaty-screen-samples .progress-fill { width:68%; height:100%; background:var(--hq-emerald); border-radius:999px; }
+  #halaqaty-screen-samples .action-row {
+    display:grid; grid-template-columns:1fr 1fr 1fr; gap:7px; margin:12px 0 2px;
+  }
+  #halaqaty-screen-samples .action-row div {
+    min-height:52px; border-radius:13px; background:var(--hq-paper); display:grid; place-items:center;
+    text-align:center; font-size:9px; box-shadow:0 3px 12px rgb(21 58 42 / .06);
+  }
+  #halaqaty-screen-samples .profile-hero { display:flex; flex-direction:column; align-items:center; padding:7px 0 16px; }
+  #halaqaty-screen-samples .profile-avatar {
+    width:66px; height:66px; border-radius:50%; background:var(--hq-emerald-soft); color:var(--hq-emerald);
+    display:grid; place-items:center; font-size:22px; font-weight:700; margin-bottom:8px;
+  }
+  #halaqaty-screen-samples .profile-hero strong { font-size:16px; }
+  #halaqaty-screen-samples .profile-hero span { font-size:10px; color:var(--hq-muted); }
+  #halaqaty-screen-samples .profile-section { margin-bottom:12px; }
+  #halaqaty-screen-samples .profile-section > strong { font-size:11px; display:block; margin-bottom:5px; }
+  #halaqaty-screen-samples .setting-row {
+    min-height:43px; display:grid; grid-template-columns:31px 1fr auto; align-items:center; gap:8px;
+    border-bottom:1px solid var(--hq-line); font-size:10px;
+  }
+  #halaqaty-screen-samples .setting-row:last-child { border-bottom:0; }
+  #halaqaty-screen-samples .setting-icon { color:var(--hq-emerald); font-size:15px; }
+  #halaqaty-screen-samples .setting-value { color:var(--hq-muted); font-size:9px; }
+  #halaqaty-screen-samples .logout { color:var(--hq-danger); }
+  #halaqaty-screen-samples .note {
+    margin-top:16px; color:var(--muted-foreground); font-size:13px; line-height:1.5;
+  }
+  @media (max-width:1000px) {
+    #halaqaty-screen-samples .sample-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  }
+  @media (max-width:560px) {
+    #halaqaty-screen-samples .sample-grid { grid-template-columns:1fr; }
+    #halaqaty-screen-samples .phone { max-width:360px; margin:0 auto; }
+  }
+</style>
+
+<div id="halaqaty-screen-samples">
+  <h2>Halaqaty — calm contemporary screen samples</h2>
+  <p class="subtitle">A connected Arabic-first preview using the approved visual direction and low-click navigation.</p>
+
+  <div class="sample-grid">
+    <section>
+      <h3 class="sample-title">الرئيسية · Home</h3>
+      <div class="phone" dir="rtl" aria-label="Halaqaty home screen concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar">
+          <div class="brand"><span class="brand-mark">۞</span><span>حِلْقَتي</span></div>
+          <span class="avatar">ك</span>
+        </div>
+        <main class="screen">
+          <div class="greeting">السلام عليكم، كريم</div>
+          <div class="hint">لنواصل رحلة الحفظ اليوم</div>
+          <section class="hero">
+            <div class="hero-label">الجلسة القادمة · بعد ٢٠ دقيقة</div>
+            <div class="hero-title">حلقة سورة البقرة</div>
+            <div class="hero-meta"><span>◷ ٧:٣٠ م</span><span>١٢ طالبًا</span><span>المعلم أحمد</span></div>
+            <button class="primary">دخول الجلسة</button>
+          </section>
+          <div class="section-head"><strong>وصول سريع</strong></div>
+          <div class="quick-grid">
+            <div class="quick-item"><span class="quick-icon">⌕</span><span>اكتشاف حلقة</span></div>
+            <div class="quick-item"><span class="quick-icon">⌁</span><span>رابط الدعوة</span></div>
+          </div>
+          <div class="section-head"><strong>حلقاتي</strong><span>عرض الكل</span></div>
+          <div class="circle-row"><span class="circle-icon">ق</span><div><strong>حلقة الإتقان</strong><small>المراجعة: الجزء الخامس</small></div><span class="chevron">‹</span></div>
+          <div class="circle-row"><span class="circle-icon">ن</span><div><strong>نور البيان</strong><small>الحفظ: سورة مريم</small></div><span class="chevron">‹</span></div>
+        </main>
+        <nav class="bottom-nav"><span class="active"><b>⌂</b>الرئيسية</span><span><b>◉</b>الحلقات</span><span><b>▣</b>المحادثات</span><span><b>○</b>حسابي</span></nav>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">الحلقات · Circles</h3>
+      <div class="phone" dir="rtl" aria-label="Halaqaty circles discovery screen concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="top-title">الحلقات</span><span class="avatar">ك</span></div>
+        <main class="screen">
+          <div class="search"><span>⌕</span><span>ابحث باسم الحلقة أو المعلم</span></div>
+          <div class="segments"><span class="selected">حلقاتي</span><span>اكتشاف</span></div>
+          <div class="invite">⌁ لديّ رابط دعوة</div>
+          <div class="section-head"><strong>حلقاتك</strong><span>حلقتان</span></div>
+          <article class="circle-card">
+            <div class="circle-card-head"><span class="circle-icon">ق</span><div><h4>حلقة الإتقان</h4><p>المعلم أحمد · الأحد والثلاثاء</p></div><span class="tag">طالب</span></div>
+            <div class="card-foot"><span>١٢ عضوًا · الجلسة اليوم</span><span class="card-link">فتح الحلقة ‹</span></div>
+          </article>
+          <article class="circle-card">
+            <div class="circle-card-head"><span class="circle-icon">ن</span><div><h4>نور البيان</h4><p>المعلمة مريم · الخميس</p></div><span class="tag">طالب</span></div>
+            <div class="card-foot"><span>٨ أعضاء · بعد يومين</span><span class="card-link">فتح الحلقة ‹</span></div>
+          </article>
+          <div class="section-head"><strong>مقترحة لك</strong><span>عرض المزيد</span></div>
+          <article class="circle-card">
+            <div class="circle-card-head"><span class="circle-icon">ت</span><div><h4>حلقة التثبيت</h4><p>مراجعة يومية · للبالغين</p></div><span class="tag">عامّة</span></div>
+            <div class="card-foot"><span>١٨ من ٢٥</span><span class="card-link">عرض التفاصيل ‹</span></div>
+          </article>
+        </main>
+        <nav class="bottom-nav"><span><b>⌂</b>الرئيسية</span><span class="active"><b>◉</b>الحلقات</span><span><b>▣</b>المحادثات</span><span><b>○</b>حسابي</span></nav>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">تفاصيل الحلقة · Circle details</h3>
+      <div class="phone" dir="rtl" aria-label="Halaqaty circle details screen concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">›</span><span class="top-title">تفاصيل الحلقة</span><span>•••</span></div>
+        <main class="screen">
+          <section class="detail-head">
+            <div class="mini">أنت طالب في هذه الحلقة</div>
+            <h3>حلقة الإتقان</h3>
+            <p>حفظ ومراجعة سورة البقرة · المعلم أحمد</p>
+          </section>
+          <section class="detail-session">
+            <strong>الجلسة القادمة اليوم</strong>
+            <p>٧:٣٠ م · تبدأ بعد ٢٠ دقيقة</p>
+            <button class="primary-green">دخول الجلسة</button>
+          </section>
+          <div class="section-head"><strong>تقدّمك هذا الشهر</strong><span>التفاصيل</span></div>
+          <div class="progress-wrap">
+            <div class="progress-label"><span>١٧ صفحة من ٢٥</span><strong>٦٨٪</strong></div>
+            <div class="progress-track"><div class="progress-fill"></div></div>
+          </div>
+          <div class="action-row"><div><span>▣</span><strong>المحادثة</strong></div><div><span>◎</span><strong>الأعضاء</strong></div><div><span>◷</span><strong>المواعيد</strong></div></div>
+          <div class="section-head"><strong>آخر نشاط</strong><span>عرض الكل</span></div>
+          <div class="circle-row"><span class="circle-icon">✓</span><div><strong>تمت مراجعة الربع الأول</strong><small>الثلاثاء · أداء جيد جدًا</small></div><span class="chevron">‹</span></div>
+          <div class="circle-row"><span class="circle-icon">◷</span><div><strong>حضرت جلسة المراجعة</strong><small>الأحد · ٤٥ دقيقة</small></div><span class="chevron">‹</span></div>
+        </main>
+        <nav class="bottom-nav"><span><b>⌂</b>الرئيسية</span><span class="active"><b>◉</b>الحلقات</span><span><b>▣</b>المحادثات</span><span><b>○</b>حسابي</span></nav>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">حسابي · Profile</h3>
+      <div class="phone" dir="rtl" aria-label="Halaqaty profile screen concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="top-title">حسابي</span><span>⚙</span></div>
+        <main class="screen">
+          <section class="profile-hero"><div class="profile-avatar">ك</div><strong>كريم فاضل</strong><span>karim@example.com</span></section>
+          <button class="primary-green">تعديل الملف الشخصي</button>
+          <div class="profile-section">
+            <div class="section-head"><strong>التفضيلات</strong></div>
+            <div class="setting-row"><span class="setting-icon">文</span><span>لغة التطبيق</span><span class="setting-value">العربية ‹</span></div>
+            <div class="setting-row"><span class="setting-icon">◐</span><span>المظهر</span><span class="setting-value">حسب الجهاز ‹</span></div>
+            <div class="setting-row"><span class="setting-icon">◉</span><span>الإشعارات</span><span class="setting-value">مفعّلة ‹</span></div>
+          </div>
+          <div class="profile-section">
+            <div class="section-head"><strong>الدعم والخصوصية</strong></div>
+            <div class="setting-row"><span class="setting-icon">?</span><span>المساعدة والدعم</span><span class="chevron">‹</span></div>
+            <div class="setting-row"><span class="setting-icon">⌾</span><span>الخصوصية والأمان</span><span class="chevron">‹</span></div>
+            <div class="setting-row logout"><span>↪</span><span>تسجيل الخروج</span><span></span></div>
+          </div>
+        </main>
+        <nav class="bottom-nav"><span><b>⌂</b>الرئيسية</span><span><b>◉</b>الحلقات</span><span><b>▣</b>المحادثات</span><span class="active"><b>○</b>حسابي</span></nav>
+      </div>
+    </section>
+  </div>
+
+  <p class="note">These samples show the intended hierarchy and visual language. Product data, role permissions, and available actions remain governed by the approved feature specifications.</p>
+</div>

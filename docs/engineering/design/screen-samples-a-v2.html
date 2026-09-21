@@ -163,6 +163,66 @@
   #halaqaty-screen-samples .setting-icon { color:var(--hq-emerald); font-size:15px; }
   #halaqaty-screen-samples .setting-value { color:var(--hq-muted); font-size:9px; }
   #halaqaty-screen-samples .logout { color:var(--hq-danger); }
+  #halaqaty-screen-samples .wave-head {
+    margin:34px 0 14px; padding-top:24px; border-top:1px solid var(--hq-line);
+  }
+  #halaqaty-screen-samples .wave-head h3 { margin:0 0 4px; font-size:18px; }
+  #halaqaty-screen-samples .wave-head p { margin:0; color:var(--hq-muted); font-size:12px; }
+  #halaqaty-screen-samples .live-pill {
+    display:inline-flex; align-items:center; gap:5px; padding:4px 8px; border-radius:999px;
+    background:var(--hq-gold-soft); color:#694d18; font-size:9px; font-weight:700;
+  }
+  #halaqaty-screen-samples .live-dot { width:6px; height:6px; border-radius:50%; background:var(--hq-danger); }
+  #halaqaty-screen-samples .session-status {
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:9px 11px; margin-bottom:10px; border-radius:13px; background:var(--hq-emerald-soft);
+    color:var(--hq-emerald-deep); font-size:10px;
+  }
+  #halaqaty-screen-samples .focus-card {
+    padding:15px; border-radius:18px; background:var(--hq-emerald); color:var(--hq-paper);
+    box-shadow:0 7px 20px rgb(21 58 42 / .14);
+  }
+  #halaqaty-screen-samples .focus-card .eyebrow { font-size:9px; opacity:.76; }
+  #halaqaty-screen-samples .focus-card h4 { margin:5px 0 2px; font-size:18px; }
+  #halaqaty-screen-samples .focus-card p { margin:0; font-size:10px; opacity:.8; }
+  #halaqaty-screen-samples .position-card {
+    margin-top:10px; padding:12px; border-radius:16px; background:var(--hq-paper);
+    border:1px solid var(--hq-gold); display:grid; grid-template-columns:44px 1fr; gap:10px; align-items:center;
+  }
+  #halaqaty-screen-samples .position-number {
+    width:44px; height:44px; border-radius:14px; display:grid; place-items:center;
+    background:var(--hq-gold-soft); color:#694d18; font-size:18px; font-weight:800;
+  }
+  #halaqaty-screen-samples .position-card strong { display:block; font-size:12px; }
+  #halaqaty-screen-samples .position-card small { color:var(--hq-muted); font-size:9px; }
+  #halaqaty-screen-samples .queue-list { margin-top:8px; background:var(--hq-paper); border-radius:15px; padding:4px 11px; }
+  #halaqaty-screen-samples .queue-person {
+    min-height:45px; display:grid; grid-template-columns:28px 1fr auto; gap:8px; align-items:center;
+    border-bottom:1px solid var(--hq-line); font-size:10px;
+  }
+  #halaqaty-screen-samples .queue-person:last-child { border-bottom:0; }
+  #halaqaty-screen-samples .queue-rank {
+    width:27px; height:27px; border-radius:9px; display:grid; place-items:center;
+    background:var(--hq-emerald-soft); color:var(--hq-emerald); font-size:9px; font-weight:700;
+  }
+  #halaqaty-screen-samples .queue-person small { color:var(--hq-muted); font-size:8px; }
+  #halaqaty-screen-samples .secondary-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:9px; }
+  #halaqaty-screen-samples .soft-button {
+    min-height:42px; border:1px solid var(--hq-line); border-radius:12px; background:var(--hq-paper);
+    color:var(--hq-emerald-deep); display:grid; place-items:center; text-align:center; font-size:10px; font-weight:700;
+  }
+  #halaqaty-screen-samples .danger-link { margin-top:13px; text-align:center; color:var(--hq-danger); font-size:10px; font-weight:700; }
+  #halaqaty-screen-samples .recovery {
+    padding:16px; border-radius:18px; background:var(--hq-paper); text-align:center;
+    box-shadow:0 4px 16px rgb(21 58 42 / .08);
+  }
+  #halaqaty-screen-samples .recovery-icon {
+    width:48px; height:48px; margin:0 auto 9px; border-radius:16px; display:grid; place-items:center;
+    background:var(--hq-gold-soft); color:#694d18; font-size:21px;
+  }
+  #halaqaty-screen-samples .recovery h4 { margin:0 0 5px; font-size:15px; }
+  #halaqaty-screen-samples .recovery p { margin:0; color:var(--hq-muted); font-size:10px; line-height:1.55; }
+  #halaqaty-screen-samples .muted-panel { margin-top:10px; opacity:.62; pointer-events:none; }
   #halaqaty-screen-samples .note {
     margin-top:16px; color:var(--muted-foreground); font-size:13px; line-height:1.5;
   }
@@ -294,5 +354,121 @@
     </section>
   </div>
 
-  <p class="note">These samples show the intended hierarchy and visual language. Product data, role permissions, and available actions remain governed by the approved feature specifications.</p>
+  <div class="wave-head">
+    <h3>Wave 2 — sessions and recitation queue</h3>
+    <p>Low-click live-session entry, clear student turn status, focused teacher controls, and recoverable connection states.</p>
+  </div>
+
+  <div class="sample-grid">
+    <section>
+      <h3 class="sample-title">جلسة مباشرة · Live now</h3>
+      <div class="phone" dir="rtl" aria-label="Wave 2 live session entry concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar">
+          <div class="brand"><span class="brand-mark">۞</span><span>حِلْقَتي</span></div>
+          <span class="avatar">ك</span>
+        </div>
+        <main class="screen">
+          <div class="greeting">السلام عليكم، كريم</div>
+          <div class="hint">جلسة حلقتك جاهزة الآن</div>
+          <section class="hero">
+            <div class="live-pill"><span class="live-dot"></span><span>مباشر الآن</span></div>
+            <div class="hero-title">حلقة الإتقان</div>
+            <div class="hero-meta"><span>المعلم أحمد</span><span>٨ مشاركين</span><span>صوت فقط</span></div>
+            <button class="primary">دخول الجلسة</button>
+          </section>
+          <div class="section-head"><strong>ماذا سيحدث؟</strong></div>
+          <div class="quick-grid">
+            <div class="quick-item"><span class="quick-icon">١</span><span>ادخل الجلسة</span></div>
+            <div class="quick-item"><span class="quick-icon">٢</span><span>تابع دورك</span></div>
+          </div>
+          <div class="section-head"><strong>حلقتك</strong><span>عرض التفاصيل</span></div>
+          <div class="circle-row"><span class="circle-icon">ق</span><div><strong>حلقة الإتقان</strong><small>جولة مراجعة · سورة البقرة</small></div><span class="chevron">‹</span></div>
+        </main>
+        <nav class="bottom-nav"><span class="active"><b>⌂</b>الرئيسية</span><span><b>◉</b>الحلقات</span><span><b>▣</b>المحادثات</span><span><b>○</b>حسابي</span></nav>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">دوري في التلاوة · Student turn</h3>
+      <div class="phone" dir="rtl" aria-label="Wave 2 student recitation turn concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">›</span><span class="top-title">الجلسة المباشرة</span><span>•••</span></div>
+        <main class="screen">
+          <div class="session-status"><strong>● متصل</strong><span>صوتك مغلق حتى يبدأ دورك</span></div>
+          <section class="focus-card">
+            <div class="eyebrow">يتلو الآن</div>
+            <h4>محمد علي</h4>
+            <p>سورة البقرة · الآيات ٢٥–٣٠</p>
+          </section>
+          <section class="position-card">
+            <span class="position-number">٢</span>
+            <div><strong>أنت التالي بعد طالب واحد</strong><small>ابقَ قريبًا، سيخبرك التطبيق عند بدء دورك</small></div>
+          </section>
+          <div class="section-head"><strong>قائمة التلاوة</strong><span>٤ طلاب</span></div>
+          <div class="queue-list">
+            <div class="queue-person"><span class="queue-rank">الآن</span><div><strong>محمد علي</strong><small>يتلو الآن</small></div><span>◉</span></div>
+            <div class="queue-person"><span class="queue-rank">١</span><div><strong>أحمد سمير</strong><small>ينتظر</small></div><span>◷</span></div>
+            <div class="queue-person"><span class="queue-rank">٢</span><div><strong>أنت</strong><small>سيأتي دورك قريبًا</small></div><span class="tag">دورك</span></div>
+          </div>
+          <div class="secondary-row"><div class="soft-button">رفع اليد</div><div class="soft-button">طلب عدم التلاوة</div></div>
+        </main>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">إدارة الجولة · Teacher queue</h3>
+      <div class="phone" dir="rtl" aria-label="Wave 2 teacher queue controls concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">›</span><span class="top-title">إدارة جلسة التلاوة</span><span class="live-pill"><span class="live-dot"></span>مباشر</span></div>
+        <main class="screen">
+          <div class="session-status"><strong>٨ مشاركين</strong><span>الجولة ٢ · مراجعة</span></div>
+          <section class="focus-card">
+            <div class="eyebrow">الطالب الحالي</div>
+            <h4>محمد علي</h4>
+            <p>سورة البقرة · الآيات ٢٥–٣٠</p>
+            <button class="primary">إتمام التلاوة والتقييم</button>
+          </section>
+          <div class="section-head"><strong>التالي</strong><span>٣ منتظرون</span></div>
+          <div class="queue-list">
+            <div class="queue-person"><span class="queue-rank">١</span><div><strong>أحمد سمير</strong><small>جاهز للتلاوة</small></div><span class="card-link">تحديد ‹</span></div>
+            <div class="queue-person"><span class="queue-rank">٢</span><div><strong>كريم فاضل</strong><small>ينتظر</small></div><span>•••</span></div>
+            <div class="queue-person"><span class="queue-rank">٣</span><div><strong>يوسف حسن</strong><small>طلب عدم التلاوة</small></div><span class="tag">مراجعة</span></div>
+          </div>
+          <div class="secondary-row"><div class="soft-button">ترتيب القائمة</div><div class="soft-button">إدارة المشاركين</div></div>
+          <div class="danger-link">إنهاء الجلسة</div>
+        </main>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">Connection recovery · English LTR</h3>
+      <div class="phone" dir="ltr" aria-label="Wave 2 connection recovery concept">
+        <div class="status"><span>9:41</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">‹</span><span class="top-title">Live session</span><span>•••</span></div>
+        <main class="screen">
+          <section class="recovery">
+            <div class="recovery-icon">↻</div>
+            <h4>Connection interrupted</h4>
+            <p>Your last queue position is still visible. Actions are paused while Halaqaty reconnects safely.</p>
+            <button class="primary-green">Try again</button>
+            <div class="danger-link">Leave session</div>
+          </section>
+          <div class="muted-panel">
+            <div class="section-head"><strong>Your recitation turn</strong><span>Last update</span></div>
+            <section class="position-card">
+              <span class="position-number">2</span>
+              <div><strong>One student before you</strong><small>Waiting for a fresh queue update</small></div>
+            </section>
+            <div class="queue-list">
+              <div class="queue-person"><span class="queue-rank">Now</span><div><strong>Mohamed Ali</strong><small>Reciting</small></div><span>◉</span></div>
+              <div class="queue-person"><span class="queue-rank">2</span><div><strong>You</strong><small>Last confirmed position</small></div><span>◷</span></div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </section>
+  </div>
+
+  <p class="note">These samples show the intended hierarchy and visual language. Wave 2 is a non-production prototype: product data, role permissions, session states, and queue actions remain governed by the existing approved F-003 and F-005 behavior.</p>
 </div>

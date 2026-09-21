@@ -70,23 +70,30 @@ class CircleDetailScreen extends ConsumerWidget {
       ),
       body: circleAsync.when(
         data: (circle) {
+          final scheme = Theme.of(context).colorScheme;
           return ListView(
             padding: const EdgeInsets.all(16.0),
             children: [
               if (circle.isArchived)
                 Container(
+                  key: const Key('circleArchivedBanner'),
                   padding: const EdgeInsets.all(12),
-                  color: Colors.amber.shade100,
+                  color: scheme.secondaryContainer,
                   child: Row(
                     children: [
-                      const Icon(Icons.archive, color: Colors.amber),
+                      Icon(
+                        Icons.archive,
+                        color: scheme.onSecondaryContainer,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           rtl
                               ? CircleDetailLabels.archivedAr
                               : CircleDetailLabels.archivedEn,
-                          style: const TextStyle(color: Colors.black87),
+                          style: TextStyle(
+                            color: scheme.onSecondaryContainer,
+                          ),
                         ),
                       ),
                     ],

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 
 class CircleJoinScreen extends ConsumerStatefulWidget {
@@ -24,14 +23,6 @@ class _CircleJoinScreenState extends ConsumerState<CircleJoinScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(circleDiscoveryControllerProvider);
     final rtl = Directionality.of(context) == TextDirection.rtl;
-    ref.listen(
-      circleDiscoveryControllerProvider.select((s) => s.failure),
-      (previous, next) {
-        if (next != null) {
-          showHalaqatyError(context, circleFailureText(next, rtl));
-        }
-      },
-    );
     return Scaffold(
       appBar: AppBar(title: Text(rtl ? 'الانضمام إلى حلقة' : 'Join a circle')),
       body: SafeArea(child: _inviteForm(state, rtl)),

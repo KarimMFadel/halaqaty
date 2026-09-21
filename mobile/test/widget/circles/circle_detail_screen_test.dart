@@ -30,6 +30,15 @@ void main() {
     expect(find.text('Circle details'), findsOneWidget);
     expect(find.text('Maximum capacity'), findsOneWidget);
     expect(find.text('Members'), findsOneWidget);
+    final membersTile = tester.widget<ListTile>(
+      find
+          .ancestor(
+            of: find.text('Members'),
+            matching: find.byType(ListTile),
+          )
+          .first,
+    );
+    expect((membersTile.trailing! as Icon).icon, Icons.chevron_right);
   });
 
   testWidgets('CircleDetailScreen: constrains long circle names',
@@ -53,6 +62,54 @@ void main() {
     final title = tester.widget<Text>(find.text(longName));
     expect(title.maxLines, 2);
     expect(title.overflow, TextOverflow.ellipsis);
+  });
+
+  testWidgets('CircleDetailScreen: mirrors archived banner in RTL',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith((_) => StubAuthNotifier()),
+          circleDetailProvider('circle-1').overrideWith(
+            (_) => Future.value(_circle(isArchived: true)),
+          ),
+        ],
+        child: const MaterialApp(
+          home: Directionality(
+            textDirection: TextDirection.rtl,
+            child: CircleDetailScreen(circleId: 'circle-1'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('تفاصيل الحلقة'), findsOneWidget);
+    expect(find.text('الأعضاء'), findsOneWidget);
+    expect(find.text('المحادثة'), findsOneWidget);
+    final banner = tester.widget<Container>(
+      find.byKey(const Key('circleArchivedBanner')),
+    );
+    final scheme =
+        Theme.of(tester.element(find.byType(CircleDetailScreen))).colorScheme;
+    expect(banner.color, scheme.secondaryContainer);
+    expect(find.byKey(const Key('circleArchivedBanner')), findsOneWidget);
+    final archiveIcon = tester.widget<Icon>(
+      find.descendant(
+        of: find.byKey(const Key('circleArchivedBanner')),
+        matching: find.byIcon(Icons.archive),
+      ),
+    );
+    expect(archiveIcon.color, scheme.onSecondaryContainer);
+    final membersTile = tester.widget<ListTile>(
+      find
+          .ancestor(
+            of: find.text('الأعضاء'),
+            matching: find.byType(ListTile),
+          )
+          .first,
+    );
+    expect((membersTile.trailing! as Icon).icon, Icons.chevron_left);
   });
 
   testWidgets('CircleDetailScreen: keeps provider errors private',
@@ -122,10 +179,12 @@ void main() {
   });
 }
 
-CircleResponse _circle({String name = 'Circle'}) => CircleResponse(
+CircleResponse _circle({String name = 'Circle', bool isArchived = false}) =>
+    CircleResponse(
       id: 'circle-1',
       name: name,
       inviteCode: 'HLQ-7X2K',
       inviteLink: 'https://halaqaty.app/join/HLQ-7X2K',
+      isArchived: isArchived,
       createdAt: DateTime.utc(2026, 8, 1),
     );

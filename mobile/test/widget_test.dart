@@ -206,6 +206,14 @@ void main() {
     expect(find.text('Circles'), findsOneWidget);
     expect(find.text('Chats'), findsOneWidget);
     expect(find.text('Profile'), findsOneWidget);
+
+    final theme = Theme.of(tester.element(find.byKey(
+      const Key('appNavigationBar'),
+    )));
+    expect(
+      theme.navigationBarTheme.indicatorColor,
+      theme.colorScheme.secondaryContainer,
+    );
   });
 
   testWidgets('shows a retryable offline state when Home cannot load circles',
@@ -263,6 +271,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(CircleDiscoveryScreen), findsOneWidget);
+    expect(
+      tester
+          .getSemantics(find.text('Circles'))
+          .flagsCollection
+          .isSelected
+          .toString(),
+      endsWith('isTrue'),
+    );
   });
 
   testWidgets('switching back to Home resets a pushed detail screen',

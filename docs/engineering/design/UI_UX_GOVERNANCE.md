@@ -1,6 +1,6 @@
 # Halaqaty UI/UX Governance and Screen Modernization
 
-**Status:** Design prepared for Karim's written review
+**Status:** Approved project standard
 **Date:** 2026-09-21
 **Scope:** Flutter mobile UI/UX rules, review ownership, and staged modernization
 
@@ -35,7 +35,7 @@ The approved personality is **Calm Contemporary**. Its visual language is:
 - Arabic-first typography using the bundled Cairo family with a deliberate mixed
   script fallback for Latin text.
 
-The reference sample is [screen-samples-a-v2.html](../../engineering/design/screen-samples-a-v2.html).
+The reference sample is [screen-samples-a-v2.html](screen-samples-a-v2.html).
 It is a visual reference, not a production implementation or a source of
 backend data.
 
@@ -137,12 +137,12 @@ The reviewer checks:
 
 ## 5. Modernization roadmap
 
-### Wave 0 — foundation
+### Wave 0 — foundation (completed)
 
 Theme, bundled fonts, logo, app shell, shared components, and selected gold
 navigation state. Existing work is retained and audited against this document.
 
-### Wave 1 — circles
+### Wave 1 — circles (completed)
 
 Discover, circle list, circle detail, membership actions, human-readable names,
 and complete loading/empty/error/offline states.
@@ -193,8 +193,12 @@ backend API, database schema, analytics dashboard, unified direct-message inbox,
 or speculative provider controls. It does not replace the existing Spec-Kit
 artifacts for individual product features.
 
-## 8. Review checkpoint
+## 8. Governance and change control
 
-This document is the written design stage for the approved conversational design.
-After Karim reviews it, the next step is a focused implementation plan covering
-the documentation/agent refinements and the first modernization wave.
+This document is the permanent UI/UX standard for current and future Halaqaty
+screens. `DESIGN.md` remains the token catalogue; this document governs how
+those tokens, flows, states, accessibility rules, and agent handoffs are applied.
+
+Material changes to the visual direction, shell navigation, accessibility floor,
+required state coverage, or wave boundaries require Karim's approval before the
+governing document and affected Spec-Kit artifacts are updated.

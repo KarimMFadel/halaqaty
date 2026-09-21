@@ -4,6 +4,11 @@
 
 Built on **Material Design 3** with Halaqaty's unique brand for Quran memorization circles (حلقات تحفيظ القرآن).
 
+Cross-screen UX rules, delivery ownership, state requirements, and the staged
+modernization roadmap are governed by
+[UI_UX_GOVERNANCE.md](UI_UX_GOVERNANCE.md). This file remains the canonical
+catalogue for visual tokens and component values.
+
 ---
 
 ## 🎨 Brand Identity

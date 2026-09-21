@@ -27,7 +27,124 @@ docker run --rm -e FLUTTER_SUPPRESS_ANALYTICS=true -v "<repo-root>:/workspace" -
 - Token rule: pipe suite output to a file and grep failures — do not stream
   thousands of lines into the agent context.
 
+## Flutter integration tests (current Android emulator first)
+
+Use the existing Android emulator when it is already running and reachable.
+This is the most useful local path for validating the real Android renderer,
+Firebase/session startup, backend connectivity, touch targets, navigation, and
+screenshots. It is not a substitute for the full integration gate: the run
+still requires the configured backend and fixtures, and a screenshot review
+does not prove every integration-test assertion.
+
+### Select the execution path
+
+Use the Android path only when all of these checks pass:
+
+```powershell
+$adb = "C:\Users\<user>\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+$appPackage = "com.halaqaty.mobile"
+
+& $adb start-server
+& $adb devices -l
+& $adb shell getprop sys.boot_completed
+& $adb shell pm path $appPackage
+```
+
+Expected results are one device in `device` state, `1` for
+`sys.boot_completed`, and an installed package path. If ADB, the emulator,
+the package, or the backend is unavailable, use the Docker/Xvfb recipe below
+instead of calling the Android test skipped result a pass.
+
+For the Halaqaty Android emulator, the default development API URL is
+`http://10.0.2.2:8080/api/v1`. Start exactly one temporary API dispatcher and
+verify the host API before launching the app:
+
+```powershell
+Invoke-WebRequest http://localhost:8080/health -UseBasicParsing
+```
+
+If the app was built with another API URL, rebuild or launch it with the
+matching `--dart-define=API_BASE_URL=...`. `localhost` inside the Android
+emulator refers to the emulator itself, not the Windows host.
+
+### Autonomous Android run, screenshot, and log workflow
+
+Run from the repository root. Keep one output directory per run and never
+write Firebase tokens, session IDs, or other fixture secrets into its logs.
+
+```powershell
+$adb = "C:\Users\<user>\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+$appPackage = "com.halaqaty.mobile"
+$runDir = Join-Path (Get-Location) ("artifacts\android-integration-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+New-Item -ItemType Directory -Force $runDir | Out-Null
+
+# Start from a known app state without clearing users, Firebase data, or app data.
+& $adb shell am force-stop $appPackage
+& $adb shell monkey -p $appPackage 1 | Out-File (Join-Path $runDir "launch.txt")
+Start-Sleep -Seconds 3
+
+# Capture the initial screen and inspectable Flutter/UI hierarchy.
+& $adb exec-out screencap -p > (Join-Path $runDir "01-start.png")
+& $adb shell uiautomator dump /sdcard/window.xml | Out-File (Join-Path $runDir "uiautomator-dump.txt")
+& $adb shell cat /sdcard/window.xml | Out-File (Join-Path $runDir "01-start.xml")
+
+# Perform one interaction at a time, then capture the resulting state.
+& $adb shell input tap <x> <y>
+& $adb exec-out screencap -p > (Join-Path $runDir "02-after-tap.png")
+& $adb shell input text "<url-encoded-text>"
+& $adb shell input keyevent ENTER
+& $adb exec-out screencap -p > (Join-Path $runDir "03-after-submit.png")
+
+# Save app-only diagnostics plus the crash buffer.
+$appPid = (& $adb shell pidof $appPackage).Trim()
+if ($appPid) {
+  & $adb logcat -d --pid=$appPid -v threadtime | Out-File (Join-Path $runDir "app.log")
+}
+& $adb logcat -d -b crash -v threadtime | Out-File (Join-Path $runDir "crash.log")
+```
+
+For a real integration test, run the test file on the connected Android
+device and retain the same screenshot/log collection around the journey:
+
+```powershell
+Set-Location mobile
+flutter test integration_test/<file>.dart -d emulator-5554
+# UX screenshot matrix: Home, Circles, Profile, and offline error in RTL/LTR.
+flutter test integration_test/ux_visual_journey_test.dart -d emulator-5554
+```
+
+The UX matrix uses deterministic fixtures and emits named screenshots such as
+`ux_home_rtl`, `ux_circles_ltr`, `ux_profile_rtl`, and `ux_error_ltr` through
+the integration-test screenshot channel. Keep the emulator/device run as the
+visual evidence source; the test must still pass its widget assertions.
+
+When the test fails, classify the evidence before changing code:
+
+- `DioExceptionType.connectionError` with no HTTP status: backend address,
+  host binding, emulator routing, firewall, or API process problem.
+- HTTP `401`/`403`: Firebase/session fixture or authorization problem, not an
+  emulator transport failure.
+- `FATAL EXCEPTION`, `AndroidRuntime`, or a non-empty crash buffer: Android
+  process crash; preserve the complete app and crash logs.
+- A screenshot-only visual defect with no app error: UI/UX regression; attach
+  the screenshot and the exact interaction sequence.
+- Repeated system messages such as Wi-Fi, satellite, emulator GPU, or
+  `system_server` diagnostics: record them separately unless they correlate
+  with the app failure.
+
+Do not use coordinate taps as a permanent test assertion when a semantic
+Flutter finder or integration-test action can express the behavior. Use
+coordinates only for exploratory black-box checks or when validating the
+actual touch target. Review screenshots in both expected RTL/LTR states where
+the tested flow supports them.
+
 ## Flutter integration tests (Linux scaffold + xvfb)
+
+Use this path when no healthy Android emulator is available, when the test
+needs a deterministic Linux runner, or when matching the CI Flutter image is
+more important than Android rendering. It validates integration behavior but
+does not validate Android-specific rendering, Android back navigation, or
+emulator network routing.
 
 1. Use the locally built image `halaqaty-flutter-ci:local`
    (cirruslabs/flutter:stable + `clang cmake ninja-build pkg-config

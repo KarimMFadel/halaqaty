@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/group_chat_screen.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_name_text.dart';
 
 /// Chats tab: group chats of the user's circles.
 ///
@@ -67,11 +68,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
                               Icons.forum,
                               color: Theme.of(context).colorScheme.primary,
                             ),
-                            title: Text(
-                              circle.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            title: CircleNameText(name: circle.name),
                             trailing: Icon(chevron),
                             onTap: () => Navigator.of(context).push(
                               MaterialPageRoute<void>(

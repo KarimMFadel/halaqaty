@@ -75,12 +75,25 @@ class _TestProfileController extends StateNotifier<ProfileState>
 class _TestCircleApiClient extends CircleApiClient {
   _TestCircleApiClient() : super(Dio());
 
+  List<CircleSummary> circles = const [];
+  DioException? listCirclesError;
+  int listCirclesCalls = 0;
+
   @override
   Future<List<CircleSummary>> listCircles({
     required String firebaseIdToken,
     required String sessionId,
   }) async =>
-      const [];
+      _listCircles();
+
+  Future<List<CircleSummary>> _listCircles() async {
+    listCirclesCalls++;
+    if (listCirclesError case final error?) {
+      listCirclesError = null;
+      throw error;
+    }
+    return circles;
+  }
 
   @override
   Future<CircleDiscoveryPage> discoverCircles({
@@ -96,7 +109,10 @@ Future<void> _pumpApp(
   WidgetTester tester,
   _TestAuthController controller, {
   List<_TestProfileController>? profileControllers,
+  _TestCircleApiClient? circleApiClient,
+  String? firebaseToken,
 }) {
+  final apiClient = circleApiClient ?? _TestCircleApiClient();
   return tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -108,16 +124,16 @@ Future<void> _pumpApp(
         }),
         circleDiscoveryControllerProvider.overrideWith(
           (_) => CircleDiscoveryController(
-            apiClient: _TestCircleApiClient(),
-            loadFirebaseIdToken: () async => 'firebase-token',
+            apiClient: apiClient,
+            loadFirebaseIdToken: () async => firebaseToken,
             readAuthState: () => controller.state,
             logout: controller.logout,
           ),
         ),
         createCircleControllerProvider.overrideWith(
           (_) => CreateCircleController(
-            apiClient: _TestCircleApiClient(),
-            loadFirebaseIdToken: () async => 'firebase-token',
+            apiClient: apiClient,
+            loadFirebaseIdToken: () async => firebaseToken,
             readAuthState: () => controller.state,
             logout: controller.logout,
           ),
@@ -192,6 +208,36 @@ void main() {
     expect(find.text('Profile'), findsOneWidget);
   });
 
+  testWidgets('shows a retryable offline state when Home cannot load circles',
+      (WidgetTester tester) async {
+    final apiClient = _TestCircleApiClient()
+      ..listCirclesError = DioException(
+        requestOptions: RequestOptions(path: '/circles'),
+        type: DioExceptionType.connectionError,
+      );
+    await _pumpApp(
+      tester,
+      _TestAuthController(
+        const AuthState(
+          status: AuthStatus.authenticated,
+          sessionId: 'session-1',
+        ),
+      ),
+      circleApiClient: apiClient,
+      firebaseToken: 'firebase-token',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('circleLoadError')), findsOneWidget);
+    expect(find.text('We cannot reach the server right now'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('circleLoadRetry')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('circleLoadError')), findsNothing);
+    expect(apiClient.listCirclesCalls, 2);
+  });
+
   testWidgets('switches to the chats tab', (WidgetTester tester) async {
     await _pumpApp(
       tester,
@@ -217,6 +263,46 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(CircleDiscoveryScreen), findsOneWidget);
+  });
+
+  testWidgets('switching back to Home resets a pushed detail screen',
+      (WidgetTester tester) async {
+    final apiClient = _TestCircleApiClient()
+      ..circles = [
+        CircleSummary(
+          id: 'circle-1',
+          name: 'Circle',
+          description: null,
+          maxCapacity: 10,
+          genderRestriction: 'unspecified',
+          language: 'en',
+          createdAt: DateTime.utc(2026, 8, 1),
+        ),
+      ];
+    await _pumpApp(
+      tester,
+      _TestAuthController(
+        const AuthState(
+          status: AuthStatus.authenticated,
+          sessionId: 'session-1',
+        ),
+      ),
+      circleApiClient: apiClient,
+      firebaseToken: 'firebase-token',
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('homeCircle-circle-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Circle details'), findsOneWidget);
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.text('Circle details'), findsNothing);
   });
 
   testWidgets('switches to the profile tab and logs out',

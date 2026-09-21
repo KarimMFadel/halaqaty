@@ -180,6 +180,22 @@ void main() {
     expect(find.text('تم الانضمام إلى الحلقة'), findsOneWidget);
   });
 
+  testWidgets('CircleDiscoveryScreen: does not repeat joined circles publicly',
+      (tester) async {
+    final apiClient = _StubCircleApiClient()
+      ..memberships = [_memberCircle]
+      ..discovered = [_memberCircle, _publicCircle];
+
+    await tester.pumpWidget(
+      _build(const CircleDiscoveryScreen(), _controller(apiClient)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('openCircle-circle-member')), findsOneWidget);
+    expect(find.byKey(const Key('joinCircle-circle-member')), findsNothing);
+    expect(find.byKey(const Key('joinCircle-circle-public')), findsOneWidget);
+  });
+
   testWidgets('CircleDiscoveryScreen: opens an authenticated member circle',
       (tester) async {
     final apiClient = _StubCircleApiClient()..memberships = [_memberCircle];

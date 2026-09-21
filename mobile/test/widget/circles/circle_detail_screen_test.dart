@@ -32,6 +32,29 @@ void main() {
     expect(find.text('Members'), findsOneWidget);
   });
 
+  testWidgets('CircleDetailScreen: constrains long circle names',
+      (tester) async {
+    const longName = 'T064-direct-denied-teacher-teacher-178948869274982';
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith((_) => StubAuthNotifier()),
+          circleDetailProvider('circle-1').overrideWith(
+            (_) => Future.value(_circle(name: longName)),
+          ),
+        ],
+        child: const MaterialApp(
+          home: CircleDetailScreen(circleId: 'circle-1'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final title = tester.widget<Text>(find.text(longName));
+    expect(title.maxLines, 2);
+    expect(title.overflow, TextOverflow.ellipsis);
+  });
+
   testWidgets('CircleDetailScreen: keeps provider errors private',
       (tester) async {
     await tester.pumpWidget(
@@ -99,9 +122,9 @@ void main() {
   });
 }
 
-CircleResponse _circle() => CircleResponse(
+CircleResponse _circle({String name = 'Circle'}) => CircleResponse(
       id: 'circle-1',
-      name: 'Circle',
+      name: name,
       inviteCode: 'HLQ-7X2K',
       inviteLink: 'https://halaqaty.app/join/HLQ-7X2K',
       createdAt: DateTime.utc(2026, 8, 1),

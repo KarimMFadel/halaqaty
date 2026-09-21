@@ -82,6 +82,7 @@ class CircleDiscoveryController extends StateNotifier<CircleDiscoveryState> {
       final credentials = await _credentials();
       if (credentials == null) {
         debugPrint('loadMyCircles: no credentials (session/token missing)');
+        _fail(CircleJoinFailure.sessionExpired);
         return;
       }
       final circles = await _apiClient.listCircles(
@@ -237,9 +238,11 @@ class CircleDiscoveryController extends StateNotifier<CircleDiscoveryState> {
       return CircleJoinFailure.sessionExpired;
     }
     final responseBody = error.response?.data;
-    final envelope =
-        responseBody is Map<String, dynamic> ? responseBody['error'] : null;
-    final message = envelope is Map ? envelope['message'] : null;
+    // Dio adapters and test doubles can materialize JSON maps with different
+    // generic arguments. Read the contract structurally, not by exact map
+    // generic type, so localized join errors are not downgraded to `unknown`.
+    final envelope = responseBody is Map ? responseBody['error'] : null;
+    final message = envelope is Map ? envelope['message']?.toString() : null;
     return switch (message) {
       'user is already a circle member' => CircleJoinFailure.alreadyMember,
       'circle has reached its maximum capacity' => CircleJoinFailure.full,

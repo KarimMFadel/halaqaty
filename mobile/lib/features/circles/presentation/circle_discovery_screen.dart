@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_detail_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_join_screen.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_name_text.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_load_error.dart';
 
 class CircleDiscoveryScreen extends ConsumerStatefulWidget {
   const CircleDiscoveryScreen({super.key, this.onOpenInvite});
@@ -33,14 +34,6 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(circleDiscoveryControllerProvider);
     final rtl = Directionality.of(context) == TextDirection.rtl;
-    ref.listen(
-      circleDiscoveryControllerProvider.select((s) => s.failure),
-      (previous, next) {
-        if (next != null) {
-          showHalaqatyError(context, circleFailureText(next, rtl));
-        }
-      },
-    );
     return Scaffold(
       appBar: AppBar(title: Text(rtl ? 'اكتشاف الحلقات' : 'Discover circles')),
       body: SafeArea(
@@ -80,46 +73,75 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
   }
 
   Widget _content(CircleDiscoveryState state, bool rtl) {
-    if (state.isLoading) {
+    if (state.isLoading &&
+        state.myCircles.isEmpty &&
+        state.publicCircles.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(
           key: Key('circleDiscoveryLoading'),
         ),
       );
     }
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        if (state.myCircles.isNotEmpty) ...[
+    final joinedCircleIds = state.myCircles.map((circle) => circle.id).toSet();
+    final publicCircles = state.publicCircles
+        .where((circle) => !joinedCircleIds.contains(circle.id))
+        .toList();
+
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (state.failure != null &&
+              state.myCircles.isEmpty &&
+              state.publicCircles.isEmpty)
+            CircleLoadError(
+              failure: state.failure!,
+              onRetry: _refresh,
+            ),
+          if (state.myCircles.isNotEmpty) ...[
+            Text(
+              rtl ? 'حلقاتي' : 'My circles',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            ...state.myCircles.map((circle) => _myCircleCard(circle, rtl)),
+            const SizedBox(height: 16),
+          ],
           Text(
-            rtl ? 'حلقاتي' : 'My circles',
+            rtl ? 'الحلقات العامة' : 'Public circles',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
-          ...state.myCircles.map((circle) => _myCircleCard(circle, rtl)),
-          const SizedBox(height: 16),
+          if (publicCircles.isEmpty)
+            Text(rtl ? 'لا توجد حلقات عامة متاحة' : 'No public circles')
+          else
+            ...publicCircles.map(
+              (circle) => _circleCard(circle, state, rtl),
+            ),
         ],
-        Text(
-          rtl ? 'الحلقات العامة' : 'Public circles',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 8),
-        if (state.publicCircles.isEmpty)
-          Text(rtl ? 'لا توجد حلقات عامة متاحة' : 'No public circles')
-        else
-          ...state.publicCircles.map(
-            (circle) => _circleCard(circle, state, rtl),
-          ),
-      ],
+      ),
     );
+  }
+
+  Future<void> _refresh() async {
+    final controller = ref.read(circleDiscoveryControllerProvider.notifier);
+    await controller.loadMyCircles();
+    if (mounted) await controller.discover();
   }
 
   Widget _myCircleCard(CircleSummary circle, bool rtl) {
     return Card(
       child: ListTile(
         key: Key('openCircle-${circle.id}'),
-        title: Text(circle.name),
-        subtitle: circle.description == null ? null : Text(circle.description!),
+        title: CircleNameText(name: circle.name),
+        subtitle: circle.description == null
+            ? null
+            : Text(
+                circle.description!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
         trailing: Icon(rtl ? Icons.chevron_left : Icons.chevron_right),
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -145,10 +167,18 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(circle.name, style: Theme.of(context).textTheme.titleLarge),
+              CircleNameText(
+                name: circle.name,
+                maxLines: 2,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               if (circle.description case final description?) ...[
                 const SizedBox(height: 6),
-                Text(description),
+                Text(
+                  description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
               const SizedBox(height: 8),
               Text('${rtl ? 'السعة' : 'Capacity'}: ${circle.maxCapacity}'),

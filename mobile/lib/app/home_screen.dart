@@ -4,6 +4,8 @@ import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_detail_screen.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_name_text.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_load_error.dart';
 
 /// Home tab: branded overview of the user's circles and quick actions.
 ///
@@ -34,18 +36,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final state = ref.watch(circleDiscoveryControllerProvider);
     final isRtl = Directionality.of(context) == TextDirection.rtl;
     final scheme = Theme.of(context).colorScheme;
-    ref.listen(
-      circleDiscoveryControllerProvider.select((s) => s.failure),
-      (previous, next) {
-        if (next != null) {
-          showHalaqatyError(
-            context,
-            isRtl ? 'تعذّر تحميل الحلقات' : 'Failed to load circles',
-          );
-        }
-      },
-    );
-
     return Scaffold(
       appBar: AppBar(
         title: Text(isRtl ? 'الرئيسية' : 'Home'),
@@ -58,6 +48,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (state.failure != null && state.myCircles.isEmpty)
+                CircleLoadError(
+                  failure: state.failure!,
+                  onRetry: () => ref
+                      .read(circleDiscoveryControllerProvider.notifier)
+                      .loadMyCircles(),
+                ),
+              if (state.failure != null && state.myCircles.isEmpty)
+                const SizedBox(height: 16),
               Row(
                 children: [
                   const HalaqatyLogo(size: 40),
@@ -120,11 +119,7 @@ class _CircleCard extends StatelessWidget {
             Icons.auto_stories,
             color: Theme.of(context).colorScheme.primary,
           ),
-          title: Text(
-            circle.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          title: CircleNameText(name: circle.name),
           subtitle: circle.description == null || circle.description!.isEmpty
               ? null
               : Text(

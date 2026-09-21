@@ -27,7 +27,9 @@ void showHalaqatyError(BuildContext context, String message) {
         action: SnackBarAction(
           textColor: scheme.onErrorContainer,
           label: isRtl ? 'إغلاق' : 'Dismiss',
-          onPressed: ScaffoldMessenger.of(context).hideCurrentSnackBar,
+          // Remove immediately so a queued/replaced snackbar cannot win the
+          // hide animation and make the dismiss tap appear ineffective.
+          onPressed: ScaffoldMessenger.of(context).removeCurrentSnackBar,
         ),
       ),
     );

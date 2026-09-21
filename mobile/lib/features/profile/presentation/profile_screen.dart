@@ -125,6 +125,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             isRtl ? TextDirection.rtl : TextDirection.ltr,
                         decoration: InputDecoration(
                           labelText: isRtl ? 'نبذة' : 'Bio',
+                          hintText: isRtl ? 'اختياري' : 'Optional',
                           errorText: state.fieldErrors['bio'],
                         ),
                       ),
@@ -182,6 +183,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         keyboardType: TextInputType.url,
                         decoration: InputDecoration(
                           labelText: isRtl ? 'رابط الصورة' : 'Avatar URL',
+                          hintText: isRtl ? 'اختياري' : 'Optional',
                           errorText: state.fieldErrors['avatar_url'],
                         ),
                       ),
@@ -192,6 +194,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         keyboardType: TextInputType.phone,
                         decoration: InputDecoration(
                           labelText: isRtl ? 'الهاتف' : 'Phone',
+                          hintText: isRtl ? 'اختياري' : 'Optional',
                           errorText: state.fieldErrors['phone'],
                         ),
                       ),
@@ -261,6 +264,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
+        key: const Key('profileSaveSuccess'),
         content: Text(
           Directionality.of(context) == TextDirection.rtl
               ? 'تم تحديث الملف الشخصي'

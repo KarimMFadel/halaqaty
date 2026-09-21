@@ -6,6 +6,7 @@ import 'package:halaqaty_mobile/features/circles/application/circle_detail_contr
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_management_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_members_screen.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_name_text.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_retirement_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_ui_labels.dart';
 
@@ -92,8 +93,9 @@ class CircleDetailScreen extends ConsumerWidget {
                   ),
                 ),
               const SizedBox(height: 16),
-              Text(
-                circle.name,
+              CircleNameText(
+                name: circle.name,
+                maxLines: 2,
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               if (circle.description != null) ...[

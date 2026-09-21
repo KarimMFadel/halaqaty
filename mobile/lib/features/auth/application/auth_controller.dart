@@ -70,9 +70,23 @@ class AuthController extends StateNotifier<AuthState> {
     final firebaseUser = _firebaseAuth.currentUser;
 
     if (storedSessionId != null && firebaseUser != null) {
+      BackendUser? user;
+      try {
+        final token = await firebaseUser.getIdToken();
+        if (token != null && token.isNotEmpty) {
+          user = await _apiClient.getMe(
+            firebaseIdToken: token,
+            sessionId: storedSessionId,
+          );
+        }
+      } on DioException {
+        // Keep the persisted session usable; protected requests will surface
+        // an expired session through their normal auth handling.
+      }
       state = state.copyWith(
         status: AuthStatus.authenticated,
         sessionId: storedSessionId,
+        user: user,
       );
       return;
     }

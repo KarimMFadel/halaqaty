@@ -81,6 +81,26 @@ Widget _buildScreen(_StubProfileNotifier stub) {
 
 void main() {
   group('ProfileScreen form behavior', () {
+    testWidgets('optional profile fields explain that they are optional',
+        (tester) async {
+      await tester.pumpWidget(_buildScreen(_StubProfileNotifier()));
+      await tester.pump();
+
+      for (final key in [
+        const Key('profileBioField'),
+        const Key('profileAvatarUrlField'),
+        const Key('profilePhoneField'),
+      ]) {
+        final decorator = tester.widget<InputDecorator>(
+          find.descendant(
+            of: find.byKey(key),
+            matching: find.byType(InputDecorator),
+          ),
+        );
+        expect(decorator.decoration.hintText, 'Optional');
+      }
+    });
+
     testWidgets('full_name and country are required', (tester) async {
       final stub = _StubProfileNotifier();
       await tester.pumpWidget(_buildScreen(stub));
@@ -126,6 +146,19 @@ void main() {
         find.text('country must be a 2-letter ISO country code'),
         findsOneWidget,
       );
+    });
+
+    testWidgets('shows save success feedback after a successful update',
+        (tester) async {
+      await tester.pumpWidget(_buildScreen(_StubProfileNotifier()));
+      await tester.pump();
+
+      await tester.ensureVisible(find.byKey(const Key('profileSaveButton')));
+      await tester.tap(find.byKey(const Key('profileSaveButton')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('profileSaveSuccess')), findsOneWidget);
+      expect(find.text('Profile updated'), findsOneWidget);
     });
   });
 }

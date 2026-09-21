@@ -9,6 +9,9 @@ import 'package:halaqaty_mobile/features/auth/presentation/auth_screens.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_discovery_screen.dart';
 import 'package:halaqaty_mobile/features/profile/presentation/profile_screen.dart';
 
+final _homeNavigatorKey =
+    GlobalKey<NavigatorState>(debugLabel: 'homeNavigator');
+
 /// Builds the app router from the current [AuthStatus].
 ///
 /// The router is rebuilt when the auth status changes (status only), which
@@ -58,12 +61,15 @@ GoRouter buildHalaqatyRouter(AuthStatus status) {
         builder: (context, state, navigationShell) =>
             HalaqatyShell(navigationShell: navigationShell),
         branches: [
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/home',
-              builder: (context, state) => const HomeScreen(),
-            ),
-          ]),
+          StatefulShellBranch(
+            navigatorKey: _homeNavigatorKey,
+            routes: [
+              GoRoute(
+                path: '/home',
+                builder: (context, state) => const HomeScreen(),
+              ),
+            ],
+          ),
           StatefulShellBranch(routes: [
             GoRoute(
               path: '/circles',
@@ -102,10 +108,19 @@ class HalaqatyShell extends StatelessWidget {
       bottomNavigationBar: NavigationBar(
         key: const Key('appNavigationBar'),
         selectedIndex: navigationShell.currentIndex,
-        onDestinationSelected: (index) => navigationShell.goBranch(
-          index,
-          initialLocation: index == navigationShell.currentIndex,
-        ),
+        onDestinationSelected: (index) {
+          // Home is the app's landing surface. Return to its route root
+          // instead of restoring a pushed circle-detail screen.
+          if (index == 0) {
+            _homeNavigatorKey.currentState?.popUntil((route) => route.isFirst);
+            navigationShell.goBranch(0);
+            return;
+          }
+          navigationShell.goBranch(
+            index,
+            initialLocation: index == navigationShell.currentIndex,
+          );
+        },
         destinations: [
           NavigationDestination(
             icon: const Icon(Icons.home_outlined),

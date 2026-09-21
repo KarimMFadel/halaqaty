@@ -132,6 +132,21 @@ class AuthApiClient {
     );
   }
 
+  /// Loads the backend user for a persisted authenticated session.
+  Future<BackendUser> getMe({
+    required String firebaseIdToken,
+    required String sessionId,
+  }) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/auth/me',
+      options: Options(headers: {
+        ..._bearerHeader(firebaseIdToken),
+        'X-Halaqaty-Session-ID': sessionId,
+      }),
+    );
+    return BackendUser.fromJson(response.data as Map<String, dynamic>);
+  }
+
   Map<String, String> _bearerHeader(String token) =>
       {'Authorization': 'Bearer $token'};
 }

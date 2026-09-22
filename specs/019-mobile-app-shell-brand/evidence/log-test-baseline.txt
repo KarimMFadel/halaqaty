@@ -1,0 +1,364 @@
+00:00 +0: loading C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_delivery_controller_test.dart
+00:00 +0: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_delivery_controller_test.dart: retry schedule is exactly 1, 2, then 4 seconds
+00:00 +1: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_delivery_controller_test.dart: failed send retries 1/2/4 then exposes editable terminal state
+00:00 +2: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_delivery_controller_test.dart: a 429 with Retry-After replaces the next delay, capped at 30s
+00:00 +3: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_delivery_controller_test.dart: restored pending messages keep the sender id after a restart
+00:00 +4: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_delivery_controller_test.dart: editing a terminal draft issues a fresh idempotency key
+00:00 +5: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_delivery_controller_test.dart: an in-flight optimistic message shows the sent state
+00:00 +6: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_discovery_controller_test.dart: reply selection keeps a safe preview from the same conversation
+00:00 +7: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_discovery_controller_test.dart: deleted reply target is redacted without preserving its content
+00:00 +8: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_discovery_controller_test.dart: searches Arabic and Latin queries through retained group history
+00:00 +9: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_discovery_controller_test.dart: keeps the server-provided pinned-bar order
+00:00 +10: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_discovery_controller_test.dart: surfaces the contracted conflict when a sixth message is pinned
+00:00 +11: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_discovery_controller_test.dart: search remains available when the circle is archived
+00:00 +12: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_discovery_controller_test.dart: reply send forwards the target and retains the draft on failure
+00:00 +13: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_lifecycle_controller_test.dart: GroupChatController lifecycle initial access denial clears history and cancels realtime
+00:00 +14: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_lifecycle_controller_test.dart: GroupChatController lifecycle initial access denial does not restore a durable pending draft
+00:00 +15: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_lifecycle_controller_test.dart: GroupChatController lifecycle pagination access denial clears history and cancels realtime
+00:00 +16: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_lifecycle_controller_test.dart: GroupChatController lifecycle reconnect: current access loss clears history immediately
+00:00 +17: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_lifecycle_controller_test.dart: GroupChatController lifecycle active write denial clears history and stops realtime delivery
+00:00 +18: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_lifecycle_controller_test.dart: GroupChatController lifecycle stale write denial cannot revoke a rejoined chat
+00:00 +19: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_lifecycle_controller_test.dart: GroupChatController lifecycle write denial still revokes access after concurrent reconciliation
+00:00 +20: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_lifecycle_controller_test.dart: GroupChatController lifecycle pagination denial still revokes access after concurrent reconciliation
+00:00 +21: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_lifecycle_controller_test.dart: GroupChatController lifecycle rejoin after access loss loads only the new membership period
+00:00 +22: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_lifecycle_controller_test.dart: GroupChatController lifecycle archived chat retains reads while denying mutations
+00:00 +23: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_lifecycle_controller_test.dart: GroupChatController lifecycle archived reconnect keeps the chat read-only
+00:01 +24: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_moderation_controller_test.dart: allows only own messages inside the ten minute deletion window
+00:01 +25: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_moderation_controller_test.dart: deletion conflict keeps the message and exposes a safe retry state
+00:01 +26: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_moderation_controller_test.dart: duplicate deletion events redact content, media, reply preview, and pin once
+00:02 +27: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: does not submit a read for the sender own message
+00:02 +28: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: submits recipient group and direct reads to their contracted routes
+00:02 +29: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: keeps group read details and deduplicates repeated reader facts
+00:02 +30: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: typing stop removes the indicator before its expiry
+00:02 +31: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: typing expires after the server five-second lifetime
+00:02 +32: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: typing expires after the server five-second lifetime
+00:02 +33: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: typing expires after the server five-second lifetime
+00:02 +34: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: typing expires after the server five-second lifetime
+00:02 +35: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: typing expires after the server five-second lifetime
+00:02 +36: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: typing expires after the server five-second lifetime
+00:02 +37: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: typing expires after the server five-second lifetime
+00:02 +38: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: typing expires after the server five-second lifetime
+00:02 +39: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: typing expires after the server five-second lifetime
+00:02 +40: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: typing expires after the server five-second lifetime
+00:02 +41: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: typing expires after the server five-second lifetime
+00:02 +42: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: typing expires after the server five-second lifetime
+00:02 +43: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/chat_presence_controller_test.dart: keeps group and direct typing projections separate
+00:02 +44: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/group_chat_controller_test.dart: initial history marks only eligible incoming messages as read
+00:02 +45: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/group_chat_controller_test.dart: open loads the authoritative newest-first page and subscribes
+00:02 +46: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/group_chat_controller_test.dart: loadOlder pages with the before cursor and prepends older messages
+00:02 +47: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/group_chat_controller_test.dart: loadOlder marks newly loaded eligible incoming messages as read
+00:02 +48: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/group_chat_controller_test.dart: projects deletion events as an idempotent redaction
+00:02 +49: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/group_chat_controller_test.dart: sendText is optimistic pending then replaces with the server message
+00:02 +50: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/group_chat_controller_test.dart: duplicate realtime messages are deduplicated by message id
+00:02 +51: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/group_chat_controller_test.dart: unknown events reconcile against authoritative history
+00:02 +52: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/group_chat_controller_test.dart: a realtime message arriving during the initial page load survives
+00:02 +53: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/group_chat_controller_test.dart: close stops realtime updates and resets the projection
+00:03 +54: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/group_chat_controller_test.dart: open failure surfaces an error state
+00:03 +55: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/group_chat_controller_test.dart: send failure surfaces an action error and drops the optimistic item
+00:03 +56: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/group_chat_controller_test.dart: sendText returns false on invalid drafts and failed credentials
+00:06 +57: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/media_attachment_controller_test.dart: cancelling a preview deletes the unsubmitted picked file
+00:06 +58: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/media_attachment_controller_test.dart: lost attach response retries the staged upload with identical payload
+00:06 +59: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/media_attachment_controller_test.dart: native picker failure becomes recoverable safe state
+00:07 +60: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/voice_note_controller_test.dart: granted permission moves requestingPermission → recording
+00:08 +61: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/voice_note_controller_test.dart: granted permission moves requestingPermission → recording
+00:08 +62: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/voice_note_controller_test.dart: denied permission surfaces denial with settings hint
+00:08 +63: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/voice_note_controller_test.dart: amplitude events accumulate as a bounded waveform sample list
+00:08 +64: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/voice_note_controller_test.dart: manual stop freezes duration and keeps a previewable recording
+00:08 +65: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/voice_note_controller_test.dart: recording auto-stops at the 300-second contract limit
+00:08 +66: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_api_client_test.dart: ChatApiClient lists group messages with auth headers and cursor query
+00:08 +67: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_api_client_test.dart: ChatApiClient lists group messages with auth headers and cursor query
+00:08 +68: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_api_client_test.dart: ChatApiClient lists group messages with auth headers and cursor query
+00:08 +69: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_api_client_test.dart: ChatApiClient lists group messages with auth headers and cursor query
+00:08 +70: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/voice_note_controller_test.dart: a client-side limit rejection is terminal, not retryable
+00:08 +71: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_api_client_test.dart: ChatApiClient omits pagination query when no cursor is supplied
+00:08 +72: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_api_client_test.dart: ChatApiClient searches retained messages with query and pagination
+00:08 +73: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/voice_note_controller_test.dart: discard from recorded resets to idle and deletes the local file
+00:08 +74: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/voice_note_controller_test.dart: discard from recorded resets to idle and deletes the local file
+00:08 +75: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_api_client_test.dart: ChatApiClient sends a text message with the idempotency key header
+00:08 +76: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/voice_note_controller_test.dart: preview tracks playback position and returns to recorded on completion
+00:08 +77: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/voice_note_controller_test.dart: preview tracks playback position and returns to recorded on completion
+00:08 +78: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_api_client_test.dart: ChatApiClient maps contract error envelopes to ChatApiException
+00:08 +79: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/voice_note_controller_test.dart: preview failure keeps the recording and exposes a retry
+00:08 +80: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/voice_note_controller_test.dart: stop failure with a valid partial file keeps it previewable
+00:08 +81: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/voice_note_controller_test.dart: stop failure without a usable file offers discard from failed
+00:08 +82: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/application/voice_note_controller_test.dart: send outside a recorded state is a no-op returning null
+00:09 +83: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_media_api_test.dart: (setUpAll)
+00:09 +83: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_media_api_test.dart: ChatMediaApiClient uploads uploadVoice posts multipart to /uploads/voice with circle_id
+00:09 +84: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_media_api_test.dart: ChatMediaApiClient uploads uploadVoice posts multipart to /uploads/voice with circle_id
+00:09 +85: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_media_api_test.dart: ChatMediaApiClient uploads uploadVoice posts multipart to /uploads/voice with circle_id
+00:09 +86: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_media_api_test.dart: ChatMediaApiClient uploads uploadVoice posts multipart to /uploads/voice with circle_id
+00:09 +87: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_media_api_test.dart: ChatMediaApiClient uploads uploadVoice posts multipart to /uploads/voice with circle_id
+00:09 +88: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: decodes direct typing with the typing user as its peer context
+00:09 +89: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_media_api_test.dart: ChatMediaApiClient uploads uploadImage posts multipart to /uploads/image with dm_peer_id only
+00:09 +90: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: a revoked session stops reconnecting and ends the stream
+00:09 +91: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: a revoked session stops reconnecting and ends the stream
+00:09 +92: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: a revoked session stops reconnecting and ends the stream
+00:09 +93: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: a revoked session stops reconnecting and ends the stream
+00:09 +94: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: a revoked session stops reconnecting and ends the stream
+00:09 +95: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_media_api_test.dart: ChatMediaApiClient error mapping maps contract error envelope for 413
+00:09 +96: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:09 +97: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:09 +98: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:09 +99: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:09 +100: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:09 +101: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:09 +102: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +103: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +104: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +105: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +106: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +107: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +108: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +109: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +110: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +111: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +112: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +113: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +114: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +115: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +116: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +117: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +118: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +119: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +120: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +121: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +122: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_realtime_client_test.dart: reconnects after a socket closes and keeps the decoder state
+00:10 +123: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_media_api_test.dart: ChatMediaApiClient client-side limits accepts media exactly at the limits
+00:11 +124: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_media_api_test.dart: ChatMediaApiClient client-side limits accepts media exactly at the limits
+00:11 +125: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_media_api_test.dart: ChatMediaApiClient client-side limits accepts media exactly at the limits
+00:11 +126: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_media_api_test.dart: ChatMediaApiClient client-side limits accepts media exactly at the limits
+00:11 +127: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_media_api_test.dart: ChatMediaApiClient client-side limits accepts media exactly at the limits
+00:11 +128: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/chat/data/chat_media_api_test.dart: (tearDownAll)
+00:11 +128: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/data/api_client_configuration_test.dart: default API base URL targets the emulator host alias on Android
+00:11 +129: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/data/api_client_configuration_test.dart: default API base URL targets localhost on other platforms
+00:11 +130: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/data/api_client_configuration_test.dart: dioProvider honors an explicit API_BASE_URL define when provided
+00:11 +131: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/data/api_client_configuration_test.dart: CircleApiClient sends the Firebase bearer token
+00:14 +132: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: connect loads the authoritative queue snapshot
+00:14 +133: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: manager command failure is action-local and retains the snapshot
+00:14 +134: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: complete sends grade and notes and replaces the snapshot
+00:14 +135: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: correction refreshes the authoritative queue snapshot
+00:14 +136: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: deduplicates duplicate queue events by event_id
+00:14 +137: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: ignores a stale queue event with a new event_id
+00:14 +138: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: re-fetches the current queue after a version gap
+00:14 +139: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: re-fetches the current queue after queue.policy_changed
+00:14 +140: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: F-005 session end remains usable after a queue command failure
+00:14 +141: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: session lifecycle refreshes queue without a second realtime stream
+00:14 +142: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T045 (US2): duplicate, out-of-order, and unknown events applies a duplicated queue change event only once
+00:14 +143: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T045 (US2): duplicate, out-of-order, and unknown events ignores an out-of-order queue change event with a stale version
+00:14 +144: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T045 (US2): duplicate, out-of-order, and unknown events ignores an unknown event type without crashing or corrupting state
+00:14 +145: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T045 (US2): duplicate, out-of-order, and unknown events re-fetches on an unrecognized queue event type with a fresh version
+00:14 +146: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T045 (US2): duplicate, out-of-order, and unknown events reconnect replaces projected state with the authoritative snapshot
+00:14 +147: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T045 (US2): duplicate, out-of-order, and unknown events a new-round snapshot replaces a higher-version previous round
+00:14 +148: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T059 (US3): grading and finalization completes a reciting entry with grade and optional note
+00:14 +149: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T059 (US3): grading and finalization corrects only the note without losing the current grade
+00:14 +150: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T059 (US3): grading and finalization keeps the queue action-local when grading fails
+00:14 +151: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T059 (US3): grading and finalization completes a grading-optional entry without a grade
+00:14 +152: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T045 (US2): student opt-out command approval_required submits a pending request and keeps the entry waiting
+00:14 +153: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T045 (US2): student opt-out command approved realtime update resolves pending student feedback
+00:14 +154: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T045 (US2): student opt-out command an older request refresh cannot overwrite realtime approval
+00:14 +155: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T045 (US2): student opt-out command a declined request keeps the entry waiting
+00:14 +156: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T045 (US2): student opt-out command an approved request opts the entry out of the round
+00:14 +157: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T045 (US2): student opt-out command auto_approve applies immediately without a pending state
+00:14 +158: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T045 (US2): student opt-out command manager controllers never issue the student-only opt-out command
+00:14 +159: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/queue_controller_test.dart: T045 (US2): student opt-out command opt-out failure is action-local and retains the snapshot
+00:14 +160: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/session_room_controller_test.dart: start connects through the neutral media boundary without storing credentials outside state
+00:14 +161: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/session_room_controller_test.dart: join exposes an error state and does not connect media when API fails
+00:14 +162: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/session_room_controller_test.dart: retry retains the first attempted session when credentials fail early
+00:15 +163: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/session_room_controller_test.dart: connect loads the authoritative participants snapshot
+00:15 +164: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/session_room_controller_test.dart: applies realtime events and skips consecutive duplicates
+00:15 +165: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/session_room_controller_test.dart: realtime snapshots replace participants authoritatively
+00:15 +166: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/session_room_controller_test.dart: ignores hand events for unknown participants
+00:15 +167: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/session_room_controller_test.dart: raise and lower hand send realtime commands
+00:15 +168: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/session_room_controller_test.dart: moderator moderation actions call the API and update state
+00:15 +169: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/session_room_controller_test.dart: uses the server moderator decision on the production connection path
+00:15 +170: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/session_room_controller_test.dart: member moderation actions are denied without calling the API
+00:15 +171: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/application/session_room_controller_test.dart: moderation failure surfaces an action error without leaving the room
+00:15 +172: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/data/queue_api_client_test.dart: QueueState decodes a manager queue snapshot with policy entries and preorder
+00:15 +173: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/data/queue_api_client_test.dart: QueueState getQueue preserves the empty preorder projection sent to non-managers
+00:15 +174: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/data/queue_api_client_test.dart: QueueApiClient sends atomic completion and audited correction payloads
+00:15 +175: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/data/queue_api_client_test.dart: QueueApiClient manager commands send documented payloads and idempotency keys
+00:15 +176: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/data/queue_api_client_test.dart: QueueApiClient maps standard 409, 422, and 503 error envelopes
+00:15 +177: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/data/realtime_session_client_test.dart: builds the required subscribe and heartbeat frames
+00:15 +178: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/data/realtime_session_client_test.dart: real websocket path subscribes, receives snapshot, and heartbeats
+00:16 +179: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/data/realtime_session_client_test.dart: parses a session snapshot with participants
+00:16 +180: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/livekit_boundary_test.dart: media interface dependencies exclude adapters and API clients
+00:16 +181: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/livekit_boundary_test.dart: media interface dependencies exclude adapters and API clients
+00:16 +182: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/livekit_boundary_test.dart: media interface dependencies exclude adapters and API clients
+00:16 +183: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/livekit_boundary_test.dart: media interface dependencies exclude adapters and API clients
+00:16 +184: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/livekit_boundary_test.dart: media interface dependencies exclude adapters and API clients
+00:16 +185: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/livekit_boundary_test.dart: media interface dependencies exclude adapters and API clients
+00:16 +186: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/livekit_boundary_test.dart: media interface dependencies exclude adapters and API clients
+00:16 +187: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/livekit_boundary_test.dart: LiveKit SDK import is confined to the media adapter
+00:16 +188: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/livekit_boundary_test.dart: LiveKit SDK import is confined to the media adapter
+00:16 +189: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/data/realtime_session_client_test.dart: websocket client emits queue recovery signal only once for a gap
+00:16 +190: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/livekit_boundary_test.dart: provider-specific livekit fields do not cross the mobile boundary
+00:16 +191: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/livekit_boundary_test.dart: provider-specific livekit fields do not cross the mobile boundary
+00:16 +192: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/features/sessions/data/realtime_session_client_test.dart: builds the websocket url from the api base url
+00:17 +193: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/auth/auth_forms_test.dart: RegisterScreen — form validation empty display_name shows required-field error
+00:19 +194: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/auth/auth_forms_test.dart: RegisterScreen — form validation empty display_name shows required-field error
+00:19 +195: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/auth/auth_forms_test.dart: RegisterScreen — form validation empty display_name shows required-field error
+00:20 +196: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/archived_chat_screen_test.dart: archived chat retains history/playback and hides mutation controls (RTL + LTR)
+00:20 +197: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/archived_chat_screen_test.dart: archived chat retains history/playback and hides mutation controls (RTL + LTR)
+00:20 +198: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/archived_chat_screen_test.dart: archived chat retains history/playback and hides mutation controls (RTL + LTR)
+00:20 +199: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/archived_chat_screen_test.dart: archived chat retains history/playback and hides mutation controls (RTL + LTR)
+00:20 +200: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/archived_chat_screen_test.dart: archived chat retains history/playback and hides mutation controls (RTL + LTR)
+00:20 +201: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/archived_chat_screen_test.dart: archived chat retains history/playback and hides mutation controls (RTL + LTR)
+00:21 +202: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/archived_chat_screen_test.dart: archived chat retains history/playback and hides mutation controls (RTL + LTR)
+00:21 +203: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/archived_chat_screen_test.dart: archived chat retains history/playback and hides mutation controls (RTL + LTR)
+00:21 +204: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/archived_chat_screen_test.dart: archived chat retains history/playback and hides mutation controls (RTL + LTR)
+00:21 +205: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/chat_status_test.dart: delivery status is not color-only
+00:21 +206: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/chat_status_test.dart: delivery status is not color-only
+00:21 +207: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/chat_status_test.dart: delivery status is not color-only
+00:22 +208: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/chat_media_widgets_test.dart: ChatMediaComposerBar voice recording preview plays the recording and a playback failure shows safe localized copy (RTL + LTR)
+00:22 +209: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/chat_media_widgets_test.dart: ChatMediaComposerBar voice recording preview plays the recording and a playback failure shows safe localized copy (RTL + LTR)
+00:22 +210: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/direct_chat_screen_test.dart: composer emits direct typing start and stop
+00:22 +211: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/direct_chat_screen_test.dart: composer emits direct typing start and stop
+00:22 +212: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/direct_chat_screen_test.dart: composer emits direct typing start and stop
+00:23 +213: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/direct_chat_screen_test.dart: composer emits direct typing start and stop
+00:23 +214: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/direct_chat_screen_test.dart: composer emits direct typing start and stop
+00:24 +215: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/direct_chat_screen_test.dart: composer emits direct typing start and stop
+00:24 +216: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: renders message text literally without interpreting markup (RTL + LTR)
+00:24 +217: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: renders message text literally without interpreting markup (RTL + LTR)
+00:24 +218: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: renders message text literally without interpreting markup (RTL + LTR)
+00:25 +219: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: renders message text literally without interpreting markup (RTL + LTR)
+00:25 +220: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: renders message text literally without interpreting markup (RTL + LTR)
+00:26 +221: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: renders message text literally without interpreting markup (RTL + LTR)
+00:26 +222: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: renders message text literally without interpreting markup (RTL + LTR)
+00:26 +223: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: renders message text literally without interpreting markup (RTL + LTR)
+00:27 +224: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: renders message text literally without interpreting markup (RTL + LTR)
+00:27 +225: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/circle_management_controls_test.dart: CircleManagementScreen: teacher sees role and invite controls for another member
+00:27 +226: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/circle_management_controls_test.dart: CircleManagementScreen: teacher sees role and invite controls for another member
+00:27 +227: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/circle_management_controls_test.dart: CircleManagementScreen: teacher sees role and invite controls for another member
+00:27 +228: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/circle_retirement_test.dart: CircleRetirementScreen confirms archive before retirement
+00:27 +229: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/circle_retirement_test.dart: CircleRetirementScreen confirms archive before retirement
+00:27 +230: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/circle_retirement_test.dart: CircleRetirementScreen confirms archive before retirement
+00:27 +231: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/circle_retirement_test.dart: CircleRetirementScreen confirms archive before retirement
+00:27 +232: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/circle_retirement_test.dart: CircleRetirementScreen confirms archive before retirement
+00:27 +233: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: requires a circle name before submitting
+00:27 +234: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: requires a circle name before submitting
+00:28 +235: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: requires a circle name before submitting
+00:28 +236: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: requires a circle name before submitting
+00:28 +237: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: requires a circle name before submitting
+00:28 +238: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: requires a circle name before submitting
+00:28 +239: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: requires a circle name before submitting
+00:28 +240: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: requires a circle name before submitting
+00:28 +241: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: requires a circle name before submitting
+00:28 +242: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: requires a circle name before submitting
+00:28 +243: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: requires a circle name before submitting
+00:28 +244: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: requires a circle name before submitting
+00:28 +245: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: requires a circle name before submitting
+00:29 +246: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: requires a circle name before submitting
+00:29 +247: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: requires a circle name before submitting
+00:29 +248: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: requires a circle name before submitting
+00:29 +249: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: composer validation: empty and overlong disable send, counter and error label shown, valid text sends once (RTL + LTR)
+00:29 +250: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: composer validation: empty and overlong disable send, counter and error label shown, valid text sends once (RTL + LTR)
+00:29 +251: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: composer validation: empty and overlong disable send, counter and error label shown, valid text sends once (RTL + LTR)
+00:29 +252: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/discover_join_screen_test.dart: CircleDiscoveryScreen: renders redacted RTL public cards
+00:29 +253: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/discover_join_screen_test.dart: CircleDiscoveryScreen: renders redacted RTL public cards
+00:29 +254: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/discover_join_screen_test.dart: CircleDiscoveryScreen: renders redacted RTL public cards
+00:30 +255: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/discover_join_screen_test.dart: CircleDiscoveryScreen: renders redacted RTL public cards
+00:30 +256: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/discover_join_screen_test.dart: CircleDiscoveryScreen: renders redacted RTL public cards
+00:30 +257: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/discover_join_screen_test.dart: CircleDiscoveryScreen: renders redacted RTL public cards
+00:30 +258: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/discover_join_screen_test.dart: CircleDiscoveryScreen: renders redacted RTL public cards
+00:30 +259: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/discover_join_screen_test.dart: CircleDiscoveryScreen: renders redacted RTL public cards
+00:30 +260: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/discover_join_screen_test.dart: CircleDiscoveryScreen: renders redacted RTL public cards
+loadMyCircles: loaded 0 circles
+00:30 +261: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: renders Arabic labels in RTL and submits valid settings
+00:31 +262: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: composer keeps the draft on failed send and retries from it (RTL + LTR)
+00:32 +263: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: composer keeps the draft on failed send and retries from it (RTL + LTR)
+00:32 +263: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/discover_join_screen_test.dart: CircleDiscoveryScreen: shows loading and join confirmation
+loadMyCircles: loaded 0 circles
+00:32 +264: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: composer keeps the draft on failed send and retries from it (RTL + LTR)
+00:32 +265: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart: ProfileScreen form behavior optional profile fields explain that they are optional
+00:32 +265: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/discover_join_screen_test.dart: CircleDiscoveryScreen: does not repeat joined circles publicly
+loadMyCircles: loaded 1 circles
+00:32 +266: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart: ProfileScreen form behavior optional profile fields explain that they are optional
+00:32 +267: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart: ProfileScreen form behavior optional profile fields explain that they are optional
+00:33 +268: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/queue/queue_grading_panel_test.dart: shows Arabic grading controls and submits a grade with a note
+00:33 +268: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/discover_join_screen_test.dart: CircleDiscoveryScreen: opens an authenticated member circle
+loadMyCircles: loaded 1 circles
+00:33 +269: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/queue/queue_grading_panel_test.dart: shows Arabic grading controls and submits a grade with a note
+00:33 +270: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/queue/queue_grading_panel_test.dart: shows Arabic grading controls and submits a grade with a note
+00:33 +271: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/queue/queue_grading_panel_test.dart: shows Arabic grading controls and submits a grade with a note
+00:33 +272: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/queue/queue_grading_panel_test.dart: shows Arabic grading controls and submits a grade with a note
+00:33 +273: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/circles/create_circle_screen_test.dart: adds a searched teacher to the create request
+00:33 +274: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart: ProfileScreen form behavior full_name and country are required
+00:33 +275: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart: ProfileScreen form behavior full_name and country are required
+00:33 +276: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart: ProfileScreen form behavior full_name and country are required
+00:33 +277: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart: ProfileScreen form behavior full_name and country are required
+00:33 +278: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: keeps deterministic order with newest at the bottom, pages older history on demand, and dedups repeated realtime events (RTL + LTR)
+00:34 +279: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: keeps deterministic order with newest at the bottom, pages older history on demand, and dedups repeated realtime events (RTL + LTR)
+00:34 +280: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: keeps deterministic order with newest at the bottom, pages older history on demand, and dedups repeated realtime events (RTL + LTR)
+00:34 +281: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: keeps deterministic order with newest at the bottom, pages older history on demand, and dedups repeated realtime events (RTL + LTR)
+00:34 +282: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: keeps deterministic order with newest at the bottom, pages older history on demand, and dedups repeated realtime events (RTL + LTR)
+00:34 +283: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: keeps deterministic order with newest at the bottom, pages older history on demand, and dedups repeated realtime events (RTL + LTR)
+00:34 +284: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: keeps deterministic order with newest at the bottom, pages older history on demand, and dedups repeated realtime events (RTL + LTR)
+00:34 +285: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: keeps deterministic order with newest at the bottom, pages older history on demand, and dedups repeated realtime events (RTL + LTR)
+00:34 +286: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: keeps deterministic order with newest at the bottom, pages older history on demand, and dedups repeated realtime events (RTL + LTR)
+00:34 +287: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: keeps deterministic order with newest at the bottom, pages older history on demand, and dedups repeated realtime events (RTL + LTR)
+00:35 +288: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: keeps deterministic order with newest at the bottom, pages older history on demand, and dedups repeated realtime events (RTL + LTR)
+00:35 +289: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/queue/queue_student_panel_test.dart: shows the durable student position and hides manager controls (RTL + LTR)
+00:35 +290: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/queue/queue_student_panel_test.dart: shows the durable student position and hides manager controls (RTL + LTR)
+00:35 +291: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/queue/queue_student_panel_test.dart: shows the durable student position and hides manager controls (RTL + LTR)
+00:35 +292: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/queue/queue_student_panel_test.dart: shows the durable student position and hides manager controls (RTL + LTR)
+00:35 +293: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/queue/queue_student_panel_test.dart: shows the durable student position and hides manager controls (RTL + LTR)
+00:35 +294: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: labels every delivery status with icon and text, never color alone (RTL + LTR)
+00:35 +295: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/queue/queue_student_panel_test.dart: renders every humane opt-out request state (RTL + LTR)
+00:36 +296: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: deterministic loading, empty, and error states with safe copy (RTL + LTR)
+00:36 +297: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: deterministic loading, empty, and error states with safe copy (RTL + LTR)
+00:36 +298: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: deterministic loading, empty, and error states with safe copy (RTL + LTR)
+00:36 +299: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/chat/group_chat_screen_test.dart: deterministic loading, empty, and error states with safe copy (RTL + LTR)
+00:38 +300: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_chat_entry_test.dart: connected session opens its circle chat independently of media
+00:38 +301: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_moderation_test.dart: moderator sees lock, mute-all, remove and end controls in RTL with hand state
+00:39 +302: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_moderation_test.dart: moderator sees lock, mute-all, remove and end controls in RTL with hand state
+00:39 +303: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_moderation_test.dart: moderator sees lock, mute-all, remove and end controls in RTL with hand state
+00:39 +304: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_moderation_test.dart: moderator sees lock, mute-all, remove and end controls in RTL with hand state
+00:39 +305: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_queue_dialog_test.dart: prepare validates the round range with English feedback
+00:39 +306: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_queue_dialog_test.dart: prepare validates the round range with English feedback
+00:39 +307: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_queue_dialog_test.dart: prepare validates the round range with English feedback
+00:40 +308: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_queue_dialog_test.dart: prepare validates the round range with English feedback
+00:40 +309: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_queue_dialog_test.dart: prepare validates the round range with English feedback
+00:40 +310: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_queue_dialog_test.dart: prepare validates the round range with English feedback
+00:41 +311: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_queue_dialog_test.dart: prepare validates the round range with English feedback
+00:41 +312: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_queue_dialog_test.dart: prepare validates the round range with English feedback
+00:41 +313: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_queue_dialog_test.dart: prepare validates the round range with English feedback
+00:41 +314: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_start_join_test.dart: renders Arabic RTL loading and student join action
+00:41 +315: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_start_join_test.dart: renders Arabic RTL loading and student join action
+00:41 +316: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_start_join_test.dart: renders Arabic RTL loading and student join action
+00:41 +317: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shows branded splash while authentication initializes
+00:41 +318: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shows branded splash while authentication initializes
+00:42 +319: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shows branded splash while authentication initializes
+00:42 +320: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shows branded splash while authentication initializes
+00:42 +321: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shows branded splash while authentication initializes
+00:42 +322: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shows branded splash while authentication initializes
+00:42 +323: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shows branded splash while authentication initializes
+00:42 +324: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_queue_dialog_test.dart: move dialog offers waiting students and enforces round bounds
+00:42 +325: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_queue_dialog_test.dart: move dialog offers waiting students and enforces round bounds
+00:42 +326: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: opens the login form
+00:43 +327: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_queue_dialog_test.dart: completion dialog offers only contract grades
+00:43 +328: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: opens the registration form
+00:43 +329: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/sessions/session_room_queue_dialog_test.dart: end-session control stays available when the round finalizes
+00:43 +330: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shows the four-tab shell when authenticated
+00:43 +331: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shows the four-tab shell when authenticated
+loadMyCircles: no credentials (session/token missing)
+00:43 +332: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shows a retryable offline state when Home cannot load circles
+loadMyCircles: DioException DioExceptionType.connectionError null
+loadMyCircles: loaded 0 circles
+00:43 +333: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: switches to the chats tab
+loadMyCircles: no credentials (session/token missing)
+loadMyCircles: no credentials (session/token missing)
+00:44 +334: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: switches to the circles tab
+loadMyCircles: no credentials (session/token missing)
+loadMyCircles: no credentials (session/token missing)
+00:44 +335: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: switching back to Home resets a pushed detail screen
+loadMyCircles: loaded 1 circles
+00:44 +336: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: switches to the profile tab and logs out
+loadMyCircles: no credentials (session/token missing)
+00:45 +337: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: auth loss clears the protected route stack
+loadMyCircles: no credentials (session/token missing)
+00:45 +338: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: auth transition resets profile state for the next session
+loadMyCircles: no credentials (session/token missing)
+loadMyCircles: no credentials (session/token missing)
+00:45 +339: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: welcome screen uses Arabic labels in RTL
+00:45 +340: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: router builds with halaqaty light theme by default
+00:45 +341: All tests passed!

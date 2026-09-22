@@ -1,0 +1,65 @@
+00:00 +0: loading C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart
+00:00 +0: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shows branded splash while authentication initializes
+00:00 +1: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/core/halaqaty_components_test.dart: showHalaqatyUnderImplementationNotice shows the exact English copy with the stable key
+00:00 +2: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shows welcome actions when unauthenticated
+00:00 +3: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shows welcome actions when unauthenticated
+00:00 +4: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/core/halaqaty_components_test.dart: showHalaqatyUnderImplementationNotice is dismissible via its action
+00:00 +5: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: opens the login form
+00:00 +6: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: opens the login form
+00:01 +7: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: opens the login form
+00:01 +8: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: opens the registration form
+00:01 +9: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shows the four-tab shell when authenticated
+loadMyCircles: no credentials (session/token missing)
+00:01 +10: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shows a retryable offline state when Home cannot load circles
+loadMyCircles: DioException DioExceptionType.connectionError null
+loadMyCircles: loaded 0 circles
+00:01 +11: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: switches to the chats tab
+loadMyCircles: loaded 0 circles
+loadMyCircles: loaded 0 circles
+00:02 +12: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: switches to the circles tab
+loadMyCircles: no credentials (session/token missing)
+loadMyCircles: no credentials (session/token missing)
+00:02 +13: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: switching back to Home resets a pushed detail screen
+loadMyCircles: loaded 1 circles
+00:02 +14: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: switches to the profile tab and logs out
+loadMyCircles: no credentials (session/token missing)
+00:03 +15: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: auth loss clears the protected route stack
+loadMyCircles: no credentials (session/token missing)
+00:03 +16: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: auth transition resets profile state for the next session
+loadMyCircles: no credentials (session/token missing)
+loadMyCircles: no credentials (session/token missing)
+00:03 +17: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: welcome screen uses Arabic labels in RTL
+00:03 +18: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: router builds with halaqaty light theme by default
+00:03 +19: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: app locale and direction (US1) unsupported platform locale falls back to Arabic RTL
+00:03 +20: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: app locale and direction (US1) Arabic platform locale selects Arabic RTL
+00:03 +21: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: app locale and direction (US1) English platform locale selects English LTR
+00:04 +22: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: app locale and direction (US1) registration language selection updates locale immediately
+00:04 +23: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: app locale and direction (US1) successful profile load applies preferred language
+loadMyCircles: no credentials (session/token missing)
+00:04 +24: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: app locale and direction (US1) profile save updates locale and rebuilds the app router
+loadMyCircles: no credentials (session/token missing)
+00:05 +25: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: app locale and direction (US1) logout restores the platform locale fallback
+loadMyCircles: no credentials (session/token missing)
+00:05 +26: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: app locale and direction (US1) protected redirect keeps unauthenticated users off the shell
+00:05 +27: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shell quality gates (US1) navigation destinations and welcome actions meet 48dp
+loadMyCircles: no credentials (session/token missing)
+00:05 +28: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shell quality gates (US1) welcome actions meet 48dp targets
+00:05 +29: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shell quality gates (US1) splash loading is branded and semantically labelled
+00:05 +30: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shell quality gates (US1) selected tab changes icon shape, not color alone
+loadMyCircles: no credentials (session/token missing)
+loadMyCircles: no credentials (session/token missing)
+00:05 +31: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shell quality gates (US1) dark theme keeps selected-state meaning and font mapping
+00:05 +32: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: home and chats states (US1) home shows branded loading while circles load
+loadMyCircles: loaded 0 circles
+00:05 +33: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: home and chats states (US1) home keeps circles visible with a stale notice when refresh fails
+loadMyCircles: loaded 1 circles
+loadMyCircles: DioException DioExceptionType.connectionError null
+loadMyCircles: loaded 1 circles
+00:05 +34: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: home and chats states (US1) chats shows a retryable error instead of empty when load fails
+loadMyCircles: loaded 0 circles
+loadMyCircles: DioException DioExceptionType.connectionError null
+00:06 +35: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: home and chats states (US1) chats keeps conversations visible with a stale notice when refresh fails
+loadMyCircles: loaded 1 circles
+loadMyCircles: loaded 1 circles
+loadMyCircles: DioException DioExceptionType.connectionError null
+00:06 +36: All tests passed!

@@ -1,0 +1,6 @@
+Formatted lib\app\chats_screen.dart
+Formatted lib\app\router.dart
+Formatted lib\core\theme\halaqaty_theme.dart
+Formatted lib\main.dart
+Formatted test\widget_test.dart
+Formatted 139 files (5 changed) in 0.69 seconds.

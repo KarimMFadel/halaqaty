@@ -223,11 +223,105 @@
   #halaqaty-screen-samples .recovery h4 { margin:0 0 5px; font-size:15px; }
   #halaqaty-screen-samples .recovery p { margin:0; color:var(--hq-muted); font-size:10px; line-height:1.55; }
   #halaqaty-screen-samples .muted-panel { margin-top:10px; opacity:.62; pointer-events:none; }
+  #halaqaty-screen-samples .chat-feed { display:flex; flex-direction:column; gap:8px; }
+  #halaqaty-screen-samples .day-label { text-align:center; color:var(--hq-muted); font-size:8px; }
+  #halaqaty-screen-samples .message {
+    max-width:82%; padding:9px 11px; border-radius:14px; background:var(--hq-paper);
+    box-shadow:0 2px 8px rgb(21 58 42 / .06); font-size:10px; line-height:1.55;
+  }
+  #halaqaty-screen-samples .message.own { align-self:flex-end; background:var(--hq-emerald-soft); }
+  #halaqaty-screen-samples .message strong { display:block; margin-bottom:2px; color:var(--hq-emerald); font-size:8px; }
+  #halaqaty-screen-samples .message small { display:block; margin-top:3px; color:var(--hq-muted); font-size:7px; }
+  #halaqaty-screen-samples .composer {
+    min-height:60px; margin-top:10px; padding:6px; display:grid; grid-template-columns:48px 1fr 48px;
+    align-items:center; gap:6px; border:1px solid var(--hq-line); border-radius:16px; background:var(--hq-paper);
+  }
+  #halaqaty-screen-samples .composer span { color:var(--hq-muted); font-size:10px; }
+  #halaqaty-screen-samples .composer-icon {
+    width:48px; height:48px; padding:0; border:0; border-radius:12px; display:grid; place-items:center;
+    background:var(--hq-emerald-soft); color:var(--hq-emerald); font-family:inherit; font-size:16px;
+  }
+  #halaqaty-screen-samples .composer-icon.send { background:var(--hq-emerald); color:var(--hq-paper); }
+  #halaqaty-screen-samples [dir="rtl"] .composer-icon.send { transform:scaleX(-1); }
+  #halaqaty-screen-samples .media-sheet { margin-top:12px; padding:14px; border-radius:20px; background:var(--hq-paper); }
+  #halaqaty-screen-samples .media-sheet h4 { margin:0 0 11px; font-size:14px; }
+  #halaqaty-screen-samples .media-choice {
+    min-height:52px; display:grid; grid-template-columns:36px 1fr auto; gap:9px; align-items:center;
+    border-bottom:1px solid var(--hq-line); font-size:11px;
+  }
+  #halaqaty-screen-samples .media-choice:last-child { border-bottom:0; }
+  #halaqaty-screen-samples .recording-card {
+    padding:18px 14px; border-radius:20px; background:var(--hq-paper); text-align:center;
+    box-shadow:0 5px 18px rgb(21 58 42 / .09);
+  }
+  #halaqaty-screen-samples .recording-time { margin:7px 0 11px; font-size:24px; font-weight:700; }
+  #halaqaty-screen-samples .waveform { display:flex; justify-content:center; align-items:center; gap:3px; height:38px; }
+  #halaqaty-screen-samples .waveform span { width:3px; border-radius:999px; background:var(--hq-emerald); }
+  #halaqaty-screen-samples .offline-strip {
+    padding:8px 10px; margin-bottom:9px; border-radius:12px; background:var(--hq-gold-soft);
+    color:#694d18; display:flex; justify-content:space-between; gap:8px; font-size:9px; font-weight:700;
+  }
+  #halaqaty-screen-samples .failed-message { border:1px solid rgb(181 68 60 / .35); }
+  #halaqaty-screen-samples .auth-hero { padding:10px 0 18px; text-align:center; }
+  #halaqaty-screen-samples .auth-hero .brand-mark { margin:0 auto 10px; }
+  #halaqaty-screen-samples .auth-hero h4 { margin:0 0 5px; font-size:19px; }
+  #halaqaty-screen-samples .auth-hero p { margin:0; color:var(--hq-muted); font-size:10px; line-height:1.55; }
+  #halaqaty-screen-samples .form-field {
+    min-height:51px; margin-bottom:9px; padding:7px 11px; border:1px solid var(--hq-line);
+    border-radius:12px; background:var(--hq-paper);
+  }
+  #halaqaty-screen-samples .form-field.active { border-color:var(--hq-emerald); box-shadow:0 0 0 2px var(--hq-emerald-soft); }
+  #halaqaty-screen-samples .form-field label { display:block; color:var(--hq-muted); font-size:8px; }
+  #halaqaty-screen-samples .form-field span { display:block; margin-top:4px; font-size:11px; }
+  #halaqaty-screen-samples .auth-switch { margin-top:12px; text-align:center; color:var(--hq-muted); font-size:9px; }
+  #halaqaty-screen-samples .auth-switch strong { color:var(--hq-emerald); }
+  #halaqaty-screen-samples .profile-summary {
+    display:grid; grid-template-columns:52px 1fr auto; gap:10px; align-items:center;
+    padding:13px; border-radius:17px; background:var(--hq-paper);
+  }
+  #halaqaty-screen-samples .profile-summary .profile-avatar { width:52px; height:52px; margin:0; font-size:17px; }
+  #halaqaty-screen-samples .profile-summary strong { display:block; font-size:13px; }
+  #halaqaty-screen-samples .profile-summary small { color:var(--hq-muted); font-size:8px; }
+  #halaqaty-screen-samples .preference-row {
+    min-height:48px; display:grid; grid-template-columns:30px 1fr auto; gap:8px; align-items:center;
+    border-bottom:1px solid var(--hq-line); font-size:10px;
+  }
+  #halaqaty-screen-samples .preference-row:last-child { border-bottom:0; }
+  #halaqaty-screen-samples .toggle { width:31px; height:18px; padding:2px; border-radius:999px; background:var(--hq-emerald); }
+  #halaqaty-screen-samples .toggle::after { content:""; display:block; width:14px; height:14px; border-radius:50%; background:var(--hq-paper); }
+  #halaqaty-screen-samples [dir="ltr"] .toggle::after { margin-left:auto; }
+  #halaqaty-screen-samples .dark {
+    --hq-ivory:#0a0a0a; --hq-paper:#121212; --hq-emerald:#4cb368; --hq-emerald-deep:#ededed;
+    --hq-emerald-soft:#2c2c2c; --hq-gold:#d4a574; --hq-gold-soft:#8b6f47; --hq-ink:#ededed;
+    --hq-muted:#bdbdbd; --hq-line:#49454e; --hq-danger:#ef5350;
+    box-shadow:0 14px 34px rgb(0 0 0 / .34);
+  }
+  #halaqaty-screen-samples .dark .hero { background:#0f5627; color:#ededed; }
+  #halaqaty-screen-samples .dark .bottom-nav .active { background:#d4a574; color:#1c1c1e; }
+  #halaqaty-screen-samples .scale-preview { overflow-y:auto; font-size:14px; line-height:1.65; }
+  #halaqaty-screen-samples .scale-preview h4 { margin:0 0 7px; font-size:22px; line-height:1.45; }
+  #halaqaty-screen-samples .scale-preview p { margin:0 0 12px; }
+  #halaqaty-screen-samples .scale-preview .primary-green { min-height:48px; font-size:14px; }
+  #halaqaty-screen-samples .scale-preview .position-card strong,
+  #halaqaty-screen-samples .scale-preview .circle-row strong { font-size:14px; }
+  #halaqaty-screen-samples .scale-preview .position-card small,
+  #halaqaty-screen-samples .scale-preview .circle-row small,
+  #halaqaty-screen-samples .scale-preview .section-head span { font-size:12px; line-height:1.5; }
+  #halaqaty-screen-samples .scale-preview .section-head strong { font-size:16px; }
+  #halaqaty-screen-samples .scale-preview .circle-row { min-height:64px; }
+  #halaqaty-screen-samples .audit-board {
+    margin-top:18px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;
+  }
+  #halaqaty-screen-samples .audit-card { padding:15px; border:1px solid var(--hq-line); border-radius:16px; background:var(--hq-paper); }
+  #halaqaty-screen-samples .audit-card h4 { margin:0 0 9px; font-size:13px; }
+  #halaqaty-screen-samples .audit-check { display:flex; align-items:flex-start; gap:7px; margin-top:7px; color:var(--hq-muted); font-size:10px; line-height:1.45; }
+  #halaqaty-screen-samples .audit-check b { color:var(--hq-emerald); }
   #halaqaty-screen-samples .note {
     margin-top:16px; color:var(--muted-foreground); font-size:13px; line-height:1.5;
   }
   @media (max-width:1000px) {
     #halaqaty-screen-samples .sample-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    #halaqaty-screen-samples .audit-board { grid-template-columns:1fr; }
   }
   @media (max-width:560px) {
     #halaqaty-screen-samples .sample-grid { grid-template-columns:1fr; }
@@ -470,5 +564,239 @@
     </section>
   </div>
 
-  <p class="note">These samples show the intended hierarchy and visual language. Wave 2 is a non-production prototype: product data, role permissions, session states, and queue actions remain governed by the existing approved F-003 and F-005 behavior.</p>
+  <div class="wave-head">
+    <h3>Wave 3 — chat</h3>
+    <p>Conversation-first entry, media actions at the composer, explicit delivery states, and recovery without losing the draft.</p>
+  </div>
+
+  <div class="sample-grid">
+    <section>
+      <h3 class="sample-title">محادثة الحلقة · Circle chat</h3>
+      <div class="phone" dir="rtl" aria-label="Wave 3 circle conversation concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="top-title">محادثة حلقة الإتقان</span><span>⌕</span></div>
+        <main class="screen">
+          <div class="session-status"><strong>١٢ عضوًا</strong><span>أحمد يكتب الآن...</span></div>
+          <div class="chat-feed">
+            <div class="day-label">اليوم</div>
+            <article class="message"><strong>المعلم أحمد</strong><span>السلام عليكم، سنراجع اليوم الآيات ٢٥–٣٠.</span><small>٧:١٢ م</small></article>
+            <article class="message own"><span>وعليكم السلام، جاهز بإذن الله.</span><small>٧:١٤ م · تمت القراءة</small></article>
+            <article class="message"><strong>أحمد سمير</strong><span>بارك الله فيكم.</span><small>٧:١٥ م</small></article>
+            <article class="message own"><span>هل نبدأ من الآية ٢٥؟</span><small>٧:١٦ م · تم التسليم</small></article>
+          </div>
+          <div class="composer"><button class="composer-icon" type="button" aria-label="إرفاق صورة أو ملف أو تسجيل صوتي">＋</button><span>اكتب رسالة</span><button class="composer-icon send" type="button" aria-label="إرسال الرسالة">➤</button></div>
+        </main>
+        <nav class="bottom-nav"><span><b>⌂</b>الرئيسية</span><span><b>◉</b>الحلقات</span><span class="active"><b>▣</b>المحادثات</span><span><b>○</b>حسابي</span></nav>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">إرفاق سريع · Media actions</h3>
+      <div class="phone" dir="rtl" aria-label="Wave 3 attachment actions concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">›</span><span class="top-title">محادثة الحلقة</span><span>⌕</span></div>
+        <main class="screen">
+          <div class="chat-feed muted-panel">
+            <article class="message"><strong>المعلم أحمد</strong><span>أرسل صورة الصفحة أو تسجيل التلاوة.</span><small>٧:١٢ م</small></article>
+            <article class="message own"><span>حاضر.</span><small>٧:١٤ م · أُرسلت</small></article>
+          </div>
+          <section class="media-sheet">
+            <h4>ماذا تريد أن ترسل؟</h4>
+            <div class="media-choice"><span class="quick-icon">▧</span><div><strong>صورة</strong><small>حتى ٥ ميجابايت</small></div><span>‹</span></div>
+            <div class="media-choice"><span class="quick-icon">▤</span><div><strong>ملف PDF</strong><small>حتى ١٠ ميجابايت</small></div><span>‹</span></div>
+            <div class="media-choice"><span class="quick-icon">●</span><div><strong>رسالة صوتية</strong><small>حتى ٥ دقائق</small></div><span>‹</span></div>
+          </section>
+          <div class="composer"><button class="composer-icon" type="button" aria-label="إغلاق خيارات الإرفاق">×</button><span>اكتب رسالة</span><button class="composer-icon send" type="button" aria-label="إرسال الرسالة">➤</button></div>
+        </main>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">رسالة صوتية · Voice note</h3>
+      <div class="phone" dir="rtl" aria-label="Wave 3 voice note concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">›</span><span class="top-title">تسجيل رسالة صوتية</span><span></span></div>
+        <main class="screen">
+          <section class="recording-card">
+            <span class="live-pill"><span class="live-dot"></span>جارٍ التسجيل</span>
+            <div class="recording-time">٠٠:٣٨</div>
+            <div class="waveform" aria-label="مستوى الصوت"><span style="height:12px"></span><span style="height:25px"></span><span style="height:18px"></span><span style="height:34px"></span><span style="height:23px"></span><span style="height:31px"></span><span style="height:15px"></span><span style="height:27px"></span><span style="height:19px"></span><span style="height:32px"></span><span style="height:14px"></span></div>
+            <div class="hint">الحد الأقصى ٥ دقائق</div>
+            <button class="primary">إيقاف التسجيل</button>
+          </section>
+          <div class="section-head"><strong>بعد الإيقاف</strong></div>
+          <div class="quick-grid">
+            <div class="quick-item"><span class="quick-icon">▶</span><span>استماع</span></div>
+            <div class="quick-item"><span class="quick-icon">➤</span><span>إرسال</span></div>
+          </div>
+          <div class="danger-link">تجاهل التسجيل</div>
+        </main>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">Offline recovery · English LTR</h3>
+      <div class="phone" dir="ltr" aria-label="Wave 3 offline chat recovery concept">
+        <div class="status"><span>9:41</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">‹</span><span class="top-title">Circle chat</span><span>⌕</span></div>
+        <main class="screen">
+          <div class="offline-strip"><span>Offline — messages stay on this device</span><span>Retry</span></div>
+          <div class="chat-feed">
+            <article class="message"><strong>Teacher Ahmed</strong><span>Please send your recitation when ready.</span><small>7:12 PM</small></article>
+            <article class="message own"><span>I will send it shortly.</span><small>7:14 PM · Read</small></article>
+            <article class="message own failed-message"><span>Here is today’s recording.</span><small>Send failed · Retry or edit</small></article>
+          </div>
+          <div class="secondary-row"><div class="soft-button">Edit message</div><div class="soft-button">Retry</div></div>
+          <div class="composer"><button class="composer-icon" type="button" aria-label="Attach a photo, PDF, or voice note">＋</button><span>Write a message</span><button class="composer-icon send" type="button" aria-label="Send message">➤</button></div>
+        </main>
+      </div>
+    </section>
+  </div>
+
+  <div class="audit-board" aria-label="Chat prototype flow and state coverage">
+    <section class="audit-card"><h4>Primary paths</h4><div class="audit-check"><b>2</b><span>App shell → Chats → circle conversation.</span></div><div class="audit-check"><b>1</b><span>Circle details → conversation.</span></div></section>
+    <section class="audit-card"><h4>Composer paths</h4><div class="audit-check"><b>2</b><span>Attachment control → photo, PDF, or voice-note choice.</span></div><div class="audit-check"><b>1</b><span>Failed draft → retry or edit without losing content.</span></div></section>
+    <section class="audit-card"><h4>Required states</h4><div class="audit-check"><b>✓</b><span>Loading history, instructional empty state, delivered/read success, recoverable failure, and offline local queue.</span></div></section>
+  </div>
+
+  <div class="wave-head">
+    <h3>Wave 4 — profile and authentication</h3>
+    <p>A calm entry path, compact registration, focused profile editing, and preferences separated from sensitive account actions.</p>
+  </div>
+
+  <div class="sample-grid">
+    <section>
+      <h3 class="sample-title">مرحبًا بك · Sign in</h3>
+      <div class="phone" dir="rtl" aria-label="Wave 4 sign in concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <main class="screen">
+          <section class="auth-hero">
+            <span class="brand-mark">۞</span>
+            <h4>مرحبًا بك في حِلْقَتي</h4>
+            <p>تابع حفظك، تواصل مع حلقتك، وادخل جلساتك بسهولة.</p>
+          </section>
+          <div class="form-field active"><label>البريد الإلكتروني</label><span>karim@example.com</span></div>
+          <div class="form-field"><label>كلمة المرور</label><span>••••••••</span></div>
+          <button class="primary-green">تسجيل الدخول</button>
+          <div class="auth-switch">ليس لديك حساب؟ <strong>إنشاء حساب</strong></div>
+        </main>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">Create account · English LTR</h3>
+      <div class="phone" dir="ltr" aria-label="Wave 4 registration concept">
+        <div class="status"><span>9:41</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">‹</span><span class="top-title">Create account</span><span></span></div>
+        <main class="screen">
+          <section class="auth-hero"><span class="brand-mark">۞</span><h4>Begin your journey</h4><p>Only the essentials now; complete the rest from your profile.</p></section>
+          <div class="form-field"><label>Display name</label><span>Karim</span></div>
+          <div class="form-field active"><label>Email</label><span>karim@example.com</span></div>
+          <div class="form-field"><label>Password</label><span>••••••••</span></div>
+          <div class="form-field"><label>Preferred language</label><span>English</span></div>
+          <button class="primary-green">Create account</button>
+          <div class="auth-switch">Already registered? <strong>Sign in</strong></div>
+        </main>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">تعديل الملف · Edit profile</h3>
+      <div class="phone" dir="rtl" aria-label="Wave 4 profile editing concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">›</span><span class="top-title">تعديل الملف الشخصي</span><span></span></div>
+        <main class="screen">
+          <section class="profile-summary"><span class="profile-avatar">ك</span><div><strong>كريم فاضل</strong><small>طالب · العربية</small></div><span class="card-link">تغيير الصورة</span></section>
+          <div class="section-head"><strong>المعلومات الأساسية</strong></div>
+          <div class="form-field active"><label>الاسم الكامل</label><span>كريم فاضل</span></div>
+          <div class="form-field"><label>الاسم المعروض</label><span>كريم</span></div>
+          <div class="form-field"><label>نبذة · اختياري</label><span>طالب في حلقة الإتقان</span></div>
+          <div class="secondary-row"><div class="form-field"><label>الدولة</label><span>EG</span></div><div class="form-field"><label>اللغة</label><span>العربية</span></div></div>
+          <button class="primary-green">حفظ التغييرات</button>
+        </main>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">Preferences and account · LTR</h3>
+      <div class="phone" dir="ltr" aria-label="Wave 4 preferences and account actions concept">
+        <div class="status"><span>9:41</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">‹</span><span class="top-title">Preferences</span><span></span></div>
+        <main class="screen">
+          <div class="profile-section">
+            <div class="section-head"><strong>App preferences</strong></div>
+            <div class="preference-row"><span class="setting-icon">文</span><span>Language</span><span class="setting-value">English ›</span></div>
+            <div class="preference-row"><span class="setting-icon">◐</span><span>Appearance</span><span class="setting-value">Use device ›</span></div>
+            <div class="preference-row"><span class="setting-icon">◉</span><span>Notifications</span><span class="toggle"></span></div>
+          </div>
+          <div class="profile-section">
+            <div class="section-head"><strong>Support and privacy</strong></div>
+            <div class="preference-row"><span class="setting-icon">?</span><span>Help and support</span><span>›</span></div>
+            <div class="preference-row"><span class="setting-icon">⌾</span><span>Privacy and security</span><span>›</span></div>
+          </div>
+          <div class="profile-section">
+            <div class="section-head"><strong>Account</strong></div>
+            <div class="preference-row logout"><span>↪</span><span>Sign out</span><span>›</span></div>
+          </div>
+        </main>
+        <nav class="bottom-nav"><span><b>⌂</b>Home</span><span><b>◉</b>Circles</span><span><b>▣</b>Chats</span><span class="active"><b>○</b>Profile</span></nav>
+      </div>
+    </section>
+  </div>
+
+  <div class="audit-board" aria-label="Authentication and profile prototype flow and state coverage">
+    <section class="audit-card"><h4>Authentication paths</h4><div class="audit-check"><b>1</b><span>Completed form → sign in.</span></div><div class="audit-check"><b>2</b><span>Sign in → create account → submit registration.</span></div></section>
+    <section class="audit-card"><h4>Profile paths</h4><div class="audit-check"><b>2</b><span>App shell → Profile → edit or preference.</span></div><div class="audit-check"><b>1</b><span>Edit form → save, with success retained in context.</span></div></section>
+    <section class="audit-card"><h4>Required states</h4><div class="audit-check"><b>✓</b><span>Loading/disabled action, empty-field guidance, saved success, inline validation/error, and offline retry.</span></div></section>
+  </div>
+
+  <div class="wave-head">
+    <h3>Wave 5 — cross-app audit</h3>
+    <p>The same hierarchy must survive dark mode, mirrored direction, larger text, assistive technology, and compact screens.</p>
+  </div>
+
+  <div class="sample-grid">
+    <section>
+      <h3 class="sample-title">الوضع الداكن · Dark mode RTL</h3>
+      <div class="phone dark" dir="rtl" aria-label="Wave 5 dark mode RTL concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><div class="brand"><span class="brand-mark">۞</span><span>حِلْقَتي</span></div><span class="avatar">ك</span></div>
+        <main class="screen">
+          <div class="greeting">مساء الخير، كريم</div>
+          <div class="hint">محتوى واضح بدون وهج زائد</div>
+          <section class="hero"><div class="hero-label">الجلسة القادمة · غدًا</div><div class="hero-title">حلقة الإتقان</div><div class="hero-meta"><span>٧:٣٠ م</span><span>مراجعة</span></div><button class="primary">عرض التفاصيل</button></section>
+          <div class="section-head"><strong>الوصول السريع</strong></div>
+          <div class="quick-grid"><div class="quick-item"><span class="quick-icon">▣</span><span>المحادثة</span></div><div class="quick-item"><span class="quick-icon">◉</span><span>الحلقة</span></div></div>
+          <div class="section-head"><strong>تنبيه الوصول</strong></div>
+          <div class="session-status"><strong>تباين AA</strong><span>الألوان ليست المؤشر الوحيد</span></div>
+        </main>
+        <nav class="bottom-nav"><span class="active"><b>⌂</b>الرئيسية</span><span><b>◉</b>الحلقات</span><span><b>▣</b>المحادثات</span><span><b>○</b>حسابي</span></nav>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">Large text · English LTR</h3>
+      <div class="phone" dir="ltr" aria-label="Wave 5 large text LTR concept">
+        <div class="status"><span>9:41</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">‹</span><span class="top-title">Circle details</span><span>•••</span></div>
+        <main class="screen scale-preview">
+          <h4>Al-Itqan Circle</h4>
+          <p>Review Surah Al-Baqarah with Teacher Ahmed.</p>
+          <section class="position-card"><span class="position-number">2</span><div><strong>Your next session</strong><small>Tomorrow at 7:30 PM</small></div></section>
+          <button class="primary-green">View session details</button>
+          <div class="section-head"><strong>Recent activity</strong><span>See all</span></div>
+          <div class="circle-row"><span class="circle-icon">✓</span><div><strong>Quarter reviewed</strong><small>Tuesday · Very good</small></div><span class="chevron">›</span></div>
+          <div class="circle-row"><span class="circle-icon">◷</span><div><strong>Session attended</strong><small>Sunday · 45 minutes</small></div><span class="chevron">›</span></div>
+        </main>
+      </div>
+    </section>
+  </div>
+
+  <div class="audit-board" aria-label="Wave 5 cross-app audit checklist">
+    <section class="audit-card"><h4>Direction and language</h4><div class="audit-check"><b>✓</b><span>Arabic RTL and English LTR use mirrored navigation and directional icons.</span></div><div class="audit-check"><b>✓</b><span>User-facing copy replaces raw IDs, keys, and developer diagnostics.</span></div></section>
+    <section class="audit-card"><h4>Access and readability</h4><div class="audit-check"><b>✓</b><span>Text and controls retain hierarchy at increased text scale without hiding primary actions.</span></div><div class="audit-check"><b>✓</b><span>Interactive targets remain at least 48dp with visible focus and semantic labels.</span></div></section>
+    <section class="audit-card"><h4>States and recovery</h4><div class="audit-check"><b>✓</b><span>Loading, empty, success, error, and offline states preserve context and offer one clear next action.</span></div><div class="audit-check"><b>✓</b><span>Selection uses gold plus shape and weight; meaning never depends on color alone.</span></div></section>
+  </div>
+
+  <p class="note">These samples show the intended hierarchy and visual language. Waves 2–5 are non-production prototypes: product data, permissions, authentication, chat/media behavior, session state, and account actions remain governed by the existing approved product contracts and feature behavior.</p>
 </div>

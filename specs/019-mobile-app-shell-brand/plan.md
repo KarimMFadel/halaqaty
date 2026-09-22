@@ -103,9 +103,11 @@ localization framework.
 3. **Wave 2 — sessions/queue**: expose the existing circle session
    list/ad-hoc create/start/join flows; restructure hierarchy around connection,
    open audio, current turn, role-specific controls, and recovery.
-4. **Wave 3 — chat**: modernize chat entry, group/direct conversation, search,
-   reply/pin/delete/read, composer, attachment, voice note, archived, and offline
-   states without changing F-004.
+4. **Wave 3 — chat**: retain the Wave 0 Chats-list loading/empty/retryable/
+   offline recovery contract, then modernize group/direct conversation, search,
+   reply/pin/delete/read, composer, attachment, voice note, archived, and
+   offline presentation without changing F-004. The Chats-list state split is
+   not reimplemented in this wave.
 5. **Wave 4 — auth/profile**: modernize welcome/forms and group the existing
    profile fields, preferred language, and logout; add no settings capability.
 6. **Wave 5 — cross-app audit**: close direction, theme, contrast, text scale,

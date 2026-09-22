@@ -104,7 +104,7 @@ FR-032/FR-033) · **omitted** (unsupported data or unplanned prototype action).
 | Home quick action "رابط الدعوة" (invite link) | implemented | switches to Circles destination hosting `openInviteJoinButton` |
 | Home "عرض الكل" (see all circles) | implemented | switches to Circles destination |
 | Home top-bar avatar → profile | omitted | redundant duplicate of the Profile destination; no hidden fifth entry |
-| Chats list from memberships | implemented | `chatCircle-<id>`; failure must not masquerade as empty (Wave 0 fix) |
+| Chats list from memberships | implemented | `chatCircle-<id>`; failure must not masquerade as empty (Wave 0 fix). Retained as a Wave 3 compatibility prerequisite; Wave 3 implementation starts with group/direct conversation and composer/media presentation. |
 
 ### Wave 1 — circles (audit reference for later phases)
 | Sample action/data | Classification | Notes |

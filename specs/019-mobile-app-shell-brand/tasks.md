@@ -81,8 +81,8 @@ until Karim approves the complete Spec-Kit artifacts and analysis.
 
 **Independent Test**: Enter group/direct chat through authorized paths and exercise history, composer, search/reply/pin/delete/read, media, voice, archived, failed, and offline states.
 
-- [ ] T029 [US4] Add failing tests that distinguish Chats loading, empty, recoverable error, and offline/degraded states instead of presenting failed loads as empty in `mobile/test/widget_test.dart`.
-- [ ] T030 [US4] Implement the minimum Chats-tab state/recovery fix in `mobile/lib/app/chats_screen.dart`, preserving client-derived circle group chats and excluding a unified direct-message inbox.
+- [X] T029 [US4] Carry forward the Wave 0 widget coverage that distinguishes Chats loading, empty, recoverable error, and offline/degraded states in `mobile/test/widget_test.dart`; it remains a Wave 3 compatibility prerequisite and is not duplicated. Evidence: `evidence/wave-0.md` and `evidence/log-test-wave0-focused.txt`.
+- [X] T030 [US4] Carry forward the Wave 0 Chats-tab state/recovery implementation in `mobile/lib/app/chats_screen.dart`, preserving client-derived circle group chats and excluding a unified direct-message inbox. No Wave 3 reimplementation is authorized unless the retained regression coverage fails.
 - [ ] T031 [US4] Add failing group/direct conversation widget tests for the recorded group/direct entry tap budgets, hierarchy, own/other messages, delivery/read, search/reply/pin/delete, archived/read-only, access-lost, terminal/retryable, semantics, targets, and large text in `mobile/test/widget/chat/`.
 - [ ] T032 [US4] Recompose existing group/direct chat screens and status widgets under `mobile/lib/features/chat/presentation/` using current controllers and theme roles without altering authorization or message behavior.
 - [ ] T033 [US4] Add failing attachment/voice-note tests for chooser, recording, preview, discard, upload/playback, pending, failure, offline draft retention, and accessible announcements in existing `mobile/test/widget/chat/` files.

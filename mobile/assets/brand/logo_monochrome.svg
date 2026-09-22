@@ -1,3 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Halaqaty logo monochrome">
-  <path fill="currentColor" fill-rule="evenodd" d="M88 50 L70.33 41.59 L76.87 23.13 L58.41 29.67 L50 12 L41.59 29.67 L23.13 23.13 L29.67 41.59 L12 50 L29.67 58.41 L23.13 76.87 L41.59 70.33 L50 88 L58.41 70.33 L76.87 76.87 L70.33 58.41 Z M48.8 38.5 Q39 33.5 29.5 36 L29.5 57.5 Q39 55 48.8 61 Z M51.2 38.5 Q61 33.5 70.5 36 L70.5 57.5 Q61 55 51.2 61 Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc">
+  <title id="title">Halaqaty Rub el Hizb logo</title>
+  <desc id="desc">The traditional Rub el Hizb: two overlapping squares with a central circle.</desc>
+  <path fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round" d="M24 24h52v52H24z M50 13.23 86.77 50 50 86.77 13.23 50Z"/>
+  <circle cx="50" cy="50" r="10" fill="none" stroke="currentColor" stroke-width="7"/>
 </svg>

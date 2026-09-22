@@ -82,9 +82,7 @@ class HalaqatyLoading extends StatelessWidget {
   }
 }
 
-/// The Halaqaty logo (8-point khatam star with open book).
-///
-/// The asset is a replaceable placeholder; keep this path stable.
+/// The Halaqaty logo (Rub el Hizb).
 class HalaqatyLogo extends StatelessWidget {
   const HalaqatyLogo({super.key, this.size = 64, this.monochrome = false});
 

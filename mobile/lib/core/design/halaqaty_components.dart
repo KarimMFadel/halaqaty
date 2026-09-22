@@ -35,6 +35,53 @@ void showHalaqatyError(BuildContext context, String message) {
     );
 }
 
+/// Shows the shared under-implementation notice (FR-032/FR-033).
+/// Presentation-only: no navigation, controller calls, or state mutation.
+void showHalaqatyUnderImplementationNotice(BuildContext context) {
+  final isRtl = Directionality.of(context) == TextDirection.rtl;
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        key: const Key('halaqatyUnderImplementationSnackBar'),
+        content: Text(
+          isRtl
+              ? 'هذه الميزة قيد التنفيذ وغير متاحة حالياً.'
+              : 'This feature is under implementation and is not available yet.',
+        ),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: isRtl ? 'إغلاق' : 'Dismiss',
+          onPressed: ScaffoldMessenger.of(context).removeCurrentSnackBar,
+        ),
+      ),
+    );
+}
+
+/// Branded loading surface for waits over 300ms (FR-007), with a localized
+/// semantics label instead of a bare spinner.
+class HalaqatyLoading extends StatelessWidget {
+  const HalaqatyLoading({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const HalaqatyLogo(size: 72, monochrome: true),
+          const SizedBox(height: 24),
+          CircularProgressIndicator(
+            semanticsLabel: isRtl ? 'جارٍ التحميل' : 'Loading',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// The Halaqaty logo (8-point khatam star with open book).
 ///
 /// The asset is a replaceable placeholder; keep this path stable.

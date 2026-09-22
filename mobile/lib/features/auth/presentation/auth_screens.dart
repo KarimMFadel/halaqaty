@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:halaqaty_mobile/app/app_locale_controller.dart';
 import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 
 import '../application/auth_controller.dart';
@@ -201,7 +202,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       )
                       .toList(),
                   onChanged: (v) {
-                    if (v != null) setState(() => _selectedLanguage = v);
+                    if (v != null) {
+                      setState(() => _selectedLanguage = v);
+                      // Registration choice drives UI direction immediately
+                      // (FR-029), before the account exists.
+                      ref
+                          .read(appLocaleControllerProvider.notifier)
+                          .selectLanguage(v);
+                    }
                   },
                 ),
                 const SizedBox(height: 32),

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/group_chat_screen.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
+import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_load_error.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_name_text.dart';
 
 /// Chats tab: group chats of the user's circles.
@@ -30,6 +32,9 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
     });
   }
 
+  Future<void> _reload() =>
+      ref.read(circleDiscoveryControllerProvider.notifier).loadMyCircles();
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(circleDiscoveryControllerProvider);
@@ -41,48 +46,80 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
         title: Text(isRtl ? 'المحادثات' : 'Chats'),
       ),
       body: SafeArea(
-        child: state.isLoading && state.myCircles.isEmpty
-            ? const Center(child: CircularProgressIndicator())
-            : state.myCircles.isEmpty
-                ? EmptyStateCard(
-                    key: const Key('chatsEmpty'),
-                    title: isRtl ? 'لا توجد محادثات' : 'No chats yet',
-                    hint: isRtl
-                        ? 'انضم إلى حلقة لتظهر محادثتها هنا'
-                        : 'Join a circle to see its group chat here',
-                  )
-                : RefreshIndicator(
-                    onRefresh: () => ref
-                        .read(circleDiscoveryControllerProvider.notifier)
-                        .loadMyCircles(),
-                    child: ListView.separated(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: state.myCircles.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final circle = state.myCircles[index];
-                        return Card(
-                          child: ListTile(
-                            key: Key('chatCircle-${circle.id}'),
-                            leading: Icon(
-                              Icons.forum,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            title: CircleNameText(name: circle.name),
-                            trailing: Icon(chevron),
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => GroupChatScreen(
-                                  circleId: circle.id,
-                                  circleName: circle.name,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
+        child: switch ((
+          state.isLoading,
+          state.failure != null,
+          state.myCircles.isEmpty,
+        )) {
+          // Initial wait: branded loading, never a bare spinner.
+          (true, _, true) => const HalaqatyLoading(key: Key('chatsLoading')),
+          // Failed load with nothing to show: error, not a fake empty state.
+          (false, true, true) => CircleLoadError(
+              failure: state.failure!,
+              onRetry: _reload,
+            ),
+          // Genuinely empty after a successful load.
+          (false, false, true) => EmptyStateCard(
+              key: const Key('chatsEmpty'),
+              title: isRtl ? 'لا توجد محادثات' : 'No chats yet',
+              hint: isRtl
+                  ? 'انضم إلى حلقة لتظهر محادثتها هنا'
+                  : 'Join a circle to see its group chat here',
+            ),
+          // Refresh failure keeps the last safe list under a retry notice.
+          _ => RefreshIndicator(
+              onRefresh: _reload,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  if (state.failure != null) ...[
+                    CircleLoadError(
+                      failure: state.failure!,
+                      onRetry: _reload,
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                  ],
+                  for (var i = 0; i < state.myCircles.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 12),
+                    _ChatCircleTile(
+                      circle: state.myCircles[i],
+                      chevron: chevron,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+        },
+      ),
+    );
+  }
+}
+
+class _ChatCircleTile extends StatelessWidget {
+  const _ChatCircleTile({required this.circle, required this.chevron});
+
+  final CircleSummary circle;
+  final IconData chevron;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        key: Key('chatCircle-${circle.id}'),
+        leading: Icon(
+          Icons.forum,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+        title: CircleNameText(name: circle.name),
+        trailing: Icon(chevron),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GroupChatScreen(
+              circleId: circle.id,
+              circleName: circle.name,
+            ),
+          ),
+        ),
       ),
     );
   }

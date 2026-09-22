@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:halaqaty_mobile/app/app_locale_controller.dart';
 import 'package:halaqaty_mobile/features/auth/presentation/auth_screens.dart';
 import 'package:halaqaty_mobile/features/profile/application/profile_controller.dart';
 import 'package:halaqaty_mobile/features/profile/data/profile_api_client.dart';
@@ -64,6 +65,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(profileControllerProvider);
     final isRtl = Directionality.of(context) == TextDirection.rtl;
+
+    // A loaded profile replaces the locale with its preferred language
+    // (FR-029).
+    ref.listen(
+      profileControllerProvider.select((s) => s.profile?.preferredLanguage),
+      (previous, next) {
+        if (next != null && next != previous) {
+          ref
+              .read(appLocaleControllerProvider.notifier)
+              .applyProfileLanguage(next);
+        }
+      },
+    );
 
     if (state.profile != null && !_didSeedFromProfile) {
       _seedFromProfile(state.profile!);
@@ -262,6 +276,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (!mounted || !success) {
       return;
     }
+    // A successful save updates the app locale and direction.
+    ref
+        .read(appLocaleControllerProvider.notifier)
+        .applyProfileLanguage(_selectedLanguage);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         key: const Key('profileSaveSuccess'),

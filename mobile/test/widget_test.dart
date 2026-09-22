@@ -1,11 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
+import 'package:go_router/go_router.dart';
+import 'package:halaqaty_mobile/app/app_locale_controller.dart';
 import 'package:halaqaty_mobile/app/chats_screen.dart';
 import 'package:halaqaty_mobile/app/home_screen.dart';
 import 'package:halaqaty_mobile/app/router.dart';
 import 'package:halaqaty_mobile/app/welcome_screen.dart';
+import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
+import 'package:halaqaty_mobile/core/theme/halaqaty_theme.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 import 'package:halaqaty_mobile/features/circles/application/create_circle_controller.dart';
@@ -57,6 +63,8 @@ class _TestProfileController extends StateNotifier<ProfileState>
   _TestProfileController() : super(const ProfileState());
 
   bool isDisposed = false;
+  ProfileUser? profileToLoad;
+  bool updateResult = false;
 
   @override
   void dispose() {
@@ -65,11 +73,16 @@ class _TestProfileController extends StateNotifier<ProfileState>
   }
 
   @override
-  Future<void> loadProfile() async {}
+  Future<void> loadProfile() async {
+    final profile = profileToLoad;
+    if (profile != null) {
+      state = ProfileState(profile: profile);
+    }
+  }
 
   @override
   Future<bool> updateProfile({required UpdateProfileRequest request}) async =>
-      false;
+      updateResult;
 }
 
 class _TestCircleApiClient extends CircleApiClient {
@@ -78,6 +91,7 @@ class _TestCircleApiClient extends CircleApiClient {
   List<CircleSummary> circles = const [];
   DioException? listCirclesError;
   int listCirclesCalls = 0;
+  Completer<List<CircleSummary>>? listCirclesCompleter;
 
   @override
   Future<List<CircleSummary>> listCircles({
@@ -91,6 +105,10 @@ class _TestCircleApiClient extends CircleApiClient {
     if (listCirclesError case final error?) {
       listCirclesError = null;
       throw error;
+    }
+    final pending = listCirclesCompleter;
+    if (pending != null) {
+      return pending.future;
     }
     return circles;
   }
@@ -111,14 +129,20 @@ Future<void> _pumpApp(
   List<_TestProfileController>? profileControllers,
   _TestCircleApiClient? circleApiClient,
   String? firebaseToken,
+  ProfileUser? profileToLoad,
+  bool profileUpdateResult = false,
+  Locale platformLocale = const Locale('en'),
 }) {
   final apiClient = circleApiClient ?? _TestCircleApiClient();
   return tester.pumpWidget(
     ProviderScope(
       overrides: [
+        platformLocaleProvider.overrideWithValue(platformLocale),
         authControllerProvider.overrideWith((_) => controller),
         profileControllerProvider.overrideWith((_) {
-          final profileController = _TestProfileController();
+          final profileController = _TestProfileController()
+            ..profileToLoad = profileToLoad
+            ..updateResult = profileUpdateResult;
           profileControllers?.add(profileController);
           return profileController;
         }),
@@ -249,7 +273,13 @@ void main() {
   testWidgets('switches to the chats tab', (WidgetTester tester) async {
     await _pumpApp(
       tester,
-      _TestAuthController(const AuthState(status: AuthStatus.authenticated)),
+      _TestAuthController(
+        const AuthState(
+          status: AuthStatus.authenticated,
+          sessionId: 'session-1',
+        ),
+      ),
+      firebaseToken: 'firebase-token',
     );
     await tester.pumpAndSettle();
 
@@ -423,5 +453,493 @@ void main() {
 
     final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(materialApp.theme?.colorScheme.primary, const Color(0xFF1B7E3C));
+  });
+
+  group('app locale and direction (US1)', () {
+    Locale appLocaleOf(WidgetTester tester) => ProviderScope.containerOf(
+          tester.element(find.byType(MaterialApp)),
+        ).read(appLocaleControllerProvider);
+
+    TextDirection directionOf(WidgetTester tester, Finder finder) =>
+        Directionality.of(tester.element(finder));
+
+    testWidgets('unsupported platform locale falls back to Arabic RTL',
+        (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        _TestAuthController(
+          const AuthState(status: AuthStatus.unauthenticated),
+        ),
+        platformLocale: const Locale('fr'),
+      );
+
+      expect(appLocaleOf(tester), const Locale('ar'));
+      expect(
+        directionOf(tester, find.byType(WelcomeScreen)),
+        TextDirection.rtl,
+      );
+      expect(find.text('حلقاتي'), findsOneWidget);
+    });
+
+    testWidgets('Arabic platform locale selects Arabic RTL',
+        (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        _TestAuthController(
+          const AuthState(status: AuthStatus.unauthenticated),
+        ),
+        platformLocale: const Locale('ar'),
+      );
+
+      expect(appLocaleOf(tester), const Locale('ar'));
+      expect(
+        directionOf(tester, find.byType(WelcomeScreen)),
+        TextDirection.rtl,
+      );
+    });
+
+    testWidgets('English platform locale selects English LTR',
+        (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        _TestAuthController(
+          const AuthState(status: AuthStatus.unauthenticated),
+        ),
+      );
+
+      expect(appLocaleOf(tester), const Locale('en'));
+      expect(
+        directionOf(tester, find.byType(WelcomeScreen)),
+        TextDirection.ltr,
+      );
+      expect(find.text('Halaqaty'), findsOneWidget);
+    });
+
+    testWidgets('registration language selection updates locale immediately',
+        (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        _TestAuthController(
+          const AuthState(status: AuthStatus.unauthenticated),
+        ),
+        platformLocale: const Locale('ar'),
+      );
+      await tester.tap(find.byKey(const Key('openRegister')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('languageDropdown')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('الإنجليزية').last);
+      await tester.pumpAndSettle();
+
+      expect(appLocaleOf(tester), const Locale('en'));
+      expect(
+        directionOf(tester, find.byType(RegisterScreen)),
+        TextDirection.ltr,
+      );
+    });
+
+    testWidgets('successful profile load applies preferred language',
+        (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        _TestAuthController(
+          const AuthState(
+            status: AuthStatus.authenticated,
+            sessionId: 'session-1',
+          ),
+        ),
+        platformLocale: const Locale('ar'),
+        profileToLoad: ProfileUser(
+          id: 'user-1',
+          firebaseUid: 'firebase-1',
+          fullName: 'Karim Fadel',
+          displayName: 'Karim',
+          bio: null,
+          country: 'EG',
+          preferredLanguage: 'en',
+          avatarUrl: null,
+          phone: null,
+          createdAt: DateTime.utc(2026, 1, 1),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('حسابي'));
+      await tester.pumpAndSettle();
+
+      expect(appLocaleOf(tester), const Locale('en'));
+      expect(
+        directionOf(tester, find.byType(ProfileScreen)),
+        TextDirection.ltr,
+      );
+    });
+
+    testWidgets('profile save updates locale and rebuilds the app router',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpApp(
+        tester,
+        _TestAuthController(
+          const AuthState(
+            status: AuthStatus.authenticated,
+            sessionId: 'session-1',
+          ),
+        ),
+        platformLocale: const Locale('ar'),
+        profileToLoad: ProfileUser(
+          id: 'user-1',
+          firebaseUid: 'firebase-1',
+          fullName: 'Karim Fadel',
+          displayName: 'Karim',
+          bio: null,
+          country: 'EG',
+          preferredLanguage: 'ar',
+          avatarUrl: null,
+          phone: null,
+          createdAt: DateTime.utc(2026, 1, 1),
+        ),
+        profileUpdateResult: true,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('حسابي'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('profileLanguageDropdown')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('الإنجليزية').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('profileSaveButton')));
+      await tester.pumpAndSettle();
+
+      expect(appLocaleOf(tester), const Locale('en'));
+      expect(
+        directionOf(tester, find.byType(ProfileScreen)),
+        TextDirection.ltr,
+      );
+    });
+
+    testWidgets('logout restores the platform locale fallback',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpApp(
+        tester,
+        _TestAuthController(
+          const AuthState(
+            status: AuthStatus.authenticated,
+            sessionId: 'session-1',
+          ),
+        ),
+        platformLocale: const Locale('en'),
+        profileToLoad: ProfileUser(
+          id: 'user-1',
+          firebaseUid: 'firebase-1',
+          fullName: 'Karim Fadel',
+          displayName: 'Karim',
+          bio: null,
+          country: 'EG',
+          preferredLanguage: 'ar',
+          avatarUrl: null,
+          phone: null,
+          createdAt: DateTime.utc(2026, 1, 1),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Profile'));
+      await tester.pumpAndSettle();
+      expect(appLocaleOf(tester), const Locale('ar'));
+
+      await tester.tap(find.byKey(const Key('logoutButton')));
+      await tester.pumpAndSettle();
+
+      expect(appLocaleOf(tester), const Locale('en'));
+      expect(
+        directionOf(tester, find.byType(WelcomeScreen)),
+        TextDirection.ltr,
+      );
+    });
+
+    testWidgets('protected redirect keeps unauthenticated users off the shell',
+        (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        _TestAuthController(
+          const AuthState(status: AuthStatus.unauthenticated),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final router = tester
+          .widget<MaterialApp>(find.byType(MaterialApp))
+          .routerConfig! as GoRouter;
+      router.go('/home');
+      await tester.pumpAndSettle();
+
+      expect(find.byType(WelcomeScreen), findsOneWidget);
+      expect(find.byKey(const Key('appNavigationBar')), findsNothing);
+    });
+  });
+
+  group('shell quality gates (US1)', () {
+    testWidgets('navigation destinations and welcome actions meet 48dp',
+        (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        _TestAuthController(
+          const AuthState(status: AuthStatus.authenticated),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      for (final label in ['Home', 'Circles', 'Chats', 'Profile']) {
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('appNavigationBar')),
+            matching: find.text(label),
+          ),
+          findsOneWidget,
+        );
+      }
+      final destinations = find.descendant(
+        of: find.byKey(const Key('appNavigationBar')),
+        matching: find.byType(NavigationDestination),
+      );
+      expect(destinations, findsNWidgets(4));
+      for (var i = 0; i < 4; i++) {
+        expect(
+          tester.getSize(destinations.at(i)).height,
+          greaterThanOrEqualTo(48),
+        );
+      }
+    });
+
+    testWidgets('welcome actions meet 48dp targets',
+        (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        _TestAuthController(
+          const AuthState(status: AuthStatus.unauthenticated),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('openLogin')), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(const Key('openLogin'))).height,
+        greaterThanOrEqualTo(48),
+      );
+      expect(find.byKey(const Key('openRegister')), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(const Key('openRegister'))).height,
+        greaterThanOrEqualTo(48),
+      );
+    });
+
+    testWidgets('splash loading is branded and semantically labelled',
+        (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        _TestAuthController(const AuthState(status: AuthStatus.unknown)),
+      );
+
+      expect(find.byType(HalaqatyLogo), findsOneWidget);
+      final semantics = tester.getSemantics(
+        find.byKey(const Key('authInitializing')),
+      );
+      expect(semantics.label, isNotEmpty);
+    });
+
+    testWidgets('selected tab changes icon shape, not color alone',
+        (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        _TestAuthController(
+          const AuthState(status: AuthStatus.authenticated),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.home), findsOneWidget);
+      expect(find.byIcon(Icons.groups_outlined), findsOneWidget);
+
+      await tester.tap(find.text('Circles'));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.home_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.groups), findsOneWidget);
+    });
+
+    testWidgets('dark theme keeps selected-state meaning and font mapping',
+        (WidgetTester tester) async {
+      final dark = halaqatyDarkTheme();
+      expect(
+        dark.navigationBarTheme.indicatorColor,
+        dark.colorScheme.secondaryContainer,
+      );
+      final labelStyle =
+          dark.navigationBarTheme.labelTextStyle?.resolve(const {});
+      expect(labelStyle?.fontWeight, FontWeight.w600);
+
+      // Frozen bundled-font mapping: title/label/button request 600 (Poppins
+      // SemiBold / Cairo Bold fallback); display/headline/body request 400.
+      expect(dark.textTheme.titleLarge?.fontWeight, FontWeight.w600);
+      expect(dark.textTheme.titleMedium?.fontWeight, FontWeight.w600);
+      expect(dark.textTheme.labelLarge?.fontWeight, FontWeight.w600);
+      expect(dark.textTheme.bodyLarge?.fontWeight, FontWeight.w400);
+      expect(dark.textTheme.headlineSmall?.fontWeight, FontWeight.w400);
+      // Arabic/Quranic lines keep height at least 1.5 in both themes.
+      expect(dark.textTheme.bodyLarge?.height, greaterThanOrEqualTo(1.5));
+
+      final light = halaqatyLightTheme();
+      expect(light.textTheme.titleLarge?.fontWeight, FontWeight.w600);
+      expect(light.textTheme.bodyLarge?.fontWeight, FontWeight.w400);
+      expect(light.textTheme.bodyLarge?.height, greaterThanOrEqualTo(1.5));
+    });
+  });
+
+  group('home and chats states (US1)', () {
+    CircleSummary circle(String id) => CircleSummary(
+          id: id,
+          name: 'Circle $id',
+          description: null,
+          maxCapacity: 10,
+          genderRestriction: 'unspecified',
+          language: 'en',
+          createdAt: DateTime.utc(2026, 8, 1),
+        );
+
+    DioException connectionError() => DioException(
+          requestOptions: RequestOptions(path: '/circles'),
+          type: DioExceptionType.connectionError,
+        );
+
+    testWidgets('home shows branded loading while circles load',
+        (WidgetTester tester) async {
+      final apiClient = _TestCircleApiClient()
+        ..listCirclesCompleter = Completer<List<CircleSummary>>();
+      await _pumpApp(
+        tester,
+        _TestAuthController(
+          const AuthState(
+            status: AuthStatus.authenticated,
+            sessionId: 'session-1',
+          ),
+        ),
+        circleApiClient: apiClient,
+        firebaseToken: 'firebase-token',
+      );
+      await tester.pump();
+
+      expect(find.byKey(const Key('homeLoading')), findsOneWidget);
+      expect(find.byType(HalaqatyLogo), findsWidgets);
+
+      apiClient.listCirclesCompleter!.complete(const []);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('homeNoCircles')), findsOneWidget);
+    });
+
+    testWidgets(
+        'home keeps circles visible with a stale notice when refresh '
+        'fails', (WidgetTester tester) async {
+      final apiClient = _TestCircleApiClient()..circles = [circle('circle-1')];
+      await _pumpApp(
+        tester,
+        _TestAuthController(
+          const AuthState(
+            status: AuthStatus.authenticated,
+            sessionId: 'session-1',
+          ),
+        ),
+        circleApiClient: apiClient,
+        firebaseToken: 'firebase-token',
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('homeCircle-circle-1')), findsOneWidget);
+
+      apiClient.listCirclesError = connectionError();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(HomeScreen)),
+      );
+      await container
+          .read(circleDiscoveryControllerProvider.notifier)
+          .loadMyCircles();
+      await tester.pump();
+
+      expect(find.byKey(const Key('homeCircle-circle-1')), findsOneWidget);
+      expect(find.byKey(const Key('circleLoadError')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('circleLoadRetry')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('circleLoadError')), findsNothing);
+      expect(find.byKey(const Key('homeCircle-circle-1')), findsOneWidget);
+    });
+
+    testWidgets(
+        'chats shows a retryable error instead of empty when load '
+        'fails', (WidgetTester tester) async {
+      // The error is armed after Home's initial load so it hits the Chats
+      // tab's own load (the fake consumes each armed error once).
+      final apiClient = _TestCircleApiClient();
+      await _pumpApp(
+        tester,
+        _TestAuthController(
+          const AuthState(
+            status: AuthStatus.authenticated,
+            sessionId: 'session-1',
+          ),
+        ),
+        circleApiClient: apiClient,
+        firebaseToken: 'firebase-token',
+      );
+      await tester.pumpAndSettle();
+
+      apiClient.listCirclesError = connectionError();
+      await tester.tap(find.text('Chats'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('circleLoadError')), findsOneWidget);
+      expect(find.byKey(const Key('chatsEmpty')), findsNothing);
+    });
+
+    testWidgets(
+        'chats keeps conversations visible with a stale notice when '
+        'refresh fails', (WidgetTester tester) async {
+      final apiClient = _TestCircleApiClient()..circles = [circle('circle-1')];
+      await _pumpApp(
+        tester,
+        _TestAuthController(
+          const AuthState(
+            status: AuthStatus.authenticated,
+            sessionId: 'session-1',
+          ),
+        ),
+        circleApiClient: apiClient,
+        firebaseToken: 'firebase-token',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Chats'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('chatCircle-circle-1')), findsOneWidget);
+
+      apiClient.listCirclesError = connectionError();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ChatsScreen)),
+      );
+      await container
+          .read(circleDiscoveryControllerProvider.notifier)
+          .loadMyCircles();
+      await tester.pump();
+
+      expect(find.byKey(const Key('chatCircle-circle-1')), findsOneWidget);
+      expect(find.byKey(const Key('circleLoadError')), findsOneWidget);
+    });
   });
 }

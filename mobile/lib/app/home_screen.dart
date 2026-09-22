@@ -48,15 +48,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              if (state.failure != null && state.myCircles.isEmpty)
+              // Recoverable failure keeps loaded circles visible under a
+              // retryable error card instead of clearing safe context.
+              if (state.failure != null)
                 CircleLoadError(
                   failure: state.failure!,
                   onRetry: () => ref
                       .read(circleDiscoveryControllerProvider.notifier)
                       .loadMyCircles(),
                 ),
-              if (state.failure != null && state.myCircles.isEmpty)
-                const SizedBox(height: 16),
+              if (state.failure != null) const SizedBox(height: 16),
               Row(
                 children: [
                   const HalaqatyLogo(size: 40),
@@ -77,7 +78,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 title: isRtl ? 'حلقاتي' : 'My circles',
               ),
               if (state.isLoading && state.myCircles.isEmpty)
-                const Center(child: CircularProgressIndicator()),
+                const HalaqatyLoading(key: Key('homeLoading')),
               if (!state.isLoading && state.myCircles.isEmpty)
                 EmptyStateCard(
                   key: const Key('homeNoCircles'),

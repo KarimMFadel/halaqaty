@@ -154,14 +154,19 @@ class HalaqatySplash extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    return Scaffold(
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            HalaqatyLogo(size: 96),
-            SizedBox(height: 32),
-            CircularProgressIndicator(key: Key('authInitializing')),
+            const HalaqatyLogo(size: 96),
+            const SizedBox(height: 32),
+            CircularProgressIndicator(
+              key: const Key('authInitializing'),
+              semanticsLabel:
+                  isRtl ? 'جارٍ التحقق من جلستك' : 'Checking your session',
+            ),
           ],
         ),
       ),

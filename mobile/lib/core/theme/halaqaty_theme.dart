@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// Halaqaty brand color tokens from `docs/engineering/design/DESIGN.md`.
@@ -107,11 +108,41 @@ final ColorScheme _darkScheme = ColorScheme.dark(
 
 ThemeData _buildTheme(ColorScheme scheme) {
   final isLight = scheme.brightness == Brightness.light;
+
+  // Bundled-font mapping (spec clarification 2026-09-22): title/label get
+  // w600 (Poppins SemiBold / Cairo Bold), the rest w400; height 1.5 keeps
+  // Arabic diacritics unclipped. No new font assets, no synthesized weights.
+  final baseTypography =
+      Typography.material2021(platform: defaultTargetPlatform);
+  final baseTextTheme = isLight ? baseTypography.black : baseTypography.white;
+  TextStyle? emphasis(TextStyle? style) =>
+      style?.copyWith(fontWeight: FontWeight.w600, height: 1.5);
+  TextStyle? regular(TextStyle? style) =>
+      style?.copyWith(fontWeight: FontWeight.w400, height: 1.5);
+  final textTheme = baseTextTheme.copyWith(
+    displayLarge: regular(baseTextTheme.displayLarge),
+    displayMedium: regular(baseTextTheme.displayMedium),
+    displaySmall: regular(baseTextTheme.displaySmall),
+    headlineLarge: regular(baseTextTheme.headlineLarge),
+    headlineMedium: regular(baseTextTheme.headlineMedium),
+    headlineSmall: regular(baseTextTheme.headlineSmall),
+    titleLarge: emphasis(baseTextTheme.titleLarge),
+    titleMedium: emphasis(baseTextTheme.titleMedium),
+    titleSmall: emphasis(baseTextTheme.titleSmall),
+    bodyLarge: regular(baseTextTheme.bodyLarge),
+    bodyMedium: regular(baseTextTheme.bodyMedium),
+    bodySmall: regular(baseTextTheme.bodySmall),
+    labelLarge: emphasis(baseTextTheme.labelLarge),
+    labelMedium: emphasis(baseTextTheme.labelMedium),
+    labelSmall: emphasis(baseTextTheme.labelSmall),
+  );
+
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
     fontFamily: HalaqatyFonts.primary,
     fontFamilyFallback: HalaqatyFonts.fallback,
+    textTheme: textTheme,
     scaffoldBackgroundColor: isLight
         ? HalaqatyColors.backgroundLight
         : HalaqatyColors.backgroundDark,

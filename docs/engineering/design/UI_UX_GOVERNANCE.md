@@ -167,9 +167,10 @@ Welcome, sign-in/register, profile editing, preferences, and account actions.
 Dark mode, RTL/LTR screenshot matrix, screen-reader checks, text scaling,
 emulator review, and removal of remaining developer-facing copy or placeholders.
 
-Each wave is a separate approved Spec-Kit feature. No wave adds backend tables,
-endpoints, role rules, or provider capabilities without the normal contract and
-architecture approvals.
+F-019 is the approved umbrella Spec-Kit feature for Waves 0–5, replacing the
+previous F-020–F-023 allocation. Each wave remains a coherent implementation and
+review batch within F-019. No wave adds backend tables, endpoints, role rules, or
+provider capabilities without the normal contract and architecture approvals.
 
 ## 6. Definition of done
 

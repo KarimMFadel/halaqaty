@@ -148,10 +148,24 @@ provider registry, job framework, or new lifecycle end reason.
 
 ---
 
+## 12. Mobile UI/UX Numbering
+
+The 2026-09-17 `APP-SHELL / UI-OVERHAUL` amendment approved Wave 0 and
+allocated the remaining per-feature redesign to F-020–F-023. F-019 supersedes
+that numbering allocation and consolidates Waves 0–5 into one feature, while
+retaining each wave as a coherent implementation and review batch.
+
+| ID | Decision | Rationale |
+|---|---|---|
+| F-019-NUMBERING | **F-019 is the umbrella feature for Waves 0–5 and replaces the previous F-020–F-023 allocation.** | Keeps the complete design modernization traceable through one Spec-Kit lifecycle while preserving wave-level implementation and review batches. Explicitly approved by Karim on 2026-09-22. |
+
+---
+
 ## Amendment Log
 
 | Date | Decision ID | Old Value | New Value | Rationale | ADR |
 |---|---|---|---|---|---|
+| 2026-09-22 | F-019-NUMBERING | Wave 0 approved separately; remaining redesign allocated to F-020–F-023 | F-019 is the umbrella for Waves 0–5 and replaces the F-020–F-023 allocation | Keeps the complete modernization in one traceable lifecycle while retaining coherent wave-level implementation and review batches. | — |
 | 2026-09-16 | PROVIDER-BOUNDARY / F-018 | MinIO SDK-shaped storage seam; LiveKit SDK construction outside its adapter | Approved provider adapter boundary refactor preserving current providers, public behavior, and existing safety guarantees | Makes future approved replacements local to their integrations. Spec-Kit plus Superpowers workflow approved by Karim. | ADR-023 |
 | 2026-06-30 | GRADE-ENUM | 4-grade: `excellent/good/needs_improvement/repeat` (ARCHITECTURE.md) / 6-grade: `excellent/very_good/good/acceptable/needs_review/repeat` (FEATURES.md) | **5-grade canonical:** `excellent/good/acceptable/needs_review/repeat` | Resolved mismatch between ARCHITECTURE.md (4-grade) and FEATURES.md F-003 (6-grade). Merged `very_good` into `good`; renamed `needs_improvement` → `needs_review` for clarity. Approved by Karim 2026-06-30. | ADR-013 |
 | 2026-06-30 | OQ-027 | Open | Fixed globally — same Surah status threshold rules for all circles | Simpler to reason about; teacher customisation deferred | — |

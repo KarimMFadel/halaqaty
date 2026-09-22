@@ -60,6 +60,7 @@ This is a **living document**. It tracks every feature from proposal through del
 | [F-016](#f-016-desktop-app) | Desktop App (Flutter) | P3 | 🔵 Proposed | 5 | Mobile |
 | [F-017](#f-017-institutional-platform) | 🏢 Institutional Platform | P3 | 🔵 Proposed | 5 | Full Stack |
 | [F-018](#f-018-provider-adapter-boundaries) | Provider Adapter Boundaries | P1 | 🟡 Approved | Platform | Full Stack |
+| [F-019](#f-019-mobile-app-shell-and-uiux-modernization) | Mobile App Shell and UI/UX Modernization | P0 | 🟡 Approved | Mobile UX | Mobile |
 
 ---
 
@@ -870,6 +871,48 @@ Keep secure file attachments and live audio independent of the currently selecte
 **Approval:** Karim approved the reviewed scope and requested recording and execution on 2026-09-16 after F-004 completion. Follow Spec-Kit for specification, planning, tasks, and analysis; use Superpowers for test-first implementation, review, and current verification evidence.
 
 **Completion:** All implementation and verification tasks passed, and Karim approved the mandatory storage/upload/deletion security review on 2026-09-16.
+
+---
+
+### F-019: Mobile App Shell and UI/UX Modernization
+
+**Priority:** P0 | **Status:** 🟡 Approved | **Phase:** Mobile UX
+
+#### Description
+
+Define the production Flutter implementation of Halaqaty's approved Calm Contemporary visual direction. The work is governed by [UI_UX_GOVERNANCE.md](../../engineering/design/UI_UX_GOVERNANCE.md), [DESIGN.md](../../engineering/design/DESIGN.md), and [screen-samples-a-v2.html](../../engineering/design/screen-samples-a-v2.html). The HTML sample records the approved visual direction for Waves 0–5; it is not executable product code and does not create or change backend behavior.
+
+F-019 is the approved umbrella feature for Waves 0–5. It replaces the previous F-020–F-023 allocation while preserving each wave as a coherent implementation and review batch within one Spec-Kit lifecycle.
+
+#### Proposed Scope
+
+**In scope after approval:**
+
+- Production Flutter shell, brand, theme, navigation, and affected feature-screen modernization assigned to the selected wave boundary.
+- Reuse of existing Material 3 theme tokens, shared components, routes, Riverpod controllers, API clients, widget keys, and localization patterns.
+- Loading, empty, success, error, and offline/degraded states for affected screens.
+- Arabic RTL and English LTR, light and dark themes, text scaling, screen-reader semantics, 48dp touch targets, and WCAG AA contrast.
+- Preservation and audit of completed Wave 0 and Wave 1 work that already meets the approved design.
+
+**Out of scope:**
+
+- New backend endpoints, database fields or tables, WebSocket events, roles, permissions, or provider capabilities.
+- A unified direct-message inbox, provider controls, new UI frameworks, runtime theme/plugin systems, or speculative abstractions.
+- Treating the HTML sample as executable code or as authority for product data, permissions, authentication, chat/media behavior, session state, or account actions.
+
+#### Dependencies
+
+- Approved F-001–F-005 behavior, specifications, and contracts remain unchanged.
+- Existing Flutter theme, shared components, routes, Riverpod controllers, API clients, widget keys, and localization patterns.
+- The approved design governance, token catalogue, and screen-sample visual reference linked above.
+- The frozen decision that F-019 replaces the previous F-020–F-023 wave allocation.
+
+#### Frozen Numbering Decision
+
+- **Selected — umbrella feature:** F-019 contains Waves 0–5 and explicitly replaces the previous F-020–F-023 allocation. Each wave remains a coherent implementation and review batch inside F-019.
+- **Not selected — separate features:** Waves 1–5 will not receive separate F-020–F-023 Spec-Kit lifecycles.
+
+**Approval:** Karim approved the P0 registration and explicitly selected the Waves 0–5 umbrella boundary on 2026-09-22. F-019 may enter the Spec-Kit lifecycle; Flutter implementation remains gated on separate approval of the generated specification, plan, tasks, and consistency analysis.
 
 ---
 

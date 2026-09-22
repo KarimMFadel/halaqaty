@@ -66,6 +66,64 @@ void main() {
     expect(room.state.status, SessionRoomStatus.ended);
   });
 
+  // FR-031 open-audio regression guard: queue position and turn state must
+  // never grant, revoke, mute, or unmute authorized student audio.
+  test('queue position and turn changes never touch authorized student audio',
+      () async {
+    final realtime = _ResilienceRealtime();
+    final selected =
+        _queue(2, entryStatus: 'selected', selectedEntryId: 'entry-1');
+    final reciting =
+        _queue(3, entryStatus: 'reciting', selectedEntryId: 'entry-1');
+    final completed =
+        _queue(4, entryStatus: 'completed', selectedEntryId: 'entry-1');
+    final queueApi = _ResilienceQueueApi([_queue(1)])
+      ..advanceResult = selected
+      ..statusResults = {'start': reciting}
+      ..completeResult = completed;
+    final queue = _queueController(queueApi, realtime);
+    final media = _MicRecordingMedia();
+    final room = SessionRoomController(
+      _ResilienceSessionApi(),
+      () async => (token: 'token', sessionId: 'backend-session'),
+      media,
+      realtime: realtime,
+      isModerator: true,
+      queue: queue,
+    );
+    addTearDown(queue.dispose);
+    addTearDown(room.dispose);
+
+    await room.join(_sessionID);
+
+    // Advance: a turn is selected.
+    await room.advanceQueue();
+    expect(queue.state.queue?.selectedEntryId, 'entry-1');
+    expect(queue.state.queue?.entries.single.status, 'selected');
+
+    // Start: the turn becomes the active recitation.
+    await room.startSelectedQueueEntry();
+    expect(queue.state.queue?.entries.single.status, 'reciting');
+
+    // Complete: the turn ends.
+    await room.completeQueueEntry(entryId: 'entry-1');
+    expect(queue.state.queue?.entries.single.status, 'completed');
+
+    // A realtime turn change for the next student.
+    realtime.emit(QueueStateEvent(
+      sessionId: _sessionID,
+      eventId: 'turn-advanced-5',
+      queue: _queue(5),
+    ));
+    expect(queue.state.queue?.version, 5);
+    expect(queue.state.queue?.entries.single.status, 'waiting');
+
+    // No transition above enabled or disabled the microphone; authorized
+    // audio stays under the participant's control.
+    expect(media.microphoneToggles, isEmpty);
+    expect(media.connections, 1);
+  });
+
   testWidgets('student queue controls stay role-safe in RTL and LTR',
       (tester) async {
     for (final direction in TextDirection.values) {
@@ -111,6 +169,9 @@ class _ResilienceQueueApi extends QueueApiClient {
   final List<QueueState> snapshots;
   int getQueueCalls = 0;
   Object? advanceFailure;
+  QueueState? advanceResult;
+  Map<String, QueueState> statusResults = const {};
+  QueueState? completeResult;
 
   @override
   Future<QueueState> getQueue({
@@ -129,8 +190,33 @@ class _ResilienceQueueApi extends QueueApiClient {
     String? idempotencyKey,
   }) async {
     if (advanceFailure != null) throw advanceFailure!;
-    return snapshots.last;
+    return advanceResult ?? snapshots.last;
   }
+
+  @override
+  Future<QueueState> updateEntryStatus({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+    required String entryId,
+    required String status,
+    required int expectedEntryVersion,
+    String? idempotencyKey,
+  }) async =>
+      statusResults[status] ?? snapshots.last;
+
+  @override
+  Future<QueueState> completeEntry({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+    required String entryId,
+    required int expectedEntryVersion,
+    String? grade,
+    String? notes,
+    String? idempotencyKey,
+  }) async =>
+      completeResult ?? snapshots.last;
 }
 
 class _ResilienceRealtime implements RealtimeSessionClient {
@@ -199,7 +285,29 @@ class _NoopMedia implements MediaSession {
   Future<void> setMicrophoneEnabled(bool enabled) async {}
 }
 
-QueueState _queue(int version) => QueueState.fromJson({
+/// Records microphone toggles so the FR-031 regression test can prove queue
+/// transitions never grant, revoke, mute, or unmute authorized audio.
+class _MicRecordingMedia implements MediaSession {
+  int connections = 0;
+  final List<bool> microphoneToggles = [];
+
+  @override
+  Future<void> connect(MediaConnection connection) async {
+    connections++;
+  }
+
+  @override
+  Future<void> disconnect() async {}
+
+  @override
+  Future<void> setMicrophoneEnabled(bool enabled) async {
+    microphoneToggles.add(enabled);
+  }
+}
+
+QueueState _queue(int version,
+        {String entryStatus = 'waiting', String? selectedEntryId}) =>
+    QueueState.fromJson({
       'session_id': _sessionID,
       'round_id': 'round-1',
       'round_number': 1,
@@ -209,7 +317,7 @@ QueueState _queue(int version) => QueueState.fromJson({
       'from_ayah': 1,
       'to_ayah': 7,
       'grading_required': false,
-      'selected_entry_id': null,
+      'selected_entry_id': selectedEntryId,
       'version': version,
       'policy': {
         'population': 'present_at_activation',
@@ -220,13 +328,13 @@ QueueState _queue(int version) => QueueState.fromJson({
         'version': 1,
       },
       'preorder': const [],
-      'entries': const [
+      'entries': [
         {
           'id': 'entry-1',
           'student_id': 'student-1',
           'student_name': 'مريم',
           'position': 1,
-          'status': 'waiting',
+          'status': entryStatus,
           'version': 1,
         },
       ],

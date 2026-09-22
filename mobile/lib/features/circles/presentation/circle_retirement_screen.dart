@@ -60,7 +60,10 @@ class CircleRetirementScreen extends ConsumerWidget {
     final circle = ref.watch(circleDetailProvider(circleId));
     final members = ref.watch(circleMembersProvider(circleId));
     return Scaffold(
-      appBar: AppBar(title: const Text(_archiveTitle)),
+      appBar: AppBar(
+          title: Text(Directionality.of(context) == TextDirection.rtl
+              ? CircleDetailLabels.archiveAr
+              : CircleDetailLabels.archiveEn)),
       body: circle.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, __) => const Center(child: Text('تعذر تحميل الحلقة')),

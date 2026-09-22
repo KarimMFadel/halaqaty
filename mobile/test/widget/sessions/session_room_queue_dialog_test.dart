@@ -129,7 +129,8 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('completion dialog offers only contract grades', (tester) async {
+  testWidgets('completion dialog offers only contract grades, localized',
+      (tester) async {
     final fixture = await _pumpManagerRoom(tester);
     addTearDown(fixture.queue.dispose);
 
@@ -138,8 +139,54 @@ void main() {
     await tester.tap(find.byType(DropdownButton<String>));
     await tester.pumpAndSettle();
 
-    expect(find.text('acceptable'), findsOneWidget);
+    expect(find.text('Acceptable'), findsWidgets);
+    expect(find.text('Needs review'), findsWidgets);
+    // Never the raw contract values (FR-028).
+    expect(find.text('acceptable'), findsNothing);
+    expect(find.text('needs_review'), findsNothing);
     expect(find.text('not_assessed'), findsNothing);
+  });
+
+  testWidgets(
+      'reorder and policy actions surface the shared under-implementation notice',
+      (tester) async {
+    final fixture = await _pumpManagerRoom(tester);
+    addTearDown(fixture.queue.dispose);
+
+    await tester.tap(find.bySemanticsLabel('Reorder queue'));
+    // Let the snackbar entrance animation settle so the Dismiss hit target is
+    // stable before tapping it.
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('halaqatyUnderImplementationSnackBar')),
+        findsOneWidget);
+    // The old "choose round details first" guidance was misleading and is gone.
+    expect(find.text('Choose the round details first'), findsNothing);
+
+    await tester.tap(find.text('Dismiss'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('halaqatyUnderImplementationSnackBar')),
+        findsNothing);
+
+    await tester.tap(find.bySemanticsLabel('Queue policy'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('halaqatyUnderImplementationSnackBar')),
+        findsOneWidget);
+
+    // Leave no snackbar timer pending at test end.
+    await tester.tap(find.text('Dismiss'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('reset dialog warns that current round progress is discarded',
+      (tester) async {
+    final fixture =
+        await _pumpManagerRoom(tester, direction: TextDirection.rtl);
+    addTearDown(fixture.queue.dispose);
+
+    await tester.tap(find.bySemanticsLabel(SessionUiLabels.resetQueue));
+    await tester.pumpAndSettle();
+
+    expect(find.text(SessionUiLabels.resetConsequence), findsOneWidget);
   });
 
   testWidgets('end-session control stays available when the round finalizes',

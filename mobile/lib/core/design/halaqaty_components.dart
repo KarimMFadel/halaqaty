@@ -104,6 +104,14 @@ class HalaqatyLogo extends StatelessWidget {
         width: size,
         height: size,
         fit: BoxFit.contain,
+        // The monochrome asset is single-currentColor; tint it from the
+        // scheme so it stays legible in both themes.
+        colorFilter: monochrome
+            ? ColorFilter.mode(
+                Theme.of(context).colorScheme.onSurfaceVariant,
+                BlendMode.srcIn,
+              )
+            : null,
       ),
     );
   }

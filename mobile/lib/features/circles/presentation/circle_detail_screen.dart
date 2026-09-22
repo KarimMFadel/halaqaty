@@ -11,6 +11,7 @@ import 'package:halaqaty_mobile/features/circles/presentation/circle_members_scr
 import 'package:halaqaty_mobile/features/circles/presentation/circle_name_text.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_retirement_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_ui_labels.dart';
+import 'package:halaqaty_mobile/features/sessions/presentation/circle_sessions_section.dart';
 
 class CircleDetailScreen extends ConsumerWidget {
   const CircleDetailScreen({
@@ -230,6 +231,16 @@ class CircleDetailScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
+              // FR-030: ad-hoc session list/create/start/join over the
+              // existing F-005 APIs; create/start stay manager-only and
+              // archived circles stay read-only.
+              CircleSessionsSection(
+                key: const Key('circleSessionsSection'),
+                circleId: circle.id,
+                isManager: currentRole == CircleRole.teacher ||
+                    currentRole == CircleRole.supervisor,
+                isArchived: circle.isArchived,
+              ),
             ],
           );
         },

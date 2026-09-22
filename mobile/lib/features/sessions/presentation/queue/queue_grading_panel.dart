@@ -63,6 +63,8 @@ class _QueueGradingPanelState extends State<QueueGradingPanel> {
       return const SizedBox.shrink();
     }
     final title = _completion ? labels.title : labels.correction;
+    final saveLabel =
+        _completion ? labels.saveCompletion : labels.saveCorrection;
     final hasNoteChange = _notes.text.isNotEmpty ||
         (widget.entry.gradeNotes?.isNotEmpty ?? false);
     final canSave = _completion
@@ -86,10 +88,19 @@ class _QueueGradingPanelState extends State<QueueGradingPanel> {
                 child: ConstrainedBox(
                   constraints:
                       const BoxConstraints(minWidth: 48, minHeight: 48),
-                  child: OutlinedButton(
-                    onPressed: () => setState(() => _grade = grade),
-                    child: ExcludeSemantics(child: Text(labels.grade(grade))),
-                  ),
+                  // The selected grade gets a filled tonal treatment so the
+                  // selection is visible, not semantics-only.
+                  child: _grade == grade
+                      ? FilledButton.tonal(
+                          onPressed: () => setState(() => _grade = grade),
+                          child: ExcludeSemantics(
+                              child: Text(labels.grade(grade))),
+                        )
+                      : OutlinedButton(
+                          onPressed: () => setState(() => _grade = grade),
+                          child: ExcludeSemantics(
+                              child: Text(labels.grade(grade))),
+                        ),
                 ),
               ),
           ],
@@ -105,7 +116,7 @@ class _QueueGradingPanelState extends State<QueueGradingPanel> {
           alignment: rtl ? Alignment.centerLeft : Alignment.centerRight,
           child: Semantics(
             button: true,
-            label: labels.save,
+            label: saveLabel,
             child: ConstrainedBox(
               constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               child: FilledButton(
@@ -121,7 +132,7 @@ class _QueueGradingPanelState extends State<QueueGradingPanel> {
                         }
                       }
                     : null,
-                child: ExcludeSemantics(child: Text(labels.save)),
+                child: ExcludeSemantics(child: Text(saveLabel)),
               ),
             ),
           ),
@@ -145,16 +156,11 @@ class _Labels {
   String get currentGrade => rtl ? 'التقييم الحالي' : 'Current grade';
   String get currentNotes =>
       rtl ? 'ملاحظة المعلم الحالية' : 'Current teacher note';
-  String get save => rtl ? 'حفظ التقييم' : 'Save correction';
+  String get saveCompletion => rtl ? 'حفظ التقييم' : 'Save grade';
+  String get saveCorrection => rtl ? 'حفظ التصحيح' : 'Save correction';
   String get finalized => 'Round finalized; grading is read-only';
 
-  String grade(String value) => switch (value) {
-        'excellent' => rtl ? 'ممتاز' : 'Excellent',
-        'good' => rtl ? 'جيد' : 'Good',
-        'acceptable' => rtl ? 'مقبول' : 'Acceptable',
-        'needs_review' => rtl ? 'يحتاج مراجعة' : 'Needs review',
-        _ => rtl ? 'إعادة' : 'Repeat',
-      };
+  String grade(String value) => SessionUiLabels.gradeLabel(value, rtl);
 }
 
 class _VisibleGrade extends StatelessWidget {

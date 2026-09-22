@@ -13,6 +13,7 @@ class SessionUiLabels {
   static const start = 'بدء الجلسة';
   static const join = 'انضمام';
   static const loadingParticipants = 'جارٍ تحميل المشاركين...';
+  static const reconnecting = 'جارٍ إعادة الاتصال...';
   static const participantsTitle = 'المشاركون';
   static const roleTeacher = 'معلم';
   static const roleSupervisor = 'مشرف';
@@ -42,6 +43,7 @@ class SessionUiLabels {
   static const skipTurn = 'تخطي الدور';
   static const queuePolicy = 'سياسة القائمة';
   static const resetQueue = 'إعادة تعيين الجولة';
+  static const resetConsequence = 'سيُتجاهل تقدم الجولة الحالية.';
   static const confirm = 'تأكيد';
   static const cancel = 'إلغاء';
   static const roundType = 'نوع الجولة';
@@ -70,7 +72,21 @@ class SessionUiLabels {
   static const optOutApproved = 'تم اعتماد الاعتذار';
   static const optOutAutoApproved = 'تم اعتماد الاعتذار تلقائيًا';
   static const queueEmptyGuidance = 'لم تبدأ جولة التلاوة بعد؛ سيظهر دورك هنا';
+  static const retryUnavailable =
+      'إعادة المحاولة غير متاحة. يمكنك مغادرة الجلسة.';
+  static const noParticipants = 'لا يوجد مشاركون حاضرون بعد';
 
   static String yourPosition(int position) => 'موضعك: $position';
   static String position(int position) => 'الموضع $position';
+
+  /// Localized label for a contract grade value (FR-028); never render the
+  /// raw enum copy.
+  static String gradeLabel(String value, bool rtl) => switch (value) {
+        'excellent' => rtl ? 'ممتاز' : 'Excellent',
+        'good' => rtl ? 'جيد' : 'Good',
+        'acceptable' => rtl ? 'مقبول' : 'Acceptable',
+        'needs_review' => rtl ? 'يحتاج مراجعة' : 'Needs review',
+        'repeat' => rtl ? 'إعادة' : 'Repeat',
+        _ => value,
+      };
 }

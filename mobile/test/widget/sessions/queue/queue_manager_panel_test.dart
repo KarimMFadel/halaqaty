@@ -151,6 +151,50 @@ void main() {
     expect(find.bySemanticsLabel('سياسة القائمة'), findsOneWidget);
     semantics.dispose();
   });
+
+  testWidgets(
+      'prioritizes the dominant next action and summarizes the active round',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(_panel(
+      direction: TextDirection.ltr,
+      queue: _queueState(entryStatus: 'selected'),
+      actions: <String>[],
+    ));
+
+    expect(
+        find.text('Round 1 · Revision · Surah 2 · Ayahs 1–5'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.bySemanticsLabel('Start recitation'),
+        matching: find.byType(FilledButton),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.bySemanticsLabel('Reorder queue'),
+        matching: find.byType(OutlinedButton),
+      ),
+      findsOneWidget,
+    );
+    semantics.dispose();
+  });
+
+  testWidgets('renders localized grade copy, never the raw contract value',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(_panel(
+      direction: TextDirection.rtl,
+      queue: _queueState(entryStatus: 'completed', grade: 'excellent'),
+      actions: <String>[],
+    ));
+
+    expect(find.text('ممتاز'), findsOneWidget);
+    expect(find.text('excellent'), findsNothing);
+    expect(find.bySemanticsLabel('التقييم ممتاز'), findsOneWidget);
+    semantics.dispose();
+  });
 }
 
 Widget _panel({
@@ -179,7 +223,8 @@ Widget _panel({
       ),
     );
 
-QueueState _queueState({required String entryStatus}) => QueueState.fromJson({
+QueueState _queueState({required String entryStatus, String? grade}) =>
+    QueueState.fromJson({
       'session_id': 'session-1',
       'round_id': 'round-1',
       'round_number': 1,
@@ -189,7 +234,10 @@ QueueState _queueState({required String entryStatus}) => QueueState.fromJson({
       'from_ayah': 1,
       'to_ayah': 5,
       'grading_required': false,
-      'selected_entry_id': entryStatus == 'reciting' ? 'entry-1' : null,
+      'selected_entry_id':
+          entryStatus == 'reciting' || entryStatus == 'selected'
+              ? 'entry-1'
+              : null,
       'version': 1,
       'policy': {
         'population': 'present_at_activation',
@@ -207,6 +255,7 @@ QueueState _queueState({required String entryStatus}) => QueueState.fromJson({
           'student_name': 'مريم',
           'position': 1,
           'status': entryStatus,
+          'grade': grade,
           'version': 1,
         },
       ],

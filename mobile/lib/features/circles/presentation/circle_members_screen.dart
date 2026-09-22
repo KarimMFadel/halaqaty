@@ -179,9 +179,21 @@ class CircleMembersScreen extends ConsumerWidget {
                 ),
               ),
               error: (error, stack) => Center(
-                child: Text(rtl
-                    ? 'حدث خطأ أثناء تحميل الأعضاء'
-                    : 'Could not load circle members'),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(rtl
+                        ? 'حدث خطأ أثناء تحميل الأعضاء'
+                        : 'Could not load circle members'),
+                    const SizedBox(height: 12),
+                    FilledButton.tonal(
+                      key: const Key('circleMembersRetry'),
+                      onPressed: () =>
+                          ref.invalidate(circleMembersProvider(circleId)),
+                      child: Text(rtl ? 'إعادة المحاولة' : 'Retry'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

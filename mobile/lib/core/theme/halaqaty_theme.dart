@@ -24,6 +24,24 @@ abstract final class HalaqatyColors {
   /// Secondary dark variant.
   static const Color secondaryDark = Color(0xFF8B6F47);
 
+  // Token amendment 2026-09-22 (UI review, F-019 Wave 2): the
+  // secondaryContainer/onSecondaryContainer pairs measured 2.96:1 in both
+  // schemes and dark onPrimary 3.34:1 — below the 4.5:1 text-on-fill floor.
+  // These role tokens restore ≥4.5:1; the brand variants above stay unchanged.
+
+  /// Text/icons on the light secondary container (#E8C8A0) — 8.16:1.
+  static const Color onSecondaryContainerLight = Color(0xFF3F2E1B);
+
+  /// Dark-mode secondary container fill — with onSecondaryContainerDark 6.58:1.
+  static const Color secondaryContainerDark = Color(0xFF5D4729);
+
+  /// Text/icons on the dark secondary container (#5D4729) — 6.58:1.
+  static const Color onSecondaryContainerDark = Color(0xFFF0DDBE);
+
+  /// Near-black green for text on the bright dark-mode primary (#4CB368) —
+  /// 5.83:1.
+  static const Color onPrimaryDark = Color(0xFF062B14);
+
   // Semantic (light, dark) per DESIGN.md.
   static const Color successLight = Color(0xFF2E7D32);
   static const Color successDark = Color(0xFF66BB6A);
@@ -78,7 +96,7 @@ final ColorScheme _lightScheme = ColorScheme.light(
   secondary: HalaqatyColors.secondary,
   onSecondary: Colors.white,
   secondaryContainer: HalaqatyColors.secondaryLight,
-  onSecondaryContainer: HalaqatyColors.secondaryDark,
+  onSecondaryContainer: HalaqatyColors.onSecondaryContainerLight,
   error: HalaqatyColors.errorLight,
   surface: HalaqatyColors.surfaceLight,
   onSurface: HalaqatyColors.onSurfaceLight,
@@ -90,13 +108,13 @@ final ColorScheme _lightScheme = ColorScheme.light(
 
 final ColorScheme _darkScheme = ColorScheme.dark(
   primary: HalaqatyColors.primaryLight,
-  onPrimary: HalaqatyColors.primaryDark,
+  onPrimary: HalaqatyColors.onPrimaryDark,
   primaryContainer: HalaqatyColors.primaryDark,
   onPrimaryContainer: HalaqatyColors.primaryLight,
   secondary: HalaqatyColors.secondary,
   onSecondary: HalaqatyColors.secondaryDark,
-  secondaryContainer: HalaqatyColors.secondaryDark,
-  onSecondaryContainer: HalaqatyColors.secondaryLight,
+  secondaryContainer: HalaqatyColors.secondaryContainerDark,
+  onSecondaryContainer: HalaqatyColors.onSecondaryContainerDark,
   error: HalaqatyColors.errorDark,
   surface: HalaqatyColors.surfaceDark,
   onSurface: HalaqatyColors.onSurfaceDark,

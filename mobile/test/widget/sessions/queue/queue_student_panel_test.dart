@@ -90,6 +90,49 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('keeps the opt-out action disabled while the queue is not ready',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    for (final status in [
+      QueueStudentPanelStatus.loading,
+      QueueStudentPanelStatus.reconnecting,
+      QueueStudentPanelStatus.recoverableError,
+    ]) {
+      final actions = <String>[];
+      await tester.pumpWidget(_panel(
+        direction: TextDirection.ltr,
+        actions: actions,
+        status: status,
+      ));
+
+      final button = tester.widget<OutlinedButton>(find.descendant(
+        of: find.bySemanticsLabel('Opt out of turn'),
+        matching: find.byType(OutlinedButton),
+      ));
+      expect(button.onPressed, isNull, reason: '$status must stay read-only');
+      await tester.tap(
+        find.bySemanticsLabel('Opt out of turn'),
+        warnIfMissed: false,
+      );
+      expect(actions, isEmpty);
+    }
+    semantics.dispose();
+  });
+
+  testWidgets('renders entries in position order with an own-row badge',
+      (tester) async {
+    for (final direction in TextDirection.values) {
+      await tester.pumpWidget(_panel(direction: direction));
+
+      expect(find.text(direction == TextDirection.rtl ? 'أنت' : 'You'),
+          findsOneWidget);
+      // Position order: the peer at position 1 renders above my position 2.
+      final peer = tester.getTopLeft(find.text('مريم'));
+      final mine = tester.getTopLeft(find.text('خالد'));
+      expect(peer.dy, lessThan(mine.dy));
+    }
+  });
+
   testWidgets(
       'shows the reconnecting banner then the authoritative snapshot (RTL + LTR)',
       (tester) async {
@@ -154,6 +197,24 @@ void main() {
       final announcement =
           tester.getSemantics(find.bySemanticsLabel(labels.optOutPending));
       expect(announcement.flagsCollection.isLiveRegion, isTrue);
+    }
+    semantics.dispose();
+  });
+
+  testWidgets(
+      'announces the student position and turn state in a live region (RTL + LTR)',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    for (final direction in TextDirection.values) {
+      final labels = _StudentPanelLabels(direction == TextDirection.rtl);
+      await tester.pumpWidget(_panel(direction: direction));
+
+      final position =
+          tester.getSemantics(find.bySemanticsLabel(labels.yourPosition(2)));
+      expect(position.flagsCollection.isLiveRegion, isTrue);
+      final turnState =
+          tester.getSemantics(find.bySemanticsLabel(labels.waiting));
+      expect(turnState.flagsCollection.isLiveRegion, isTrue);
     }
     semantics.dispose();
   });

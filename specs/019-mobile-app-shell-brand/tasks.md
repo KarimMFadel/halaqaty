@@ -61,15 +61,15 @@ until Karim approves the complete Spec-Kit artifacts and analysis.
 
 **Independent Test**: From circle details, list/create/start/join a session and exercise student and manager queue states, reconnect, terminal state, and open-audio invariants.
 
-- [ ] T020 [US3] Add failing unit/widget tests for a minimal Riverpod circle-session presentation controller using existing `SessionApiClient.list/create` states in `mobile/test/features/sessions/application/` and `mobile/test/widget/sessions/session_discovery_test.dart`.
-- [ ] T021 [US3] Implement the minimal circle-session presentation controller in `mobile/lib/features/sessions/application/` by reusing `SessionApiClient`; add no generic repository, schedule, or attendance abstraction.
-- [ ] T022 [US3] Add failing widget tests for circle detail session list/create/start/join entry, student versus manager actions, loading/empty/success/error/offline states, tap budgets, and preserved session-room behavior in `mobile/test/widget/sessions/session_discovery_test.dart`.
-- [ ] T023 [US3] Implement the circle session section/entry using existing F-005 APIs in `mobile/lib/features/circles/presentation/circle_detail_screen.dart` and focused presentation widgets under `mobile/lib/features/sessions/presentation/`.
-- [ ] T024 [US3] Add failing tests for session-room hierarchy, queue/participant semantics, 48dp targets, retryable versus terminal recovery, destructive-action separation, and text scaling in existing `mobile/test/widget/sessions/` files.
-- [ ] T025 [US3] Recompose `mobile/lib/features/sessions/presentation/session_room_screen.dart` and existing queue panels using current controller states and M3/theme roles; do not change session/queue/media behavior, and route any inventoried Wave 2 under-implementation action only to the shared notice.
-- [ ] T026 [US3] Add a regression test proving queue position/turn state never grants, revokes, mutes, or unmutes authorized student audio, updating the smallest existing session/queue test file.
-- [ ] T027 [US3] Run all session/queue widget and applicable integration tests; record exact results and student/manager/reconnect RTL/LTR light/dark screenshots in `specs/019-mobile-app-shell-brand/evidence/wave-2.md`.
-- [ ] T028 [US3] Obtain UX Designer and UI Designer review of Wave 2; resolve findings and record outcomes in `specs/019-mobile-app-shell-brand/evidence/wave-2.md`.
+- [X] T020 [US3] Add failing unit/widget tests for a minimal Riverpod circle-session presentation controller using existing `SessionApiClient.list/create` states in `mobile/test/features/sessions/application/` and `mobile/test/widget/sessions/session_discovery_test.dart`.
+- [X] T021 [US3] Implement the minimal circle-session presentation controller in `mobile/lib/features/sessions/application/` by reusing `SessionApiClient`; add no generic repository, schedule, or attendance abstraction.
+- [X] T022 [US3] Add failing widget tests for circle detail session list/create/start/join entry, student versus manager actions, loading/empty/success/error/offline states, tap budgets, and preserved session-room behavior in `mobile/test/widget/sessions/session_discovery_test.dart`.
+- [X] T023 [US3] Implement the circle session section/entry using existing F-005 APIs in `mobile/lib/features/circles/presentation/circle_detail_screen.dart` and focused presentation widgets under `mobile/lib/features/sessions/presentation/`.
+- [X] T024 [US3] Add failing tests for session-room hierarchy, queue/participant semantics, 48dp targets, retryable versus terminal recovery, destructive-action separation, and text scaling in existing `mobile/test/widget/sessions/` files.
+- [X] T025 [US3] Recompose `mobile/lib/features/sessions/presentation/session_room_screen.dart` and existing queue panels using current controller states and M3/theme roles; do not change session/queue/media behavior, and route any inventoried Wave 2 under-implementation action only to the shared notice.
+- [X] T026 [US3] Add a regression test proving queue position/turn state never grants, revokes, mutes, or unmutes authorized student audio, updating the smallest existing session/queue test file.
+- [X] T027 [US3] Run all session/queue widget and applicable integration tests; record exact results and student/manager/reconnect RTL/LTR light/dark screenshots in `specs/019-mobile-app-shell-brand/evidence/wave-2.md`.
+- [X] T028 [US3] Obtain UX Designer and UI Designer review of Wave 2; resolve findings and record outcomes in `specs/019-mobile-app-shell-brand/evidence/wave-2.md`.
 
 **Checkpoint**: Session/queue UX is reachable and clear without changing open-audio or backend behavior.
 

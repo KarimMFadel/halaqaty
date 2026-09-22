@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_detail_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_join_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_name_text.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_load_error.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/create_circle_screen.dart';
 
 class CircleDiscoveryScreen extends ConsumerStatefulWidget {
   const CircleDiscoveryScreen({super.key, this.onOpenInvite});
@@ -56,13 +58,25 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: OutlinedButton.icon(
-                key: const Key('openInviteJoinButton'),
-                onPressed: widget.onOpenInvite ?? _openInvite,
-                icon: const Icon(Icons.link),
-                label: Text(
-                  rtl ? 'لديّ رابط دعوة' : 'I have an invite link',
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FilledButton.icon(
+                    key: const Key('openCreateCircleButton'),
+                    onPressed: _openCreate,
+                    icon: const Icon(Icons.add),
+                    label: Text(rtl ? 'إنشاء حلقة' : 'Create circle'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    key: const Key('openInviteJoinButton'),
+                    onPressed: widget.onOpenInvite ?? _openInvite,
+                    icon: const Icon(Icons.link),
+                    label: Text(
+                      rtl ? 'لديّ رابط دعوة' : 'I have an invite link',
+                    ),
+                  ),
+                ],
               ),
             ),
             Expanded(child: _content(state, rtl)),
@@ -76,11 +90,7 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
     if (state.isLoading &&
         state.myCircles.isEmpty &&
         state.publicCircles.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(
-          key: Key('circleDiscoveryLoading'),
-        ),
-      );
+      return const HalaqatyLoading(key: Key('circleDiscoveryLoading'));
     }
     final joinedCircleIds = state.myCircles.map((circle) => circle.id).toSet();
     final publicCircles = state.publicCircles
@@ -142,7 +152,7 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-        trailing: Icon(rtl ? Icons.chevron_left : Icons.chevron_right),
+        trailing: const Icon(Icons.chevron_right),
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => CircleDetailScreen(circleId: circle.id),
@@ -232,12 +242,11 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
     final joined = await ref
         .read(circleDiscoveryControllerProvider.notifier)
         .joinPublic(circle);
+    // Retained confirmation (FR-008): open the joined circle itself.
     if (joined && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            rtl ? 'تم الانضمام إلى الحلقة' : 'Joined the circle',
-          ),
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => CircleDetailScreen(circleId: circle.id),
         ),
       );
     }
@@ -246,6 +255,28 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
   void _openInvite() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const CircleJoinScreen()),
+    );
+  }
+
+  Future<void> _openCreate() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CreateCircleScreen(onCreated: _openCreatedCircle),
+      ),
+    );
+    // Pick up a circle created (or list changes) while the form was open.
+    if (mounted) {
+      await ref
+          .read(circleDiscoveryControllerProvider.notifier)
+          .loadMyCircles();
+    }
+  }
+
+  void _openCreatedCircle(CircleResponse circle) {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => CircleDetailScreen(circleId: circle.id),
+      ),
     );
   }
 

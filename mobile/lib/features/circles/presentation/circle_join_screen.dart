@@ -120,14 +120,10 @@ class _CircleJoinScreenState extends ConsumerState<CircleJoinScreen> {
     final joined = await ref
         .read(circleDiscoveryControllerProvider.notifier)
         .joinInvite(_invite.text);
+    // Retained confirmation (FR-008): back to discovery, where the joined
+    // circle now appears under My circles.
     if (joined && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            rtl ? 'تم الانضمام إلى الحلقة' : 'Joined the circle',
-          ),
-        ),
-      );
+      Navigator.of(context).pop();
     }
   }
 }

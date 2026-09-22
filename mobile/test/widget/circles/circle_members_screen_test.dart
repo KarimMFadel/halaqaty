@@ -54,6 +54,7 @@ void main() {
 
     expect(find.textContaining('حدث خطأ أثناء تحميل الأعضاء'), findsOneWidget);
     expect(find.textContaining('Network error'), findsNothing);
+    expect(find.byKey(const Key('circleMembersRetry')), findsOneWidget);
   });
 
   testWidgets('displays members with correct roles', (tester) async {

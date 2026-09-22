@@ -43,13 +43,13 @@ until Karim approves the complete Spec-Kit artifacts and analysis.
 
 **Independent Test**: Discover/open/join/create/manage/retire with student, teacher, supervisor, and archived fixtures while role behavior and keys stay unchanged.
 
-- [ ] T013 [US2] Add failing tests for reachable Create and invite/public Join entry points, tap budgets, and preserved circle discovery/join keys in `mobile/test/widget/circles/discover_join_screen_test.dart` and `mobile/test/widget/circles/create_circle_screen_test.dart`.
-- [ ] T014 [US2] Expose the existing `CreateCircleScreen` and existing join flows from `mobile/lib/features/circles/presentation/circle_discovery_screen.dart` with one role-appropriate primary action and no new permission behavior.
-- [ ] T015 [US2] Add failing tests for circle detail loading, empty section, retryable/fatal error, in-context success, offline/read-only archive behavior, 48dp controls, semantics, and the recorded members/management/retirement tap budgets in `mobile/test/widget/circles/circle_detail_screen_test.dart` and existing circle widget tests.
-- [ ] T016 [US2] Implement minimum state/hierarchy/token fixes across `mobile/lib/features/circles/presentation/`, including removal of screen-level hard-coded colors, while preserving controllers, actions, and keys; route any inventoried Wave 1 under-implementation action only to the shared notice.
-- [ ] T017 [US2] Replace snackbar-only consequential circle success with retained in-context confirmation where required, updating the smallest relevant tests and presentation files under `mobile/test/widget/circles/` and `mobile/lib/features/circles/presentation/`.
-- [ ] T018 [US2] Run all circle widget tests and applicable circle integration journeys; record results and role/state RTL/LTR light/dark screenshots in `specs/019-mobile-app-shell-brand/evidence/wave-1.md`.
-- [ ] T019 [US2] Obtain UX Designer and UI Designer review of Wave 1; resolve findings and record outcomes in `specs/019-mobile-app-shell-brand/evidence/wave-1.md`.
+- [X] T013 [US2] Add failing tests for reachable Create and invite/public Join entry points, tap budgets, and preserved circle discovery/join keys in `mobile/test/widget/circles/discover_join_screen_test.dart` and `mobile/test/widget/circles/create_circle_screen_test.dart`.
+- [X] T014 [US2] Expose the existing `CreateCircleScreen` and existing join flows from `mobile/lib/features/circles/presentation/circle_discovery_screen.dart` with one role-appropriate primary action and no new permission behavior.
+- [X] T015 [US2] Add failing tests for circle detail loading, empty section, retryable/fatal error, in-context success, offline/read-only archive behavior, 48dp controls, semantics, and the recorded members/management/retirement tap budgets in `mobile/test/widget/circles/circle_detail_screen_test.dart` and existing circle widget tests.
+- [X] T016 [US2] Implement minimum state/hierarchy/token fixes across `mobile/lib/features/circles/presentation/`, including removal of screen-level hard-coded colors, while preserving controllers, actions, and keys; route any inventoried Wave 1 under-implementation action only to the shared notice.
+- [X] T017 [US2] Replace snackbar-only consequential circle success with retained in-context confirmation where required, updating the smallest relevant tests and presentation files under `mobile/test/widget/circles/` and `mobile/lib/features/circles/presentation/`.
+- [X] T018 [US2] Run all circle widget tests and applicable circle integration journeys; record results and role/state RTL/LTR light/dark screenshots in `specs/019-mobile-app-shell-brand/evidence/wave-1.md`.
+- [X] T019 [US2] Obtain UX Designer and UI Designer review of Wave 1; resolve findings and record outcomes in `specs/019-mobile-app-shell-brand/evidence/wave-1.md`.
 
 **Checkpoint**: Wave 1 is audited/remediated, not blindly rewritten.
 

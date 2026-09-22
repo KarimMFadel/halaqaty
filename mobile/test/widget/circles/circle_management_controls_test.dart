@@ -51,6 +51,7 @@ Widget _build({
   bool isArchived = false,
   CircleApiClient? apiClient,
   bool missingCredentials = false,
+  TextDirection textDirection = TextDirection.rtl,
 }) {
   return ProviderScope(
     overrides: [
@@ -93,7 +94,7 @@ Widget _build({
     ],
     child: MaterialApp(
       home: Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: textDirection,
         child: CircleManagementScreen(
           circleId: _circleID,
           currentUserId: currentUserID,
@@ -116,6 +117,19 @@ void main() {
     expect(find.byKey(const Key('refreshCircleInvite')), findsOneWidget);
     expect(find.byKey(const Key('removeMember-student-1')), findsOneWidget);
     expect(find.byKey(const Key('manageRole-teacher-1')), findsNothing);
+  });
+
+  testWidgets('CircleManagementScreen: localizes its title in English',
+      (tester) async {
+    await tester.pumpWidget(
+      _build(
+        currentUserID: _teacherID,
+        textDirection: TextDirection.ltr,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Manage circle'), findsOneWidget);
   });
 
   testWidgets(

@@ -25,6 +25,7 @@ Widget _build({
   bool isArchived = false,
   CircleApiClient? apiClient,
   bool missingCredentials = false,
+  TextDirection textDirection = TextDirection.rtl,
 }) =>
     ProviderScope(
       overrides: [
@@ -56,10 +57,13 @@ Widget _build({
           ]),
         ),
       ],
-      child: const MaterialApp(
-        home: CircleRetirementScreen(
-          circleId: 'circle-1',
-          currentUserId: 'current-user',
+      child: MaterialApp(
+        home: Directionality(
+          textDirection: textDirection,
+          child: const CircleRetirementScreen(
+            circleId: 'circle-1',
+            currentUserId: 'current-user',
+          ),
         ),
       ),
     );
@@ -74,6 +78,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('confirmCircleArchive')), findsOneWidget);
+  });
+
+  testWidgets('CircleRetirementScreen localizes its title in English',
+      (tester) async {
+    await tester.pumpWidget(_build(textDirection: TextDirection.ltr));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Archive circle'), findsOneWidget);
   });
 
   testWidgets('CircleRetirementScreen hides archive for archived circles',

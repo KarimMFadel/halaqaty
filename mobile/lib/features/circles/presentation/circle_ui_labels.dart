@@ -26,6 +26,14 @@ abstract final class CircleDetailLabels {
   static const archiveEn = 'Archive circle';
   static const loadErrorAr = 'تعذر تحميل تفاصيل الحلقة';
   static const loadErrorEn = 'Could not load circle details';
+  static const goneAr = 'هذه الحلقة لم تعد متاحة';
+  static const goneEn = 'This circle is no longer available';
+  static const goneHelpAr = 'إعادة المحاولة غير متاحة. عُد إلى الحلقات.';
+  static const goneHelpEn = 'Retry is unavailable. Return to circles.';
+  static const exitAr = 'العودة إلى الحلقات';
+  static const exitEn = 'Back to circles';
+  static const retryAr = 'إعادة المحاولة';
+  static const retryEn = 'Retry';
   static const privateAr = 'خاصة';
   static const privateEn = 'Private';
   static const publicAr = 'عامة';

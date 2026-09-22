@@ -4,13 +4,17 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
+import 'package:halaqaty_mobile/core/theme/halaqaty_theme.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_detail_controller.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
+import 'package:halaqaty_mobile/features/circles/application/create_circle_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_detail_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_discovery_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_join_screen.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/create_circle_screen.dart';
 
 import '../../helpers/stub_auth_notifier.dart';
 
@@ -83,6 +87,20 @@ class _StubCircleApiClient extends CircleApiClient {
     if (joinError case final error?) throw error;
     return _joinedCircle('circle-private', 'حلقة خاصة');
   }
+
+  @override
+  Future<CircleResponse> createCircle({
+    required String firebaseIdToken,
+    required String sessionId,
+    required CreateCircleRequest request,
+  }) async =>
+      CircleResponse(
+        id: 'circle-1',
+        name: request.name,
+        inviteCode: 'HLQ-7X2K',
+        inviteLink: 'https://halaqaty.app/join/HLQ-7X2K',
+        createdAt: DateTime.utc(2026, 8, 1),
+      );
 }
 
 CircleResponse _joinedCircle(String id, String name) => CircleResponse(
@@ -112,6 +130,44 @@ Widget _build(Widget child, CircleDiscoveryController controller) {
       ),
     ],
     child: MaterialApp(
+      home: Directionality(textDirection: TextDirection.rtl, child: child),
+    ),
+  );
+}
+
+CreateCircleController _createController(_StubCircleApiClient apiClient) {
+  return CreateCircleController(
+    apiClient: apiClient,
+    loadFirebaseIdToken: () async => 'firebase-token',
+    readAuthState: () => const AuthState(sessionId: 'session-id'),
+    logout: () async {},
+  );
+}
+
+/// Themed variant for entry-point tests that assert real 48dp targets.
+Widget _buildThemed(
+  Widget child,
+  CircleDiscoveryController controller, {
+  CreateCircleController? createController,
+}) {
+  return ProviderScope(
+    overrides: [
+      authControllerProvider.overrideWith((_) => StubAuthNotifier()),
+      circleDiscoveryControllerProvider.overrideWith((_) => controller),
+      circleDetailProvider('circle-member').overrideWith(
+        (_) => Future.value(_joinedCircle('circle-member', 'حلقتي')),
+      ),
+      circleDetailProvider('circle-public').overrideWith(
+        (_) => Future.value(_joinedCircle('circle-public', 'حلقة النور')),
+      ),
+      circleDetailProvider('circle-1').overrideWith(
+        (_) => Future.value(_joinedCircle('circle-1', 'حلقة جديدة')),
+      ),
+      if (createController != null)
+        createCircleControllerProvider.overrideWith((_) => createController),
+    ],
+    child: MaterialApp(
+      theme: halaqatyLightTheme(),
       home: Directionality(textDirection: TextDirection.rtl, child: child),
     ),
   );
@@ -162,11 +218,12 @@ void main() {
     final completer = Completer<CircleDiscoveryPage>();
     final apiClient = _StubCircleApiClient(discoveryCompleter: completer);
     await tester.pumpWidget(
-      _build(const CircleDiscoveryScreen(), _controller(apiClient)),
+      _buildThemed(const CircleDiscoveryScreen(), _controller(apiClient)),
     );
     await tester.pump();
 
     expect(find.byKey(const Key('circleDiscoveryLoading')), findsOneWidget);
+    expect(find.byType(HalaqatyLoading), findsOneWidget);
     completer.complete(CircleDiscoveryPage(circles: [_publicCircle]));
     await tester.pumpAndSettle();
 
@@ -177,7 +234,30 @@ void main() {
     await tester.tap(find.byKey(const Key('confirmCircleJoinButton')));
     await tester.pumpAndSettle();
     expect(apiClient.joinedCircleId, 'circle-public');
-    expect(find.text('تم الانضمام إلى الحلقة'), findsOneWidget);
+    // Join success is retained in context: the joined circle itself is shown
+    // (FR-008), not a transient snackbar.
+    expect(find.byType(CircleDetailScreen), findsOneWidget);
+    expect(find.text('تم الانضمام إلى الحلقة'), findsNothing);
+  });
+
+  testWidgets(
+      'CircleJoinScreen: a successful invite join returns to discovery with '
+      'the joined circle visible', (tester) async {
+    final apiClient = _StubCircleApiClient();
+    await tester.pumpWidget(
+      _buildThemed(const CircleDiscoveryScreen(), _controller(apiClient)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('openInviteJoinButton')));
+    await tester.pumpAndSettle();
+    await _submitInvite(tester, 'HLQ-7X2K');
+
+    expect(apiClient.joinedInviteCode, 'HLQ-7X2K');
+    expect(find.byType(CircleJoinScreen), findsNothing);
+    expect(find.byType(CircleDiscoveryScreen), findsOneWidget);
+    expect(find.byKey(const Key('openCircle-circle-private')), findsOneWidget);
+    expect(find.text('تم الانضمام إلى الحلقة'), findsNothing);
   });
 
   testWidgets('CircleDiscoveryScreen: does not repeat joined circles publicly',
@@ -208,6 +288,92 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(CircleDetailScreen), findsOneWidget);
+  });
+
+  testWidgets(
+      'CircleDiscoveryScreen: create entry opens CreateCircleScreen '
+      '(Circles → Create, tap 2 of 3)', (tester) async {
+    final apiClient = _StubCircleApiClient();
+    await tester.pumpWidget(
+      _buildThemed(
+        const CircleDiscoveryScreen(),
+        _controller(apiClient),
+        createController: _createController(apiClient),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final createEntry = find.byKey(const Key('openCreateCircleButton'));
+    expect(createEntry, findsOneWidget);
+    expect(tester.getSize(createEntry).height, greaterThanOrEqualTo(48));
+
+    await tester.tap(createEntry);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CreateCircleScreen), findsOneWidget);
+    expect(find.byKey(const Key('createCircleNameField')), findsOneWidget);
+    expect(find.byKey(const Key('createCircleSubmitButton')), findsOneWidget);
+  });
+
+  testWidgets('CircleDiscoveryScreen: a created circle opens its detail screen',
+      (tester) async {
+    final apiClient = _StubCircleApiClient();
+    await tester.pumpWidget(
+      _buildThemed(
+        const CircleDiscoveryScreen(),
+        _controller(apiClient),
+        createController: _createController(apiClient),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('openCreateCircleButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('createCircleNameField')),
+      'حلقة جديدة',
+    );
+    // Unfocus first: the focused name field pulls the scroll back to the top
+    // and the submit tap misses the 800x600 test surface.
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump();
+    tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position
+        .jumpTo(
+          tester
+              .state<ScrollableState>(find.byType(Scrollable).first)
+              .position
+              .maxScrollExtent,
+        );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('createCircleSubmitButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CircleDetailScreen), findsOneWidget);
+  });
+
+  testWidgets(
+      'CircleDiscoveryScreen: invite entry opens CircleJoinScreen '
+      '(within the 4-tap invite budget)', (tester) async {
+    final apiClient = _StubCircleApiClient();
+    await tester.pumpWidget(
+      _buildThemed(
+        const CircleDiscoveryScreen(),
+        _controller(apiClient),
+        createController: _createController(apiClient),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final inviteEntry = find.byKey(const Key('openInviteJoinButton'));
+    expect(tester.getSize(inviteEntry).height, greaterThanOrEqualTo(48));
+
+    await tester.tap(inviteEntry);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CircleJoinScreen), findsOneWidget);
+    expect(find.byKey(const Key('circleInviteField')), findsOneWidget);
   });
 
   testWidgets('CircleJoinScreen: rejects invalid invite before the API call',

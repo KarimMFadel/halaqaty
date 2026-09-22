@@ -1,5 +1,7 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/group_chat_screen.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_detail_controller.dart';
@@ -159,7 +161,7 @@ class CircleDetailScreen extends ConsumerWidget {
                 title: Text(rtl
                     ? CircleDetailLabels.membersAr
                     : CircleDetailLabels.membersEn),
-                trailing: Icon(rtl ? Icons.chevron_left : Icons.chevron_right),
+                trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
@@ -180,7 +182,7 @@ class CircleDetailScreen extends ConsumerWidget {
                 title: Text(rtl
                     ? CircleDetailLabels.chatAr
                     : CircleDetailLabels.chatEn),
-                trailing: Icon(rtl ? Icons.chevron_left : Icons.chevron_right),
+                trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => GroupChatScreen(
@@ -231,14 +233,67 @@ class CircleDetailScreen extends ConsumerWidget {
             ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Text(
-            rtl
-                ? CircleDetailLabels.loadErrorAr
-                : CircleDetailLabels.loadErrorEn,
-          ),
-        ),
+        loading: () => const HalaqatyLoading(),
+        error: (error, stack) {
+          // 403/404 mean access lost or the circle is gone: terminal — state
+          // the reason and do not offer a retry that cannot succeed.
+          final terminal = error is DioException &&
+              (error.response?.statusCode == 403 ||
+                  error.response?.statusCode == 404);
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    terminal
+                        ? (rtl
+                            ? CircleDetailLabels.goneAr
+                            : CircleDetailLabels.goneEn)
+                        : (rtl
+                            ? CircleDetailLabels.loadErrorAr
+                            : CircleDetailLabels.loadErrorEn),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                if (!terminal) ...[
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    key: const Key('circleDetailRetry'),
+                    onPressed: () =>
+                        ref.invalidate(circleDetailProvider(circleId)),
+                    icon: const Icon(Icons.refresh),
+                    label: Text(
+                      rtl
+                          ? CircleDetailLabels.retryAr
+                          : CircleDetailLabels.retryEn,
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    rtl
+                        ? CircleDetailLabels.goneHelpAr
+                        : CircleDetailLabels.goneHelpEn,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    key: const Key('circleDetailExit'),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(Icons.arrow_back),
+                    label: Text(
+                      rtl
+                          ? CircleDetailLabels.exitAr
+                          : CircleDetailLabels.exitEn,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
       ),
     );
   }

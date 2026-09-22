@@ -882,7 +882,7 @@ Keep secure file attachments and live audio independent of the currently selecte
 
 Define the production Flutter implementation of Halaqaty's approved Calm Contemporary visual direction. The work is governed by [UI_UX_GOVERNANCE.md](../../engineering/design/UI_UX_GOVERNANCE.md), [DESIGN.md](../../engineering/design/DESIGN.md), and [screen-samples-a-v2.html](../../engineering/design/screen-samples-a-v2.html). The HTML sample records the approved visual direction for Waves 0–5; it is not executable product code and does not create or change backend behavior.
 
-F-019 is the approved umbrella feature for Waves 0–5. It replaces the previous F-020–F-023 allocation while preserving each wave as a coherent implementation and review batch within one Spec-Kit lifecycle.
+F-019 is the approved umbrella feature for Waves 0–5, preserving each wave as a coherent implementation and review batch within one Spec-Kit lifecycle.
 
 #### Proposed Scope
 
@@ -893,6 +893,7 @@ F-019 is the approved umbrella feature for Waves 0–5. It replaces the previous
 - Loading, empty, success, error, and offline/degraded states for affected screens.
 - Arabic RTL and English LTR, light and dark themes, text scaling, screen-reader semantics, 48dp touch targets, and WCAG AA contrast.
 - Preservation and audit of completed Wave 0 and Wave 1 work that already meets the approved design.
+- A shared localized under-implementation notice for approved design actions that have no implemented behavior, with no API call, navigation, or state mutation.
 
 **Out of scope:**
 
@@ -905,12 +906,12 @@ F-019 is the approved umbrella feature for Waves 0–5. It replaces the previous
 - Approved F-001–F-005 behavior, specifications, and contracts remain unchanged.
 - Existing Flutter theme, shared components, routes, Riverpod controllers, API clients, widget keys, and localization patterns.
 - The approved design governance, token catalogue, and screen-sample visual reference linked above.
-- The frozen decision that F-019 replaces the previous F-020–F-023 wave allocation.
+- The frozen decision that F-019 is the sole feature boundary for the complete Waves 0–5 modernization.
 
 #### Frozen Numbering Decision
 
-- **Selected — umbrella feature:** F-019 contains Waves 0–5 and explicitly replaces the previous F-020–F-023 allocation. Each wave remains a coherent implementation and review batch inside F-019.
-- **Not selected — separate features:** Waves 1–5 will not receive separate F-020–F-023 Spec-Kit lifecycles.
+- **Selected — umbrella feature:** F-019 contains Waves 0–5. Each wave remains a coherent implementation and review batch inside F-019.
+- **Not selected — separate features:** Waves 1–5 will not receive separate Spec-Kit feature lifecycles.
 
 **Approval:** Karim approved the P0 registration and explicitly selected the Waves 0–5 umbrella boundary on 2026-09-22. F-019 may enter the Spec-Kit lifecycle; Flutter implementation remains gated on separate approval of the generated specification, plan, tasks, and consistency analysis.
 

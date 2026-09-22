@@ -57,6 +57,11 @@ backend data.
 - Use the approved four-tab shell: Home, Circles, Chats, Profile.
 - Each screen has one dominant primary action; secondary actions are visually
   subordinate.
+- An action that is intentionally present in the approved design but has no
+  implemented product behavior remains presentation-only: tapping it shows the
+  shared localized under-implementation notice and performs no navigation,
+  controller/API call, or state mutation. Unplanned prototype actions remain
+  omitted.
 - Core tasks target a maximum of three taps from the app shell. If a role,
   confirmation, or security boundary requires more, the UX brief records why.
 - Every screen has a clear back path and no dead-end state.
@@ -167,9 +172,9 @@ Welcome, sign-in/register, profile editing, preferences, and account actions.
 Dark mode, RTL/LTR screenshot matrix, screen-reader checks, text scaling,
 emulator review, and removal of remaining developer-facing copy or placeholders.
 
-F-019 is the approved umbrella Spec-Kit feature for Waves 0–5, replacing the
-previous F-020–F-023 allocation. Each wave remains a coherent implementation and
-review batch within F-019. No wave adds backend tables, endpoints, role rules, or
+F-019 is the approved umbrella Spec-Kit feature for Waves 0–5. Each wave remains
+a coherent implementation and review batch within F-019. No wave adds backend
+tables, endpoints, role rules, or
 provider capabilities without the normal contract and architecture approvals.
 
 ## 6. Definition of done

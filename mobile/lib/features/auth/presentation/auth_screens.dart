@@ -25,6 +25,19 @@ class _LanguageOption {
   final String labelAr;
 }
 
+/// Full-width in-flight indicator shown while the submit button is disabled,
+/// so it must stay readable on the disabled (grey) button surface.
+Widget _submitProgress(BuildContext context) {
+  return SizedBox(
+    height: 20,
+    width: 20,
+    child: CircularProgressIndicator(
+      strokeWidth: 2,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    ),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // RegisterScreen
 // ---------------------------------------------------------------------------
@@ -78,9 +91,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (authState.isAuthenticated) {
       widget.onSuccess?.call();
     } else if (authState.errorMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(authState.errorMessage!)),
-      );
+      showHalaqatyError(context, authState.errorMessage!);
     }
   }
 
@@ -104,11 +115,22 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Center(child: HalaqatyLogo(size: 56)),
+                const SizedBox(height: 8),
+                Text(
+                  isRtl
+                      ? 'أنشئ حسابك للانضمام إلى حلقتك'
+                      : 'Create your account to join your circle',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
                 const SizedBox(height: 24),
                 // Display name
                 TextFormField(
                   key: const Key('displayNameField'),
                   controller: _displayNameController,
+                  textInputAction: TextInputAction.next,
                   textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
                   decoration: InputDecoration(
                     labelText: isRtl ? 'الاسم المعروض' : 'Display Name',
@@ -140,6 +162,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   key: const Key('emailField'),
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
                   decoration: InputDecoration(
                     labelText: isRtl ? 'البريد الإلكتروني' : 'Email',
                   ),
@@ -157,9 +180,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   key: const Key('passwordField'),
                   controller: _passwordController,
                   obscureText: _obscurePassword,
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _submit(),
                   decoration: InputDecoration(
                     labelText: isRtl ? 'كلمة المرور' : 'Password',
                     suffixIcon: IconButton(
+                      tooltip: _obscurePassword
+                          ? (isRtl ? 'إظهار كلمة المرور' : 'Show password')
+                          : (isRtl ? 'إخفاء كلمة المرور' : 'Hide password'),
                       icon: Icon(
                         _obscurePassword
                             ? Icons.visibility_off
@@ -214,15 +242,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
                 const SizedBox(height: 32),
 
-                ElevatedButton(
+                FilledButton(
                   key: const Key('submitButton'),
                   onPressed: isLoading ? null : _submit,
                   child: isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                      ? _submitProgress(context)
                       : Text(isRtl ? 'إنشاء حساب' : 'Register'),
                 ),
               ],
@@ -278,9 +302,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (authState.isAuthenticated) {
       widget.onSuccess?.call();
     } else if (authState.errorMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(authState.errorMessage!)),
-      );
+      showHalaqatyError(context, authState.errorMessage!);
     }
   }
 
@@ -304,11 +326,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Center(child: HalaqatyLogo(size: 56)),
+                const SizedBox(height: 8),
+                Text(
+                  isRtl
+                      ? 'مرحباً بعودتك إلى حلقاتك'
+                      : 'Welcome back to your circles',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
                 const SizedBox(height: 24),
                 TextFormField(
                   key: const Key('emailField'),
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
                   decoration: InputDecoration(
                     labelText: isRtl ? 'البريد الإلكتروني' : 'Email',
                   ),
@@ -324,9 +357,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   key: const Key('passwordField'),
                   controller: _passwordController,
                   obscureText: _obscurePassword,
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _submit(),
                   decoration: InputDecoration(
                     labelText: isRtl ? 'كلمة المرور' : 'Password',
                     suffixIcon: IconButton(
+                      tooltip: _obscurePassword
+                          ? (isRtl ? 'إظهار كلمة المرور' : 'Show password')
+                          : (isRtl ? 'إخفاء كلمة المرور' : 'Hide password'),
                       icon: Icon(
                         _obscurePassword
                             ? Icons.visibility_off
@@ -347,15 +385,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   },
                 ),
                 const SizedBox(height: 32),
-                ElevatedButton(
+                FilledButton(
                   key: const Key('submitButton'),
                   onPressed: isLoading ? null : _submit,
                   child: isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                      ? _submitProgress(context)
                       : Text(isRtl ? 'دخول' : 'Sign In'),
                 ),
               ],
@@ -373,7 +407,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
 /// A button widget that triggers [AuthController.logout] when tapped.
 ///
-/// Shows a loading indicator while logout is in progress.
+/// Shown as a subordinate outlined action in the account section — clearly
+/// separated from the routine profile-save primary action. Shows a loading
+/// indicator while logout is in progress.
 class LogoutButton extends ConsumerWidget {
   const LogoutButton({super.key, this.onLoggedOut});
 
@@ -385,22 +421,31 @@ class LogoutButton extends ConsumerWidget {
       authControllerProvider.select((s) => s.isLoading),
     );
     final isRtl = Directionality.of(context) == TextDirection.rtl;
+    final scheme = Theme.of(context).colorScheme;
 
-    return ElevatedButton(
+    return OutlinedButton.icon(
       key: const Key('logoutButton'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: scheme.error,
+        side: BorderSide(color: scheme.error),
+      ),
       onPressed: isLoading
           ? null
           : () async {
               await ref.read(authControllerProvider.notifier).logout();
               onLoggedOut?.call();
             },
-      child: isLoading
-          ? const SizedBox(
+      icon: isLoading
+          ? SizedBox(
               height: 20,
               width: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: scheme.error,
+              ),
             )
-          : Text(isRtl ? 'تسجيل الخروج' : 'Logout'),
+          : const Icon(Icons.logout),
+      label: Text(isRtl ? 'تسجيل الخروج' : 'Logout'),
     );
   }
 }

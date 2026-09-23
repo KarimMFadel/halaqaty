@@ -43,21 +43,27 @@ class WelcomeScreen extends StatelessWidget {
                       ),
                 ),
                 const SizedBox(height: 48),
-                FilledButton(
-                  key: const Key('openLogin'),
-                  onPressed: () => context.push('/login'),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Text(isRtl ? 'تسجيل الدخول' : 'Sign in'),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    key: const Key('openLogin'),
+                    onPressed: () => context.push('/login'),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(isRtl ? 'تسجيل الدخول' : 'Sign in'),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                OutlinedButton(
-                  key: const Key('openRegister'),
-                  onPressed: () => context.push('/register'),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Text(isRtl ? 'إنشاء حساب' : 'Register'),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    key: const Key('openRegister'),
+                    onPressed: () => context.push('/register'),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(isRtl ? 'إنشاء حساب' : 'Register'),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 48),

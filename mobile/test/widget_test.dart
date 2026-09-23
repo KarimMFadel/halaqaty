@@ -27,6 +27,10 @@ class _TestAuthController extends StateNotifier<AuthState>
     implements AuthController {
   _TestAuthController(super.initialState);
 
+  int signInCalls = 0;
+  int registerCalls = 0;
+  String? lastPreferredLanguage;
+
   @override
   Future<void> logout() async {
     state = const AuthState(status: AuthStatus.unauthenticated);
@@ -49,13 +53,18 @@ class _TestAuthController extends StateNotifier<AuthState>
     required String password,
     required String displayName,
     required String preferredLanguage,
-  }) async {}
+  }) async {
+    registerCalls++;
+    lastPreferredLanguage = preferredLanguage;
+  }
 
   @override
   Future<void> signIn({
     required String email,
     required String password,
-  }) async {}
+  }) async {
+    signInCalls++;
+  }
 }
 
 class _TestProfileController extends StateNotifier<ProfileState>
@@ -453,6 +462,54 @@ void main() {
 
     final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(materialApp.theme?.colorScheme.primary, const Color(0xFF1B7E3C));
+  });
+
+  group('wave 4 auth tap budgets (US5)', () {
+    testWidgets('complete sign-in from welcome within the 2-action budget',
+        (WidgetTester tester) async {
+      final controller = _TestAuthController(
+        const AuthState(status: AuthStatus.unauthenticated),
+      );
+      await _pumpApp(tester, controller);
+
+      // Action 1 of 2: open the login form.
+      await tester.tap(find.byKey(const Key('openLogin')));
+      await tester.pumpAndSettle();
+      expect(find.byType(LoginScreen), findsOneWidget);
+
+      // Typing does not count against the budget; submission is action 2.
+      await tester.enterText(find.byKey(const Key('emailField')), 'a@b.com');
+      await tester.enterText(find.byKey(const Key('passwordField')), 'secret1');
+      await tester.tap(find.byKey(const Key('submitButton')));
+      await tester.pump();
+
+      expect(controller.signInCalls, 1);
+    });
+
+    testWidgets(
+        'complete registration from welcome within the 2-action '
+        'budget', (WidgetTester tester) async {
+      final controller = _TestAuthController(
+        const AuthState(status: AuthStatus.unauthenticated),
+      );
+      await _pumpApp(tester, controller);
+
+      // Action 1 of 2: open the registration form.
+      await tester.tap(find.byKey(const Key('openRegister')));
+      await tester.pumpAndSettle();
+      expect(find.byType(RegisterScreen), findsOneWidget);
+
+      await tester.enterText(
+          find.byKey(const Key('displayNameField')), 'Ahmad');
+      await tester.enterText(find.byKey(const Key('emailField')), 'a@b.com');
+      await tester.enterText(
+          find.byKey(const Key('passwordField')), 'password123');
+      await tester.tap(find.byKey(const Key('submitButton')));
+      await tester.pump();
+
+      expect(controller.registerCalls, 1);
+      expect(controller.lastPreferredLanguage, 'ar');
+    });
   });
 
   group('app locale and direction (US1)', () {

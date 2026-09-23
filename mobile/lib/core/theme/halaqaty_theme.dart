@@ -137,23 +137,30 @@ ThemeData _buildTheme(ColorScheme scheme) {
       style?.copyWith(fontWeight: FontWeight.w600, height: 1.5);
   TextStyle? regular(TextStyle? style) =>
       style?.copyWith(fontWeight: FontWeight.w400, height: 1.5);
-  final textTheme = baseTextTheme.copyWith(
-    displayLarge: regular(baseTextTheme.displayLarge),
-    displayMedium: regular(baseTextTheme.displayMedium),
-    displaySmall: regular(baseTextTheme.displaySmall),
-    headlineLarge: regular(baseTextTheme.headlineLarge),
-    headlineMedium: regular(baseTextTheme.headlineMedium),
-    headlineSmall: regular(baseTextTheme.headlineSmall),
-    titleLarge: emphasis(baseTextTheme.titleLarge),
-    titleMedium: emphasis(baseTextTheme.titleMedium),
-    titleSmall: emphasis(baseTextTheme.titleSmall),
-    bodyLarge: regular(baseTextTheme.bodyLarge),
-    bodyMedium: regular(baseTextTheme.bodyMedium),
-    bodySmall: regular(baseTextTheme.bodySmall),
-    labelLarge: emphasis(baseTextTheme.labelLarge),
-    labelMedium: emphasis(baseTextTheme.labelMedium),
-    labelSmall: emphasis(baseTextTheme.labelSmall),
-  );
+  final textTheme = baseTextTheme
+      .copyWith(
+        displayLarge: regular(baseTextTheme.displayLarge),
+        displayMedium: regular(baseTextTheme.displayMedium),
+        displaySmall: regular(baseTextTheme.displaySmall),
+        headlineLarge: regular(baseTextTheme.headlineLarge),
+        headlineMedium: regular(baseTextTheme.headlineMedium),
+        headlineSmall: regular(baseTextTheme.headlineSmall),
+        titleLarge: emphasis(baseTextTheme.titleLarge),
+        titleMedium: emphasis(baseTextTheme.titleMedium),
+        titleSmall: emphasis(baseTextTheme.titleSmall),
+        bodyLarge: regular(baseTextTheme.bodyLarge),
+        bodyMedium: regular(baseTextTheme.bodyMedium),
+        bodySmall: regular(baseTextTheme.bodySmall),
+        labelLarge: emphasis(baseTextTheme.labelLarge),
+        labelMedium: emphasis(baseTextTheme.labelMedium),
+        labelSmall: emphasis(baseTextTheme.labelSmall),
+        // The material2021 platform bases hard-code 'Roboto'; apply() overrides
+        // every role so the bundled Poppins family (Cairo fallback) actually wins.
+      )
+      .apply(
+        fontFamily: HalaqatyFonts.primary,
+        fontFamilyFallback: HalaqatyFonts.fallback,
+      );
 
   return ThemeData(
     useMaterial3: true,

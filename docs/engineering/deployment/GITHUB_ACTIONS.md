@@ -35,10 +35,12 @@ the split does not remove screenshot tests from CI.
 Screenshot tests run through `flutter drive` and the shared
 [`ci_screenshot_driver.dart`](../../../mobile/test_driver/ci_screenshot_driver.dart),
 which writes PNG files to `mobile/build/visual-artifacts/screenshots/`.
-The artifact also contains `test.log` and the integration response JSON when
-the driver receives a result. Both jobs preserve command failures through
-`tee` with `pipefail`, and attempt artifact upload even after test failure.
-An early build or emulator failure may leave no screenshots or response JSON.
+The artifact also contains `test.log`, the integration response JSON when
+the driver receives a result, and ADB status, Android logcat, and memory
+snapshots taken before emulator cleanup. Both jobs preserve command failures
+through `tee` with `pipefail`, and attempt artifact upload even after test
+failure. An early build or emulator failure may leave no screenshots or
+response JSON.
 
 ## Test fixtures and limits
 

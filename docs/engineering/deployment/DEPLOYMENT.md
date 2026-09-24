@@ -629,6 +629,11 @@ files.halaqaty.app   A      → Server IP (Proxied ✅)
 
 ## 10. CI/CD Pipeline
 
+For the implemented test jobs, see [GitHub Actions test workflows](GITHUB_ACTIONS.md).
+Flutter functional integration tests run on Linux; the native screenshot suites
+run on Android emulators. That guide documents the rationale, artifacts, and
+verification limits. The phase descriptions below describe the deployment plan.
+
 ### Phase 1: Simple Pipeline (GitHub Actions)
 
 ```yaml

@@ -140,6 +140,12 @@ the tested flow supports them.
 
 ## Flutter integration tests (Linux scaffold + xvfb)
 
+This path covers functional tests only. Do not run the UX journey or Wave 0–2
+visual screenshot suites on Linux: their native `takeScreenshot()` call fails
+with `MissingPluginException` for `captureScreenshot`. Use Android and the
+shared screenshot driver to save PNGs. See [GitHub Actions test workflows](../deployment/GITHUB_ACTIONS.md)
+for the exact suite list, reproduction command, and artifact locations.
+
 Use this path when no healthy Android emulator is available, when the test
 needs a deterministic Linux runner, or when matching the CI Flutter image is
 more important than Android rendering. It validates integration behavior but

@@ -177,6 +177,19 @@ a coherent implementation and review batch within F-019. No wave adds backend
 tables, endpoints, role rules, or
 provider capabilities without the normal contract and architecture approvals.
 
+**F-019 implementation status (2026-09-24): complete.** The accepted work
+covers the app launch and shell, welcome and home, authentication and profile,
+circle discovery and detail, session room and recitation queue, group and
+direct chat, and their documented loading, empty, error, offline, and recovery
+states. Acceptance captures cover Arabic RTL / English LTR, light / dark,
+compact phone / tablet widths, 200% text, focus, and semantics. See the
+[feature status and screen inventory](../../management/product/FEATURES.md#f-019-mobile-app-shell-and-uiux-modernization)
+and the [final evidence report](../../../specs/019-mobile-app-shell-brand/evidence/final-report.md).
+The final report records the owner-approved T049 closure and explicitly leaves
+the `T052_*` and `T064_*` real-account journeys unverified; implementation
+completion does not mean production release or a full real-account integration
+pass.
+
 ## 6. Definition of done
 
 A screen is complete only when:

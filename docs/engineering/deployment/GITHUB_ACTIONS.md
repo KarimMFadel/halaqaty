@@ -38,9 +38,10 @@ which writes PNG files to `mobile/build/visual-artifacts/screenshots/`.
 The artifact also contains `test.log`, the integration response JSON when
 the driver receives a result, and ADB status, Android logcat, and memory
 snapshots taken before emulator cleanup. Both jobs preserve command failures
-through `tee` with `pipefail`, and attempt artifact upload even after test
-failure. An early build or emulator failure may leave no screenshots or
-response JSON.
+and attempt artifact upload even after test failure. The Linux job uses
+`tee` with `pipefail`; the Android job saves Flutter's exit code before
+collecting emulator diagnostics and then returns that same code. An early
+build or emulator failure may leave no screenshots or response JSON.
 
 ## Test fixtures and limits
 

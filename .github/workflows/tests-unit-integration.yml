@@ -219,15 +219,13 @@ jobs:
           disable-animations: true
           working-directory: mobile
           script: |
-            bash -c '
-              set -o pipefail
-              flutter drive --driver=test_driver/ci_screenshot_driver.dart --target=integration_test/${{ matrix.suite }}_test.dart -d emulator-5554 2>&1 | tee build/visual-artifacts/test.log
-              drive_status=$?
-              adb devices -l > build/visual-artifacts/adb-devices.txt 2>&1 || true
-              adb -s emulator-5554 logcat -b main -b system -b crash -t 3000 -d -v threadtime > build/visual-artifacts/emulator-logcat.txt 2>&1 || true
-              adb -s emulator-5554 shell dumpsys meminfo > build/visual-artifacts/emulator-memory.txt 2>&1 || true
-              exit "$drive_status"
-            '
+            drive_status=0
+            flutter drive --driver=test_driver/ci_screenshot_driver.dart --target=integration_test/${{ matrix.suite }}_test.dart -d emulator-5554 > build/visual-artifacts/test.log 2>&1 || drive_status=$?
+            cat build/visual-artifacts/test.log
+            adb devices -l > build/visual-artifacts/adb-devices.txt 2>&1 || true
+            adb -s emulator-5554 logcat -b main -b system -b crash -t 3000 -d -v threadtime > build/visual-artifacts/emulator-logcat.txt 2>&1 || true
+            adb -s emulator-5554 shell dumpsys meminfo > build/visual-artifacts/emulator-memory.txt 2>&1 || true
+            exit "$drive_status"
       - name: Upload screenshots and test log
         if: always()
         uses: actions/upload-artifact@v4

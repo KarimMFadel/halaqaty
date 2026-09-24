@@ -292,6 +292,48 @@ void main() {
     });
 
     testWidgets(
+        'sending announces the pending state in a live region while the '
+        'upload is in flight, with no fabricated success (RTL + LTR)',
+        (tester) async {
+      final semantics = tester.ensureSemantics();
+      for (final direction in TextDirection.values) {
+        final labels = _Labels(direction == TextDirection.rtl);
+        final harness = await _pumpComposerBar(tester, direction: direction);
+        harness.recorder.permission.complete(true);
+        final uploadGate = Completer<void>();
+        harness.voiceUploadGate = uploadGate;
+
+        await tester.tap(find.bySemanticsLabel(labels.recordVoiceNote));
+        await tester.pump();
+        File(harness.recorder.startedPath!)
+            .writeAsBytesSync(List<int>.filled(8, 1));
+        await tester.tap(find.bySemanticsLabel(labels.stopRecording));
+        await tester.pumpAndSettle();
+        await tester.tap(find.bySemanticsLabel(labels.sendRecording));
+        await tester.pump();
+
+        // Pending: the send is announced as text in a live region, and the
+        // idle controls stay hidden — nothing claims success yet.
+        expect(find.text(labels.sendingVoice), findsOneWidget);
+        expect(
+          tester
+              .getSemantics(find.text(labels.sendingVoice))
+              .flagsCollection
+              .isLiveRegion,
+          isTrue,
+        );
+        expect(find.bySemanticsLabel(labels.recordVoiceNote), findsNothing);
+
+        // Completion returns to idle only after the upload is accepted.
+        uploadGate.complete();
+        await tester.pumpAndSettle();
+        expect(find.bySemanticsLabel(labels.recordVoiceNote), findsOneWidget);
+        harness.voice.dispose();
+      }
+      semantics.dispose();
+    });
+
+    testWidgets(
         'a rejected upload keeps the note and shows safe retryable copy '
         '(RTL + LTR)', (tester) async {
       final semantics = tester.ensureSemantics();
@@ -836,6 +878,8 @@ class _ComposerHarness {
       player: player,
       upload: (filePath, durationSeconds) async {
         voiceUploadCalls.add((filePath, durationSeconds));
+        final gate = voiceUploadGate;
+        if (gate != null) await gate.future;
         final error = voiceUploadError;
         if (error != null) throw error;
         return _uploadResult();
@@ -885,6 +929,7 @@ class _ComposerHarness {
 
   final voiceUploadCalls = <(String, int)>[];
   Object? voiceUploadError;
+  Completer<void>? voiceUploadGate;
 
   final imageUploadCalls = <String>[];
   Object? imageUploadError;

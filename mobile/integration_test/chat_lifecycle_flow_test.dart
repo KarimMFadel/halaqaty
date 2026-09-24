@@ -11,6 +11,7 @@ import 'package:halaqaty_mobile/features/chat/application/group_chat_controller.
 import 'package:halaqaty_mobile/features/chat/data/chat_api_client.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_realtime_client.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/group_chat_screen.dart';
+import 'package:halaqaty_mobile/features/chat/presentation/chat_ui_labels.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -59,7 +60,7 @@ void main() {
     // Archive: retained reads remain visible while all mutations disappear.
     chat.setReadOnly(true);
     await tester.pump();
-    expect(find.text('هذه المحادثة للقراءة فقط'), findsOneWidget);
+    expect(find.text(ChatUiLabels.readOnlyArchived), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
     expect(await chat.sendText('ممنوع بعد الأرشفة'), isFalse);
     expect(api.sent, isFalse);

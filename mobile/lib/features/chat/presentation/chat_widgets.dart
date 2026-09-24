@@ -16,12 +16,18 @@ class ChatMessageBubble extends StatelessWidget {
     required this.isOwn,
     this.canDelete = false,
     this.onDelete,
+    this.hasTerminalFailure = false,
   });
 
   final ChatMessage message;
   final bool isOwn;
   final bool canDelete;
   final VoidCallback? onDelete;
+
+  /// A terminally failed draft shows the failure strip instead of the
+  /// delivery badge — one message never claims "sending" and "failed" at
+  /// once.
+  final bool hasTerminalFailure;
 
   @override
   Widget build(BuildContext context) {
@@ -86,12 +92,17 @@ class ChatMessageBubble extends StatelessWidget {
                     tooltip: Directionality.of(context) == TextDirection.rtl
                         ? 'حذف الرسالة'
                         : 'Delete message',
+                    // The button renders inside the own-message bubble; the
+                    // default onSurfaceVariant fails contrast on
+                    // primaryContainer in light mode.
+                    style: IconButton.styleFrom(
+                        foregroundColor: colorScheme.onSurface),
                     onPressed: onDelete,
                     icon: const Icon(Icons.delete_outline),
                   ),
                 ),
               ),
-            if (isOwn)
+            if (isOwn && !hasTerminalFailure)
               _DeliveryStatusBadge(
                 status: message.deliveryStatus,
                 labels: labels,
@@ -210,7 +221,10 @@ class _ChatComposerState extends State<ChatComposer> {
             child: ExcludeSemantics(
               child: Text(
                 labels.tooLong,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: Theme.of(context).colorScheme.error),
               ),
             ),
           ),

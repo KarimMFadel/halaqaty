@@ -71,13 +71,18 @@ void main() {
       final playLabel =
           rtl ? ChatUiLabels.playVoiceMessage : ChatUiLabels.playVoiceMessageEn;
       final readOnlyLabel =
-          rtl ? 'هذه المحادثة للقراءة فقط' : 'This conversation is read-only';
+          rtl ? ChatUiLabels.readOnlyArchived : ChatUiLabels.readOnlyArchivedEn;
 
       expect(find.text('رسالة محفوظة'), findsOneWidget);
+      expect(find.text('رسالتي'), findsOneWidget);
       expect(find.text('0:12'), findsOneWidget);
       expect(find.text(readOnlyLabel), findsOneWidget);
       expect(find.byType(TextField), findsNothing);
       expect(find.byType(ChatMediaComposerBar), findsNothing);
+      // Read-only must not offer any mutation affordance — not even for the
+      // member's own recent message (pin and delete both stay hidden).
+      expect(find.byIcon(Icons.delete_outline), findsNothing);
+      expect(find.byIcon(Icons.push_pin_outlined), findsNothing);
 
       final playSemantics = find.byWidgetPredicate(
         (widget) => widget is Semantics && widget.properties.label == playLabel,
@@ -126,6 +131,15 @@ class _Api extends ChatApiClient {
             type: ChatMessageType.text,
             sentAt: DateTime.utc(2026),
             deliveryStatus: ChatDeliveryStatus.delivered,
+          ),
+          ChatMessage(
+            id: 'own-1',
+            senderId: 'me',
+            circleId: circleId,
+            content: 'رسالتي',
+            type: ChatMessageType.text,
+            sentAt: DateTime.now().toUtc(),
+            deliveryStatus: ChatDeliveryStatus.sent,
           ),
           ChatMessage(
             id: 'voice-1',

@@ -77,7 +77,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('This conversation is unavailable'), findsOneWidget);
+    // Lost access is terminal: honest copy with a safe exit, never a retry
+    // loop, and never the raw server code.
+    expect(find.text('You no longer have access to this conversation'),
+        findsOneWidget);
+    expect(find.text('Back'), findsOneWidget);
+    expect(find.text('Retry'), findsNothing);
     expect(find.textContaining('private'), findsNothing);
   });
 
@@ -132,6 +137,157 @@ void main() {
     expect(api.deletedMessageId, 'own-message');
     expect(find.text('Message deleted'), findsOneWidget);
   });
+
+  testWidgets('load failure keeps a retry path', (tester) async {
+    final controller = DirectChatController(
+      _FakeFlakyApi(),
+      () async => (token: 'token', sessionId: 'session', userId: 'user'),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith((_) => StubAuthNotifier(
+                initialState: AuthState(
+                  status: AuthStatus.authenticated,
+                  sessionId: 'session',
+                  user: BackendUser(
+                    id: 'user',
+                    firebaseUid: 'firebase-user',
+                    preferredLanguage: 'en',
+                    createdAt: DateTime.utc(2026),
+                  ),
+                ),
+              )),
+          directChatControllerProvider('peer').overrideWith((_) => controller),
+        ],
+        child: const MaterialApp(home: DirectChatScreen(peerId: 'peer')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(controller.state.status, DirectChatStatus.error);
+    expect(find.text('Could not load chat history'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.textContaining('socket reset'), findsNothing);
+
+    // The retry path re-opens the conversation and recovers to ready.
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+    expect(controller.state.status, DirectChatStatus.ready);
+  });
+
+  testWidgets('empty conversation shows guidance and keeps the composer',
+      (tester) async {
+    final controller = DirectChatController(
+      _FakeReadyApi(),
+      () async => (token: 'token', sessionId: 'session', userId: 'user'),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith((_) => StubAuthNotifier(
+                initialState: AuthState(
+                  status: AuthStatus.authenticated,
+                  sessionId: 'session',
+                  user: BackendUser(
+                    id: 'user',
+                    firebaseUid: 'firebase-user',
+                    preferredLanguage: 'en',
+                    createdAt: DateTime.utc(2026),
+                  ),
+                ),
+              )),
+          directChatControllerProvider('peer').overrideWith((_) => controller),
+        ],
+        child: const MaterialApp(home: DirectChatScreen(peerId: 'peer')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+        find.text('No messages yet; start the conversation'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+  });
+
+  testWidgets(
+      'send stays disabled for an empty draft and a rejected send announces '
+      'the failure', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final api = _FakeReadyApi()..sendFailure = StateError('offline');
+    final controller = DirectChatController(
+      api,
+      () async => (token: 'token', sessionId: 'session', userId: 'user'),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith((_) => StubAuthNotifier(
+                initialState: AuthState(
+                  status: AuthStatus.authenticated,
+                  sessionId: 'session',
+                  user: BackendUser(
+                    id: 'user',
+                    firebaseUid: 'firebase-user',
+                    preferredLanguage: 'en',
+                    createdAt: DateTime.utc(2026),
+                  ),
+                ),
+              )),
+          directChatControllerProvider('peer').overrideWith((_) => controller),
+        ],
+        child: const MaterialApp(home: DirectChatScreen(peerId: 'peer')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    IconButton sendButton() =>
+        tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.send));
+
+    // Empty drafts cannot be sent at all.
+    expect(sendButton().onPressed, isNull);
+
+    await tester.enterText(find.byType(TextField), 'مرحبا');
+    await tester.pump();
+    expect(sendButton().onPressed, isNotNull);
+
+    // A rejected send keeps the draft and announces the failure in a live
+    // region instead of staying silent.
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.send));
+    await tester.pumpAndSettle();
+    expect(api.sentContents, isEmpty);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller?.text,
+      'مرحبا',
+    );
+    expect(find.text('Action failed'), findsOneWidget);
+    expect(
+      tester
+          .getSemantics(find.text('Action failed'))
+          .flagsCollection
+          .isLiveRegion,
+      isTrue,
+    );
+    semantics.dispose();
+  });
+}
+
+class _FakeFlakyApi extends ChatApiClient {
+  _FakeFlakyApi() : super(Dio());
+
+  var calls = 0;
+
+  @override
+  Future<ChatMessagePage> listDirectMessages({
+    required String token,
+    required String sessionId,
+    required String userId,
+    int? limit,
+    String? before,
+  }) async {
+    calls++;
+    if (calls == 1) throw StateError('socket reset');
+    return ChatMessagePage(messages: const [], hasMore: false);
+  }
 }
 
 class _FakeReadyApi extends ChatApiClient implements ChatModerationApi {
@@ -139,6 +295,30 @@ class _FakeReadyApi extends ChatApiClient implements ChatModerationApi {
 
   final ChatMessage? message;
   String? deletedMessageId;
+  Object? sendFailure;
+  final sentContents = <String>[];
+
+  @override
+  Future<ChatMessage> sendDirectTextMessage({
+    required String token,
+    required String sessionId,
+    required String userId,
+    required String content,
+    required String idempotencyKey,
+  }) async {
+    if (sendFailure != null) throw sendFailure!;
+    sentContents.add(content);
+    return ChatMessage(
+      id: 'sent-${sentContents.length}',
+      senderId: 'user',
+      circleId: null,
+      dmPeerId: userId,
+      content: content,
+      type: ChatMessageType.text,
+      sentAt: DateTime.utc(2026),
+      deliveryStatus: ChatDeliveryStatus.sent,
+    );
+  }
 
   @override
   Future<ChatMessagePage> listDirectMessages({

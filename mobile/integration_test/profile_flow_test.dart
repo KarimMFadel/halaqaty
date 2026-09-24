@@ -137,6 +137,8 @@ void main() {
       find.byKey(const Key('profileBioField')),
       'Updated bio',
     );
+    await tester.ensureVisible(find.byKey(const Key('profileSaveButton')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('profileSaveButton')));
     await tester.pumpAndSettle();
 

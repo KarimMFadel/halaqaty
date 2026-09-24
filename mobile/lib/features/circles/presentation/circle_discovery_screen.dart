@@ -7,6 +7,7 @@ import 'package:halaqaty_mobile/features/circles/presentation/circle_detail_scre
 import 'package:halaqaty_mobile/features/circles/presentation/circle_join_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_name_text.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_load_error.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_ui_labels.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/create_circle_screen.dart';
 
 class CircleDiscoveryScreen extends ConsumerStatefulWidget {
@@ -192,7 +193,10 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
               ],
               const SizedBox(height: 8),
               Text('${rtl ? 'السعة' : 'Capacity'}: ${circle.maxCapacity}'),
-              Text('${rtl ? 'اللغة' : 'Language'}: ${circle.language}'),
+              Text(
+                '${rtl ? 'اللغة' : 'Language'}: '
+                '${circleLanguageLabel(circle.language, rtl)}',
+              ),
               Text(_genderText(circle.genderRestriction, rtl)),
               const SizedBox(height: 12),
               FilledButton(
@@ -281,12 +285,7 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
   }
 
   String _genderText(String gender, bool rtl) {
-    if (!rtl) return 'Audience: $gender';
-    return switch (gender) {
-      'male' => 'الفئة: ذكور',
-      'female' => 'الفئة: إناث',
-      'mixed' => 'الفئة: مختلط',
-      _ => 'الفئة: غير محدد',
-    };
+    final label = circleAudienceLabel(gender, rtl);
+    return rtl ? 'الفئة: $label' : 'Audience: $label';
   }
 }

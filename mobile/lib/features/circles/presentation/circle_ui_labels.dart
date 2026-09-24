@@ -1,6 +1,28 @@
 const circleCancelLabel = 'إلغاء';
 const circleMutationErrorLabel = 'تعذر إكمال الطلب. حاول مرة أخرى';
 
+/// Localized display name for a circle language code so user-facing copy never
+/// exposes the raw database value. Unknown codes fall back to the code itself.
+String circleLanguageLabel(String code, bool rtl) => switch (code) {
+      'ar' => rtl ? 'العربية' : 'Arabic',
+      'en' => rtl ? 'الإنجليزية' : 'English',
+      _ => code,
+    };
+
+/// Localized display name for a circle audience restriction. The single source
+/// for the restriction→copy mapping (mirrors [CircleDetailLabels]); unknown
+/// values render as "unspecified".
+String circleAudienceLabel(String restriction, bool rtl) =>
+    switch (restriction) {
+      'male' => rtl ? CircleDetailLabels.maleAr : CircleDetailLabels.maleEn,
+      'female' =>
+        rtl ? CircleDetailLabels.femaleAr : CircleDetailLabels.femaleEn,
+      'mixed' => rtl ? CircleDetailLabels.mixedAr : CircleDetailLabels.mixedEn,
+      _ => rtl
+          ? CircleDetailLabels.unspecifiedAr
+          : CircleDetailLabels.unspecifiedEn,
+    };
+
 abstract final class CircleDetailLabels {
   static const titleAr = 'تفاصيل الحلقة';
   static const titleEn = 'Circle details';
@@ -20,6 +42,8 @@ abstract final class CircleDetailLabels {
   static const membersEn = 'Members';
   static const chatAr = 'المحادثة';
   static const chatEn = 'Chat';
+  static const scheduleAr = 'المواعيد';
+  static const scheduleEn = 'Schedule';
   static const manageAr = 'إدارة الحلقة';
   static const manageEn = 'Manage circle';
   static const archiveAr = 'أرشفة الحلقة';

@@ -127,6 +127,20 @@ final ColorScheme _darkScheme = ColorScheme.dark(
 ThemeData _buildTheme(ColorScheme scheme) {
   final isLight = scheme.brightness == Brightness.light;
 
+  // Visible keyboard-focus indication (DESIGN.md: Primary Dark #0F5627 is the
+  // focus-state token; dark mode uses the lifted primary for contrast). The
+  // default 10% state-layer overlay is indistinguishable on filled buttons.
+  final focusedSide = WidgetStateProperty.resolveWith<BorderSide?>(
+    (states) => states.contains(WidgetState.focused)
+        ? BorderSide(
+            color: isLight
+                ? HalaqatyColors.primaryDark
+                : HalaqatyColors.primaryLight,
+            width: 2,
+          )
+        : null,
+  );
+
   // Bundled-font mapping (spec clarification 2026-09-22): title/label get
   // w600 (Poppins SemiBold / Cairo Bold), the rest w400; height 1.5 keeps
   // Arabic diacritics unclipped. No new font assets, no synthesized weights.
@@ -196,13 +210,28 @@ ThemeData _buildTheme(ColorScheme scheme) {
       style: FilledButton.styleFrom(
         minimumSize: const Size(64, 48),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
+      ).copyWith(side: focusedSide),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(64, 48),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
+      ).copyWith(side: focusedSide),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        minimumSize: const Size(64, 48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ).copyWith(side: focusedSide),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        minimumSize: const Size(64, 48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ).copyWith(side: focusedSide),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: scheme.surface,

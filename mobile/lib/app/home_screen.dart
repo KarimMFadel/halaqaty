@@ -88,7 +88,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       : 'Discover public circles or join with an invite code',
                 ),
               ...state.myCircles.map(
-                (circle) => _CircleCard(circle: circle, isRtl: isRtl),
+                (circle) => _CircleCard(circle: circle),
               ),
             ],
           ),
@@ -99,14 +99,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 }
 
 class _CircleCard extends StatelessWidget {
-  const _CircleCard({required this.circle, required this.isRtl});
+  const _CircleCard({required this.circle});
 
   final CircleSummary circle;
-  final bool isRtl;
 
   @override
   Widget build(BuildContext context) {
-    final chevron = isRtl ? Icons.chevron_left : Icons.chevron_right;
     return Semantics(
       button: true,
       label: circle.name,
@@ -128,7 +126,9 @@ class _CircleCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-          trailing: Icon(chevron),
+          // Material mirrors this direction-aware icon once for RTL; picking
+          // chevron_left manually would double-mirror it (FR-010).
+          trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => CircleDetailScreen(circleId: circle.id),

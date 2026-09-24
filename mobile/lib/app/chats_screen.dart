@@ -39,7 +39,6 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(circleDiscoveryControllerProvider);
     final isRtl = Directionality.of(context) == TextDirection.rtl;
-    final chevron = isRtl ? Icons.chevron_left : Icons.chevron_right;
 
     return Scaffold(
       appBar: AppBar(
@@ -81,10 +80,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
                   ],
                   for (var i = 0; i < state.myCircles.length; i++) ...[
                     if (i > 0) const SizedBox(height: 12),
-                    _ChatCircleTile(
-                      circle: state.myCircles[i],
-                      chevron: chevron,
-                    ),
+                    _ChatCircleTile(circle: state.myCircles[i]),
                   ],
                 ],
               ),
@@ -96,10 +92,9 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
 }
 
 class _ChatCircleTile extends StatelessWidget {
-  const _ChatCircleTile({required this.circle, required this.chevron});
+  const _ChatCircleTile({required this.circle});
 
   final CircleSummary circle;
-  final IconData chevron;
 
   @override
   Widget build(BuildContext context) {
@@ -111,7 +106,8 @@ class _ChatCircleTile extends StatelessWidget {
           color: Theme.of(context).colorScheme.primary,
         ),
         title: CircleNameText(name: circle.name),
-        trailing: Icon(chevron),
+        // Material mirrors this direction-aware icon once for RTL (FR-010).
+        trailing: const Icon(Icons.chevron_right),
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => GroupChatScreen(

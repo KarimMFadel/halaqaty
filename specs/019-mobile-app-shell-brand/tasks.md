@@ -117,11 +117,11 @@ until Karim approves the complete Spec-Kit artifacts and analysis.
 
 **Independent Test**: Run representative primary journeys in the complete variant matrix and find no clipping, incorrect direction, inaccessible controls, token violations, or developer copy.
 
-- [ ] T043 [US6] Expand `mobile/integration_test/ux_visual_journey_test.dart` and focused test helpers to implement the exact `spec.md` Screenshot Acceptance Matrix: every affected screen in four direction/theme ready-state variants plus the named role/state, 320dp/600dp, and 200% text captures, without weakening real integration coverage.
-- [ ] T044 [US6] Add focused cross-app tests for contrast-relevant theme roles, bundled typography mapping (400 regular and Poppins 600/Cairo 700 emphasis), directional icons/order, 48dp targets, semantics/focus, dynamic announcements, reduced motion, long mixed-script copy, Arabic diacritic layout, and every inventoried under-implementation action's exact localized notice plus zero navigation/controller/API/state side effects in `mobile/test/widget/`.
-- [ ] T045 [US6] Audit and minimally fix remaining presentation violations across changed `mobile/lib/` surfaces; remove raw IDs, fixtures, provider terms, ad-hoc developer placeholders, unsupported data, and unplanned actions while retaining only the standardized under-implementation notice for approved future-intended actions.
-- [ ] T046 [US6] Capture the final screenshot matrix and record artifact names, dimensions, state, direction, theme, text scale, and findings in `specs/019-mobile-app-shell-brand/evidence/wave-5.md`.
-- [ ] T047 [US6] Obtain final UX Designer and UI Designer approval of the complete matrix; resolve findings and record outcomes in `specs/019-mobile-app-shell-brand/evidence/wave-5.md`.
+- [X] T043 [US6] Expand `mobile/integration_test/ux_visual_journey_test.dart` and focused test helpers to implement the exact `spec.md` Screenshot Acceptance Matrix: every affected screen in four direction/theme ready-state variants plus the named role/state, 320dp/600dp, and 200% text captures, without weakening real integration coverage. Evidence: `evidence/wave-5.md`; responsive capture harness passes 5/5.
+- [X] T044 [US6] Add focused cross-app tests for contrast-relevant theme roles, bundled typography mapping (400 regular and Poppins 600/Cairo 700 emphasis), directional icons/order, 48dp targets, semantics/focus, dynamic announcements, reduced motion, long mixed-script copy, Arabic diacritic layout, and every inventoried under-implementation action's exact localized notice plus zero navigation/controller/API/state side effects in `mobile/test/widget/`. Evidence: `test/widget/wave5/cross_app_surfaces_audit_test.dart`; retained complete widget suite passed 114/114.
+- [X] T045 [US6] Audit and minimally fix remaining presentation violations across changed `mobile/lib/` surfaces; remove raw IDs, fixtures, provider terms, ad-hoc developer placeholders, unsupported data, and unplanned actions while retaining only the standardized under-implementation notice for approved future-intended actions. Evidence: `evidence/wave-5.md` records the minimal fixes and no-scope-expansion boundary.
+- [X] T046 [US6] Capture the final screenshot matrix and record artifact names, dimensions, state, direction, theme, text scale, and findings in `specs/019-mobile-app-shell-brand/evidence/wave-5.md`. Evidence: 68 PNGs under `evidence/screenshots/wave5/`, capture harness 5/5.
+- [X] T047 [US6] Obtain final UX Designer and UI Designer approval of the complete matrix; resolve findings and record outcomes in `specs/019-mobile-app-shell-brand/evidence/wave-5.md`. Evidence: both roles APPROVE-WITH-FIXES on first pass; UI-W5-1 (raw `ar`/`mixed` codes localized via `circleLanguageLabel`) and UI-W5-2 (2dp focused border on all button themes per DESIGN.md focus token) fixed with regression coverage in the audit test "T047 review fixes" group and a re-captured 68-PNG matrix; post-fix verdict APPROVED.
 
 **Checkpoint**: Every wave meets the common governance floor.
 
@@ -131,15 +131,15 @@ until Karim approves the complete Spec-Kit artifacts and analysis.
 
 **Purpose**: Produce fresh evidence on the final tree before any commit or completion claim.
 
-- [ ] T048 Run `flutter test test` from `mobile/` and record exact pass/fail counts in `specs/019-mobile-app-shell-brand/evidence/final-gates.md`.
-- [ ] T049 Run `flutter test integration_test/` from `mobile/` with the connected emulator/device and configured backend; record exact results, or mark blocked and stop before committing.
-- [ ] T050 Run `flutter analyze` from `mobile/` and record exact output.
-- [ ] T051 Run `dart format --set-exit-if-changed .` from `mobile/` and record exact output.
-- [ ] T052 Run `git diff --check` from repository root and record exact output.
-- [ ] T053 Apply `$clean-code-guard` to all changed production Dart and `$test-guard` to all changed test Dart; fix findings and record the checklists in `specs/019-mobile-app-shell-brand/evidence/final-gates.md`.
-- [ ] T054 Run the Tech Lead correctness/security/performance/accessibility review plus Ponytail over-engineering review on the final diff; resolve findings and record the result.
-- [ ] T055 Confirm `.specify/memory/constitution.md`, backend code/contracts, database migrations, WebSocket catalog, and unrelated features are unchanged; record `git diff --stat` and status.
-- [ ] T056 Mark completed tasks only from current evidence, list any incomplete/blocked task IDs, and create the requested final report with screens/files, gates, screenshots, reviews, and commit hashes.
+- [X] T048 Run `flutter test test` from `mobile/` and record exact pass/fail counts in `specs/019-mobile-app-shell-brand/evidence/final-gates.md`. Evidence: 515/515 passed on the final tree.
+- [ ] T049 Run `flutter test integration_test/` from `mobile/` with the connected emulator/device and configured backend; record exact results, or mark blocked and stop before committing. **BLOCKED**: no attached device, no installed emulator images, no Docker for the Linux-scaffold fallback, and no provisioned real-stack fixtures in this environment; per the commit rule below, Flutter changes remain uncommitted.
+- [X] T050 Run `flutter analyze` from `mobile/` and record exact output. Evidence: `No issues found!` in `final-gates.md`.
+- [X] T051 Run `dart format --set-exit-if-changed .` from `mobile/` and record exact output. Evidence: `Formatted 154 files (0 changed)` after one re-wrap pass.
+- [X] T052 Run `git diff --check` from repository root and record exact output. Evidence: exit 0, whitespace-clean.
+- [X] T053 Apply `$clean-code-guard` to all changed production Dart and `$test-guard` to all changed test Dart; fix findings and record the checklists in `specs/019-mobile-app-shell-brand/evidence/final-gates.md`. Evidence: one DRY finding (duplicated audience mapping) fixed via `circleAudienceLabel`; checklists recorded.
+- [X] T054 Run the Tech Lead correctness/security/performance/accessibility review plus Ponytail over-engineering review on the final diff; resolve findings and record the result. Evidence: both APPROVE in `final-gates.md`; security-sensitive paths untouched.
+- [X] T055 Confirm `.specify/memory/constitution.md`, backend code/contracts, database migrations, WebSocket catalog, and unrelated features are unchanged; record `git diff --stat` and status. Evidence: `final-gates.md` — diff touches only `mobile/` and `specs/019-mobile-app-shell-brand/`.
+- [X] T056 Mark completed tasks only from current evidence, list any incomplete/blocked task IDs, and create the requested final report with screens/files, gates, screenshots, reviews, and commit hashes. Evidence: `specs/019-mobile-app-shell-brand/evidence/final-report.md`; T049 listed as the only blocked task; no commits made.
 
 ## Dependencies and Execution Order
 

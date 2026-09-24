@@ -1,0 +1,29 @@
+HEAD: b090469
+tree-status:
+23
+00:47 +502: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: app locale and direction (US1) logout restores the platform locale fallback
+loadMyCircles: no credentials (session/token missing)
+00:48 +503: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: app locale and direction (US1) protected redirect keeps unauthenticated users off the shell
+00:48 +504: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shell quality gates (US1) navigation destinations and welcome actions meet 48dp
+loadMyCircles: no credentials (session/token missing)
+00:48 +505: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shell quality gates (US1) welcome actions meet 48dp targets
+00:48 +506: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shell quality gates (US1) splash loading is branded and semantically labelled
+00:48 +507: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shell quality gates (US1) selected tab changes icon shape, not color alone
+loadMyCircles: no credentials (session/token missing)
+loadMyCircles: no credentials (session/token missing)
+00:48 +508: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: shell quality gates (US1) dark theme keeps selected-state meaning and font mapping
+00:48 +509: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: home and chats states (US1) home shows branded loading while circles load
+loadMyCircles: loaded 0 circles
+00:48 +510: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: home and chats states (US1) home keeps circles visible with a stale notice when refresh fails
+loadMyCircles: loaded 1 circles
+loadMyCircles: DioException DioExceptionType.connectionError null
+loadMyCircles: loaded 1 circles
+00:48 +511: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: home and chats states (US1) chats shows a retryable error instead of empty when load fails
+loadMyCircles: loaded 0 circles
+loadMyCircles: DioException DioExceptionType.connectionError null
+00:49 +512: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: home and chats states (US1) chats keeps conversations visible with a stale notice when refresh fails
+loadMyCircles: loaded 1 circles
+loadMyCircles: loaded 1 circles
+loadMyCircles: DioException DioExceptionType.connectionError null
+00:49 +513: All tests passed!
+EXIT=0

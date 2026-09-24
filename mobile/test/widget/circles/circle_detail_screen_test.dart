@@ -309,6 +309,14 @@ void main() {
 
   testWidgets('CircleDetailScreen: management and retirement are reachable',
       (tester) async {
+    // Tall viewport keeps every entry tile built in the lazy ListView —
+    // with the Wave 5 schedule notice tile added, 600px no longer builds
+    // the management tile for ensureVisible.
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
       ProviderScope(
         overrides: [

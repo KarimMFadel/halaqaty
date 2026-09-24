@@ -27,27 +27,6 @@ class CircleDetailScreen extends ConsumerWidget {
       ? (rtl ? CircleDetailLabels.privateAr : CircleDetailLabels.privateEn)
       : (rtl ? CircleDetailLabels.publicAr : CircleDetailLabels.publicEn);
 
-  String _genderLabel(String genderRestriction, bool rtl) {
-    if (!rtl) {
-      return switch (genderRestriction) {
-        'male' => CircleDetailLabels.maleEn,
-        'female' => CircleDetailLabels.femaleEn,
-        'mixed' => CircleDetailLabels.mixedEn,
-        _ => CircleDetailLabels.unspecifiedEn,
-      };
-    }
-    switch (genderRestriction) {
-      case 'male':
-        return CircleDetailLabels.maleAr;
-      case 'female':
-        return CircleDetailLabels.femaleAr;
-      case 'mixed':
-        return CircleDetailLabels.mixedAr;
-      default:
-        return CircleDetailLabels.unspecifiedAr;
-    }
-  }
-
   CircleRole? _currentRole(List<CircleMember> members, String? userId) {
     for (final member in members) {
       if (member.userId == userId) return member.role;
@@ -135,15 +114,16 @@ class CircleDetailScreen extends ConsumerWidget {
                       title: Text(rtl
                           ? CircleDetailLabels.audienceAr
                           : CircleDetailLabels.audienceEn),
-                      subtitle:
-                          Text(_genderLabel(circle.genderRestriction, rtl)),
+                      subtitle: Text(
+                        circleAudienceLabel(circle.genderRestriction, rtl),
+                      ),
                     ),
                     ListTile(
                       leading: const Icon(Icons.language),
                       title: Text(rtl
                           ? CircleDetailLabels.languageAr
                           : CircleDetailLabels.languageEn),
-                      subtitle: Text(circle.language),
+                      subtitle: Text(circleLanguageLabel(circle.language, rtl)),
                     ),
                     if (circle.rules != null && circle.rules!.isNotEmpty)
                       ListTile(
@@ -193,6 +173,18 @@ class CircleDetailScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
+              ),
+              // Planned in the approved design but without F-002/F-005
+              // schedule behavior: the shared under-implementation notice
+              // only (FR-032/FR-033, compatibility inventory §6).
+              ListTile(
+                leading: const Icon(Icons.calendar_month_outlined),
+                title: Text(rtl
+                    ? CircleDetailLabels.scheduleAr
+                    : CircleDetailLabels.scheduleEn),
+                // Material mirrors this direction-aware icon once for RTL.
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => showHalaqatyUnderImplementationNotice(context),
               ),
               if (!circle.isArchived &&
                   userId != null &&

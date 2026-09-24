@@ -4,11 +4,10 @@ A new Flutter project.
 
 ## Integration tests in CI
 
-Functional integration tests run on Linux; UX and Wave 0–2 screenshot suites run
-on Android emulators because their native screenshot API is unavailable on Linux.
-The Android jobs upload PNGs and test logs using `test_driver/ci_screenshot_driver.dart`.
-See the [GitHub Actions guide](../docs/engineering/deployment/GITHUB_ACTIONS.md)
-for commands, fixture requirements, artifacts, and verification limits.
+CI runs functional integration tests on Linux. The UX and Wave 0–2 screenshot
+suites run locally on a connected Android device/emulator; GitHub Actions does
+not start an emulator. See the [GitHub Actions guide](../docs/engineering/deployment/GITHUB_ACTIONS.md)
+for local commands and CI coverage limits.
 
 ## Getting Started
 

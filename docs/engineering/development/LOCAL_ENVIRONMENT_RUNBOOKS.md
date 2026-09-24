@@ -53,7 +53,8 @@ $appPackage = "com.halaqaty.mobile"
 Expected results are one device in `device` state, `1` for
 `sys.boot_completed`, and an installed package path. If ADB, the emulator,
 the package, or the backend is unavailable, use the Docker/Xvfb recipe below
-instead of calling the Android test skipped result a pass.
+for functional integration checks. Screenshot suites require the connected
+Android device/emulator and remain unrun until it is available.
 
 For the Halaqaty Android emulator, the default development API URL is
 `http://10.0.2.2:8080/api/v1`. Start exactly one temporary API dispatcher and
@@ -140,11 +141,12 @@ the tested flow supports them.
 
 ## Flutter integration tests (Linux scaffold + xvfb)
 
-This path covers functional tests only. Do not run the UX journey or Wave 0–2
-visual screenshot suites on Linux: their native `takeScreenshot()` call fails
-with `MissingPluginException` for `captureScreenshot`. Use Android and the
-shared screenshot driver to save PNGs. See [GitHub Actions test workflows](../deployment/GITHUB_ACTIONS.md)
-for the exact suite list, reproduction command, and artifact locations.
+This path covers functional integration tests only. The workflow intentionally
+excludes the UX journey and Wave 0–2 screenshot suites; run those locally on the
+connected Android device/emulator using the existing device instructions above
+and screenshot drivers. GitHub Actions does not start an emulator for them.
+See [GitHub Actions test workflows](../deployment/GITHUB_ACTIONS.md) for the
+suite list and exact local commands.
 
 Use this path when no healthy Android emulator is available, when the test
 needs a deterministic Linux runner, or when matching the CI Flutter image is

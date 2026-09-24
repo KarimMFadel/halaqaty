@@ -138,7 +138,7 @@ jobs:
           mkdir -p build/integration-logs
           status=0
           for test_file in integration_test/*_test.dart; do
-            # Native screenshot capture is covered by the Android job below.
+            # Native screenshot suites are run locally on the developer's device.
             case "$test_file" in
               integration_test/ux_visual_journey_test.dart|integration_test/wave0_shell_visual_test.dart|integration_test/wave1_circles_visual_test.dart|integration_test/wave2_sessions_visual_test.dart) continue ;;
             esac
@@ -153,82 +153,3 @@ jobs:
         with:
           name: flutter-integration-linux-logs
           path: mobile/build/integration-logs/
-
-  flutter-visual-tests:
-    needs: detect-test-targets
-    if: needs.detect-test-targets.outputs.flutter_enabled == 'true' && needs.detect-test-targets.outputs.flutter_integration_enabled == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        suite:
-          - ux_visual_journey
-          - wave0_shell_visual
-          - wave1_circles_visual
-          - wave2_sessions_visual
-    defaults:
-      run:
-        working-directory: mobile
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - name: Install Flutter dependencies
-        run: flutter pub get
-      - name: Prepare fixture-only Android build
-        run: |
-          mkdir -p build/visual-artifacts/screenshots
-          # Non-production placeholders: these suites override auth/data providers.
-          # No real Firebase project or credentials are used by this job.
-          cat > android/app/google-services.json <<'JSON'
-          {
-            "project_info": {
-              "project_number": "123456789012",
-              "project_id": "demo-halaqaty-visual"
-            },
-            "client": [{
-              "client_info": {
-                "mobilesdk_app_id": "1:123456789012:android:0123456789abcdef",
-                "android_client_info": {"package_name": "com.halaqaty.mobile"}
-              },
-              "api_key": [{"current_key": "visual-test-placeholder-not-a-real-key"}]
-            }],
-            "configuration_version": "1"
-          }
-          JSON
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: Run Android screenshot suite
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          target: google_apis
-          profile: pixel_2
-          disable-animations: true
-          working-directory: mobile
-          script: |
-            drive_status=0
-            flutter drive --driver=test_driver/ci_screenshot_driver.dart --target=integration_test/${{ matrix.suite }}_test.dart -d emulator-5554 > build/visual-artifacts/test.log 2>&1 || drive_status=$?
-            cat build/visual-artifacts/test.log
-            adb devices -l > build/visual-artifacts/adb-devices.txt 2>&1 || true
-            adb -s emulator-5554 logcat -b main -b system -b crash -t 3000 -d -v threadtime > build/visual-artifacts/emulator-logcat.txt 2>&1 || true
-            adb -s emulator-5554 shell dumpsys meminfo > build/visual-artifacts/emulator-memory.txt 2>&1 || true
-            exit "$drive_status"
-      - name: Upload screenshots and test log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: flutter-visual-${{ matrix.suite }}
-          path: mobile/build/visual-artifacts/

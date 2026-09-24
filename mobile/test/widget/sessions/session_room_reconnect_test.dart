@@ -16,7 +16,8 @@ void main() {
   testWidgets('reconnect refreshes the participant credential', (tester) async {
     final api = RecoverySessionApi();
     final media = RecordingMediaSession();
-    await tester.pumpWidget(_app(api, media: media));
+    final realtime = RecordingRealtimeClient();
+    await tester.pumpWidget(_app(api, media: media, realtime: realtime));
 
     await tester.tap(find.text('Join'));
     await _pumpAsync(tester);
@@ -24,8 +25,11 @@ void main() {
     expect(media.credentials, ['credential-1']);
 
     // A reconnect must use a fresh authenticated join response, not reuse the
-    // short-lived credential from the first media connection.
-    await tester.tap(find.text('Join'));
+    // short-lived credential from the first media connection. The connected
+    // room offers no re-join action; the retry affordance owns recovery.
+    await realtime.close();
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('sessionRoomRetry')));
     await _pumpAsync(tester);
 
     expect(media.connections, 2);
@@ -44,12 +48,44 @@ void main() {
     await _pumpAsync(tester);
 
     api.participantsList = [_participant('student-2')];
-    await tester.tap(find.text('Join'));
+    await realtime.close();
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('sessionRoomRetry')));
     await _pumpAsync(tester);
 
     expect(find.text('student-1'), findsNothing);
     expect(find.text('student-2'), findsOneWidget);
     expect(media.connections, 2);
+  });
+
+  testWidgets('a retry after a prior connection announces reconnecting',
+      (tester) async {
+    final realtime = RecordingRealtimeClient();
+    final api = RecoverySessionApi();
+    await tester.pumpWidget(_app(api, realtime: realtime));
+    await tester.tap(find.text('Join'));
+    await _pumpAsync(tester);
+
+    await realtime.close();
+    await tester.pump();
+    // Dropping the focused dominant action on connect defers the rebuild one
+    // frame, so the retry affordance needs a second pump before it is tappable.
+    await tester.pump();
+    api.joinDelay = const Duration(milliseconds: 100);
+    await tester.tap(find.byKey(const Key('sessionRoomRetry')));
+    await tester.pump();
+    await tester.pump();
+
+    // A prior connection turns the wait into a reconnect, matching the queue
+    // panel's reconnecting copy.
+    expect(find.text('Reconnecting...'), findsOneWidget);
+    expect(find.text('Loading participants...'), findsNothing);
+
+    await _pumpAsync(tester);
+    // Dropping the focused dominant action on reconnect defers the rebuild one
+    // frame, so the connected copy needs a second pump.
+    await tester.pump();
+    expect(find.text('Connected. Audio is ready.'), findsOneWidget);
   });
 
   testWidgets('ended event is terminal and stops the room state',
@@ -65,6 +101,9 @@ void main() {
       sessionId: 'session-1',
       endReason: 'manual',
     ));
+    await tester.pump();
+    // Dropping the focused dominant action on connect defers the rebuild one
+    // frame, so the post-event state needs a second pump.
     await tester.pump();
 
     expect(find.text(SessionUiLabels.sessionEnded), findsOneWidget);
@@ -85,6 +124,9 @@ void main() {
       userId: 'student-1',
     ));
     await tester.pump();
+    // Dropping the focused dominant action on connect defers the rebuild one
+    // frame, so the post-event state needs a second pump.
+    await tester.pump();
 
     expect(find.text('student-1'), findsNothing);
   });
@@ -102,6 +144,9 @@ void main() {
     await _pumpAsync(tester);
 
     realtime.emit(const LockChangedEvent(sessionId: 'session-1', locked: true));
+    await tester.pump();
+    // Dropping the focused dominant action on connect defers the rebuild one
+    // frame, so the post-event state needs a second pump.
     await tester.pump();
 
     expect(find.text(SessionUiLabels.unlockSession), findsOneWidget);
@@ -150,6 +195,39 @@ void main() {
 
     expect(find.text(SessionUiLabels.unableToConnect), findsOneWidget);
     expect(find.textContaining('provider-secret'), findsNothing);
+  });
+
+  testWidgets('retryable failure keeps retry and leave affordances at 48dp',
+      (tester) async {
+    await tester.pumpWidget(
+        _app(FailingRecoverySessionApi(), direction: TextDirection.ltr));
+    await tester.tap(find.text('Join'));
+    await tester.pumpAndSettle();
+
+    final retry = find.byKey(const Key('sessionRoomRetry'));
+    final leave = find.byKey(const Key('sessionRoomLeave'));
+    expect(retry, findsOneWidget);
+    expect(leave, findsOneWidget);
+    expect(tester.getSize(retry).height, greaterThanOrEqualTo(48));
+    expect(tester.getSize(leave).height, greaterThanOrEqualTo(48));
+    expect(find.text('Session access has ended'), findsNothing);
+  });
+
+  testWidgets(
+      'terminal failure states retry is unavailable and offers a safe exit',
+      (tester) async {
+    await tester.pumpWidget(
+        _app(TerminalRecoverySessionApi(), direction: TextDirection.ltr));
+    await tester.tap(find.text('Join'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Session access has ended'), findsOneWidget);
+    expect(
+        find.text('Retry is unavailable. Leave the session.'), findsOneWidget);
+    expect(find.byKey(const Key('sessionRoomRetry')), findsNothing);
+    final leave = find.byKey(const Key('sessionRoomLeave'));
+    expect(leave, findsOneWidget);
+    expect(tester.getSize(leave).height, greaterThanOrEqualTo(48));
   });
 }
 
@@ -208,7 +286,7 @@ class RecordingMediaSession implements MediaSession {
 }
 
 class RecordingRealtimeClient implements RealtimeSessionClient {
-  final StreamController<RealtimeSessionEvent> _events =
+  StreamController<RealtimeSessionEvent> _events =
       StreamController<RealtimeSessionEvent>.broadcast(sync: true);
 
   void emit(RealtimeSessionEvent event) {
@@ -219,8 +297,14 @@ class RecordingRealtimeClient implements RealtimeSessionClient {
 
   @override
   Stream<RealtimeSessionEvent> sessionEvents(String liveSessionId,
-          {required String token, required String backendSessionId}) =>
-      _events.stream;
+      {required String token, required String backendSessionId}) {
+    // A retry reopens the channel, like a fresh WebSocket connection;
+    // reusing the closed controller would replay an immediate done event.
+    if (_events.isClosed) {
+      _events = StreamController<RealtimeSessionEvent>.broadcast(sync: true);
+    }
+    return _events.stream;
+  }
 
   @override
   Future<void> raiseHand(String liveSessionId) async {}
@@ -237,6 +321,9 @@ class RecoverySessionApi extends SessionApiClient {
   int joinCalls = 0;
   List<SessionParticipant> participantsList = const [];
 
+  /// Optional artificial join latency so tests can observe the loading state.
+  Duration? joinDelay;
+
   @override
   Future<SessionConnection> join({
     required String token,
@@ -244,6 +331,8 @@ class RecoverySessionApi extends SessionApiClient {
     required String liveSessionId,
   }) async {
     joinCalls++;
+    final delay = joinDelay;
+    if (delay != null) await Future<void>.delayed(delay);
     return _connection(credential: 'credential-$joinCalls');
   }
 
@@ -289,6 +378,17 @@ class FailingRecoverySessionApi extends RecoverySessionApi {
     required String liveSessionId,
   }) =>
       Future.error(StateError('provider-secret: media unavailable'));
+}
+
+/// Terminal per `SessionRoomController._isTerminal` ('ended' / '403').
+class TerminalRecoverySessionApi extends RecoverySessionApi {
+  @override
+  Future<SessionConnection> join({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+  }) =>
+      Future.error(StateError('session access ended: 403'));
 }
 
 SessionParticipant _participant(String userId) => SessionParticipant(

@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/sessions/application/media_session.dart';
 import 'package:halaqaty_mobile/features/sessions/application/session_room_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/data/realtime_session_client.dart';
@@ -33,10 +34,107 @@ void main() {
     expect(find.text('تعذر الاتصال'), findsOneWidget);
     expect(find.textContaining('start failed'), findsNothing);
   });
+
+  testWidgets(
+      'primary join action is dominant and the audio-only status is clear on entry',
+      (tester) async {
+    await tester.pumpWidget(_app(WidgetSessionApi(),
+        canStart: false, direction: TextDirection.rtl));
+
+    expect(find.text('جلسة صوتية فقط'), findsOneWidget);
+    final primary = find.byKey(const Key('sessionRoomPrimaryAction'));
+    expect(primary, findsOneWidget);
+    expect(find.descendant(of: primary, matching: find.text('انضمام')),
+        findsOneWidget);
+    final size = tester.getSize(primary);
+    expect(size.height, greaterThanOrEqualTo(48));
+    // The dominant action spans the content width instead of trailing at the
+    // bottom among secondary controls.
+    expect(size.width, greaterThan(400));
+  });
+
+  testWidgets('connected state shows no enabled Join/Start primary action',
+      (tester) async {
+    await tester.pumpWidget(_app(WidgetSessionApi(),
+        canStart: false, direction: TextDirection.rtl));
+    await tester.tap(find.text('انضمام'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تم الاتصال. الصوت متاح.'), findsOneWidget);
+    expect(find.byKey(const Key('sessionRoomPrimaryAction')), findsNothing);
+    expect(find.text('انضمام'), findsNothing);
+  });
+
+  testWidgets('the connecting wait uses branded loading, not a bare spinner',
+      (tester) async {
+    await tester.pumpWidget(_app(WidgetSessionApi(),
+        canStart: false, direction: TextDirection.rtl));
+    await tester.tap(find.text('انضمام'));
+    await tester.pump();
+
+    expect(find.byType(HalaqatyLoading), findsOneWidget);
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('connection status changes are announced in a live region',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(_app(WidgetSessionApi(),
+        canStart: false, direction: TextDirection.ltr));
+    await tester.tap(find.text('Join'));
+    await tester.pumpAndSettle();
+
+    final status = tester
+        .getSemantics(find.bySemanticsLabel('Connected. Audio is ready.'));
+    expect(status.flagsCollection.isLiveRegion, isTrue);
+    semantics.dispose();
+  });
+
+  testWidgets('keeps the primary action and status reachable at 2.0 text scale',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_app(WidgetSessionApi(),
+        canStart: false,
+        direction: TextDirection.rtl,
+        textScaler: const TextScaler.linear(2)));
+
+    // The dominant action is reachable before connecting...
+    expect(find.byKey(const Key('sessionRoomPrimaryAction')), findsOneWidget);
+    await tester.tap(find.text('انضمام'));
+    await tester.pumpAndSettle();
+
+    // ...and once connected the status alone carries the state (no
+    // contradictory re-join action), still without overflow.
+    expect(find.text('تم الاتصال. الصوت متاح.'), findsOneWidget);
+    expect(find.byKey(const Key('sessionRoomPrimaryAction')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'retryable error header stays usable at 2.0 text scale on a small screen',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_app(FailingWidgetSessionApi(),
+        canStart: true,
+        direction: TextDirection.rtl,
+        textScaler: const TextScaler.linear(2)));
+    await tester.tap(find.text('بدء الجلسة'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تعذر الاتصال'), findsOneWidget);
+    expect(find.byKey(const Key('sessionRoomRetry')), findsOneWidget);
+    expect(find.byKey(const Key('sessionRoomLeave')), findsOneWidget);
+    expect(find.byKey(const Key('sessionRoomPrimaryAction')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Widget _app(SessionApiClient api,
-        {required bool canStart, required TextDirection direction}) =>
+        {required bool canStart,
+        required TextDirection direction,
+        TextScaler textScaler = TextScaler.noScaling}) =>
     ProviderScope(
       overrides: [
         sessionRoomControllerProvider('session-1').overrideWith(
@@ -48,6 +146,10 @@ Widget _app(SessionApiClient api,
         ),
       ],
       child: MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+          child: child!,
+        ),
         home: Directionality(
           textDirection: direction,
           child: SessionRoomScreen(sessionId: 'session-1', canStart: canStart),

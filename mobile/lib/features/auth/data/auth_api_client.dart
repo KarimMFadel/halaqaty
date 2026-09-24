@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -130,17 +132,41 @@ class AuthApiClient {
     );
   }
 
+  /// Loads the backend user for a persisted authenticated session.
+  Future<BackendUser> getMe({
+    required String firebaseIdToken,
+    required String sessionId,
+  }) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/auth/me',
+      options: Options(headers: {
+        ..._bearerHeader(firebaseIdToken),
+        'X-Halaqaty-Session-ID': sessionId,
+      }),
+    );
+    return BackendUser.fromJson(response.data as Map<String, dynamic>);
+  }
+
   Map<String, String> _bearerHeader(String token) =>
       {'Authorization': 'Bearer $token'};
 }
 
+/// Dev default API base URL.
+///
+/// On Android this must be the emulator's host-loopback alias (`10.0.2.2`);
+/// `localhost` on an emulator is the emulator itself and yields
+/// connection-refused. An explicit `--dart-define=API_BASE_URL=...` always
+/// wins (production builds and integration fixtures pass their own value).
+String defaultApiBaseUrl({required bool isAndroid}) =>
+    isAndroid ? 'http://10.0.2.2:8080/api/v1' : 'http://localhost:8080/api/v1';
+
 final dioProvider = Provider<Dio>((ref) {
+  const apiBaseUrlDefine = String.fromEnvironment('API_BASE_URL');
   return Dio(
     BaseOptions(
-      baseUrl: const String.fromEnvironment(
-        'API_BASE_URL',
-        defaultValue: 'http://localhost:8080/api/v1',
-      ),
+      baseUrl: apiBaseUrlDefine.isNotEmpty
+          ? apiBaseUrlDefine
+          : defaultApiBaseUrl(isAndroid: Platform.isAndroid),
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 15),
     ),

@@ -1,13 +1,17 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/group_chat_screen.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_detail_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_management_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_members_screen.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_name_text.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_retirement_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_ui_labels.dart';
+import 'package:halaqaty_mobile/features/sessions/presentation/circle_sessions_section.dart';
 
 class CircleDetailScreen extends ConsumerWidget {
   const CircleDetailScreen({
@@ -22,27 +26,6 @@ class CircleDetailScreen extends ConsumerWidget {
   String _privacyLabel(bool isPrivate, bool rtl) => isPrivate
       ? (rtl ? CircleDetailLabels.privateAr : CircleDetailLabels.privateEn)
       : (rtl ? CircleDetailLabels.publicAr : CircleDetailLabels.publicEn);
-
-  String _genderLabel(String genderRestriction, bool rtl) {
-    if (!rtl) {
-      return switch (genderRestriction) {
-        'male' => CircleDetailLabels.maleEn,
-        'female' => CircleDetailLabels.femaleEn,
-        'mixed' => CircleDetailLabels.mixedEn,
-        _ => CircleDetailLabels.unspecifiedEn,
-      };
-    }
-    switch (genderRestriction) {
-      case 'male':
-        return CircleDetailLabels.maleAr;
-      case 'female':
-        return CircleDetailLabels.femaleAr;
-      case 'mixed':
-        return CircleDetailLabels.mixedAr;
-      default:
-        return CircleDetailLabels.unspecifiedAr;
-    }
-  }
 
   CircleRole? _currentRole(List<CircleMember> members, String? userId) {
     for (final member in members) {
@@ -69,31 +52,39 @@ class CircleDetailScreen extends ConsumerWidget {
       ),
       body: circleAsync.when(
         data: (circle) {
+          final scheme = Theme.of(context).colorScheme;
           return ListView(
             padding: const EdgeInsets.all(16.0),
             children: [
               if (circle.isArchived)
                 Container(
+                  key: const Key('circleArchivedBanner'),
                   padding: const EdgeInsets.all(12),
-                  color: Colors.amber.shade100,
+                  color: scheme.secondaryContainer,
                   child: Row(
                     children: [
-                      const Icon(Icons.archive, color: Colors.amber),
+                      Icon(
+                        Icons.archive,
+                        color: scheme.onSecondaryContainer,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           rtl
                               ? CircleDetailLabels.archivedAr
                               : CircleDetailLabels.archivedEn,
-                          style: const TextStyle(color: Colors.black87),
+                          style: TextStyle(
+                            color: scheme.onSecondaryContainer,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
               const SizedBox(height: 16),
-              Text(
-                circle.name,
+              CircleNameText(
+                name: circle.name,
+                maxLines: 2,
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               if (circle.description != null) ...[
@@ -123,15 +114,16 @@ class CircleDetailScreen extends ConsumerWidget {
                       title: Text(rtl
                           ? CircleDetailLabels.audienceAr
                           : CircleDetailLabels.audienceEn),
-                      subtitle:
-                          Text(_genderLabel(circle.genderRestriction, rtl)),
+                      subtitle: Text(
+                        circleAudienceLabel(circle.genderRestriction, rtl),
+                      ),
                     ),
                     ListTile(
                       leading: const Icon(Icons.language),
                       title: Text(rtl
                           ? CircleDetailLabels.languageAr
                           : CircleDetailLabels.languageEn),
-                      subtitle: Text(circle.language),
+                      subtitle: Text(circleLanguageLabel(circle.language, rtl)),
                     ),
                     if (circle.rules != null && circle.rules!.isNotEmpty)
                       ListTile(
@@ -150,7 +142,7 @@ class CircleDetailScreen extends ConsumerWidget {
                 title: Text(rtl
                     ? CircleDetailLabels.membersAr
                     : CircleDetailLabels.membersEn),
-                trailing: Icon(rtl ? Icons.chevron_left : Icons.chevron_right),
+                trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
@@ -171,7 +163,7 @@ class CircleDetailScreen extends ConsumerWidget {
                 title: Text(rtl
                     ? CircleDetailLabels.chatAr
                     : CircleDetailLabels.chatEn),
-                trailing: Icon(rtl ? Icons.chevron_left : Icons.chevron_right),
+                trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => GroupChatScreen(
@@ -181,6 +173,18 @@ class CircleDetailScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
+              ),
+              // Planned in the approved design but without F-002/F-005
+              // schedule behavior: the shared under-implementation notice
+              // only (FR-032/FR-033, compatibility inventory §6).
+              ListTile(
+                leading: const Icon(Icons.calendar_month_outlined),
+                title: Text(rtl
+                    ? CircleDetailLabels.scheduleAr
+                    : CircleDetailLabels.scheduleEn),
+                // Material mirrors this direction-aware icon once for RTL.
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => showHalaqatyUnderImplementationNotice(context),
               ),
               if (!circle.isArchived &&
                   userId != null &&
@@ -219,17 +223,80 @@ class CircleDetailScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
+              // FR-030: ad-hoc session list/create/start/join over the
+              // existing F-005 APIs; create/start stay manager-only and
+              // archived circles stay read-only.
+              CircleSessionsSection(
+                key: const Key('circleSessionsSection'),
+                circleId: circle.id,
+                isManager: currentRole == CircleRole.teacher ||
+                    currentRole == CircleRole.supervisor,
+                isArchived: circle.isArchived,
+              ),
             ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Text(
-            rtl
-                ? CircleDetailLabels.loadErrorAr
-                : CircleDetailLabels.loadErrorEn,
-          ),
-        ),
+        loading: () => const HalaqatyLoading(),
+        error: (error, stack) {
+          // 403/404 mean access lost or the circle is gone: terminal — state
+          // the reason and do not offer a retry that cannot succeed.
+          final terminal = error is DioException &&
+              (error.response?.statusCode == 403 ||
+                  error.response?.statusCode == 404);
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    terminal
+                        ? (rtl
+                            ? CircleDetailLabels.goneAr
+                            : CircleDetailLabels.goneEn)
+                        : (rtl
+                            ? CircleDetailLabels.loadErrorAr
+                            : CircleDetailLabels.loadErrorEn),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                if (!terminal) ...[
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    key: const Key('circleDetailRetry'),
+                    onPressed: () =>
+                        ref.invalidate(circleDetailProvider(circleId)),
+                    icon: const Icon(Icons.refresh),
+                    label: Text(
+                      rtl
+                          ? CircleDetailLabels.retryAr
+                          : CircleDetailLabels.retryEn,
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    rtl
+                        ? CircleDetailLabels.goneHelpAr
+                        : CircleDetailLabels.goneHelpEn,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    key: const Key('circleDetailExit'),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(Icons.arrow_back),
+                    label: Text(
+                      rtl
+                          ? CircleDetailLabels.exitAr
+                          : CircleDetailLabels.exitEn,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
       ),
     );
   }

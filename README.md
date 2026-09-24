@@ -143,6 +143,10 @@ Halaqaty uses **[Spec-Kit](https://github.com/github/spec-kit)** (`v0.8.1`) for 
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for the full command table, step-by-step workflow, and PR requirements.
 
+Flutter CI runs functional integration tests on Linux. Screenshot suites run
+locally on the connected Android device/emulator. See [GitHub Actions test workflows](docs/engineering/deployment/GITHUB_ACTIONS.md)
+for commands and the checks each environment covers.
+
 ---
 
 

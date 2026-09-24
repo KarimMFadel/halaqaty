@@ -164,10 +164,13 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
         GroupChatStatus.idle ||
         GroupChatStatus.loading =>
           _LoadingStatus(labels: labels),
-        GroupChatStatus.error || GroupChatStatus.accessLost => _ErrorStatus(
+        GroupChatStatus.error => _ErrorStatus(
             labels: labels,
             onRetry: () => unawaited(_controller.open(widget.circleId)),
           ),
+        // FR-009: lost access is terminal — say retry is unavailable and
+        // offer a safe exit instead of a retry that loops without effect.
+        GroupChatStatus.accessLost => _AccessLostStatus(labels: labels),
         GroupChatStatus.ready => Padding(
             padding: const EdgeInsets.all(8),
             child: Column(
@@ -216,10 +219,14 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                                   child: ChatMessageBubble(
                                     message: message,
                                     isOwn: message.senderId == currentUserId,
-                                    canDelete: moderation.canDelete(message,
-                                        userId: currentUserId ?? '',
-                                        isTeacher: isTeacher,
-                                        now: DateTime.now().toUtc()),
+                                    hasTerminalFailure: terminalError != null,
+                                    // A read-only (archived) conversation must
+                                    // not offer any mutation affordance.
+                                    canDelete: !state.readOnly &&
+                                        moderation.canDelete(message,
+                                            userId: currentUserId ?? '',
+                                            isTeacher: isTeacher,
+                                            now: DateTime.now().toUtc()),
                                     onDelete: () => unawaited(_deleteMessage(
                                         moderation, message, isTeacher)),
                                   ),
@@ -342,7 +349,10 @@ class _ErrorStatus extends StatelessWidget {
             // Never the raw controller error: safe localized copy only.
             Text(
               labels.historyError,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: Theme.of(context).colorScheme.error),
             ),
             const SizedBox(height: 8),
             Semantics(
@@ -353,6 +363,41 @@ class _ErrorStatus extends StatelessWidget {
                 child: OutlinedButton(
                   onPressed: onRetry,
                   child: ExcludeSemantics(child: Text(labels.retry)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+/// FR-009 terminal access loss: honest copy with a safe exit, no retry loop.
+class _AccessLostStatus extends StatelessWidget {
+  const _AccessLostStatus({required this.labels});
+
+  final _ScreenLabels labels;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              labels.accessLost,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: Theme.of(context).colorScheme.error),
+            ),
+            const SizedBox(height: 8),
+            Semantics(
+              button: true,
+              label: labels.back,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                child: OutlinedButton(
+                  onPressed: () => unawaited(Navigator.maybePop(context)),
+                  child: ExcludeSemantics(child: Text(labels.back)),
                 ),
               ),
             ),
@@ -374,7 +419,10 @@ class _ActionErrorLabel extends StatelessWidget {
         child: ExcludeSemantics(
           child: Text(
             labels.actionFailed,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: Theme.of(context).colorScheme.error),
           ),
         ),
       );
@@ -478,7 +526,10 @@ class _ScreenLabels {
   String get cancelEdit => rtl ? ChatUiLabels.cancel : ChatUiLabels.cancelEn;
   String get saveEdit => rtl ? ChatUiLabels.send : ChatUiLabels.sendEn;
   String get readOnly =>
-      rtl ? 'هذه المحادثة للقراءة فقط' : 'This conversation is read-only';
+      rtl ? ChatUiLabels.readOnlyArchived : ChatUiLabels.readOnlyArchivedEn;
+  String get accessLost =>
+      rtl ? ChatUiLabels.accessLost : ChatUiLabels.accessLostEn;
+  String get back => rtl ? ChatUiLabels.back : ChatUiLabels.backEn;
   String get search => rtl ? ChatUiLabels.search : ChatUiLabels.searchEn;
   String get memberFallback =>
       rtl ? ChatUiLabels.memberFallback : ChatUiLabels.memberFallbackEn;

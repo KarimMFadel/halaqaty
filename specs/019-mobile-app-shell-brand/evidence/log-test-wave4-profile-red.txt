@@ -1,0 +1,250 @@
+00:00 +0: loading C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart
+00:00 +0: ProfileScreen form behavior optional profile fields explain that they are optional
+00:01 +1: ProfileScreen form behavior full_name and country are required
+00:02 +2: ProfileScreen form behavior maps server error.fields into field-level messages
+00:02 +3: ProfileScreen form behavior shows save success feedback after a successful update
+00:03 +4: ProfileScreen — US5 structure and states groups existing fields under profile, preferences, and account sections
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TextWidgetFinder:<Found 0 widgets with text "Profile details": []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure>.<anonymous closure> (file:///C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart:270:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart line 270
+The test description was:
+  groups existing fields under profile, preferences, and account sections
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:04 +4 -1: ProfileScreen — US5 structure and states groups existing fields under profile, preferences, and account sections [E]
+  Test failed. See exception logs above.
+  The test description was: groups existing fields under profile, preferences, and account sections
+  
+00:04 +4 -1: ProfileScreen — US5 structure and states preserves every existing field key
+00:04 +5 -1: ProfileScreen — US5 structure and states shows branded loading while the profile loads
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TypeWidgetFinder:<Found 0 widgets with type "HalaqatyLoading": []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure>.<anonymous closure> (file:///C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart:300:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart line 300
+The test description was:
+  shows branded loading while the profile loads
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:04 +5 -2: ProfileScreen — US5 structure and states shows branded loading while the profile loads [E]
+  Test failed. See exception logs above.
+  The test description was: shows branded loading while the profile loads
+  
+00:04 +5 -2: ProfileScreen — US5 structure and states load failure explains the error and offers retry
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TextWidgetFinder:<Found 0 widgets with text "Retry": []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure>.<anonymous closure> (file:///C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart:315:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart line 315
+The test description was:
+  load failure explains the error and offers retry
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:04 +5 -3: ProfileScreen — US5 structure and states load failure explains the error and offers retry [E]
+  Test failed. See exception logs above.
+  The test description was: load failure explains the error and offers retry
+  
+00:04 +5 -3: ProfileScreen — US5 structure and states English preferred language renders the form LTR
+00:04 +6 -3: ProfileScreen — US5 structure and states Arabic preferred language renders the form RTL
+00:05 +7 -3: ProfileScreen — US5 structure and states save success remains visible in context, not only in a transient snackbar
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _KeyWidgetFinder:<Found 0 widgets with key [<'profileSaveSuccess'>]: []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure>.<anonymous closure> (file:///C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart:368:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart line 368
+The test description was:
+  save success remains visible in context, not only in a transient snackbar
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:05 +7 -4: ProfileScreen — US5 structure and states save success remains visible in context, not only in a transient snackbar [E]
+  Test failed. See exception logs above.
+  The test description was: save success remains visible in context, not only in a transient snackbar
+  
+00:05 +7 -4: ProfileScreen — US5 structure and states save failure keeps edits and explains the error in context
+00:05 +8 -4: ProfileScreen — US5 structure and states save is the single dominant filled action and save/logout meet 48dp
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TypeWidgetFinder:<Found 0 widgets with type "FilledButton": []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure>.<anonymous closure> (file:///C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart:401:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart line 401
+The test description was:
+  save is the single dominant filled action and save/logout meet 48dp
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:06 +8 -5: ProfileScreen — US5 structure and states save is the single dominant filled action and save/logout meet 48dp [E]
+  Test failed. See exception logs above.
+  The test description was: save is the single dominant filled action and save/logout meet 48dp
+  
+00:06 +8 -5: ProfileScreen — US5 structure and states keyboard flow follows the profile field order
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: TextInputAction:<TextInputAction.next>
+  Actual: <null>
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure>.<anonymous closure> (file:///C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart:421:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart line 421
+The test description was:
+  keyboard flow follows the profile field order
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:06 +8 -6: ProfileScreen — US5 structure and states keyboard flow follows the profile field order [E]
+  Test failed. See exception logs above.
+  The test description was: keyboard flow follows the profile field order
+  
+00:06 +8 -6: ProfileScreen — US5 structure and states save button exposes its label to screen readers
+00:06 +9 -6: ProfileScreen — US5 structure and states logout stays in the account section below the save action and completes on tap
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown running a test:
+The finder "Found 0 widgets with text "Account & support": []" (used in a call to "getCenter()")
+could not find any matching widgets.
+
+When the exception was thrown, this was the stack:
+#0      WidgetController._getElementPoint (package:flutter_test/src/controller.dart:2095:7)
+#1      WidgetController.getCenter (package:flutter_test/src/controller.dart:1947:12)
+#2      main.<anonymous closure>.<anonymous closure> (file:///C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart:462:37)
+<asynchronous suspension>
+#3      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#4      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+The test description was:
+  logout stays in the account section below the save action and completes on tap
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:07 +9 -7: ProfileScreen — US5 structure and states logout stays in the account section below the save action and completes on tap [E]
+  Test failed. See exception logs above.
+  The test description was: logout stays in the account section below the save action and completes on tap
+  
+00:07 +9 -7: ProfileScreen — US5 structure and states planned settings actions show only the shared under-implementation notice
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following StateError was thrown running a test:
+Bad state: No element
+
+When the exception was thrown, this was the stack:
+#0      Iterable.single (dart:core/iterable.dart:694:25)
+#1      WidgetController.element (package:flutter_test/src/controller.dart:888:30)
+#2      WidgetController.ensureVisible (package:flutter_test/src/controller.dart:2389:32)
+#3      main.<anonymous closure>.<anonymous closure> (file:///C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart:486:22)
+<asynchronous suspension>
+#4      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#5      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+The test description was:
+  planned settings actions show only the shared under-implementation notice
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:07 +9 -8: ProfileScreen — US5 structure and states planned settings actions show only the shared under-implementation notice [E]
+  Test failed. See exception logs above.
+  The test description was: planned settings actions show only the shared under-implementation notice
+  
+00:07 +9 -8: ProfileScreen — US5 structure and states the shared notice uses the exact Arabic copy in RTL
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following StateError was thrown running a test:
+Bad state: No element
+
+When the exception was thrown, this was the stack:
+#0      Iterable.single (dart:core/iterable.dart:694:25)
+#1      WidgetController.element (package:flutter_test/src/controller.dart:888:30)
+#2      WidgetController.ensureVisible (package:flutter_test/src/controller.dart:2389:32)
+#3      main.<anonymous closure>.<anonymous closure> (file:///C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart:518:20)
+<asynchronous suspension>
+#4      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#5      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+The test description was:
+  the shared notice uses the exact Arabic copy in RTL
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:07 +9 -9: ProfileScreen — US5 structure and states the shared notice uses the exact Arabic copy in RTL [E]
+  Test failed. See exception logs above.
+  The test description was: the shared notice uses the exact Arabic copy in RTL
+  
+00:07 +9 -9: ProfileScreen — US5 structure and states omitted avatar-upload and account-deletion actions stay absent
+00:08 +10 -9: ProfileScreen — US5 structure and states large text on a compact width keeps the form usable
+00:08 +11 -9: Some tests failed.
+
+Failing tests:
+  C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart: ProfileScreen — US5 structure and states groups existing fields under profile, preferences, and account sections
+  C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart: ProfileScreen — US5 structure and states keyboard flow follows the profile field order
+  C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart: ProfileScreen — US5 structure and states load failure explains the error and offers retry
+  C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/profile/profile_form_test.dart: ProfileScreen — US5 structure and states logout stays in the account section below the save action and completes on tap
+  ... and 5 more

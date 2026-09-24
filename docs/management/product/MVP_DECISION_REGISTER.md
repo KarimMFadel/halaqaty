@@ -148,10 +148,25 @@ provider registry, job framework, or new lifecycle end reason.
 
 ---
 
+## 12. Mobile UI/UX Numbering
+
+The 2026-09-17 `APP-SHELL / UI-OVERHAUL` amendment approved Wave 0. The
+subsequent F-019 decision consolidates Waves 0–5 into one feature while
+retaining each wave as a coherent implementation and review batch.
+
+| ID | Decision | Rationale |
+|---|---|---|
+| F-019-NUMBERING | **F-019 is the sole umbrella feature for Waves 0–5.** | Keeps the complete design modernization traceable through one Spec-Kit lifecycle while preserving wave-level implementation and review batches. Explicitly approved by Karim on 2026-09-22. |
+| F-019-UNIMPLEMENTED-ACTIONS | **An intentionally planned design action with no implemented behavior remains visible and shows one shared localized under-implementation notice; it performs no navigation, controller/API call, or state mutation. Unsupported data and unplanned actions remain omitted.** | Preserves the approved design direction without faking capability or expanding F-019 backend scope. Explicitly approved by Karim on 2026-09-22. |
+
+---
+
 ## Amendment Log
 
 | Date | Decision ID | Old Value | New Value | Rationale | ADR |
 |---|---|---|---|---|---|
+| 2026-09-22 | F-019-UNIMPLEMENTED-ACTIONS | Prototype actions without existing behavior were omitted with other unsupported content | Intentionally planned actions remain visible and show the shared localized under-implementation notice with zero product side effects; unplanned actions remain omitted | Makes future scope visible without simulating completion or adding backend behavior. | — |
+| 2026-09-22 | F-019-NUMBERING | Wave 0 approved separately; remaining redesign planned as separate feature lifecycles | F-019 is the sole umbrella for Waves 0–5 | Keeps the complete modernization in one traceable lifecycle while retaining coherent wave-level implementation and review batches. | — |
 | 2026-09-16 | PROVIDER-BOUNDARY / F-018 | MinIO SDK-shaped storage seam; LiveKit SDK construction outside its adapter | Approved provider adapter boundary refactor preserving current providers, public behavior, and existing safety guarantees | Makes future approved replacements local to their integrations. Spec-Kit plus Superpowers workflow approved by Karim. | ADR-023 |
 | 2026-06-30 | GRADE-ENUM | 4-grade: `excellent/good/needs_improvement/repeat` (ARCHITECTURE.md) / 6-grade: `excellent/very_good/good/acceptable/needs_review/repeat` (FEATURES.md) | **5-grade canonical:** `excellent/good/acceptable/needs_review/repeat` | Resolved mismatch between ARCHITECTURE.md (4-grade) and FEATURES.md F-003 (6-grade). Merged `very_good` into `good`; renamed `needs_improvement` → `needs_review` for clarity. Approved by Karim 2026-06-30. | ADR-013 |
 | 2026-06-30 | OQ-027 | Open | Fixed globally — same Surah status threshold rules for all circles | Simpler to reason about; teacher customisation deferred | — |
@@ -174,5 +189,6 @@ provider registry, job framework, or new lifecycle end reason.
 | 2026-08-28 | OQ-038, OQ-054 | F-003 owned turn-based student publishing; students joined listen-only | Students publish audio freely in authorized live sessions; F-003 is a voluntary ordered queue and displayed-turn tracker, while F-005 retains explicit moderator controls | Matches the intended Zoom-like halaqa experience without removing teacher/supervisor safety controls. Approved by Karim 2026-08-28. | ADR-020 |
 | 2026-09-03 | OQ-036 / F-002 | Invite acceptance always created a student membership and only teachers shared circle invites | Active teachers and supervisors may invite a teacher or student; active students may invite a student only; the selected role is bound to the invitation and cannot be altered during acceptance | Approved by Karim while starting F-004 so chat eligibility can rely on explicit, active, circle-scoped memberships without introducing global roles. | ADR-010 |
 | 2026-09-03 | OQ-055 / F-004 | F-004 created a background-notification trigger for later F-008 delivery | F-008 owns the complete background notification pipeline; F-004 retains durable messages and foreground realtime delivery only | Approved by Karim during F-004 clarification to minimize changes and keep notification ownership cohesive. | ADR-021 |
+| 2026-09-17 | APP-SHELL / UI-OVERHAUL | Mobile root was a developer bridge (implemented-features index) on the default Flutter theme, with no logo, fonts, or app shell | Wave 0 of the mobile UI overhaul approved: Material 3 light+dark theme from DESIGN.md tokens, bundled Cairo/Poppins fonts, replaceable Islamic logo placeholder, 4-tab shell (Home/Circles/Chats/Profile) on go_router; Chats tab lists my circles' group chats client-side only; unified DM inbox deferred (would need a new conversations API + ADR) | Foundation for the approved full per-feature UI redesign roadmap. Approved by Karim 2026-09-17. | - |
 
 *Any change requires: (1) a new or updated ADR in `../../engineering/architecture/adr/`, (2) an entry in the Amendment Log above, (3) approval from Karim.*

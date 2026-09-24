@@ -1,0 +1,32 @@
+== flutter test test/widget/wave5 ==
+00:08 +51: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/wave5/cross_app_surfaces_audit_test.dart: under-implementation notices (FR-032/FR-033, SC-009) circle detail schedule action shows only the shared notice (RTL)
+00:08 +52: C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/wave5/cross_app_surfaces_audit_test.dart: under-implementation notices (FR-032/FR-033, SC-009) profile notice tiles replace the notice and cause zero side effects in RTL
+00:08 +53: All tests passed!
+exit=0
+== flutter test tool/wave5_visual_capture_test.dart ==
+00:36 +4: wave5 visible focus evidence
+00:40 +5: (tearDownAll)
+00:40 +5: All tests passed!
+exit=0
+== flutter analyze ==
+   info - Use a function declaration rather than a variable assignment to bind a function to a name. Try rewriting the closure assignment as a function declaration - tool\wave5_visual_capture_test.dart:503:11 - prefer_function_declarations_over_variables
+
+2 issues found. (ran in 13.8s)
+exit=0
+== dart format --set-exit-if-changed . ==
+Formatted tool\wave3_visual_capture_test.dart
+Formatted tool\wave5_visual_capture_test.dart
+Formatted 154 files (5 changed) in 1.40 seconds.
+exit=0
+== git diff --check ==
+warning: LF will be replaced by CRLF in mobile/integration_test/ux_visual_journey_test.dart.
+The file will have its original line endings in your working directory
+warning: LF will be replaced by CRLF in mobile/lib/app/chats_screen.dart.
+The file will have its original line endings in your working directory
+warning: LF will be replaced by CRLF in mobile/lib/app/home_screen.dart.
+The file will have its original line endings in your working directory
+warning: LF will be replaced by CRLF in mobile/lib/core/theme/halaqaty_theme.dart.
+The file will have its original line endings in your working directory
+warning: LF will be replaced by CRLF in specs/019-mobile-app-shell-brand/tasks.md.
+The file will have its original line endings in your working directory
+exit=0

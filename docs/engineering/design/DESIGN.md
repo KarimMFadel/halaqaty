@@ -4,6 +4,11 @@
 
 Built on **Material Design 3** with Halaqaty's unique brand for Quran memorization circles (حلقات تحفيظ القرآن).
 
+Cross-screen UX rules, delivery ownership, state requirements, and the staged
+modernization roadmap are governed by
+[UI_UX_GOVERNANCE.md](UI_UX_GOVERNANCE.md). This file remains the canonical
+catalogue for visual tokens and component values.
+
 ---
 
 ## 🎨 Brand Identity
@@ -44,6 +49,19 @@ Built on **Material Design 3** with Halaqaty's unique brand for Quran memorizati
 | **On Secondary** | `#FFFFFF` | Text on secondary background |
 
 **Rationale:** Gold reflects the value of Quran memorization. Used sparingly for achievements, badges, and celebrations.
+
+**Token amendment 2026-09-22 (F-019 Wave 2 UI review):** the Material role tokens
+derived from this palette failed WCAG 2.1 AA text-on-fill contrast (4.5:1 floor):
+`onSecondaryContainer` on `secondaryContainer` measured **2.96:1** in both schemes,
+and dark-mode `onPrimary` on `#4CB368` measured **3.34:1**. The brand colors above
+are unchanged; the following role tokens are amended in `halaqaty_theme.dart`:
+
+| Role | Mode | Old | New | Measured contrast |
+|------|------|-----|-----|-------------------|
+| **onSecondaryContainer** | Light | `#FFFFFF` | `#3F2E1B` | 8.16:1 on `#E8C8A0` |
+| **secondaryContainer** | Dark | `#8B6F47` | `#5D4729` | — |
+| **onSecondaryContainer** | Dark | `#1B7E3C` | `#F0DDBE` | 6.58:1 on `#5D4729` |
+| **onPrimary** | Dark | `#FFFFFF` | `#062B14` | 5.83:1 on `#4CB368` |
 
 ### Semantic Colors
 | Purpose | Light Mode | Dark Mode | Usage |

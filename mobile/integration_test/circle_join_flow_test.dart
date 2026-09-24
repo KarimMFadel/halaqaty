@@ -5,9 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
+import 'package:halaqaty_mobile/features/circles/application/circle_detail_controller.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_detail_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_discovery_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_join_screen.dart';
 import 'package:integration_test/integration_test.dart';
+
+import '../test/helpers/stub_auth_notifier.dart';
 
 final _publicCircle = CircleSummary(
   id: 'public-circle',
@@ -83,7 +87,12 @@ CircleDiscoveryController _controller() => CircleDiscoveryController(
 
 Widget _app(CircleDiscoveryController controller, Widget home) => ProviderScope(
       overrides: [
+        authControllerProvider.overrideWith((_) => StubAuthNotifier()),
         circleDiscoveryControllerProvider.overrideWith((_) => controller),
+        // A successful public join opens the joined circle detail (FR-008).
+        circleDetailProvider('public-circle').overrideWith(
+          (_) => Future.value(_response('public-circle', 'حلقة عامة')),
+        ),
       ],
       child: MaterialApp(
         builder: (context, child) => Directionality(
@@ -118,6 +127,10 @@ void main() {
     await tester.tap(find.byKey(const Key('confirmCircleJoinButton')));
     await tester.pumpAndSettle();
     expect(controller.state.myCircles.single.id, 'public-circle');
+    // The joined circle detail opens as the retained confirmation.
+    expect(find.byType(CircleDetailScreen), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('openInviteJoinButton')));
     await tester.pumpAndSettle();

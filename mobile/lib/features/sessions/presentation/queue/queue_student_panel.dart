@@ -41,7 +41,7 @@ class QueueStudentPanel extends StatelessWidget {
     final rtl = Directionality.of(context) == TextDirection.rtl;
     final labels = _QueueLabels(rtl);
     final isTerminal = status == QueueStudentPanelStatus.terminal;
-    final peers = _peerEntries(queue?.entries ?? const <QueueEntry>[]);
+    final entries = _orderedEntries();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -49,19 +49,21 @@ class QueueStudentPanel extends StatelessWidget {
         Text(labels.title, style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         _StatusMessage(status: status, labels: labels),
-        if (peers.isNotEmpty) ...[
+        if (entries.isNotEmpty) ...[
           const SizedBox(height: 8),
-          for (final entry in peers) _EntryRow(entry: entry, labels: labels),
-        ],
-        if (myEntry != null) ...[
-          const SizedBox(height: 8),
-          _MyEntryRow(entry: myEntry!, labels: labels),
+          for (final entry in entries)
+            entry.id == myEntry?.id
+                ? _MyEntryRow(entry: entry, labels: labels)
+                : _EntryRow(entry: entry, labels: labels),
         ],
         if (!isTerminal && status != QueueStudentPanelStatus.empty) ...[
           const SizedBox(height: 8),
           _OptOutFeedback(
             status: optOutStatus,
             labels: labels,
+            // The queue is read-only while a snapshot is in flight or stale;
+            // only a ready queue accepts an opt-out request.
+            interactive: status == QueueStudentPanelStatus.ready,
             onRequest: onRequestOptOut,
           ),
         ],
@@ -69,9 +71,16 @@ class QueueStudentPanel extends StatelessWidget {
     );
   }
 
-  List<QueueEntry> _peerEntries(List<QueueEntry> entries) {
-    final myId = myEntry?.id;
-    return entries.where((entry) => entry.id != myId).toList(growable: false);
+  /// Entries render in position order; the student's own row stays in place
+  /// with emphasis instead of trailing below the peers.
+  List<QueueEntry> _orderedEntries() {
+    final entries = [...?queue?.entries];
+    final mine = myEntry;
+    if (mine != null && !entries.any((entry) => entry.id == mine.id)) {
+      entries.add(mine);
+    }
+    entries.sort((a, b) => a.position.compareTo(b.position));
+    return entries;
   }
 }
 
@@ -92,7 +101,7 @@ class _StatusMessage extends StatelessWidget {
       QueueStudentPanelStatus.ready => null,
     };
     if (message == null) return const SizedBox.shrink();
-    return Text(message);
+    return Text(message, style: Theme.of(context).textTheme.bodyMedium);
   }
 }
 
@@ -103,35 +112,41 @@ class _EntryRow extends StatelessWidget {
   final _QueueLabels labels;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Semantics(
-                  container: true,
-                  label: labels.position(entry.position),
-                  child: ExcludeSemantics(
-                    child: Text('${entry.position}. '),
-                  ),
+  Widget build(BuildContext context) {
+    // Never inherit the ambient default text style: panel rows must size from
+    // the theme (a Scaffold-less host may default to a display-size style).
+    final rowStyle = Theme.of(context).textTheme.bodyMedium;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Semantics(
+                container: true,
+                label: labels.position(entry.position),
+                child: ExcludeSemantics(
+                  child: Text('${entry.position}. ', style: rowStyle),
                 ),
-                Expanded(child: Text(entry.studentName)),
-                const SizedBox(width: 8),
-                Semantics(
-                  container: true,
-                  label: labels.entryStatus(entry.status),
-                  child: ExcludeSemantics(
-                    child: Text(labels.entryStatus(entry.status)),
-                  ),
+              ),
+              Expanded(child: Text(entry.studentName, style: rowStyle)),
+              const SizedBox(width: 8),
+              Semantics(
+                container: true,
+                label: labels.entryStatus(entry.status),
+                child: ExcludeSemantics(
+                  child:
+                      Text(labels.entryStatus(entry.status), style: rowStyle),
                 ),
-              ],
-            ),
-            _VisibleGrade(entry: entry, labels: labels),
-          ],
-        ),
-      );
+              ),
+            ],
+          ),
+          _VisibleGrade(entry: entry, labels: labels),
+        ],
+      ),
+    );
+  }
 }
 
 class _MyEntryRow extends StatelessWidget {
@@ -141,35 +156,55 @@ class _MyEntryRow extends StatelessWidget {
   final _QueueLabels labels;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Semantics(
-                  container: true,
-                  label: labels.yourPosition(entry.position),
-                  child: ExcludeSemantics(
-                    child: Text('${entry.position}. '),
-                  ),
+  Widget build(BuildContext context) {
+    final rowStyle = Theme.of(context).textTheme.bodyMedium;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Semantics(
+                container: true,
+                liveRegion: true,
+                label: labels.yourPosition(entry.position),
+                child: ExcludeSemantics(
+                  child: Text('${entry.position}. ', style: rowStyle),
                 ),
-                Expanded(child: Text(entry.studentName)),
-                const SizedBox(width: 8),
-                Semantics(
-                  container: true,
-                  label: labels.entryStatus(entry.status),
-                  child: ExcludeSemantics(
-                    child: Text(labels.entryStatus(entry.status)),
-                  ),
+              ),
+              Expanded(child: Text(entry.studentName, style: rowStyle)),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ],
-            ),
-            _VisibleGrade(entry: entry, labels: labels),
-          ],
-        ),
-      );
+                child: Text(
+                  labels.you,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color:
+                          Theme.of(context).colorScheme.onSecondaryContainer),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Semantics(
+                container: true,
+                liveRegion: true,
+                label: labels.entryStatus(entry.status),
+                child: ExcludeSemantics(
+                  child:
+                      Text(labels.entryStatus(entry.status), style: rowStyle),
+                ),
+              ),
+            ],
+          ),
+          _VisibleGrade(entry: entry, labels: labels),
+        ],
+      ),
+    );
+  }
 }
 
 class _VisibleGrade extends StatelessWidget {
@@ -185,7 +220,8 @@ class _VisibleGrade extends StatelessWidget {
     }
     return Padding(
       padding: const EdgeInsets.only(top: 4),
-      child: Text(labels.grade(entry.grade, entry.gradeNotes)),
+      child: Text(labels.grade(entry.grade, entry.gradeNotes),
+          style: Theme.of(context).textTheme.bodySmall),
     );
   }
 }
@@ -194,11 +230,16 @@ class _OptOutFeedback extends StatelessWidget {
   const _OptOutFeedback({
     required this.status,
     required this.labels,
+    required this.interactive,
     required this.onRequest,
   });
 
   final StudentOptOutStatus status;
   final _QueueLabels labels;
+
+  /// False while the queue is loading/reconnecting/stale: the action stays
+  /// visible but disabled, mirroring the room's paused Join treatment.
+  final bool interactive;
   final VoidCallback onRequest;
 
   @override
@@ -230,7 +271,7 @@ class _OptOutFeedback extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
         child: OutlinedButton(
-          onPressed: isRequesting ? null : onRequest,
+          onPressed: isRequesting || !interactive ? null : onRequest,
           child: ExcludeSemantics(child: Text(label)),
         ),
       ),
@@ -254,6 +295,7 @@ class _QueueLabels {
       rtl ? SessionUiLabels.queueUpdateFailed : 'Unable to update queue';
   String get terminal =>
       rtl ? SessionUiLabels.queueEnded : 'Recitation round ended';
+  String get you => rtl ? 'أنت' : 'You';
   String get optOutAction =>
       rtl ? SessionUiLabels.optOutAction : 'Opt out of turn';
   String get optOutRequesting =>
@@ -293,12 +335,5 @@ class _QueueLabels {
     return parts.join(' · ');
   }
 
-  String _gradeLabel(String value) => switch (value) {
-        'excellent' => rtl ? 'ممتاز' : 'Excellent',
-        'good' => rtl ? 'جيد' : 'Good',
-        'acceptable' => rtl ? 'مقبول' : 'Acceptable',
-        'needs_review' => rtl ? 'يحتاج مراجعة' : 'Needs review',
-        'repeat' => rtl ? 'إعادة' : 'Repeat',
-        _ => value,
-      };
+  String _gradeLabel(String value) => SessionUiLabels.gradeLabel(value, rtl);
 }

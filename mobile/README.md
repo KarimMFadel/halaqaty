@@ -2,6 +2,13 @@
 
 A new Flutter project.
 
+## Integration tests in CI
+
+CI runs functional integration tests on Linux. The UX and Wave 0–2 screenshot
+suites run locally on a connected Android device/emulator; GitHub Actions does
+not start an emulator. See the [GitHub Actions guide](../docs/engineering/deployment/GITHUB_ACTIONS.md)
+for local commands and CI coverage limits.
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.

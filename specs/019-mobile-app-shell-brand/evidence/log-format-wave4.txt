@@ -1,0 +1,9 @@
+Formatted integration_test\chat_presence_flow_test.dart
+Formatted lib\core\theme\halaqaty_theme.dart
+Formatted lib\features\profile\presentation\profile_screen.dart
+Formatted test\widget\auth\auth_forms_test.dart
+Formatted test\widget\chat\chat_media_widgets_test.dart
+Formatted test\widget\profile\profile_form_test.dart
+Formatted test\widget_test.dart
+Formatted tool\wave4_visual_capture_test.dart
+Formatted 151 files (8 changed) in 1.59 seconds.

@@ -40,9 +40,16 @@ class _CircleJoinScreenState extends ConsumerState<CircleJoinScreen> {
               : 'Enter the invite code or link shared by your teacher.'),
           const SizedBox(height: 16),
           _inviteField(rtl),
+          if (state.failure case final failure?) ...[
+            const SizedBox(height: 12),
+            Text(
+              key: const Key('circleJoinError'),
+              circleFailureText(failure, rtl),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
           const SizedBox(height: 16),
           _submitButton(state, rtl),
-          if (state.failure case final failure?) _error(failure, rtl),
         ],
       ),
     );
@@ -84,20 +91,6 @@ class _CircleJoinScreenState extends ConsumerState<CircleJoinScreen> {
     );
   }
 
-  Widget _error(CircleJoinFailure failure, bool rtl) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: Semantics(
-        liveRegion: true,
-        child: Text(
-          circleFailureText(failure, rtl),
-          key: const Key('circleJoinError'),
-          style: TextStyle(color: Theme.of(context).colorScheme.error),
-        ),
-      ),
-    );
-  }
-
   Future<void> _confirmJoin() async {
     if (!_formKey.currentState!.validate()) return;
     final rtl = Directionality.of(context) == TextDirection.rtl;
@@ -127,14 +120,10 @@ class _CircleJoinScreenState extends ConsumerState<CircleJoinScreen> {
     final joined = await ref
         .read(circleDiscoveryControllerProvider.notifier)
         .joinInvite(_invite.text);
+    // Retained confirmation (FR-008): back to discovery, where the joined
+    // circle now appears under My circles.
     if (joined && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            rtl ? 'تم الانضمام إلى الحلقة' : 'Joined the circle',
-          ),
-        ),
-      );
+      Navigator.of(context).pop();
     }
   }
 }

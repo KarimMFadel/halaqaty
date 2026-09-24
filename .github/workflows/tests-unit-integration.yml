@@ -134,8 +134,22 @@ jobs:
         run: flutter create . --platforms linux --no-pub
       - name: Run Flutter integration tests
         run: |
+          set -o pipefail
+          mkdir -p build/integration-logs
           status=0
           for test_file in integration_test/*_test.dart; do
-            xvfb-run -a flutter test "$test_file" -d linux || status=1
+            # Native screenshot suites are run locally on the developer's device.
+            case "$test_file" in
+              integration_test/ux_visual_journey_test.dart|integration_test/wave0_shell_visual_test.dart|integration_test/wave1_circles_visual_test.dart|integration_test/wave2_sessions_visual_test.dart) continue ;;
+            esac
+            echo "::group::$test_file"
+            xvfb-run -a flutter test "$test_file" -d linux --reporter expanded 2>&1 | tee "build/integration-logs/$(basename "$test_file" .dart).log" || status=1
+            echo "::endgroup::"
           done
           exit "$status"
+      - name: Upload functional test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-integration-linux-logs
+          path: mobile/build/integration-logs/

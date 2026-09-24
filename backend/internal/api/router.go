@@ -219,6 +219,13 @@ func (r *Router) registerRoutes() {
 
 	if r.mw.Auth != nil {
 		rbacH := r.mw.RBACHandler
+		var listCirclesHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		if rbacH != nil {
+			listCirclesHandler = http.HandlerFunc(rbacH.ListCircles)
+		}
+		r.mux.Handle(routeCirclesList, r.requireWithUserLimit(listCirclesHandler))
 		var createCircleHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
 		})
@@ -275,7 +282,6 @@ func (r *Router) registerRoutes() {
 		}
 		r.mux.Handle(routeUsersSearch, r.requireWithUserLimit(searchUsersHandler))
 	}
-
 	if r.mw.Auth != nil && r.mw.Role != nil {
 		rbacH := r.mw.RBACHandler
 		var assignRoleHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

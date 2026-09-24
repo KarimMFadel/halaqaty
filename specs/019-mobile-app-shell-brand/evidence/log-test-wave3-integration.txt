@@ -1,0 +1,172 @@
+00:00 +0: loading C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_direct_flow_test.dart
+Running Gradle task 'assembleDebug'...                          
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/C:/Users/karim.fadel/.gradle/wrapper/dists/gradle-9.1.0-all/7wzd0jkjit61aq2p43wpjgij9/gradle-9.1.0/lib/native-platform-0.22-milestone-28.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): device_info_plus, file_picker, flutter_webrtc, livekit_client
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
+
+Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
+If no such version exists, report the issue to the plugin. If necessary, here is a guide on filing
+an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
+
+If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+Running Gradle task 'assembleDebug'...                             43.8s
+√ Built build\app\outputs\flutter-apk\app-debug.apk
+Installing build\app\outputs\flutter-apk\app-debug.apk...           6.3s
+00:00 +0: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_direct_flow_test.dart: T064: authorized direct conversation lifecycle
+  T064_* env vars missing; provide Firebase ID tokens, backend sessions, and user IDs for four isolated teacher, student, supervisor, and operator fixture accounts.
+00:00 +0 ~1: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_direct_flow_test.dart: (tearDownAll)
+00:02 +0 ~1: loading C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_discovery_flow_test.dart
+Running Gradle task 'assembleDebug'...                          
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/C:/Users/karim.fadel/.gradle/wrapper/dists/gradle-9.1.0-all/7wzd0jkjit61aq2p43wpjgij9/gradle-9.1.0/lib/native-platform-0.22-milestone-28.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): device_info_plus, file_picker, flutter_webrtc, livekit_client
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
+
+Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
+If no such version exists, report the issue to the plugin. If necessary, here is a guide on filing
+an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
+
+If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+Running Gradle task 'assembleDebug'...                             38.4s
+√ Built build\app\outputs\flutter-apk\app-debug.apk
+Installing build\app\outputs\flutter-apk\app-debug.apk...           3.9s
+00:59 +0 ~1: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_discovery_flow_test.dart: T079: replies to a message through the discovery seam
+01:00 +1 ~1: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_discovery_flow_test.dart: T079: searches Arabic and Latin retained history
+01:01 +2 ~1: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_discovery_flow_test.dart: T079: pins and unpins messages in server order
+01:01 +3 ~1: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_discovery_flow_test.dart: T079: deletion redacts reply content in the rendered preview
+01:02 +4 ~1: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_discovery_flow_test.dart: T079: archived discovery remains readable but denies mutations
+01:03 +5 ~1: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_discovery_flow_test.dart: (tearDownAll)
+01:04 +5 ~1: loading C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_group_flow_test.dart
+Running Gradle task 'assembleDebug'...                          
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/C:/Users/karim.fadel/.gradle/wrapper/dists/gradle-9.1.0-all/7wzd0jkjit61aq2p43wpjgij9/gradle-9.1.0/lib/native-platform-0.22-milestone-28.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): device_info_plus, file_picker, flutter_webrtc, livekit_client
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
+
+Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
+If no such version exists, report the issue to the plugin. If necessary, here is a guide on filing
+an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
+
+If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+Running Gradle task 'assembleDebug'...                             40.2s
+√ Built build\app\outputs\flutter-apk\app-debug.apk
+Installing build\app\outputs\flutter-apk\app-debug.apk...           4.7s
+02:04 +5 ~1: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_group_flow_test.dart: group chat flow: history, pagination, send, realtime, dedup — no live session
+02:13 +6 ~1: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_group_flow_test.dart: (tearDownAll)
+02:15 +6 ~1: loading C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_lifecycle_flow_test.dart
+Running Gradle task 'assembleDebug'...                          
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/C:/Users/karim.fadel/.gradle/wrapper/dists/gradle-9.1.0-all/7wzd0jkjit61aq2p43wpjgij9/gradle-9.1.0/lib/native-platform-0.22-milestone-28.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): device_info_plus, file_picker, flutter_webrtc, livekit_client
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
+
+Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
+If no such version exists, report the issue to the plugin. If necessary, here is a guide on filing
+an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
+
+If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+Running Gradle task 'assembleDebug'...                             42.3s
+√ Built build\app\outputs\flutter-apk\app-debug.apk
+Installing build\app\outputs\flutter-apk\app-debug.apk...           4.7s
+03:17 +6 ~1: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_lifecycle_flow_test.dart: chat lifecycle preserves access boundaries without live session
+03:22 +7 ~1: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_lifecycle_flow_test.dart: (tearDownAll)
+03:24 +7 ~1: loading C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_media_flow_test.dart
+Running Gradle task 'assembleDebug'...                          
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/C:/Users/karim.fadel/.gradle/wrapper/dists/gradle-9.1.0-all/7wzd0jkjit61aq2p43wpjgij9/gradle-9.1.0/lib/native-platform-0.22-milestone-28.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): device_info_plus, file_picker, flutter_webrtc, livekit_client
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
+
+Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
+If no such version exists, report the issue to the plugin. If necessary, here is a guide on filing
+an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
+
+If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+Running Gradle task 'assembleDebug'...                             39.4s
+√ Built build\app\outputs\flutter-apk\app-debug.apk
+Installing build\app\outputs\flutter-apk\app-debug.apk...           4.9s
+04:23 +7 ~1: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_media_flow_test.dart: T052: chat media happy paths, renewable links, and every server-enforced boundary (RTL)
+  T052_* env vars missing; real-backend integration needs pre-provisioned Firebase tokens and backend sessions.
+04:24 +7 ~2: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_media_flow_test.dart: (tearDownAll)
+04:26 +7 ~2: loading C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_moderation_flow_test.dart
+Running Gradle task 'assembleDebug'...                          
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/C:/Users/karim.fadel/.gradle/wrapper/dists/gradle-9.1.0-all/7wzd0jkjit61aq2p43wpjgij9/gradle-9.1.0/lib/native-platform-0.22-milestone-28.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): device_info_plus, file_picker, flutter_webrtc, livekit_client
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
+
+Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
+If no such version exists, report the issue to the plugin. If necessary, here is a guide on filing
+an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
+
+If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+Running Gradle task 'assembleDebug'...                             38.8s
+√ Built build\app\outputs\flutter-apk\app-debug.apk
+Installing build\app\outputs\flutter-apk\app-debug.apk...           4.6s
+05:23 +7 ~2: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_moderation_flow_test.dart: T088: sender and teacher deletion converge to a redacted projection
+05:24 +8 ~2: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_moderation_flow_test.dart: T088: duplicate sender and teacher requests converge safely
+05:24 +9 ~2: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_moderation_flow_test.dart: T088: deletion event redacts audit-visible group and direct projections
+05:25 +10 ~2: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_moderation_flow_test.dart: T088: media projection is revoked after delete acceptance
+05:25 +11 ~2: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_moderation_flow_test.dart: (tearDownAll)
+05:26 +11 ~2: loading C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_offline_recovery_test.dart
+Running Gradle task 'assembleDebug'...                          
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/C:/Users/karim.fadel/.gradle/wrapper/dists/gradle-9.1.0-all/7wzd0jkjit61aq2p43wpjgij9/gradle-9.1.0/lib/native-platform-0.22-milestone-28.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): device_info_plus, file_picker, flutter_webrtc, livekit_client
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
+
+Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
+If no such version exists, report the issue to the plugin. If necessary, here is a guide on filing
+an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
+
+If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+Running Gradle task 'assembleDebug'...                             37.7s
+√ Built build\app\outputs\flutter-apk\app-debug.apk
+Installing build\app\outputs\flutter-apk\app-debug.apk...           4.3s
+06:21 +11 ~2: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_offline_recovery_test.dart: offline send survives restart and converges after REST and WebSocket redelivery
+06:24 +12 ~2: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_offline_recovery_test.dart: (tearDownAll)
+06:26 +12 ~2: loading C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_presence_flow_test.dart
+Running Gradle task 'assembleDebug'...                          
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/C:/Users/karim.fadel/.gradle/wrapper/dists/gradle-9.1.0-all/7wzd0jkjit61aq2p43wpjgij9/gradle-9.1.0/lib/native-platform-0.22-milestone-28.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): device_info_plus, file_picker, flutter_webrtc, livekit_client
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
+
+Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
+If no such version exists, report the issue to the plugin. If necessary, here is a guide on filing
+an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
+
+If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+Running Gradle task 'assembleDebug'...                             39.1s
+√ Built build\app\outputs\flutter-apk\app-debug.apk
+Installing build\app\outputs\flutter-apk\app-debug.apk...           5.5s
+07:25 +12 ~2: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_presence_flow_test.dart: group and direct delivery, reads, typing stop, and expiry
+07:28 +13 ~2: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_presence_flow_test.dart: group and direct transports carry reads, typing, and expiry
+07:32 +14 ~2: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_presence_flow_test.dart: group and direct screens submit reads and render presence
+07:36 +15 ~2: C:/Users/karim.fadel/workspaces/halaqaty/mobile/integration_test/chat_presence_flow_test.dart: (tearDownAll)
+07:38 +15 ~2: All tests passed!

@@ -1,0 +1,803 @@
+<style>
+  #halaqaty-screen-samples {
+    --hq-ivory: #f8f6f0;
+    --hq-paper: #fffdf8;
+    --hq-emerald: #17633a;
+    --hq-emerald-deep: #10492c;
+    --hq-emerald-soft: #e4efe8;
+    --hq-gold: #e8c88b;
+    --hq-gold-soft: #f4e7cb;
+    --hq-ink: #173b2b;
+    --hq-muted: #68766e;
+    --hq-line: #dce4df;
+    --hq-danger: #b5443c;
+    color: var(--hq-ink);
+  }
+  #halaqaty-screen-samples * { box-sizing: border-box; }
+  #halaqaty-screen-samples .sample-grid {
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:18px;
+    align-items:start;
+  }
+  #halaqaty-screen-samples .sample-title { margin:0 0 10px; font-size:14px; font-weight:500; text-align:center; }
+  #halaqaty-screen-samples .phone {
+    width:100%; min-width:0; height:640px; overflow:hidden;
+    border-radius:30px; background:var(--hq-ivory); color:var(--hq-ink);
+    box-shadow:0 14px 34px rgb(21 58 42 / .16);
+    display:flex; flex-direction:column;
+    font-family:Cairo,"Segoe UI",sans-serif;
+  }
+  #halaqaty-screen-samples .status {
+    height:28px; padding:8px 15px 0; display:flex; justify-content:space-between;
+    font-size:10px; font-weight:600; flex:0 0 auto;
+  }
+  #halaqaty-screen-samples .topbar {
+    min-height:52px; padding:8px 15px 10px; display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  #halaqaty-screen-samples .brand { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:700; }
+  #halaqaty-screen-samples .brand-mark,
+  #halaqaty-screen-samples .avatar {
+    width:32px; height:32px; border-radius:11px; display:grid; place-items:center;
+    background:var(--hq-emerald-soft); color:var(--hq-emerald); font-weight:700;
+  }
+  #halaqaty-screen-samples img.brand-mark { padding:6px; }
+  #halaqaty-screen-samples .avatar { border-radius:50%; font-size:11px; }
+  #halaqaty-screen-samples .back { font-size:20px; color:var(--hq-ink); }
+  #halaqaty-screen-samples .top-title { font-size:16px; font-weight:700; }
+  #halaqaty-screen-samples .screen {
+    flex:1; min-height:0; overflow:hidden; padding:4px 15px 12px;
+  }
+  #halaqaty-screen-samples .greeting { font-size:21px; line-height:1.35; font-weight:700; margin:5px 0 1px; }
+  #halaqaty-screen-samples .hint { color:var(--hq-muted); font-size:11px; line-height:1.5; }
+  #halaqaty-screen-samples .hero {
+    margin-top:13px; padding:15px; border-radius:19px; background:var(--hq-emerald); color:#fffdf8;
+  }
+  #halaqaty-screen-samples .hero-label { font-size:9px; font-weight:700; opacity:.78; }
+  #halaqaty-screen-samples .hero-title { font-size:17px; font-weight:700; margin:4px 0; }
+  #halaqaty-screen-samples .hero-meta { font-size:10px; opacity:.78; display:flex; gap:7px; flex-wrap:wrap; }
+  #halaqaty-screen-samples .primary {
+    width:100%; min-height:40px; border:0; border-radius:12px; margin-top:12px;
+    background:var(--hq-gold); color:#263520; font-family:inherit; font-size:12px; font-weight:700;
+  }
+  #halaqaty-screen-samples .primary-green {
+    width:100%; min-height:42px; border:0; border-radius:12px;
+    background:var(--hq-emerald); color:#fffdf8; font-family:inherit; font-size:12px; font-weight:700;
+  }
+  #halaqaty-screen-samples .section-head {
+    display:flex; justify-content:space-between; align-items:center; margin:16px 0 8px;
+  }
+  #halaqaty-screen-samples .section-head strong { font-size:13px; }
+  #halaqaty-screen-samples .section-head span { color:var(--hq-emerald); font-size:10px; }
+  #halaqaty-screen-samples .quick-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  #halaqaty-screen-samples .quick-item {
+    min-height:55px; padding:10px; border-radius:14px; background:var(--hq-paper);
+    display:flex; align-items:center; gap:8px; box-shadow:0 3px 12px rgb(21 58 42 / .07);
+    font-size:11px; font-weight:700;
+  }
+  #halaqaty-screen-samples .quick-icon,
+  #halaqaty-screen-samples .circle-icon {
+    width:33px; height:33px; border-radius:11px; display:grid; place-items:center;
+    background:var(--hq-emerald-soft); color:var(--hq-emerald); flex:0 0 auto; font-weight:700;
+  }
+  #halaqaty-screen-samples .circle-row {
+    padding:9px 0; display:grid; grid-template-columns:36px 1fr auto; gap:9px; align-items:center;
+    border-bottom:1px solid var(--hq-line);
+  }
+  #halaqaty-screen-samples .circle-row:last-child { border-bottom:0; }
+  #halaqaty-screen-samples .circle-row strong { display:block; font-size:11px; }
+  #halaqaty-screen-samples .circle-row small { display:block; font-size:9px; color:var(--hq-muted); margin-top:2px; }
+  #halaqaty-screen-samples .chevron { color:var(--hq-muted); font-size:16px; }
+  #halaqaty-screen-samples .bottom-nav {
+    min-height:61px; padding:8px 6px 10px; display:grid; grid-template-columns:repeat(4,1fr);
+    background:var(--hq-paper); border-top:1px solid var(--hq-line); flex:0 0 auto;
+  }
+  #halaqaty-screen-samples .bottom-nav span {
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+    color:var(--hq-muted); font-size:8px; margin:0 3px; padding:5px 2px; border-radius:14px;
+  }
+  #halaqaty-screen-samples .bottom-nav b { font-size:16px; line-height:1; }
+  #halaqaty-screen-samples .bottom-nav .active {
+    background:var(--hq-gold-soft); color:#694d18; font-weight:700;
+  }
+  #halaqaty-screen-samples .search {
+    min-height:42px; border:1px solid var(--hq-line); border-radius:13px; background:var(--hq-paper);
+    display:flex; align-items:center; gap:8px; padding:0 12px; color:var(--hq-muted); font-size:11px;
+  }
+  #halaqaty-screen-samples .segments {
+    margin:10px 0 12px; padding:3px; border-radius:12px; background:var(--hq-emerald-soft);
+    display:grid; grid-template-columns:1fr 1fr; gap:3px;
+  }
+  #halaqaty-screen-samples .segments span { padding:7px; text-align:center; font-size:10px; border-radius:9px; color:var(--hq-muted); }
+  #halaqaty-screen-samples .segments .selected { background:var(--hq-paper); color:var(--hq-emerald); font-weight:700; }
+  #halaqaty-screen-samples .circle-card {
+    background:var(--hq-paper); border-radius:16px; padding:12px; margin-bottom:9px;
+    box-shadow:0 3px 12px rgb(21 58 42 / .07);
+  }
+  #halaqaty-screen-samples .circle-card-head { display:grid; grid-template-columns:39px 1fr auto; gap:9px; align-items:center; }
+  #halaqaty-screen-samples .circle-card h4 { margin:0; font-size:12px; }
+  #halaqaty-screen-samples .circle-card p { margin:2px 0 0; font-size:9px; color:var(--hq-muted); }
+  #halaqaty-screen-samples .tag { padding:4px 7px; border-radius:999px; background:var(--hq-gold-soft); color:#694d18; font-size:8px; font-weight:700; }
+  #halaqaty-screen-samples .card-foot { margin-top:10px; display:flex; align-items:center; justify-content:space-between; font-size:9px; color:var(--hq-muted); }
+  #halaqaty-screen-samples .card-link { color:var(--hq-emerald); font-weight:700; }
+  #halaqaty-screen-samples .invite {
+    min-height:42px; margin-bottom:12px; border:1px solid var(--hq-emerald); border-radius:12px;
+    display:flex; align-items:center; justify-content:center; gap:7px; color:var(--hq-emerald); font-size:11px; font-weight:700;
+  }
+  #halaqaty-screen-samples .detail-head {
+    background:var(--hq-emerald); color:#fffdf8; margin:0 -15px; padding:12px 15px 19px;
+  }
+  #halaqaty-screen-samples .detail-head .mini { font-size:9px; opacity:.72; }
+  #halaqaty-screen-samples .detail-head h3 { margin:3px 0 5px; font-size:20px; }
+  #halaqaty-screen-samples .detail-head p { margin:0; font-size:10px; opacity:.82; }
+  #halaqaty-screen-samples .detail-session {
+    margin-top:-9px; background:var(--hq-paper); border-radius:16px; padding:12px;
+    box-shadow:0 5px 18px rgb(21 58 42 / .10);
+  }
+  #halaqaty-screen-samples .detail-session strong { font-size:12px; }
+  #halaqaty-screen-samples .detail-session p { font-size:9px; color:var(--hq-muted); margin:3px 0 8px; }
+  #halaqaty-screen-samples .progress-wrap { margin:8px 0 12px; }
+  #halaqaty-screen-samples .progress-label { display:flex; justify-content:space-between; font-size:9px; margin-bottom:5px; }
+  #halaqaty-screen-samples .progress-track { height:6px; border-radius:999px; background:var(--hq-emerald-soft); overflow:hidden; }
+  #halaqaty-screen-samples .progress-fill { width:68%; height:100%; background:var(--hq-emerald); border-radius:999px; }
+  #halaqaty-screen-samples .action-row {
+    display:grid; grid-template-columns:1fr 1fr 1fr; gap:7px; margin:12px 0 2px;
+  }
+  #halaqaty-screen-samples .action-row div {
+    min-height:52px; border-radius:13px; background:var(--hq-paper); display:grid; place-items:center;
+    text-align:center; font-size:9px; box-shadow:0 3px 12px rgb(21 58 42 / .06);
+  }
+  #halaqaty-screen-samples .profile-hero { display:flex; flex-direction:column; align-items:center; padding:7px 0 16px; }
+  #halaqaty-screen-samples .profile-avatar {
+    width:66px; height:66px; border-radius:50%; background:var(--hq-emerald-soft); color:var(--hq-emerald);
+    display:grid; place-items:center; font-size:22px; font-weight:700; margin-bottom:8px;
+  }
+  #halaqaty-screen-samples .profile-hero strong { font-size:16px; }
+  #halaqaty-screen-samples .profile-hero span { font-size:10px; color:var(--hq-muted); }
+  #halaqaty-screen-samples .profile-section { margin-bottom:12px; }
+  #halaqaty-screen-samples .profile-section > strong { font-size:11px; display:block; margin-bottom:5px; }
+  #halaqaty-screen-samples .setting-row {
+    min-height:43px; display:grid; grid-template-columns:31px 1fr auto; align-items:center; gap:8px;
+    border-bottom:1px solid var(--hq-line); font-size:10px;
+  }
+  #halaqaty-screen-samples .setting-row:last-child { border-bottom:0; }
+  #halaqaty-screen-samples .setting-icon { color:var(--hq-emerald); font-size:15px; }
+  #halaqaty-screen-samples .setting-value { color:var(--hq-muted); font-size:9px; }
+  #halaqaty-screen-samples .logout { color:var(--hq-danger); }
+  #halaqaty-screen-samples .wave-head {
+    margin:34px 0 14px; padding-top:24px; border-top:1px solid var(--hq-line);
+  }
+  #halaqaty-screen-samples .wave-head h3 { margin:0 0 4px; font-size:18px; }
+  #halaqaty-screen-samples .wave-head p { margin:0; color:var(--hq-muted); font-size:12px; }
+  #halaqaty-screen-samples .live-pill {
+    display:inline-flex; align-items:center; gap:5px; padding:4px 8px; border-radius:999px;
+    background:var(--hq-gold-soft); color:#694d18; font-size:9px; font-weight:700;
+  }
+  #halaqaty-screen-samples .live-dot { width:6px; height:6px; border-radius:50%; background:var(--hq-danger); }
+  #halaqaty-screen-samples .session-status {
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:9px 11px; margin-bottom:10px; border-radius:13px; background:var(--hq-emerald-soft);
+    color:var(--hq-emerald-deep); font-size:10px;
+  }
+  #halaqaty-screen-samples .focus-card {
+    padding:15px; border-radius:18px; background:var(--hq-emerald); color:var(--hq-paper);
+    box-shadow:0 7px 20px rgb(21 58 42 / .14);
+  }
+  #halaqaty-screen-samples .focus-card .eyebrow { font-size:9px; opacity:.76; }
+  #halaqaty-screen-samples .focus-card h4 { margin:5px 0 2px; font-size:18px; }
+  #halaqaty-screen-samples .focus-card p { margin:0; font-size:10px; opacity:.8; }
+  #halaqaty-screen-samples .position-card {
+    margin-top:10px; padding:12px; border-radius:16px; background:var(--hq-paper);
+    border:1px solid var(--hq-gold); display:grid; grid-template-columns:44px 1fr; gap:10px; align-items:center;
+  }
+  #halaqaty-screen-samples .position-number {
+    width:44px; height:44px; border-radius:14px; display:grid; place-items:center;
+    background:var(--hq-gold-soft); color:#694d18; font-size:18px; font-weight:800;
+  }
+  #halaqaty-screen-samples .position-card strong { display:block; font-size:12px; }
+  #halaqaty-screen-samples .position-card small { color:var(--hq-muted); font-size:9px; }
+  #halaqaty-screen-samples .queue-list { margin-top:8px; background:var(--hq-paper); border-radius:15px; padding:4px 11px; }
+  #halaqaty-screen-samples .queue-person {
+    min-height:45px; display:grid; grid-template-columns:28px 1fr auto; gap:8px; align-items:center;
+    border-bottom:1px solid var(--hq-line); font-size:10px;
+  }
+  #halaqaty-screen-samples .queue-person:last-child { border-bottom:0; }
+  #halaqaty-screen-samples .queue-rank {
+    width:27px; height:27px; border-radius:9px; display:grid; place-items:center;
+    background:var(--hq-emerald-soft); color:var(--hq-emerald); font-size:9px; font-weight:700;
+  }
+  #halaqaty-screen-samples .queue-person small { color:var(--hq-muted); font-size:8px; }
+  #halaqaty-screen-samples .secondary-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:9px; }
+  #halaqaty-screen-samples .soft-button {
+    min-height:42px; border:1px solid var(--hq-line); border-radius:12px; background:var(--hq-paper);
+    color:var(--hq-emerald-deep); display:grid; place-items:center; text-align:center; font-size:10px; font-weight:700;
+  }
+  #halaqaty-screen-samples .danger-link { margin-top:13px; text-align:center; color:var(--hq-danger); font-size:10px; font-weight:700; }
+  #halaqaty-screen-samples .recovery {
+    padding:16px; border-radius:18px; background:var(--hq-paper); text-align:center;
+    box-shadow:0 4px 16px rgb(21 58 42 / .08);
+  }
+  #halaqaty-screen-samples .recovery-icon {
+    width:48px; height:48px; margin:0 auto 9px; border-radius:16px; display:grid; place-items:center;
+    background:var(--hq-gold-soft); color:#694d18; font-size:21px;
+  }
+  #halaqaty-screen-samples .recovery h4 { margin:0 0 5px; font-size:15px; }
+  #halaqaty-screen-samples .recovery p { margin:0; color:var(--hq-muted); font-size:10px; line-height:1.55; }
+  #halaqaty-screen-samples .muted-panel { margin-top:10px; opacity:.62; pointer-events:none; }
+  #halaqaty-screen-samples .chat-feed { display:flex; flex-direction:column; gap:8px; }
+  #halaqaty-screen-samples .day-label { text-align:center; color:var(--hq-muted); font-size:8px; }
+  #halaqaty-screen-samples .message {
+    max-width:82%; padding:9px 11px; border-radius:14px; background:var(--hq-paper);
+    box-shadow:0 2px 8px rgb(21 58 42 / .06); font-size:10px; line-height:1.55;
+  }
+  #halaqaty-screen-samples .message.own { align-self:flex-end; background:var(--hq-emerald-soft); }
+  #halaqaty-screen-samples .message strong { display:block; margin-bottom:2px; color:var(--hq-emerald); font-size:8px; }
+  #halaqaty-screen-samples .message small { display:block; margin-top:3px; color:var(--hq-muted); font-size:7px; }
+  #halaqaty-screen-samples .composer {
+    min-height:60px; margin-top:10px; padding:6px; display:grid; grid-template-columns:48px 1fr 48px;
+    align-items:center; gap:6px; border:1px solid var(--hq-line); border-radius:16px; background:var(--hq-paper);
+  }
+  #halaqaty-screen-samples .composer span { color:var(--hq-muted); font-size:10px; }
+  #halaqaty-screen-samples .composer-icon {
+    width:48px; height:48px; padding:0; border:0; border-radius:12px; display:grid; place-items:center;
+    background:var(--hq-emerald-soft); color:var(--hq-emerald); font-family:inherit; font-size:16px;
+  }
+  #halaqaty-screen-samples .composer-icon.send { background:var(--hq-emerald); color:var(--hq-paper); }
+  #halaqaty-screen-samples [dir="rtl"] .composer-icon.send { transform:scaleX(-1); }
+  #halaqaty-screen-samples .media-sheet { margin-top:12px; padding:14px; border-radius:20px; background:var(--hq-paper); }
+  #halaqaty-screen-samples .media-sheet h4 { margin:0 0 11px; font-size:14px; }
+  #halaqaty-screen-samples .media-choice {
+    min-height:52px; display:grid; grid-template-columns:36px 1fr auto; gap:9px; align-items:center;
+    border-bottom:1px solid var(--hq-line); font-size:11px;
+  }
+  #halaqaty-screen-samples .media-choice:last-child { border-bottom:0; }
+  #halaqaty-screen-samples .recording-card {
+    padding:18px 14px; border-radius:20px; background:var(--hq-paper); text-align:center;
+    box-shadow:0 5px 18px rgb(21 58 42 / .09);
+  }
+  #halaqaty-screen-samples .recording-time { margin:7px 0 11px; font-size:24px; font-weight:700; }
+  #halaqaty-screen-samples .waveform { display:flex; justify-content:center; align-items:center; gap:3px; height:38px; }
+  #halaqaty-screen-samples .waveform span { width:3px; border-radius:999px; background:var(--hq-emerald); }
+  #halaqaty-screen-samples .offline-strip {
+    padding:8px 10px; margin-bottom:9px; border-radius:12px; background:var(--hq-gold-soft);
+    color:#694d18; display:flex; justify-content:space-between; gap:8px; font-size:9px; font-weight:700;
+  }
+  #halaqaty-screen-samples .failed-message { border:1px solid rgb(181 68 60 / .35); }
+  #halaqaty-screen-samples .auth-hero { padding:10px 0 18px; text-align:center; }
+  #halaqaty-screen-samples .auth-hero .brand-mark { margin:0 auto 10px; }
+  #halaqaty-screen-samples .auth-hero h4 { margin:0 0 5px; font-size:19px; }
+  #halaqaty-screen-samples .auth-hero p { margin:0; color:var(--hq-muted); font-size:10px; line-height:1.55; }
+  #halaqaty-screen-samples .form-field {
+    min-height:51px; margin-bottom:9px; padding:7px 11px; border:1px solid var(--hq-line);
+    border-radius:12px; background:var(--hq-paper);
+  }
+  #halaqaty-screen-samples .form-field.active { border-color:var(--hq-emerald); box-shadow:0 0 0 2px var(--hq-emerald-soft); }
+  #halaqaty-screen-samples .form-field label { display:block; color:var(--hq-muted); font-size:8px; }
+  #halaqaty-screen-samples .form-field span { display:block; margin-top:4px; font-size:11px; }
+  #halaqaty-screen-samples .auth-switch { margin-top:12px; text-align:center; color:var(--hq-muted); font-size:9px; }
+  #halaqaty-screen-samples .auth-switch strong { color:var(--hq-emerald); }
+  #halaqaty-screen-samples .profile-summary {
+    display:grid; grid-template-columns:52px 1fr auto; gap:10px; align-items:center;
+    padding:13px; border-radius:17px; background:var(--hq-paper);
+  }
+  #halaqaty-screen-samples .profile-summary .profile-avatar { width:52px; height:52px; margin:0; font-size:17px; }
+  #halaqaty-screen-samples .profile-summary strong { display:block; font-size:13px; }
+  #halaqaty-screen-samples .profile-summary small { color:var(--hq-muted); font-size:8px; }
+  #halaqaty-screen-samples .preference-row {
+    min-height:48px; display:grid; grid-template-columns:30px 1fr auto; gap:8px; align-items:center;
+    border-bottom:1px solid var(--hq-line); font-size:10px;
+  }
+  #halaqaty-screen-samples .preference-row:last-child { border-bottom:0; }
+  #halaqaty-screen-samples .toggle { width:31px; height:18px; padding:2px; border-radius:999px; background:var(--hq-emerald); }
+  #halaqaty-screen-samples .toggle::after { content:""; display:block; width:14px; height:14px; border-radius:50%; background:var(--hq-paper); }
+  #halaqaty-screen-samples [dir="ltr"] .toggle::after { margin-left:auto; }
+  #halaqaty-screen-samples .dark {
+    --hq-ivory:#0a0a0a; --hq-paper:#121212; --hq-emerald:#4cb368; --hq-emerald-deep:#ededed;
+    --hq-emerald-soft:#2c2c2c; --hq-gold:#d4a574; --hq-gold-soft:#8b6f47; --hq-ink:#ededed;
+    --hq-muted:#bdbdbd; --hq-line:#49454e; --hq-danger:#ef5350;
+    box-shadow:0 14px 34px rgb(0 0 0 / .34);
+  }
+  #halaqaty-screen-samples .dark .hero { background:#0f5627; color:#ededed; }
+  #halaqaty-screen-samples .dark .bottom-nav .active { background:#d4a574; color:#1c1c1e; }
+  #halaqaty-screen-samples .scale-preview { overflow-y:auto; font-size:14px; line-height:1.65; }
+  #halaqaty-screen-samples .scale-preview h4 { margin:0 0 7px; font-size:22px; line-height:1.45; }
+  #halaqaty-screen-samples .scale-preview p { margin:0 0 12px; }
+  #halaqaty-screen-samples .scale-preview .primary-green { min-height:48px; font-size:14px; }
+  #halaqaty-screen-samples .scale-preview .position-card strong,
+  #halaqaty-screen-samples .scale-preview .circle-row strong { font-size:14px; }
+  #halaqaty-screen-samples .scale-preview .position-card small,
+  #halaqaty-screen-samples .scale-preview .circle-row small,
+  #halaqaty-screen-samples .scale-preview .section-head span { font-size:12px; line-height:1.5; }
+  #halaqaty-screen-samples .scale-preview .section-head strong { font-size:16px; }
+  #halaqaty-screen-samples .scale-preview .circle-row { min-height:64px; }
+  #halaqaty-screen-samples .audit-board {
+    margin-top:18px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;
+  }
+  #halaqaty-screen-samples .audit-card { padding:15px; border:1px solid var(--hq-line); border-radius:16px; background:var(--hq-paper); }
+  #halaqaty-screen-samples .audit-card h4 { margin:0 0 9px; font-size:13px; }
+  #halaqaty-screen-samples .audit-check { display:flex; align-items:flex-start; gap:7px; margin-top:7px; color:var(--hq-muted); font-size:10px; line-height:1.45; }
+  #halaqaty-screen-samples .audit-check b { color:var(--hq-emerald); }
+  #halaqaty-screen-samples .note {
+    margin-top:16px; color:var(--muted-foreground); font-size:13px; line-height:1.5;
+  }
+  @media (max-width:1000px) {
+    #halaqaty-screen-samples .sample-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    #halaqaty-screen-samples .audit-board { grid-template-columns:1fr; }
+  }
+  @media (max-width:560px) {
+    #halaqaty-screen-samples .sample-grid { grid-template-columns:1fr; }
+    #halaqaty-screen-samples .phone { max-width:360px; margin:0 auto; }
+  }
+</style>
+
+<div id="halaqaty-screen-samples">
+  <h2>Halaqaty — calm contemporary screen samples</h2>
+  <p class="subtitle">A connected Arabic-first preview using the approved visual direction and low-click navigation.</p>
+
+  <div class="sample-grid">
+    <section>
+      <h3 class="sample-title">الرئيسية · Home</h3>
+      <div class="phone" dir="rtl" aria-label="Halaqaty home screen concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar">
+          <div class="brand"><img class="brand-mark" src="../../../mobile/assets/brand/logo.svg" alt="Halaqaty Rub el Hizb mark"><span>حِلْقَتي</span></div>
+          <span class="avatar">ك</span>
+        </div>
+        <main class="screen">
+          <div class="greeting">السلام عليكم، كريم</div>
+          <div class="hint">لنواصل رحلة الحفظ اليوم</div>
+          <section class="hero">
+            <div class="hero-label">الجلسة القادمة · بعد ٢٠ دقيقة</div>
+            <div class="hero-title">حلقة سورة البقرة</div>
+            <div class="hero-meta"><span>◷ ٧:٣٠ م</span><span>١٢ طالبًا</span><span>المعلم أحمد</span></div>
+            <button class="primary">دخول الجلسة</button>
+          </section>
+          <div class="section-head"><strong>وصول سريع</strong></div>
+          <div class="quick-grid">
+            <div class="quick-item"><span class="quick-icon">⌕</span><span>اكتشاف حلقة</span></div>
+            <div class="quick-item"><span class="quick-icon">⌁</span><span>رابط الدعوة</span></div>
+          </div>
+          <div class="section-head"><strong>حلقاتي</strong><span>عرض الكل</span></div>
+          <div class="circle-row"><span class="circle-icon">ق</span><div><strong>حلقة الإتقان</strong><small>المراجعة: الجزء الخامس</small></div><span class="chevron">‹</span></div>
+          <div class="circle-row"><span class="circle-icon">ن</span><div><strong>نور البيان</strong><small>الحفظ: سورة مريم</small></div><span class="chevron">‹</span></div>
+        </main>
+        <nav class="bottom-nav"><span class="active"><b>⌂</b>الرئيسية</span><span><b>◉</b>الحلقات</span><span><b>▣</b>المحادثات</span><span><b>○</b>حسابي</span></nav>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">الحلقات · Circles</h3>
+      <div class="phone" dir="rtl" aria-label="Halaqaty circles discovery screen concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="top-title">الحلقات</span><span class="avatar">ك</span></div>
+        <main class="screen">
+          <div class="search"><span>⌕</span><span>ابحث باسم الحلقة أو المعلم</span></div>
+          <div class="segments"><span class="selected">حلقاتي</span><span>اكتشاف</span></div>
+          <div class="invite">⌁ لديّ رابط دعوة</div>
+          <div class="section-head"><strong>حلقاتك</strong><span>حلقتان</span></div>
+          <article class="circle-card">
+            <div class="circle-card-head"><span class="circle-icon">ق</span><div><h4>حلقة الإتقان</h4><p>المعلم أحمد · الأحد والثلاثاء</p></div><span class="tag">طالب</span></div>
+            <div class="card-foot"><span>١٢ عضوًا · الجلسة اليوم</span><span class="card-link">فتح الحلقة ‹</span></div>
+          </article>
+          <article class="circle-card">
+            <div class="circle-card-head"><span class="circle-icon">ن</span><div><h4>نور البيان</h4><p>المعلمة مريم · الخميس</p></div><span class="tag">طالب</span></div>
+            <div class="card-foot"><span>٨ أعضاء · بعد يومين</span><span class="card-link">فتح الحلقة ‹</span></div>
+          </article>
+          <div class="section-head"><strong>مقترحة لك</strong><span>عرض المزيد</span></div>
+          <article class="circle-card">
+            <div class="circle-card-head"><span class="circle-icon">ت</span><div><h4>حلقة التثبيت</h4><p>مراجعة يومية · للبالغين</p></div><span class="tag">عامّة</span></div>
+            <div class="card-foot"><span>١٨ من ٢٥</span><span class="card-link">عرض التفاصيل ‹</span></div>
+          </article>
+        </main>
+        <nav class="bottom-nav"><span><b>⌂</b>الرئيسية</span><span class="active"><b>◉</b>الحلقات</span><span><b>▣</b>المحادثات</span><span><b>○</b>حسابي</span></nav>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">تفاصيل الحلقة · Circle details</h3>
+      <div class="phone" dir="rtl" aria-label="Halaqaty circle details screen concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">›</span><span class="top-title">تفاصيل الحلقة</span><span>•••</span></div>
+        <main class="screen">
+          <section class="detail-head">
+            <div class="mini">أنت طالب في هذه الحلقة</div>
+            <h3>حلقة الإتقان</h3>
+            <p>حفظ ومراجعة سورة البقرة · المعلم أحمد</p>
+          </section>
+          <section class="detail-session">
+            <strong>الجلسة القادمة اليوم</strong>
+            <p>٧:٣٠ م · تبدأ بعد ٢٠ دقيقة</p>
+            <button class="primary-green">دخول الجلسة</button>
+          </section>
+          <div class="section-head"><strong>تقدّمك هذا الشهر</strong><span>التفاصيل</span></div>
+          <div class="progress-wrap">
+            <div class="progress-label"><span>١٧ صفحة من ٢٥</span><strong>٦٨٪</strong></div>
+            <div class="progress-track"><div class="progress-fill"></div></div>
+          </div>
+          <div class="action-row"><div><span>▣</span><strong>المحادثة</strong></div><div><span>◎</span><strong>الأعضاء</strong></div><div><span>◷</span><strong>المواعيد</strong></div></div>
+          <div class="section-head"><strong>آخر نشاط</strong><span>عرض الكل</span></div>
+          <div class="circle-row"><span class="circle-icon">✓</span><div><strong>تمت مراجعة الربع الأول</strong><small>الثلاثاء · أداء جيد جدًا</small></div><span class="chevron">‹</span></div>
+          <div class="circle-row"><span class="circle-icon">◷</span><div><strong>حضرت جلسة المراجعة</strong><small>الأحد · ٤٥ دقيقة</small></div><span class="chevron">‹</span></div>
+        </main>
+        <nav class="bottom-nav"><span><b>⌂</b>الرئيسية</span><span class="active"><b>◉</b>الحلقات</span><span><b>▣</b>المحادثات</span><span><b>○</b>حسابي</span></nav>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">حسابي · Profile</h3>
+      <div class="phone" dir="rtl" aria-label="Halaqaty profile screen concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="top-title">حسابي</span><span>⚙</span></div>
+        <main class="screen">
+          <section class="profile-hero"><div class="profile-avatar">ك</div><strong>كريم فاضل</strong><span>karim@example.com</span></section>
+          <button class="primary-green">تعديل الملف الشخصي</button>
+          <div class="profile-section">
+            <div class="section-head"><strong>التفضيلات</strong></div>
+            <div class="setting-row"><span class="setting-icon">文</span><span>لغة التطبيق</span><span class="setting-value">العربية ‹</span></div>
+            <div class="setting-row"><span class="setting-icon">◐</span><span>المظهر</span><span class="setting-value">حسب الجهاز ‹</span></div>
+            <div class="setting-row"><span class="setting-icon">◉</span><span>الإشعارات</span><span class="setting-value">مفعّلة ‹</span></div>
+          </div>
+          <div class="profile-section">
+            <div class="section-head"><strong>الدعم والخصوصية</strong></div>
+            <div class="setting-row"><span class="setting-icon">?</span><span>المساعدة والدعم</span><span class="chevron">‹</span></div>
+            <div class="setting-row"><span class="setting-icon">⌾</span><span>الخصوصية والأمان</span><span class="chevron">‹</span></div>
+            <div class="setting-row logout"><span>↪</span><span>تسجيل الخروج</span><span></span></div>
+          </div>
+        </main>
+        <nav class="bottom-nav"><span><b>⌂</b>الرئيسية</span><span><b>◉</b>الحلقات</span><span><b>▣</b>المحادثات</span><span class="active"><b>○</b>حسابي</span></nav>
+      </div>
+    </section>
+  </div>
+
+  <div class="wave-head">
+    <h3>Wave 2 — sessions and recitation queue</h3>
+    <p>Low-click live-session entry, clear student turn status, focused teacher controls, and recoverable connection states.</p>
+  </div>
+
+  <div class="sample-grid">
+    <section>
+      <h3 class="sample-title">جلسة مباشرة · Live now</h3>
+      <div class="phone" dir="rtl" aria-label="Wave 2 live session entry concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar">
+          <div class="brand"><img class="brand-mark" src="../../../mobile/assets/brand/logo.svg" alt="Halaqaty Rub el Hizb mark"><span>حِلْقَتي</span></div>
+          <span class="avatar">ك</span>
+        </div>
+        <main class="screen">
+          <div class="greeting">السلام عليكم، كريم</div>
+          <div class="hint">جلسة حلقتك جاهزة الآن</div>
+          <section class="hero">
+            <div class="live-pill"><span class="live-dot"></span><span>مباشر الآن</span></div>
+            <div class="hero-title">حلقة الإتقان</div>
+            <div class="hero-meta"><span>المعلم أحمد</span><span>٨ مشاركين</span><span>صوت فقط</span></div>
+            <button class="primary">دخول الجلسة</button>
+          </section>
+          <div class="section-head"><strong>ماذا سيحدث؟</strong></div>
+          <div class="quick-grid">
+            <div class="quick-item"><span class="quick-icon">١</span><span>ادخل الجلسة</span></div>
+            <div class="quick-item"><span class="quick-icon">٢</span><span>تابع دورك</span></div>
+          </div>
+          <div class="section-head"><strong>حلقتك</strong><span>عرض التفاصيل</span></div>
+          <div class="circle-row"><span class="circle-icon">ق</span><div><strong>حلقة الإتقان</strong><small>جولة مراجعة · سورة البقرة</small></div><span class="chevron">‹</span></div>
+        </main>
+        <nav class="bottom-nav"><span class="active"><b>⌂</b>الرئيسية</span><span><b>◉</b>الحلقات</span><span><b>▣</b>المحادثات</span><span><b>○</b>حسابي</span></nav>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">دوري في التلاوة · Student turn</h3>
+      <div class="phone" dir="rtl" aria-label="Wave 2 student recitation turn concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">›</span><span class="top-title">الجلسة المباشرة</span><span>•••</span></div>
+        <main class="screen">
+          <div class="session-status"><strong>● متصل</strong><span>صوتك مغلق حتى يبدأ دورك</span></div>
+          <section class="focus-card">
+            <div class="eyebrow">يتلو الآن</div>
+            <h4>محمد علي</h4>
+            <p>سورة البقرة · الآيات ٢٥–٣٠</p>
+          </section>
+          <section class="position-card">
+            <span class="position-number">٢</span>
+            <div><strong>أنت التالي بعد طالب واحد</strong><small>ابقَ قريبًا، سيخبرك التطبيق عند بدء دورك</small></div>
+          </section>
+          <div class="section-head"><strong>قائمة التلاوة</strong><span>٤ طلاب</span></div>
+          <div class="queue-list">
+            <div class="queue-person"><span class="queue-rank">الآن</span><div><strong>محمد علي</strong><small>يتلو الآن</small></div><span>◉</span></div>
+            <div class="queue-person"><span class="queue-rank">١</span><div><strong>أحمد سمير</strong><small>ينتظر</small></div><span>◷</span></div>
+            <div class="queue-person"><span class="queue-rank">٢</span><div><strong>أنت</strong><small>سيأتي دورك قريبًا</small></div><span class="tag">دورك</span></div>
+          </div>
+          <div class="secondary-row"><div class="soft-button">رفع اليد</div><div class="soft-button">طلب عدم التلاوة</div></div>
+        </main>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">إدارة الجولة · Teacher queue</h3>
+      <div class="phone" dir="rtl" aria-label="Wave 2 teacher queue controls concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">›</span><span class="top-title">إدارة جلسة التلاوة</span><span class="live-pill"><span class="live-dot"></span>مباشر</span></div>
+        <main class="screen">
+          <div class="session-status"><strong>٨ مشاركين</strong><span>الجولة ٢ · مراجعة</span></div>
+          <section class="focus-card">
+            <div class="eyebrow">الطالب الحالي</div>
+            <h4>محمد علي</h4>
+            <p>سورة البقرة · الآيات ٢٥–٣٠</p>
+            <button class="primary">إتمام التلاوة والتقييم</button>
+          </section>
+          <div class="section-head"><strong>التالي</strong><span>٣ منتظرون</span></div>
+          <div class="queue-list">
+            <div class="queue-person"><span class="queue-rank">١</span><div><strong>أحمد سمير</strong><small>جاهز للتلاوة</small></div><span class="card-link">تحديد ‹</span></div>
+            <div class="queue-person"><span class="queue-rank">٢</span><div><strong>كريم فاضل</strong><small>ينتظر</small></div><span>•••</span></div>
+            <div class="queue-person"><span class="queue-rank">٣</span><div><strong>يوسف حسن</strong><small>طلب عدم التلاوة</small></div><span class="tag">مراجعة</span></div>
+          </div>
+          <div class="secondary-row"><div class="soft-button">ترتيب القائمة</div><div class="soft-button">إدارة المشاركين</div></div>
+          <div class="danger-link">إنهاء الجلسة</div>
+        </main>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">Connection recovery · English LTR</h3>
+      <div class="phone" dir="ltr" aria-label="Wave 2 connection recovery concept">
+        <div class="status"><span>9:41</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">‹</span><span class="top-title">Live session</span><span>•••</span></div>
+        <main class="screen">
+          <section class="recovery">
+            <div class="recovery-icon">↻</div>
+            <h4>Connection interrupted</h4>
+            <p>Your last queue position is still visible. Actions are paused while Halaqaty reconnects safely.</p>
+            <button class="primary-green">Try again</button>
+            <div class="danger-link">Leave session</div>
+          </section>
+          <div class="muted-panel">
+            <div class="section-head"><strong>Your recitation turn</strong><span>Last update</span></div>
+            <section class="position-card">
+              <span class="position-number">2</span>
+              <div><strong>One student before you</strong><small>Waiting for a fresh queue update</small></div>
+            </section>
+            <div class="queue-list">
+              <div class="queue-person"><span class="queue-rank">Now</span><div><strong>Mohamed Ali</strong><small>Reciting</small></div><span>◉</span></div>
+              <div class="queue-person"><span class="queue-rank">2</span><div><strong>You</strong><small>Last confirmed position</small></div><span>◷</span></div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </section>
+  </div>
+
+  <div class="wave-head">
+    <h3>Wave 3 — chat</h3>
+    <p>Conversation-first entry, media actions at the composer, explicit delivery states, and recovery without losing the draft.</p>
+  </div>
+
+  <div class="sample-grid">
+    <section>
+      <h3 class="sample-title">محادثة الحلقة · Circle chat</h3>
+      <div class="phone" dir="rtl" aria-label="Wave 3 circle conversation concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="top-title">محادثة حلقة الإتقان</span><span>⌕</span></div>
+        <main class="screen">
+          <div class="session-status"><strong>١٢ عضوًا</strong><span>أحمد يكتب الآن...</span></div>
+          <div class="chat-feed">
+            <div class="day-label">اليوم</div>
+            <article class="message"><strong>المعلم أحمد</strong><span>السلام عليكم، سنراجع اليوم الآيات ٢٥–٣٠.</span><small>٧:١٢ م</small></article>
+            <article class="message own"><span>وعليكم السلام، جاهز بإذن الله.</span><small>٧:١٤ م · تمت القراءة</small></article>
+            <article class="message"><strong>أحمد سمير</strong><span>بارك الله فيكم.</span><small>٧:١٥ م</small></article>
+            <article class="message own"><span>هل نبدأ من الآية ٢٥؟</span><small>٧:١٦ م · تم التسليم</small></article>
+          </div>
+          <div class="composer"><button class="composer-icon" type="button" aria-label="إرفاق صورة أو ملف أو تسجيل صوتي">＋</button><span>اكتب رسالة</span><button class="composer-icon send" type="button" aria-label="إرسال الرسالة">➤</button></div>
+        </main>
+        <nav class="bottom-nav"><span><b>⌂</b>الرئيسية</span><span><b>◉</b>الحلقات</span><span class="active"><b>▣</b>المحادثات</span><span><b>○</b>حسابي</span></nav>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">إرفاق سريع · Media actions</h3>
+      <div class="phone" dir="rtl" aria-label="Wave 3 attachment actions concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">›</span><span class="top-title">محادثة الحلقة</span><span>⌕</span></div>
+        <main class="screen">
+          <div class="chat-feed muted-panel">
+            <article class="message"><strong>المعلم أحمد</strong><span>أرسل صورة الصفحة أو تسجيل التلاوة.</span><small>٧:١٢ م</small></article>
+            <article class="message own"><span>حاضر.</span><small>٧:١٤ م · أُرسلت</small></article>
+          </div>
+          <section class="media-sheet">
+            <h4>ماذا تريد أن ترسل؟</h4>
+            <div class="media-choice"><span class="quick-icon">▧</span><div><strong>صورة</strong><small>حتى ٥ ميجابايت</small></div><span>‹</span></div>
+            <div class="media-choice"><span class="quick-icon">▤</span><div><strong>ملف PDF</strong><small>حتى ١٠ ميجابايت</small></div><span>‹</span></div>
+            <div class="media-choice"><span class="quick-icon">●</span><div><strong>رسالة صوتية</strong><small>حتى ٥ دقائق</small></div><span>‹</span></div>
+          </section>
+          <div class="composer"><button class="composer-icon" type="button" aria-label="إغلاق خيارات الإرفاق">×</button><span>اكتب رسالة</span><button class="composer-icon send" type="button" aria-label="إرسال الرسالة">➤</button></div>
+        </main>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">رسالة صوتية · Voice note</h3>
+      <div class="phone" dir="rtl" aria-label="Wave 3 voice note concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">›</span><span class="top-title">تسجيل رسالة صوتية</span><span></span></div>
+        <main class="screen">
+          <section class="recording-card">
+            <span class="live-pill"><span class="live-dot"></span>جارٍ التسجيل</span>
+            <div class="recording-time">٠٠:٣٨</div>
+            <div class="waveform" aria-label="مستوى الصوت"><span style="height:12px"></span><span style="height:25px"></span><span style="height:18px"></span><span style="height:34px"></span><span style="height:23px"></span><span style="height:31px"></span><span style="height:15px"></span><span style="height:27px"></span><span style="height:19px"></span><span style="height:32px"></span><span style="height:14px"></span></div>
+            <div class="hint">الحد الأقصى ٥ دقائق</div>
+            <button class="primary">إيقاف التسجيل</button>
+          </section>
+          <div class="section-head"><strong>بعد الإيقاف</strong></div>
+          <div class="quick-grid">
+            <div class="quick-item"><span class="quick-icon">▶</span><span>استماع</span></div>
+            <div class="quick-item"><span class="quick-icon">➤</span><span>إرسال</span></div>
+          </div>
+          <div class="danger-link">تجاهل التسجيل</div>
+        </main>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">Offline recovery · English LTR</h3>
+      <div class="phone" dir="ltr" aria-label="Wave 3 offline chat recovery concept">
+        <div class="status"><span>9:41</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">‹</span><span class="top-title">Circle chat</span><span>⌕</span></div>
+        <main class="screen">
+          <div class="offline-strip"><span>Offline — messages stay on this device</span><span>Retry</span></div>
+          <div class="chat-feed">
+            <article class="message"><strong>Teacher Ahmed</strong><span>Please send your recitation when ready.</span><small>7:12 PM</small></article>
+            <article class="message own"><span>I will send it shortly.</span><small>7:14 PM · Read</small></article>
+            <article class="message own failed-message"><span>Here is today’s recording.</span><small>Send failed · Retry or edit</small></article>
+          </div>
+          <div class="secondary-row"><div class="soft-button">Edit message</div><div class="soft-button">Retry</div></div>
+          <div class="composer"><button class="composer-icon" type="button" aria-label="Attach a photo, PDF, or voice note">＋</button><span>Write a message</span><button class="composer-icon send" type="button" aria-label="Send message">➤</button></div>
+        </main>
+      </div>
+    </section>
+  </div>
+
+  <div class="audit-board" aria-label="Chat prototype flow and state coverage">
+    <section class="audit-card"><h4>Primary paths</h4><div class="audit-check"><b>2</b><span>App shell → Chats → circle conversation.</span></div><div class="audit-check"><b>1</b><span>Circle details → conversation.</span></div></section>
+    <section class="audit-card"><h4>Composer paths</h4><div class="audit-check"><b>2</b><span>Attachment control → photo, PDF, or voice-note choice.</span></div><div class="audit-check"><b>1</b><span>Failed draft → retry or edit without losing content.</span></div></section>
+    <section class="audit-card"><h4>Required states</h4><div class="audit-check"><b>✓</b><span>Loading history, instructional empty state, delivered/read success, recoverable failure, and offline local queue.</span></div></section>
+  </div>
+
+  <div class="wave-head">
+    <h3>Wave 4 — profile and authentication</h3>
+    <p>A calm entry path, compact registration, focused profile editing, and preferences separated from sensitive account actions.</p>
+  </div>
+
+  <div class="sample-grid">
+    <section>
+      <h3 class="sample-title">مرحبًا بك · Sign in</h3>
+      <div class="phone" dir="rtl" aria-label="Wave 4 sign in concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <main class="screen">
+          <section class="auth-hero">
+            <img class="brand-mark" src="../../../mobile/assets/brand/logo.svg" alt="Halaqaty Rub el Hizb mark">
+            <h4>مرحبًا بك في حِلْقَتي</h4>
+            <p>تابع حفظك، تواصل مع حلقتك، وادخل جلساتك بسهولة.</p>
+          </section>
+          <div class="form-field active"><label>البريد الإلكتروني</label><span>karim@example.com</span></div>
+          <div class="form-field"><label>كلمة المرور</label><span>••••••••</span></div>
+          <button class="primary-green">تسجيل الدخول</button>
+          <div class="auth-switch">ليس لديك حساب؟ <strong>إنشاء حساب</strong></div>
+        </main>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">Create account · English LTR</h3>
+      <div class="phone" dir="ltr" aria-label="Wave 4 registration concept">
+        <div class="status"><span>9:41</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">‹</span><span class="top-title">Create account</span><span></span></div>
+        <main class="screen">
+          <section class="auth-hero"><img class="brand-mark" src="../../../mobile/assets/brand/logo.svg" alt="Halaqaty Rub el Hizb mark"><h4>Begin your journey</h4><p>Only the essentials now; complete the rest from your profile.</p></section>
+          <div class="form-field"><label>Display name</label><span>Karim</span></div>
+          <div class="form-field active"><label>Email</label><span>karim@example.com</span></div>
+          <div class="form-field"><label>Password</label><span>••••••••</span></div>
+          <div class="form-field"><label>Preferred language</label><span>English</span></div>
+          <button class="primary-green">Create account</button>
+          <div class="auth-switch">Already registered? <strong>Sign in</strong></div>
+        </main>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">تعديل الملف · Edit profile</h3>
+      <div class="phone" dir="rtl" aria-label="Wave 4 profile editing concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">›</span><span class="top-title">تعديل الملف الشخصي</span><span></span></div>
+        <main class="screen">
+          <section class="profile-summary"><span class="profile-avatar">ك</span><div><strong>كريم فاضل</strong><small>طالب · العربية</small></div><span class="card-link">تغيير الصورة</span></section>
+          <div class="section-head"><strong>المعلومات الأساسية</strong></div>
+          <div class="form-field active"><label>الاسم الكامل</label><span>كريم فاضل</span></div>
+          <div class="form-field"><label>الاسم المعروض</label><span>كريم</span></div>
+          <div class="form-field"><label>نبذة · اختياري</label><span>طالب في حلقة الإتقان</span></div>
+          <div class="secondary-row"><div class="form-field"><label>الدولة</label><span>EG</span></div><div class="form-field"><label>اللغة</label><span>العربية</span></div></div>
+          <button class="primary-green">حفظ التغييرات</button>
+        </main>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">Preferences and account · LTR</h3>
+      <div class="phone" dir="ltr" aria-label="Wave 4 preferences and account actions concept">
+        <div class="status"><span>9:41</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">‹</span><span class="top-title">Preferences</span><span></span></div>
+        <main class="screen">
+          <div class="profile-section">
+            <div class="section-head"><strong>App preferences</strong></div>
+            <div class="preference-row"><span class="setting-icon">文</span><span>Language</span><span class="setting-value">English ›</span></div>
+            <div class="preference-row"><span class="setting-icon">◐</span><span>Appearance</span><span class="setting-value">Use device ›</span></div>
+            <div class="preference-row"><span class="setting-icon">◉</span><span>Notifications</span><span class="toggle"></span></div>
+          </div>
+          <div class="profile-section">
+            <div class="section-head"><strong>Support and privacy</strong></div>
+            <div class="preference-row"><span class="setting-icon">?</span><span>Help and support</span><span>›</span></div>
+            <div class="preference-row"><span class="setting-icon">⌾</span><span>Privacy and security</span><span>›</span></div>
+          </div>
+          <div class="profile-section">
+            <div class="section-head"><strong>Account</strong></div>
+            <div class="preference-row logout"><span>↪</span><span>Sign out</span><span>›</span></div>
+          </div>
+        </main>
+        <nav class="bottom-nav"><span><b>⌂</b>Home</span><span><b>◉</b>Circles</span><span><b>▣</b>Chats</span><span class="active"><b>○</b>Profile</span></nav>
+      </div>
+    </section>
+  </div>
+
+  <div class="audit-board" aria-label="Authentication and profile prototype flow and state coverage">
+    <section class="audit-card"><h4>Authentication paths</h4><div class="audit-check"><b>1</b><span>Completed form → sign in.</span></div><div class="audit-check"><b>2</b><span>Sign in → create account → submit registration.</span></div></section>
+    <section class="audit-card"><h4>Profile paths</h4><div class="audit-check"><b>2</b><span>App shell → Profile → edit or preference.</span></div><div class="audit-check"><b>1</b><span>Edit form → save, with success retained in context.</span></div></section>
+    <section class="audit-card"><h4>Required states</h4><div class="audit-check"><b>✓</b><span>Loading/disabled action, empty-field guidance, saved success, inline validation/error, and offline retry.</span></div></section>
+  </div>
+
+  <div class="wave-head">
+    <h3>Wave 5 — cross-app audit</h3>
+    <p>The same hierarchy must survive dark mode, mirrored direction, larger text, assistive technology, and compact screens.</p>
+  </div>
+
+  <div class="sample-grid">
+    <section>
+      <h3 class="sample-title">الوضع الداكن · Dark mode RTL</h3>
+      <div class="phone dark" dir="rtl" aria-label="Wave 5 dark mode RTL concept">
+        <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><div class="brand"><img class="brand-mark" src="../../../mobile/assets/brand/logo.svg" alt="Halaqaty Rub el Hizb mark"><span>حِلْقَتي</span></div><span class="avatar">ك</span></div>
+        <main class="screen">
+          <div class="greeting">مساء الخير، كريم</div>
+          <div class="hint">محتوى واضح بدون وهج زائد</div>
+          <section class="hero"><div class="hero-label">الجلسة القادمة · غدًا</div><div class="hero-title">حلقة الإتقان</div><div class="hero-meta"><span>٧:٣٠ م</span><span>مراجعة</span></div><button class="primary">عرض التفاصيل</button></section>
+          <div class="section-head"><strong>الوصول السريع</strong></div>
+          <div class="quick-grid"><div class="quick-item"><span class="quick-icon">▣</span><span>المحادثة</span></div><div class="quick-item"><span class="quick-icon">◉</span><span>الحلقة</span></div></div>
+          <div class="section-head"><strong>تنبيه الوصول</strong></div>
+          <div class="session-status"><strong>تباين AA</strong><span>الألوان ليست المؤشر الوحيد</span></div>
+        </main>
+        <nav class="bottom-nav"><span class="active"><b>⌂</b>الرئيسية</span><span><b>◉</b>الحلقات</span><span><b>▣</b>المحادثات</span><span><b>○</b>حسابي</span></nav>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sample-title">Large text · English LTR</h3>
+      <div class="phone" dir="ltr" aria-label="Wave 5 large text LTR concept">
+        <div class="status"><span>9:41</span><span>● ◒ ◔</span></div>
+        <div class="topbar"><span class="back">‹</span><span class="top-title">Circle details</span><span>•••</span></div>
+        <main class="screen scale-preview">
+          <h4>Al-Itqan Circle</h4>
+          <p>Review Surah Al-Baqarah with Teacher Ahmed.</p>
+          <section class="position-card"><span class="position-number">2</span><div><strong>Your next session</strong><small>Tomorrow at 7:30 PM</small></div></section>
+          <button class="primary-green">View session details</button>
+          <div class="section-head"><strong>Recent activity</strong><span>See all</span></div>
+          <div class="circle-row"><span class="circle-icon">✓</span><div><strong>Quarter reviewed</strong><small>Tuesday · Very good</small></div><span class="chevron">›</span></div>
+          <div class="circle-row"><span class="circle-icon">◷</span><div><strong>Session attended</strong><small>Sunday · 45 minutes</small></div><span class="chevron">›</span></div>
+        </main>
+      </div>
+    </section>
+  </div>
+
+  <div class="audit-board" aria-label="Wave 5 cross-app audit checklist">
+    <section class="audit-card"><h4>Direction and language</h4><div class="audit-check"><b>✓</b><span>Arabic RTL and English LTR use mirrored navigation and directional icons.</span></div><div class="audit-check"><b>✓</b><span>User-facing copy replaces raw IDs, keys, and developer diagnostics.</span></div></section>
+    <section class="audit-card"><h4>Access and readability</h4><div class="audit-check"><b>✓</b><span>Text and controls retain hierarchy at increased text scale without hiding primary actions.</span></div><div class="audit-check"><b>✓</b><span>Interactive targets remain at least 48dp with visible focus and semantic labels.</span></div></section>
+    <section class="audit-card"><h4>States and recovery</h4><div class="audit-check"><b>✓</b><span>Loading, empty, success, error, and offline states preserve context and offer one clear next action.</span></div><div class="audit-check"><b>✓</b><span>Selection uses gold plus shape and weight; meaning never depends on color alone.</span></div></section>
+  </div>
+
+  <p class="note">These samples show the intended hierarchy and visual language. Waves 2–5 are non-production prototypes: product data, permissions, authentication, chat/media behavior, session state, and account actions remain governed by the existing approved product contracts and feature behavior.</p>
+</div>

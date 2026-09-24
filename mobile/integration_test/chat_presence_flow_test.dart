@@ -115,7 +115,7 @@ void main() {
 
     await _until(
         () => server.groupSocket != null && server.directSocket != null);
-    final expiry = DateTime.now().add(const Duration(milliseconds: 40));
+    final expiry = DateTime.now().add(const Duration(seconds: 1));
     server.sendGroup(_frame(
       type: ChatRealtimeTypes.messageRead,
       eventId: 'group-read',
@@ -162,7 +162,7 @@ void main() {
         circleId: 'circle-1', isTyping: false));
     await _until(
         () => !presence.state.typing.containsKey('circle-1:group-peer'));
-    await tester.pump(const Duration(milliseconds: 80));
+    await _until(() => presence.state.typing.isEmpty);
     expect(presence.state.typing, isEmpty);
   });
 

@@ -1,0 +1,102 @@
+diff --git a/docs/engineering/design/screen-samples-a-v2.html b/docs/engineering/design/screen-samples-a-v2.html
+index 7524052..9fd2607 100644
+--- a/docs/engineering/design/screen-samples-a-v2.html
++++ b/docs/engineering/design/screen-samples-a-v2.html
+@@ -41,7 +41,6 @@
+     width:32px; height:32px; border-radius:11px; display:grid; place-items:center;
+     background:var(--hq-emerald-soft); color:var(--hq-emerald); font-weight:700;
+   }
+-  #halaqaty-screen-samples img.brand-mark { padding:6px; }
+   #halaqaty-screen-samples .avatar { border-radius:50%; font-size:11px; }
+   #halaqaty-screen-samples .back { font-size:20px; color:var(--hq-ink); }
+   #halaqaty-screen-samples .top-title { font-size:16px; font-weight:700; }
+@@ -340,7 +339,7 @@
+       <div class="phone" dir="rtl" aria-label="Halaqaty home screen concept">
+         <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+         <div class="topbar">
+-          <div class="brand"><img class="brand-mark" src="../../../mobile/assets/brand/logo.svg" alt="Halaqaty Rub el Hizb mark"><span>حِلْقَتي</span></div>
++          <div class="brand"><span class="brand-mark">۞</span><span>حِلْقَتي</span></div>
+           <span class="avatar">ك</span>
+         </div>
+         <main class="screen">
+@@ -460,7 +459,7 @@
+       <div class="phone" dir="rtl" aria-label="Wave 2 live session entry concept">
+         <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+         <div class="topbar">
+-          <div class="brand"><img class="brand-mark" src="../../../mobile/assets/brand/logo.svg" alt="Halaqaty Rub el Hizb mark"><span>حِلْقَتي</span></div>
++          <div class="brand"><span class="brand-mark">۞</span><span>حِلْقَتي</span></div>
+           <span class="avatar">ك</span>
+         </div>
+         <main class="screen">
+@@ -672,7 +671,7 @@
+         <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+         <main class="screen">
+           <section class="auth-hero">
+-            <img class="brand-mark" src="../../../mobile/assets/brand/logo.svg" alt="Halaqaty Rub el Hizb mark">
++            <span class="brand-mark">۞</span>
+             <h4>مرحبًا بك في حِلْقَتي</h4>
+             <p>تابع حفظك، تواصل مع حلقتك، وادخل جلساتك بسهولة.</p>
+           </section>
+@@ -690,7 +689,7 @@
+         <div class="status"><span>9:41</span><span>● ◒ ◔</span></div>
+         <div class="topbar"><span class="back">‹</span><span class="top-title">Create account</span><span></span></div>
+         <main class="screen">
+-          <section class="auth-hero"><img class="brand-mark" src="../../../mobile/assets/brand/logo.svg" alt="Halaqaty Rub el Hizb mark"><h4>Begin your journey</h4><p>Only the essentials now; complete the rest from your profile.</p></section>
++          <section class="auth-hero"><span class="brand-mark">۞</span><h4>Begin your journey</h4><p>Only the essentials now; complete the rest from your profile.</p></section>
+           <div class="form-field"><label>Display name</label><span>Karim</span></div>
+           <div class="form-field active"><label>Email</label><span>karim@example.com</span></div>
+           <div class="form-field"><label>Password</label><span>••••••••</span></div>
+@@ -761,7 +760,7 @@
+       <h3 class="sample-title">الوضع الداكن · Dark mode RTL</h3>
+       <div class="phone dark" dir="rtl" aria-label="Wave 5 dark mode RTL concept">
+         <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
+-        <div class="topbar"><div class="brand"><img class="brand-mark" src="../../../mobile/assets/brand/logo.svg" alt="Halaqaty Rub el Hizb mark"><span>حِلْقَتي</span></div><span class="avatar">ك</span></div>
++        <div class="topbar"><div class="brand"><span class="brand-mark">۞</span><span>حِلْقَتي</span></div><span class="avatar">ك</span></div>
+         <main class="screen">
+           <div class="greeting">مساء الخير، كريم</div>
+           <div class="hint">محتوى واضح بدون وهج زائد</div>
+diff --git a/mobile/assets/brand/logo.svg b/mobile/assets/brand/logo.svg
+index 2259445..b2a0fdf 100644
+--- a/mobile/assets/brand/logo.svg
++++ b/mobile/assets/brand/logo.svg
+@@ -1,6 +1,7 @@
+-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc">
+-  <title id="title">Halaqaty Rub el Hizb logo</title>
+-  <desc id="desc">The traditional Rub el Hizb: two overlapping squares with a central circle.</desc>
+-  <path fill="none" stroke="#1B7E3C" stroke-width="7" stroke-linejoin="round" d="M24 24h52v52H24z M50 13.23 86.77 50 50 86.77 13.23 50Z"/>
+-  <circle cx="50" cy="50" r="10" fill="none" stroke="#1B7E3C" stroke-width="7"/>
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Halaqaty logo">
++  <!-- 8-pointed khatam star, sharp points (outer R=38, inner r=22) -->
++  <path fill="#1B7E3C" d="M88 50 L70.33 41.59 L76.87 23.13 L58.41 29.67 L50 12 L41.59 29.67 L23.13 23.13 L29.67 41.59 L12 50 L29.67 58.41 L23.13 76.87 L41.59 70.33 L50 88 L58.41 70.33 L76.87 76.87 L70.33 58.41 Z"/>
++  <!-- open book (Mushaf), bold pages -->
++  <path fill="#D4A574" d="M48.8 38.5 Q39 33.5 29.5 36 L29.5 57.5 Q39 55 48.8 61 Z"/>
++  <path fill="#D4A574" d="M51.2 38.5 Q61 33.5 70.5 36 L70.5 57.5 Q61 55 51.2 61 Z"/>
+ </svg>
+diff --git a/mobile/assets/brand/logo_monochrome.svg b/mobile/assets/brand/logo_monochrome.svg
+index 7101d25..2c90837 100644
+--- a/mobile/assets/brand/logo_monochrome.svg
++++ b/mobile/assets/brand/logo_monochrome.svg
+@@ -1,6 +1,3 @@
+-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc">
+-  <title id="title">Halaqaty Rub el Hizb logo</title>
+-  <desc id="desc">The traditional Rub el Hizb: two overlapping squares with a central circle.</desc>
+-  <path fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round" d="M24 24h52v52H24z M50 13.23 86.77 50 50 86.77 13.23 50Z"/>
+-  <circle cx="50" cy="50" r="10" fill="none" stroke="currentColor" stroke-width="7"/>
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Halaqaty logo monochrome">
++  <path fill="currentColor" fill-rule="evenodd" d="M88 50 L70.33 41.59 L76.87 23.13 L58.41 29.67 L50 12 L41.59 29.67 L23.13 23.13 L29.67 41.59 L12 50 L29.67 58.41 L23.13 76.87 L41.59 70.33 L50 88 L58.41 70.33 L76.87 76.87 L70.33 58.41 Z M48.8 38.5 Q39 33.5 29.5 36 L29.5 57.5 Q39 55 48.8 61 Z M51.2 38.5 Q61 33.5 70.5 36 L70.5 57.5 Q61 55 51.2 61 Z"/>
+ </svg>
+diff --git a/mobile/lib/core/design/halaqaty_components.dart b/mobile/lib/core/design/halaqaty_components.dart
+index 5368cc7..baf3757 100644
+--- a/mobile/lib/core/design/halaqaty_components.dart
++++ b/mobile/lib/core/design/halaqaty_components.dart
+@@ -82,7 +82,9 @@ class HalaqatyLoading extends StatelessWidget {
+   }
+ }
+ 
+-/// The Halaqaty logo (Rub el Hizb).
++/// The Halaqaty logo (8-point khatam star with open book).
++///
++/// The asset is a replaceable placeholder; keep this path stable.
+ class HalaqatyLogo extends StatelessWidget {
+   const HalaqatyLogo({super.key, this.size = 64, this.monochrome = false});
+ 

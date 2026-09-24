@@ -1,0 +1,49 @@
+00:00 +0: loading C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart
+test/widget_test.dart:8:8: Error: Error when reading 'lib/app/app_locale_controller.dart': The system cannot find the file specified
+import 'package:halaqaty_mobile/app/app_locale_controller.dart';
+       ^
+test/widget_test.dart:140:9: Error: Undefined name 'platformLocaleProvider'.
+        platformLocaleProvider.overrideWithValue(platformLocale),
+        ^^^^^^^^^^^^^^^^^^^^^^
+00:00 +0 -1: loading C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart [E]
+  Failed to load "C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart":
+  Compilation failed for testPath=C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: test/widget_test.dart:8:8: Error: Error when reading 'lib/app/app_locale_controller.dart': The system cannot find the file specified
+  import 'package:halaqaty_mobile/app/app_locale_controller.dart';
+         ^
+  test/widget_test.dart:140:9: Error: Undefined name 'platformLocaleProvider'.
+          platformLocaleProvider.overrideWithValue(platformLocale),
+          ^^^^^^^^^^^^^^^^^^^^^^
+  .
+  Error: The Dart compiler exited unexpectedly.
+  package:flutter_tools/src/base/common.dart 34:3  throwToolExit
+  package:flutter_tools/src/compile.dart 1024:11   DefaultResidentCompiler._compile.<fn>
+  dart:async/zone_root.dart 48:47                  _rootRunUnary
+  dart:async/zone.dart 816:35                      _CustomZone.runUnary
+  dart:async/future_impl.dart 948:45               Future._propagateToListeners.handleValueCallback
+  dart:async/future_impl.dart 977:13               Future._propagateToListeners
+  dart:async/future_impl.dart 862:9                Future._propagateToListeners
+  dart:async/future_impl.dart 720:5                Future._completeWithValue
+  dart:async/future_impl.dart 804:7                Future._asyncCompleteWithValue.<fn>
+  dart:async/zone_root.dart 35:13                  _rootRun
+  dart:async/zone.dart 810:35                      _CustomZone.run
+  dart:async/zone.dart 702:7                       _CustomZone.runGuarded
+  dart:async/zone.dart 743:23                      _CustomZone.bindCallbackGuarded.<fn>
+  dart:async/schedule_microtask.dart 40:35         _microtaskLoop
+  dart:async/schedule_microtask.dart 49:5          _startMicrotaskLoop
+  dart:isolate-patch/isolate_patch.dart 127:13     _runPendingImmediateCallback
+  dart:isolate-patch/isolate_patch.dart 193:5      _RawReceivePort._handleMessage
+  
+test/widget/core/halaqaty_components_test.dart:19:32: Error: Method not found: 'showHalaqatyUnderImplementationNotice'.
+              onPressed: () => showHalaqatyUnderImplementationNotice(context),
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+00:00 +0 -2: loading C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/core/halaqaty_components_test.dart [E]
+  Failed to load "C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/core/halaqaty_components_test.dart":
+  Compilation failed for testPath=C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/core/halaqaty_components_test.dart: test/widget/core/halaqaty_components_test.dart:19:32: Error: Method not found: 'showHalaqatyUnderImplementationNotice'.
+                onPressed: () => showHalaqatyUnderImplementationNotice(context),
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  .
+00:00 +0 -2: Some tests failed.
+
+Failing tests:
+  C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/core/halaqaty_components_test.dart: loading C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget/core/halaqaty_components_test.dart
+  C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart: loading C:/Users/karim.fadel/workspaces/halaqaty/mobile/test/widget_test.dart

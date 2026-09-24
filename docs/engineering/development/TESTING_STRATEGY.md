@@ -185,17 +185,19 @@ Performed by Karim before every milestone release:
 
 ## CI/CD Gates
 
-All must pass before merge:
+The implemented test workflow is
+[`tests-unit-integration.yml`](../../../.github/workflows/tests-unit-integration.yml).
+Flutter functional integration tests run on Linux; the UX and Wave 0–2
+screenshot suites run on Android. Both jobs must pass. See the
+[GitHub Actions guide](../deployment/GITHUB_ACTIONS.md) for routing, artifacts,
+fixture limitations, and failure diagnosis.
 
-```yaml
-# .github/workflows/ci.yml
-- run: go test ./... -race -coverprofile=coverage.out
-- run: go tool cover -func=coverage.out | grep total  # must be >= 80%
-- run: flutter test
-- run: npx @redocly/cli lint docs/contracts/openapi.yaml
-```
-
-Coverage drops below 80% on new code → PR blocked.
+The complete pre-merge gates remain defined in
+[DEVELOPMENT.md](../../../DEVELOPMENT.md). Go coverage must reach at least 80%
+aggregate over `internal/`, measured by `make coverage` from `backend/` with
+the combined unit, contract, and integration profile. A unit-only coverage
+profile or a green CI run with skipped fixture-dependent tests does not
+establish that all gates passed.
 
 ---
 

@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_detail_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_join_screen.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_name_text.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_load_error.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_ui_labels.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/create_circle_screen.dart';
 
 class CircleDiscoveryScreen extends ConsumerStatefulWidget {
   const CircleDiscoveryScreen({super.key, this.onOpenInvite});
@@ -54,29 +59,27 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: OutlinedButton.icon(
-                key: const Key('openInviteJoinButton'),
-                onPressed: widget.onOpenInvite ?? _openInvite,
-                icon: const Icon(Icons.link),
-                label: Text(
-                  rtl ? 'لديّ رابط دعوة' : 'I have an invite link',
-                ),
-              ),
-            ),
-            if (state.failure case final failure?)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    circleFailureText(failure, rtl),
-                    key: const Key('circleDiscoveryError'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FilledButton.icon(
+                    key: const Key('openCreateCircleButton'),
+                    onPressed: _openCreate,
+                    icon: const Icon(Icons.add),
+                    label: Text(rtl ? 'إنشاء حلقة' : 'Create circle'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    key: const Key('openInviteJoinButton'),
+                    onPressed: widget.onOpenInvite ?? _openInvite,
+                    icon: const Icon(Icons.link),
+                    label: Text(
+                      rtl ? 'لديّ رابط دعوة' : 'I have an invite link',
                     ),
                   ),
-                ),
+                ],
               ),
+            ),
             Expanded(child: _content(state, rtl)),
           ],
         ),
@@ -85,47 +88,72 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
   }
 
   Widget _content(CircleDiscoveryState state, bool rtl) {
-    if (state.isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(
-          key: Key('circleDiscoveryLoading'),
-        ),
-      );
+    if (state.isLoading &&
+        state.myCircles.isEmpty &&
+        state.publicCircles.isEmpty) {
+      return const HalaqatyLoading(key: Key('circleDiscoveryLoading'));
     }
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        if (state.myCircles.isNotEmpty) ...[
+    final joinedCircleIds = state.myCircles.map((circle) => circle.id).toSet();
+    final publicCircles = state.publicCircles
+        .where((circle) => !joinedCircleIds.contains(circle.id))
+        .toList();
+
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (state.failure != null &&
+              state.myCircles.isEmpty &&
+              state.publicCircles.isEmpty)
+            CircleLoadError(
+              failure: state.failure!,
+              onRetry: _refresh,
+            ),
+          if (state.myCircles.isNotEmpty) ...[
+            Text(
+              rtl ? 'حلقاتي' : 'My circles',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            ...state.myCircles.map((circle) => _myCircleCard(circle, rtl)),
+            const SizedBox(height: 16),
+          ],
           Text(
-            rtl ? 'حلقاتي' : 'My circles',
+            rtl ? 'الحلقات العامة' : 'Public circles',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
-          ...state.myCircles.map((circle) => _myCircleCard(circle, rtl)),
-          const SizedBox(height: 16),
+          if (publicCircles.isEmpty)
+            Text(rtl ? 'لا توجد حلقات عامة متاحة' : 'No public circles')
+          else
+            ...publicCircles.map(
+              (circle) => _circleCard(circle, state, rtl),
+            ),
         ],
-        Text(
-          rtl ? 'الحلقات العامة' : 'Public circles',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 8),
-        if (state.publicCircles.isEmpty)
-          Text(rtl ? 'لا توجد حلقات عامة متاحة' : 'No public circles')
-        else
-          ...state.publicCircles.map(
-            (circle) => _circleCard(circle, state, rtl),
-          ),
-      ],
+      ),
     );
+  }
+
+  Future<void> _refresh() async {
+    final controller = ref.read(circleDiscoveryControllerProvider.notifier);
+    await controller.loadMyCircles();
+    if (mounted) await controller.discover();
   }
 
   Widget _myCircleCard(CircleSummary circle, bool rtl) {
     return Card(
       child: ListTile(
         key: Key('openCircle-${circle.id}'),
-        title: Text(circle.name),
-        subtitle: circle.description == null ? null : Text(circle.description!),
-        trailing: Icon(rtl ? Icons.chevron_left : Icons.chevron_right),
+        title: CircleNameText(name: circle.name),
+        subtitle: circle.description == null
+            ? null
+            : Text(
+                circle.description!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+        trailing: const Icon(Icons.chevron_right),
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => CircleDetailScreen(circleId: circle.id),
@@ -150,14 +178,25 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(circle.name, style: Theme.of(context).textTheme.titleLarge),
+              CircleNameText(
+                name: circle.name,
+                maxLines: 2,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               if (circle.description case final description?) ...[
                 const SizedBox(height: 6),
-                Text(description),
+                Text(
+                  description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
               const SizedBox(height: 8),
               Text('${rtl ? 'السعة' : 'Capacity'}: ${circle.maxCapacity}'),
-              Text('${rtl ? 'اللغة' : 'Language'}: ${circle.language}'),
+              Text(
+                '${rtl ? 'اللغة' : 'Language'}: '
+                '${circleLanguageLabel(circle.language, rtl)}',
+              ),
               Text(_genderText(circle.genderRestriction, rtl)),
               const SizedBox(height: 12),
               FilledButton(
@@ -207,12 +246,11 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
     final joined = await ref
         .read(circleDiscoveryControllerProvider.notifier)
         .joinPublic(circle);
+    // Retained confirmation (FR-008): open the joined circle itself.
     if (joined && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            rtl ? 'تم الانضمام إلى الحلقة' : 'Joined the circle',
-          ),
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => CircleDetailScreen(circleId: circle.id),
         ),
       );
     }
@@ -224,13 +262,30 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
     );
   }
 
+  Future<void> _openCreate() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CreateCircleScreen(onCreated: _openCreatedCircle),
+      ),
+    );
+    // Pick up a circle created (or list changes) while the form was open.
+    if (mounted) {
+      await ref
+          .read(circleDiscoveryControllerProvider.notifier)
+          .loadMyCircles();
+    }
+  }
+
+  void _openCreatedCircle(CircleResponse circle) {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => CircleDetailScreen(circleId: circle.id),
+      ),
+    );
+  }
+
   String _genderText(String gender, bool rtl) {
-    if (!rtl) return 'Audience: $gender';
-    return switch (gender) {
-      'male' => 'الفئة: ذكور',
-      'female' => 'الفئة: إناث',
-      'mixed' => 'الفئة: مختلط',
-      _ => 'الفئة: غير محدد',
-    };
+    final label = circleAudienceLabel(gender, rtl);
+    return rtl ? 'الفئة: $label' : 'Audience: $label';
   }
 }

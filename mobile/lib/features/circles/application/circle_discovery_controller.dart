@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
@@ -79,19 +80,29 @@ class CircleDiscoveryController extends StateNotifier<CircleDiscoveryState> {
     state = state.copyWith(isLoading: true, clearFailure: true);
     try {
       final credentials = await _credentials();
-      if (credentials == null) return;
+      if (credentials == null) {
+        debugPrint('loadMyCircles: no credentials (session/token missing)');
+        _fail(CircleJoinFailure.sessionExpired);
+        return;
+      }
       final circles = await _apiClient.listCircles(
         firebaseIdToken: credentials.$1,
         sessionId: credentials.$2,
       );
+      debugPrint('loadMyCircles: loaded ${circles.length} circles');
       state = state.copyWith(
         myCircles: circles,
         isLoading: false,
         clearFailure: true,
       );
-    } on FirebaseAuthException {
+    } on FirebaseAuthException catch (error) {
+      debugPrint('loadMyCircles: FirebaseAuthException ${error.code}');
       _fail(CircleJoinFailure.sessionExpired);
     } on DioException catch (error) {
+      debugPrint(
+        'loadMyCircles: DioException ${error.type} '
+        '${error.response?.statusCode}',
+      );
       _fail(await _failureFrom(error));
     }
   }
@@ -146,7 +157,19 @@ class CircleDiscoveryController extends StateNotifier<CircleDiscoveryState> {
     } on FirebaseAuthException {
       _fail(CircleJoinFailure.sessionExpired);
     } on DioException catch (error) {
-      _fail(await _failureFrom(error));
+      final failure = await _failureFrom(error);
+      if (failure == CircleJoinFailure.alreadyMember) {
+        state = state.copyWith(
+          myCircles: _addCircle(state.myCircles, circle),
+          publicCircles: state.publicCircles
+              .where((item) => item.id != circle.id)
+              .toList(growable: false),
+          clearJoining: true,
+          clearFailure: true,
+        );
+        return false;
+      }
+      _fail(failure);
     }
     return false;
   }
@@ -215,9 +238,11 @@ class CircleDiscoveryController extends StateNotifier<CircleDiscoveryState> {
       return CircleJoinFailure.sessionExpired;
     }
     final responseBody = error.response?.data;
-    final envelope =
-        responseBody is Map<String, dynamic> ? responseBody['error'] : null;
-    final message = envelope is Map ? envelope['message'] : null;
+    // Dio adapters and test doubles can materialize JSON maps with different
+    // generic arguments. Read the contract structurally, not by exact map
+    // generic type, so localized join errors are not downgraded to `unknown`.
+    final envelope = responseBody is Map ? responseBody['error'] : null;
+    final message = envelope is Map ? envelope['message']?.toString() : null;
     return switch (message) {
       'user is already a circle member' => CircleJoinFailure.alreadyMember,
       'circle has reached its maximum capacity' => CircleJoinFailure.full,

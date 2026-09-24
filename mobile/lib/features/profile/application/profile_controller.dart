@@ -214,7 +214,7 @@ class _ProfileCredentials {
 }
 
 final profileControllerProvider =
-    StateNotifierProvider<ProfileController, ProfileState>((ref) {
+    StateNotifierProvider.autoDispose<ProfileController, ProfileState>((ref) {
   return ProfileController(
     apiClient: ref.watch(profileApiClientProvider),
     firebaseAuth: ref.watch(firebaseAuthProvider),

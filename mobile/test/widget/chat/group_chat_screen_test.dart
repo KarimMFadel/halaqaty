@@ -512,6 +512,82 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets(
+      'a terminally failed draft shows the failure strip instead of the '
+      'pending badge (RTL + LTR)', (tester) async {
+    final semantics = tester.ensureSemantics();
+    for (final direction in TextDirection.values) {
+      final labels = _ChatLabels(direction == TextDirection.rtl);
+      final api = _FakeChatApi()
+        ..pages.add(_page([]))
+        ..sendFailure = const ChatApiException(
+            statusCode: 422, code: 'ERR_VALIDATION_FAILED', message: 'invalid');
+      final chat = GroupChatController(
+        api,
+        () async =>
+            (token: 'token', sessionId: 'backend-session', userId: _meId),
+        realtime: _FakeChatRealtimeClient(),
+        pendingStore: PendingMessageStore(_MemorySecureStorage()),
+      );
+      await _pumpChat(tester, direction: direction, api: api, controller: chat);
+
+      await tester.enterText(_editableWithin(labels.composerHint), 'مسودة');
+      await tester.pump();
+      await tester.tap(find.bySemanticsLabel(labels.send));
+      await tester.pumpAndSettle();
+
+      // One message never claims "sending" and "failed" at once: the failure
+      // strip replaces the delivery badge for a terminally failed draft.
+      expect(find.bySemanticsLabel(labels.sendFailed), findsOneWidget);
+      expect(find.bySemanticsLabel(labels.statusPending), findsNothing);
+    }
+    semantics.dispose();
+  });
+
+  testWidgets(
+      'access loss is terminal: honest copy and safe exit, never a retry '
+      '(RTL + LTR)', (tester) async {
+    final semantics = tester.ensureSemantics();
+    for (final direction in TextDirection.values) {
+      final labels = _ChatLabels(direction == TextDirection.rtl);
+      final api = _FakeChatApi();
+      // Seeded terminal state: driving a real controller to accessLost would
+      // await a realtime-stream cancel that never completes under the fake
+      // test clock (the open-path 403 mapping is controller-covered).
+      final chat = _SeededChat(
+        api,
+        const GroupChatControllerState(status: GroupChatStatus.accessLost),
+      );
+      await _pumpChat(tester, direction: direction, api: api, controller: chat);
+
+      expect(chat.state.status, GroupChatStatus.accessLost);
+      expect(find.text(labels.accessLost), findsOneWidget);
+      expect(find.bySemanticsLabel(labels.back), findsOneWidget);
+      expect(find.bySemanticsLabel(labels.retry), findsNothing);
+    }
+    semantics.dispose();
+  });
+
+  testWidgets('the delete affordance stays legible on the own bubble',
+      (tester) async {
+    final message = _message(
+      'own-recent',
+      senderId: _meId,
+      senderName: null,
+      sentAt: DateTime.now().toUtc(),
+    );
+    final api = _FakeChatApi()..pages.add(_page([message]));
+    await _pumpChat(tester, direction: TextDirection.ltr, api: api);
+
+    final button = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.delete_outline));
+    final scheme =
+        Theme.of(tester.element(find.byType(GroupChatScreen))).colorScheme;
+    // The button renders inside the primaryContainer bubble; the default
+    // onSurfaceVariant icon color fails contrast there in light mode.
+    expect(button.style?.foregroundColor?.resolve(const {}), scheme.onSurface);
+  });
+
   testWidgets('leaving the screen disposes the circle chat controller',
       (tester) async {
     final api = _FakeChatApi()..pages.add(_page([_message('m1')]));
@@ -613,7 +689,7 @@ Future<GroupChatController> _pumpChat(
   WidgetTester tester, {
   required TextDirection direction,
   required _FakeChatApi api,
-  _FakeChatRealtimeClient? realtime,
+  ChatRealtimeClient? realtime,
   bool settle = true,
   GroupChatController? controller,
 }) async {
@@ -758,6 +834,41 @@ class _FakeChatApi extends ChatApiClient {
 }
 
 /// Fake realtime boundary: the controller subscribes to the broadcast stream.
+/// Realtime whose event stream is already complete: subscription teardown
+/// finishes synchronously under the fake test clock.
+class _EmptyChatRealtime implements ChatRealtimeClient {
+  @override
+  Stream<ChatRealtimeEvent> circleChatEvents(
+    String circleId, {
+    required String token,
+    required String backendSessionId,
+  }) =>
+      const Stream.empty();
+
+  @override
+  Future<void> dispose() async {}
+}
+
+/// Controller seeded into a terminal state without opening: realtime
+/// subscribe/cancel never runs under the fake test clock.
+class _SeededChat extends GroupChatController {
+  _SeededChat(ChatApiClient api, GroupChatControllerState initialState)
+      : super(
+          api,
+          () async =>
+              (token: 'token', sessionId: 'backend-session', userId: _meId),
+          realtime: _EmptyChatRealtime(),
+        ) {
+    state = initialState;
+  }
+
+  @override
+  Future<void> open(String circleId) async {}
+
+  @override
+  Future<void> close() async {}
+}
+
 class _FakeChatRealtimeClient
     implements ChatRealtimeClient, ChatRealtimePresenceClient {
   final StreamController<ChatRealtimeEvent> _events =
@@ -822,6 +933,10 @@ class _ChatLabels {
   String get sendFailed => rtl ? 'فشل الإرسال' : 'Send failed';
   String get editDraft => rtl ? 'تعديل الرسالة' : 'Edit message';
   String get discardDraft => rtl ? 'تجاهل الرسالة' : 'Discard message';
+  String get accessLost => rtl
+      ? 'لم تعد لديك صلاحية الوصول إلى هذه المحادثة'
+      : 'You no longer have access to this conversation';
+  String get back => rtl ? 'رجوع' : 'Back';
 
   String counter(int length) => '$length/4000';
 }

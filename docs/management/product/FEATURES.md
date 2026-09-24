@@ -1,6 +1,6 @@
 # Halaqaty — Feature Specification & Status Board
 
-> **Version:** 1.0 | **Status:** Planning Phase | **Last Updated:** 2026
+> **Version:** 1.0 | **Status:** Implementation Phase | **Last Updated:** 2026-09-24
 
 **Related Documents:** [FEATURES_AR.md](../arabic/FEATURES_AR.md) · [PROJECT_PLAN.md](../planning/PROJECT_PLAN.md) · [ARCHITECTURE.md](../../engineering/architecture/ARCHITECTURE.md) · [DEVELOPMENT.md](../../../DEVELOPMENT.md) · [AGENT_COLLABORATION_GUIDE.md](../../engineering/collaboration/AGENT_COLLABORATION_GUIDE.md)
 
@@ -33,7 +33,7 @@ This is a **living document**. It tracks every feature from proposal through del
 | Proposed | 🔵 | Feature identified; not yet reviewed by team |
 | Approved | 🟡 | Team has agreed to build this |
 | In Progress | 🟠 | Actively being developed |
-| Done | 🟢 | Shipped and verified |
+| Done | 🟢 | Approved implementation is complete and its acceptance evidence is recorded; production release is tracked separately |
 | Rejected | 🔴 | Decided not to build (with reason) |
 
 ---
@@ -60,6 +60,7 @@ This is a **living document**. It tracks every feature from proposal through del
 | [F-016](#f-016-desktop-app) | Desktop App (Flutter) | P3 | 🔵 Proposed | 5 | Mobile |
 | [F-017](#f-017-institutional-platform) | 🏢 Institutional Platform | P3 | 🔵 Proposed | 5 | Full Stack |
 | [F-018](#f-018-provider-adapter-boundaries) | Provider Adapter Boundaries | P1 | 🟡 Approved | Platform | Full Stack |
+| [F-019](#f-019-mobile-app-shell-and-uiux-modernization) | Mobile App Shell and UI/UX Modernization | P0 | 🟢 Done | Mobile UX | Mobile |
 
 ---
 
@@ -870,6 +871,62 @@ Keep secure file attachments and live audio independent of the currently selecte
 **Approval:** Karim approved the reviewed scope and requested recording and execution on 2026-09-16 after F-004 completion. Follow Spec-Kit for specification, planning, tasks, and analysis; use Superpowers for test-first implementation, review, and current verification evidence.
 
 **Completion:** All implementation and verification tasks passed, and Karim approved the mandatory storage/upload/deletion security review on 2026-09-16.
+
+---
+
+### F-019: Mobile App Shell and UI/UX Modernization
+
+**Priority:** P0 | **Status:** 🟢 Done (implementation complete; production release tracked separately) | **Phase:** Mobile UX | **Completed:** 2026-09-24
+
+#### Description
+
+Define the production Flutter implementation of Halaqaty's approved Calm Contemporary visual direction. The work is governed by [UI_UX_GOVERNANCE.md](../../engineering/design/UI_UX_GOVERNANCE.md), [DESIGN.md](../../engineering/design/DESIGN.md), and [screen-samples-a-v2.html](../../engineering/design/screen-samples-a-v2.html). The HTML sample records the approved visual direction for Waves 0–5; it is not executable product code and does not create or change backend behavior.
+
+F-019 is the approved umbrella feature for Waves 0–5, preserving each wave as a coherent implementation and review batch within one Spec-Kit lifecycle.
+
+#### Implemented Screens
+
+The approved Waves 0–5 scope is implemented across these screen groups:
+
+- App launch and shell: branded splash, welcome, home, bottom navigation, and chats list.
+- Authentication and profile: login, registration and validation, profile view/edit, and account actions.
+- Circles: discovery, circle detail, member and session sections, empty/loading/error/offline states, and join flows.
+- Live sessions and recitation queue: upcoming session, session room, student turn, manager controls/grading, and reconnect states.
+- Chat: group and direct conversations, composer and media affordances, moderation, and offline/access recovery states.
+- Cross-app accessibility and responsive behavior: Arabic RTL and English LTR, light and dark themes, compact and tablet widths, 200% text scaling, keyboard focus, and screen-reader semantics.
+
+This records completed implementation and acceptance work; it does not claim a production release or completion of the separately unverified real-account journeys. See the [F-019 final report](../../../specs/019-mobile-app-shell-brand/evidence/final-report.md), [wave evidence](../../../specs/019-mobile-app-shell-brand/evidence/), and [UI/UX governance](../../engineering/design/UI_UX_GOVERNANCE.md).
+
+#### Delivered Scope
+
+**Implemented within the approved boundary:**
+
+- Production Flutter shell, brand, theme, navigation, and affected feature-screen modernization assigned to the selected wave boundary.
+- Reuse of existing Material 3 theme tokens, shared components, routes, Riverpod controllers, API clients, widget keys, and localization patterns.
+- Loading, empty, success, error, and offline/degraded states for affected screens.
+- Arabic RTL and English LTR, light and dark themes, text scaling, screen-reader semantics, 48dp touch targets, and WCAG AA contrast.
+- Preservation and audit of completed Wave 0 and Wave 1 work that already meets the approved design.
+- A shared localized under-implementation notice for approved design actions that have no implemented behavior, with no API call, navigation, or state mutation.
+
+**Out of scope:**
+
+- New backend endpoints, database fields or tables, WebSocket events, roles, permissions, or provider capabilities.
+- A unified direct-message inbox, provider controls, new UI frameworks, runtime theme/plugin systems, or speculative abstractions.
+- Treating the HTML sample as executable code or as authority for product data, permissions, authentication, chat/media behavior, session state, or account actions.
+
+#### Dependencies
+
+- Approved F-001–F-005 behavior, specifications, and contracts remain unchanged.
+- Existing Flutter theme, shared components, routes, Riverpod controllers, API clients, widget keys, and localization patterns.
+- The approved design governance, token catalogue, and screen-sample visual reference linked above.
+- The frozen decision that F-019 is the sole feature boundary for the complete Waves 0–5 modernization.
+
+#### Frozen Numbering Decision
+
+- **Selected — umbrella feature:** F-019 contains Waves 0–5. Each wave remains a coherent implementation and review batch inside F-019.
+- **Not selected — separate features:** Waves 1–5 will not receive separate Spec-Kit feature lifecycles.
+
+**Approval:** Karim approved the P0 registration and explicitly selected the Waves 0–5 umbrella boundary on 2026-09-22. The generated specification, plan, tasks, and consistency analysis were approved before implementation. All F-019 tasks were closed against the recorded evidence; T049's full integration run had an owner-approved closure while the `T052_*` and `T064_*` credential-dependent journeys remain explicitly unverified. Final implementation, review, and screen evidence are recorded in the linked report.
 
 ---
 

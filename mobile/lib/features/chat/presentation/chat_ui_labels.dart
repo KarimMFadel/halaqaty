@@ -9,6 +9,9 @@ class ChatUiLabels {
   static const empty = 'لا توجد رسائل بعد؛ ابدأ المحادثة';
   static const historyError = 'تعذر تحميل المحادثة';
   static const retry = 'إعادة المحاولة';
+  static const accessLost = 'لم تعد لديك صلاحية الوصول إلى هذه المحادثة';
+  static const back = 'رجوع';
+  static const readOnlyArchived = 'هذه المحادثة للقراءة فقط؛ الحلقة مؤرشفة';
   static const loadOlder = 'تحميل الرسائل الأقدم';
   static const actionFailed = 'تعذر تنفيذ الإجراء';
   static const composerHint = 'اكتب رسالة';
@@ -78,6 +81,10 @@ class ChatUiLabels {
   static const emptyEn = 'No messages yet; start the conversation';
   static const historyErrorEn = 'Could not load chat history';
   static const retryEn = 'Retry';
+  static const accessLostEn = 'You no longer have access to this conversation';
+  static const backEn = 'Back';
+  static const readOnlyArchivedEn =
+      'This conversation is read-only; the circle is archived';
   static const actionFailedEn = 'Action failed';
   static const composerHintEn = 'Write a message';
   static const sendEn = 'Send';

@@ -30,6 +30,10 @@ func (s *discoveryStoreStub) ListPublicCircles(_ context.Context, query, cursor 
 	return s.publicCircles, nil
 }
 
+func (s *discoveryStoreStub) ListUserCircles(_ context.Context, _, _ string) ([]rbac.PublicCircleSummary, error) {
+	return nil, nil
+}
+
 func buildDiscoverPublicCirclesRoute(store *discoveryStoreStub) http.Handler {
 	handler := rbac.NewHandler(rbac.NewService(store, nil))
 	repo := &stubSessionRepo{sessionID: testSessionID, userID: testLocalUserID}

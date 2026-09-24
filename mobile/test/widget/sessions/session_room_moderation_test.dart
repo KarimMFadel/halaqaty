@@ -59,6 +59,19 @@ void main() {
     expect(realtime.raiseCalls, 1);
   });
 
+  testWidgets('non-moderator never sees the end-session control',
+      (tester) async {
+    await tester.pumpWidget(_app(ModerationSessionApi(),
+        realtime: RecordingRealtimeClient(),
+        canStart: false,
+        isModerator: false,
+        direction: TextDirection.ltr));
+    await tester.tap(find.text('Join'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('sessionRoomEndSession')), findsNothing);
+  });
+
   testWidgets('renders moderator controls and hand state in LTR',
       (tester) async {
     final semantics = tester.ensureSemantics();
@@ -80,6 +93,53 @@ void main() {
     expect(find.byIcon(Icons.pan_tool), findsOneWidget);
     expect(find.bySemanticsLabel('Hand raised'), findsOneWidget);
     semantics.dispose();
+  });
+
+  testWidgets('destructive actions are separated and use error theme roles',
+      (tester) async {
+    await tester.pumpWidget(_app(ModerationSessionApi(),
+        realtime: RecordingRealtimeClient(),
+        canStart: true,
+        isModerator: true,
+        direction: TextDirection.rtl));
+    await tester.tap(find.text('بدء الجلسة'));
+    await tester.pumpAndSettle();
+
+    final scheme = Theme.of(tester.element(find.byType(Scaffold))).colorScheme;
+    final end = find.byKey(const Key('sessionRoomEndSession'));
+    expect(end, findsOneWidget);
+    // End session is separated from the primary queue/moderation Wrap actions.
+    expect(find.ancestor(of: end, matching: find.byType(Wrap)), findsNothing);
+    final endButton = tester.widget<FilledButton>(end);
+    expect(endButton.style?.backgroundColor?.resolve(const <WidgetState>{}),
+        scheme.errorContainer);
+
+    final remove = tester
+        .widget<TextButton>(find.widgetWithText(TextButton, 'إزالة').first);
+    expect(remove.style?.foregroundColor?.resolve(const <WidgetState>{}),
+        scheme.error);
+
+    // Per-participant moderation actions meet the 48dp target floor (FR-013).
+    final mute = find.widgetWithText(TextButton, 'كتم').first;
+    expect(tester.getSize(mute).height, greaterThanOrEqualTo(48));
+    expect(tester.getSize(mute).width, greaterThanOrEqualTo(48));
+    expect(
+        tester.getSize(find.widgetWithText(TextButton, 'إزالة').first).height,
+        greaterThanOrEqualTo(48));
+  });
+
+  testWidgets('an empty participant list explains the empty state',
+      (tester) async {
+    await tester.pumpWidget(_app(
+        ModerationSessionApi()..participantsOverride = const [],
+        realtime: RecordingRealtimeClient(),
+        canStart: false,
+        isModerator: false,
+        direction: TextDirection.ltr));
+    await tester.tap(find.text('Join'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No participants are present yet'), findsOneWidget);
   });
 }
 
@@ -144,6 +204,8 @@ class RecordingRealtimeClient implements RealtimeSessionClient {
 class ModerationSessionApi extends SessionApiClient {
   ModerationSessionApi() : super(Dio());
 
+  List<SessionParticipant>? participantsOverride;
+
   @override
   Future<SessionConnection> start(
           {required String token,
@@ -163,7 +225,7 @@ class ModerationSessionApi extends SessionApiClient {
           {required String token,
           required String sessionId,
           required String liveSessionId}) async =>
-      _participants;
+      participantsOverride ?? _participants;
 }
 
 final _participants = [

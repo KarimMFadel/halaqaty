@@ -26,7 +26,7 @@ class ChatDeliveryStatusView extends StatelessWidget {
         label: _label,
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(_icon, size: 14),
-          const SizedBox(width: 3),
+          const SizedBox(width: 4),
           Text(_label),
         ]),
       );

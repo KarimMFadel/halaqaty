@@ -90,6 +90,47 @@ void main() {
     expect(corrections, ['good:null:true']);
   });
 
+  testWidgets('marks the selected grade with a filled tonal treatment',
+      (tester) async {
+    await tester.pumpWidget(_panel(
+      direction: TextDirection.ltr,
+      onComplete: (_, __) {},
+      onCorrect: (_, __, ___) {},
+    ));
+
+    // Completion flow copy is grade-appropriate (not "Save correction").
+    expect(find.bySemanticsLabel('Save grade'), findsOneWidget);
+    expect(find.bySemanticsLabel('Save correction'), findsNothing);
+
+    // Grades start as outlined options...
+    expect(
+      find.descendant(
+        of: find.bySemanticsLabel('Excellent'),
+        matching: find.byType(OutlinedButton),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.bySemanticsLabel('Excellent'));
+    await tester.pump();
+
+    // ...and the selected grade becomes visually selected (filled tonal).
+    expect(
+      find.descendant(
+        of: find.bySemanticsLabel('Excellent'),
+        matching: find.byType(FilledButton),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.bySemanticsLabel('Good'),
+        matching: find.byType(OutlinedButton),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('caps the teacher note at 500 characters', (tester) async {
     final semantics = tester.ensureSemantics();
     await tester.pumpWidget(_panel(

@@ -27,6 +27,16 @@ void main() {
     _tempDir = await Directory.systemTemp.createTemp('chat_media_api_test');
   });
   tearDownAll(() async {
+    // Windows may briefly keep upload-file handles open after the suite
+    // finishes; retry before surfacing a real deletion failure.
+    for (var attempt = 0; attempt < 5; attempt++) {
+      try {
+        await _tempDir.delete(recursive: true);
+        return;
+      } on FileSystemException {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      }
+    }
     await _tempDir.delete(recursive: true);
   });
 

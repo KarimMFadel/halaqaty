@@ -37,7 +37,7 @@ Tests/tooling (`mobile/`):
 | Gate | Result |
 |---|---|
 | `flutter test test` | **515/515 passed** |
-| `flutter test integration_test/` | **BLOCKED — T049** (no device/emulator, no Docker, no fixtures) |
+| `flutter test integration_test/profile_flow_test.dart -d emulator-5554` | **1/1 passed** after the focused save-button fix; T049 owner-approved without another full-suite rerun |
 | `flutter analyze` | No issues found |
 | `dart format --set-exit-if-changed .` | 154 files, 0 changed |
 | `git diff --check` | Clean (exit 0) |
@@ -64,14 +64,14 @@ chevron, localized notice, and visible-focus evidence. Details in
 
 ## Incomplete / blocked tasks
 
-- **T049 (BLOCKED)** — integration suite could not run in this environment.
-  Per the feature's commit rule, no Flutter commit was made; the working tree
-  holds the complete Wave 5 change set awaiting an integration run.
+- **T049 (OWNER-APPROVED CLOSURE)** — the original on-device directory run
+  reached 23 passes and 2 fixture-dependent skips before the profile save tap
+  failed and the grading-history journey stalled. The focused post-fix profile
+  journey passed 1/1. Karim approved closure without another full-suite rerun;
+  the missing `T064_*` and `T052_*` isolated-account fixture journeys remain
+  explicitly unverified.
 
 ## Commit hashes
 
-No new commits this session (commit blocked by T049). HEAD remains
-`b090469 docs(specs): record wave-3 chat evidence and close T035/T036`.
-Unblocking T049 requires: an Android emulator/device (or Docker for the
-Linux-scaffold path) plus the real-stack fixture accounts and configured
-backend described in `docs/engineering/development/LOCAL_ENVIRONMENT_RUNBOOKS.md`.
+The post-fix T049 evidence and focused test change are committed separately;
+the real-stack fixture journeys remain unverified by owner-approved exception.

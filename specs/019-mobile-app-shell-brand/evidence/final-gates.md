@@ -10,17 +10,28 @@ the repo root or `mobile/` as noted, on 2026-09-24.
   fixes" group) and the circles suites (re-confirmed 108/108 after `dart
   format` re-wrapping).
 
-## T049 — `flutter test integration_test/` (from `mobile/`)
+## T049 — `flutter test integration_test/ -d emulator-5554` (from `mobile/`)
 
-- **BLOCKED.** `adb devices` lists no attached device and `flutter emulators`
-  lists no installed emulator images (the previously shared emulator is gone).
-  The Docker Linux-scaffold fallback (LOCAL_ENVIRONMENT_RUNBOOKS.md §"Flutter
-  integration tests (Linux scaffold + xvfb)") is unavailable: `docker` is not
-  on PATH in this environment, and the real-stack fixture tokens
-  (`T064_*`/`T052_*`) plus a configured backend are not provisioned here.
-- Per `tasks.md` ("No Flutter commit is allowed if T049 is unavailable or
-  failing") this blocks committing Flutter changes; reported as a blocker in
-  the final report (T056).
+- **Owner-approved closure (2026-09-24).** Fresh prerequisites were satisfied:
+  booted `emulator-5554` (Android 17 / API 37), Flutter-recognized device, and
+  `http://localhost:8080/health` = HTTP 200. The command used process-local
+  JDK 17 with `TEMP`/`TMP` set to `C:\jtmp`.
+- Before the bounded stop, the on-device run recorded **23 passing**, **2
+  skipped**, and **1 failed** journey. `chat_direct_flow_test.dart` skipped for
+  missing `T064_*` isolated-account fixtures and `chat_media_flow_test.dart`
+  skipped for missing `T052_*` fixtures. These skips do not satisfy T049.
+- `integration_test/profile_flow_test.dart` failed: the computed tap for
+  `profileSaveButton` did not hit the widget, then the expected save result was
+  false at line 145. After that failure, the process produced no output during
+  `queue_grading_history_test.dart` for the final bounded wait and was stopped;
+  therefore no full-suite pass claim is made.
+- The focused post-fix rerun, `flutter test
+  integration_test/profile_flow_test.dart -d emulator-5554`, passed **1/1** in
+  6s. The test now unfocuses the multiline bio field before revealing and
+  tapping Save, preventing the native keyboard from intercepting the tap.
+- Karim explicitly approved T049 closure without another full-suite rerun.
+  Missing `T064_*`/`T052_*` real-account fixtures remain unverified; this is
+  an owner-approved exception, not a full integration-suite success claim.
 
 ## T050 — `flutter analyze` (from `mobile/`)
 
@@ -98,4 +109,3 @@ shared notice. Nothing to delete. **APPROVE.**
   Wave 5 evidence set (logs, 68 PNGs, `wave-5.md`, `final-gates.md`).
 - Pre-existing untracked items from earlier sessions, left untouched:
   `artifacts/f019-w3w4-logo-experiment/`, `docs/spec-kit-copy-paste-prompts.md`.
-

@@ -142,7 +142,7 @@ the tested flow supports them.
 ## Flutter integration tests (Linux scaffold + xvfb)
 
 This path covers functional integration tests only. The workflow intentionally
-excludes the UX journey and Wave 0–2 screenshot suites; run those locally on the
+excludes the account deletion, UX journey, and Wave 0–2 screenshot suites; run those locally on the
 connected Android device/emulator using the existing device instructions above
 and screenshot drivers. GitHub Actions does not start an emulator for them.
 See [GitHub Actions test workflows](../deployment/GITHUB_ACTIONS.md) for the

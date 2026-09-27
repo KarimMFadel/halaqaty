@@ -74,6 +74,7 @@ class _TestProfileController extends StateNotifier<ProfileState>
   bool isDisposed = false;
   ProfileUser? profileToLoad;
   bool updateResult = false;
+  AccountDeletionOutcome? deletionOutcome;
 
   @override
   void dispose() {
@@ -92,6 +93,11 @@ class _TestProfileController extends StateNotifier<ProfileState>
   @override
   Future<bool> updateProfile({required UpdateProfileRequest request}) async =>
       updateResult;
+
+  @override
+  Future<AccountDeletionOutcome?> deleteAccount(
+          {required String password}) async =>
+      deletionOutcome;
 }
 
 class _TestCircleApiClient extends CircleApiClient {
@@ -384,6 +390,36 @@ void main() {
 
     expect(find.byKey(const Key('openLogin')), findsOneWidget);
     expect(find.byType(ProfileScreen), findsNothing);
+  });
+
+  testWidgets('account deletion outcome survives the real logout route change',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final profiles = <_TestProfileController>[];
+    await _pumpApp(
+      tester,
+      _TestAuthController(const AuthState(status: AuthStatus.authenticated)),
+      profileControllers: profiles,
+      platformLocale: const Locale('en'),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    profiles.single.deletionOutcome = AccountDeletionOutcome.complete;
+    await tester.ensureVisible(find.byKey(const Key('deleteAccountTile')));
+    await tester.tap(find.byKey(const Key('deleteAccountTile')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'password123');
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete account'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(ProfileScreen), findsNothing);
+    expect(find.byType(WelcomeScreen), findsOneWidget);
+    expect(find.text('Account deleted.'), findsOneWidget);
   });
 
   testWidgets('auth loss clears the protected route stack',

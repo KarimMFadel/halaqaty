@@ -86,6 +86,11 @@ class _IntegrationProfileNotifier extends StateNotifier<ProfileState>
     );
     return true;
   }
+
+  @override
+  Future<AccountDeletionOutcome?> deleteAccount(
+          {required String password}) async =>
+      null;
 }
 
 class _FlowApp extends ConsumerWidget {

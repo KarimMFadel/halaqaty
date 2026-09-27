@@ -30,3 +30,18 @@
 
 - The global REST contract is the source of truth; the feature-level contract conforms to it.
 - Contract-test scenarios are recorded in `tasks.md` for implementation.
+
+## Account-deletion amendment review (2026-09-26)
+
+The completed checks above describe the original F-001 scope and remain historical evidence. They do not validate User Story 4 or FR-014–FR-020.
+
+- [x] Deletion is assigned to F-001 by `FEATURES.md`; its absence from the original spec and runtime router is recorded.
+- [x] OQ-006 and ADR-011 are reflected: archive teacher circles, require a designated supervisor, no automatic transfer, preserve history.
+- [x] F-008 notification delivery is an explicit blocker for teacher deletion, per Karim's 2026-09-26 decision.
+- [x] Confirm the exact retained identity fields and recent-reauthentication window in FR-014 and FR-016 (display name only; five minutes, Karim 2026-09-26).
+- [x] Reconcile the feature board and canonical OpenAPI's permanent-erasure claims with the approved retained-history policy.
+- [x] Add a failure/retry and persistence design to the plan, including Firebase coordination and ADR-024's migration contract.
+- [x] Confirm FR-021's live-session admission precondition and map FR-014–FR-021 to Phase 8 tasks T081–T090.
+- [x] Complete cross-artifact analysis from the Spec-Kit analyze agent brief using Codex inline fallback; no critical/high findings remain.
+
+**Amendment readiness**: Ready for student-only implementation under Phase 8. This readiness does not approve teacher/supervisor deletion, other unchecked F-001 controls, commit, or merge.

@@ -143,6 +143,8 @@ var (
 	// reconnect, or act: they were removed, never joined, or are not
 	// currently present.
 	ErrParticipantRemoved = errors.New("participant is not eligible")
+	// ErrAccountDeleted means a tombstoned identity cannot enter a live session.
+	ErrAccountDeleted = errors.New("account deleted")
 	// ErrNotCircleMember means the user lacks an active membership in the
 	// session's circle; the service layer enforces it via circle_members.
 	ErrNotCircleMember = errors.New("user is not an active member of the circle")

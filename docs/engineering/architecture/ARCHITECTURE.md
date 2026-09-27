@@ -599,6 +599,8 @@ erDiagram
     users {
         uuid id PK
         varchar firebase_uid UK
+        bytea deleted_firebase_uid_hash UK
+        timestamptz deleted_at
         varchar display_name
         varchar email UK
         varchar timezone
@@ -822,15 +824,14 @@ erDiagram
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | UUID | PK, DEFAULT gen_random_uuid() | Unique user identifier |
-| firebase_uid | VARCHAR(128) | UNIQUE NOT NULL | Firebase Auth UID |
-| display_name | VARCHAR(100) | NOT NULL | User's chosen display name |
-| email | VARCHAR(255) | UNIQUE | Email (nullable for Apple relay used) |
-| phone | VARCHAR(20) | UNIQUE | Phone number with country code |
-| timezone | VARCHAR(50) | NOT NULL DEFAULT 'UTC' | IANA timezone string (e.g., Asia/Riyadh) |
-| avatar_url | TEXT | | MinIO object URL |
-| preferred_lang | VARCHAR(10) | NOT NULL DEFAULT 'ar' | ISO 639-1 language code |
+| firebase_uid | TEXT | UNIQUE; nullable after F-001 deletion migration | Firebase UID while active or pending backend-owned identity cleanup; NULL after removal |
+| email | TEXT | UNIQUE; nullable after F-001 deletion migration | Erased at account closure |
+| deleted_at | TIMESTAMPTZ | NULL; F-001 deletion migration | Irreversible backend closure; never an active principal after set |
+| deleted_firebase_uid_hash | BYTEA | UNIQUE when present; F-001 deletion migration | SHA-256 tombstone of the former Firebase UID, preventing registration replay after UID cleanup |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | |
 | updated_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | |
+
+`profiles` (created by F-001 migrations) is the 1:1 extension keyed by `user_id` with `display_name`, `full_name`, `country`, `phone`, `bio`, `avatar_url`, `preferred_language`, and completion/audit timestamps. Account deletion retains `display_name` for authorized history attribution, clears all non-retained profile fields, and resets the language preference. `users.id` remains for historical foreign keys. The deletion migration/worker protocol is defined by [ADR-024](adr/ADR-024-account-deletion-tombstone-and-firebase-cleanup.md); `DELETE /auth/me` is implemented for eligible student accounts.
 
 #### `device_tokens`
 | Column | Type | Constraints | Description |
@@ -1183,7 +1184,7 @@ token remains valid.
 | POST | `/auth/fcm-token` | ✅ | Register or update a device FCM token (upsert by user_id + token) |
 | GET | `/auth/me` | ✅ | Get current user profile |
 | PUT | `/auth/me` | ✅ | Update profile (name, avatar, language) |
-| DELETE | `/auth/me` | ✅ | Delete account and all data |
+| DELETE | `/auth/me` | ✅ | F-001 student closure followed by backend-owned Firebase removal; 202 while identity cleanup is pending, 204 only after completion. Teacher deletion stays blocked until F-008 member notifications. |
 
 ### `/circles`
 | Method | Path | Status | Description |

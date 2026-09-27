@@ -58,6 +58,10 @@ func (v *alwaysOKVerifier) Verify(_ context.Context, _ string) (*auth.DecodedTok
 	return testDecodedToken, nil
 }
 
+func (v *alwaysOKVerifier) VerifyAndCheckRevoked(ctx context.Context, token string) (*auth.DecodedToken, error) {
+	return v.Verify(ctx, token)
+}
+
 func buildRegisterRoute(store auth.Store) http.Handler {
 	svc := auth.NewService(store, nil, 30*24*time.Hour)
 	h := auth.NewHandler(svc)

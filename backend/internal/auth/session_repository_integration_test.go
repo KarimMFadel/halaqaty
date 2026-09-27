@@ -4,12 +4,14 @@ package auth
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +23,227 @@ var authRepoMigrations = []string{
 	"000010_auth_roles_profile.up.sql",
 	"000011_auth_roles_profile_alignment.up.sql",
 	"000012_auth_profiles_display_name.up.sql",
+	"000013_create_circles.up.sql",
+	"000014_circle_members_circle_fk.up.sql",
+	"000016_live_sessions.up.sql",
+	"000019_account_deletion_tombstone.up.sql",
+}
+
+func TestSessionRepository_CloseStudentAccountPreservesHistoryAndErasesPrivateData(t *testing.T) {
+	repo := newSessionRepo(t)
+	ctx := context.Background()
+	userID := seedAuthUser(t, repo, "closure-eligible")
+	if err := repo.CreateEmptyProfile(ctx, userID); err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+	if _, err := repo.pool.Exec(ctx, `
+		UPDATE profiles
+		SET display_name = 'Student', full_name = 'Private Name', country = 'EG',
+		    phone = '+201000000000', bio = 'private bio', avatar_url = 'https://example.test/avatar',
+		    preferred_language = 'en', completed_at = NOW()
+		WHERE user_id = $1::uuid;
+	`, userID); err != nil {
+		t.Fatalf("prepare profile: %v", err)
+	}
+	if _, err := repo.pool.Exec(ctx, `CREATE TABLE account_history_fixture (user_id UUID NOT NULL REFERENCES users(id) ON DELETE NO ACTION, content TEXT NOT NULL)`); err != nil {
+		t.Fatalf("create history fixture: %v", err)
+	}
+	if _, err := repo.pool.Exec(ctx, `INSERT INTO account_history_fixture (user_id, content) VALUES ($1::uuid, 'retained recitation')`, userID); err != nil {
+		t.Fatalf("seed history: %v", err)
+	}
+	session := createRepoSession(t, repo, userID, nil)
+
+	firebaseUID, err := repo.CloseStudentAccount(ctx, userID)
+	if err != nil {
+		t.Fatalf("CloseStudentAccount: %v", err)
+	}
+	if firebaseUID != "firebase-auth-closure-eligible" {
+		t.Fatalf("cleanup uid: got %q", firebaseUID)
+	}
+	var deletedAt, language string
+	var email, fullName, country, phone, bio, avatarURL, displayName sql.NullString
+	if err := repo.pool.QueryRow(ctx, `
+		SELECT u.deleted_at::text, u.email, p.full_name, p.country, p.phone, p.bio,
+		       p.avatar_url, p.display_name, p.preferred_language
+		FROM users u JOIN profiles p ON p.user_id = u.id WHERE u.id = $1::uuid
+	`, userID).Scan(&deletedAt, &email, &fullName, &country, &phone, &bio, &avatarURL, &displayName, &language); err != nil {
+		t.Fatalf("load closed account: %v", err)
+	}
+	if deletedAt == "" || email.Valid || fullName.Valid || country.Valid || phone.Valid || bio.Valid || avatarURL.Valid || !displayName.Valid || displayName.String != "Student" || language != "ar" {
+		t.Fatalf("closed account retained unexpected data: deleted=%q email=%+v full=%+v country=%+v phone=%+v bio=%+v avatar=%+v display=%+v language=%q", deletedAt, email, fullName, country, phone, bio, avatarURL, displayName, language)
+	}
+	if _, err := repo.GetByID(ctx, session.ID); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("old backend session: got %v, want revoked/absent", err)
+	}
+	if _, err := repo.GetUserProfileByUserID(ctx, userID); !errors.Is(err, ErrUserNotFound) {
+		t.Fatalf("closed account profile: got %v, want %v", err, ErrUserNotFound)
+	}
+	if _, _, err := repo.UpsertUserByFirebaseUID(ctx, firebaseUID, "resurrect@example.com"); !errors.Is(err, ErrAccountDeleted) {
+		t.Fatalf("closed account registration replay: got %v, want %v", err, ErrAccountDeleted)
+	}
+	pending, err := repo.ListPendingFirebaseDeletions(ctx, nil, 1)
+	if err != nil || len(pending) != 1 || pending[0].UserID != userID {
+		t.Fatalf("first pending page: rows=%v err=%v", pending, err)
+	}
+	pending, err = repo.ListPendingFirebaseDeletions(ctx, &userID, 1)
+	if err != nil || len(pending) != 0 {
+		t.Fatalf("pending page after cursor: rows=%v err=%v", pending, err)
+	}
+	if err := repo.ClearDeletedAccountFirebaseUID(ctx, userID, firebaseUID); err != nil {
+		t.Fatalf("clear deleted Firebase UID: %v", err)
+	}
+	if _, _, err := repo.UpsertUserByFirebaseUID(ctx, firebaseUID, "resurrect@example.com"); !errors.Is(err, ErrAccountDeleted) {
+		t.Fatalf("registration after Firebase UID cleanup: got %v, want %v", err, ErrAccountDeleted)
+	}
+	if err := repo.CreateSession(ctx, Session{ID: uuid.NewString(), UserID: userID, LastActivityAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}); !errors.Is(err, ErrAccountDeleted) {
+		t.Fatalf("closed account session creation: got %v, want %v", err, ErrAccountDeleted)
+	}
+	var history string
+	if err := repo.pool.QueryRow(ctx, `SELECT content FROM account_history_fixture WHERE user_id = $1::uuid`, userID).Scan(&history); err != nil || history != "retained recitation" {
+		t.Fatalf("history after closure: content=%q err=%v", history, err)
+	}
+}
+
+func TestSessionRepository_CloseStudentAccountAllowsStudentWhoLeftActiveSession(t *testing.T) {
+	repo := newSessionRepo(t)
+	ctx := context.Background()
+	manager := seedAuthUser(t, repo, "closure-left-manager")
+	student := seedAuthUser(t, repo, "closure-left-student")
+	var circleID, sessionID string
+	if err := repo.pool.QueryRow(ctx, `INSERT INTO circles (name, teacher_id, invite_code) VALUES ('Left Circle', $1::uuid, 'LEFT-1') RETURNING id::text`, manager).Scan(&circleID); err != nil {
+		t.Fatalf("create circle: %v", err)
+	}
+	if err := repo.pool.QueryRow(ctx, `INSERT INTO sessions (circle_id, created_by, status, media_room_ref) VALUES ($1::uuid, $2::uuid, 'active', 'left-room') RETURNING id::text`, circleID, manager).Scan(&sessionID); err != nil {
+		t.Fatalf("create active session: %v", err)
+	}
+	if _, err := repo.pool.Exec(ctx, `INSERT INTO session_participant_presence (session_id, user_id, is_currently_present) VALUES ($1::uuid, $2::uuid, FALSE)`, sessionID, student); err != nil {
+		t.Fatalf("create historical presence: %v", err)
+	}
+	if _, err := repo.CloseStudentAccount(ctx, student); err != nil {
+		t.Fatalf("CloseStudentAccount for departed participant: %v", err)
+	}
+}
+
+func TestSessionRepository_CloseStudentAccountRejectsManagerAndActiveMediaParticipant(t *testing.T) {
+	repo := newSessionRepo(t)
+	ctx := context.Background()
+	manager := seedAuthUser(t, repo, "closure-manager")
+	student := seedAuthUser(t, repo, "closure-live-student")
+	var circleID, liveSessionID string
+	if err := repo.pool.QueryRow(ctx, `
+		INSERT INTO circles (name, teacher_id, invite_code)
+		VALUES ('Closure Circle', $1::uuid, 'CLOSE-1') RETURNING id::text
+	`, manager).Scan(&circleID); err != nil {
+		t.Fatalf("create circle: %v", err)
+	}
+	if _, err := repo.pool.Exec(ctx, `
+		INSERT INTO circle_members (circle_id, user_id, role) VALUES ($1::uuid, $2::uuid, 'teacher');
+	`, circleID, manager); err != nil {
+		t.Fatalf("create manager membership: %v", err)
+	}
+	if _, err := repo.CloseStudentAccount(ctx, manager); !errors.Is(err, ErrAccountIneligible) {
+		t.Fatalf("manager closure: got %v, want %v", err, ErrAccountIneligible)
+	}
+	if _, err := repo.pool.Exec(ctx, `
+		INSERT INTO circle_members (circle_id, user_id, role) VALUES ($1::uuid, $2::uuid, 'student');
+	`, circleID, student); err != nil {
+		t.Fatalf("create student membership: %v", err)
+	}
+	if err := repo.pool.QueryRow(ctx, `
+		INSERT INTO sessions (circle_id, created_by, status, media_room_ref)
+		VALUES ($1::uuid, $2::uuid, 'active', 'closure-room') RETURNING id::text
+	`, circleID, manager).Scan(&liveSessionID); err != nil {
+		t.Fatalf("create active session: %v", err)
+	}
+	if _, err := repo.pool.Exec(ctx, `
+		INSERT INTO session_participant_presence (session_id, user_id, is_currently_present)
+		VALUES ($1::uuid, $2::uuid, TRUE)
+	`, liveSessionID, student); err != nil {
+		t.Fatalf("create active presence: %v", err)
+	}
+	if _, err := repo.CloseStudentAccount(ctx, student); !errors.Is(err, ErrAccountActiveSession) {
+		t.Fatalf("active media participant closure: got %v, want %v", err, ErrAccountActiveSession)
+	}
+	var deletedAt *time.Time
+	if err := repo.pool.QueryRow(ctx, `SELECT deleted_at FROM users WHERE id = $1::uuid`, student).Scan(&deletedAt); err != nil || deletedAt != nil {
+		t.Fatalf("rejected closure mutated account: deleted_at=%v err=%v", deletedAt, err)
+	}
+}
+
+func TestSessionRepository_CloseStudentAccountRollsBackWhenProfileScrubFails(t *testing.T) {
+	repo := newSessionRepo(t)
+	ctx := context.Background()
+	userID := seedAuthUser(t, repo, "closure-rollback")
+	if err := repo.CreateEmptyProfile(ctx, userID); err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+	session := createRepoSession(t, repo, userID, nil)
+	if _, err := repo.pool.Exec(ctx, `
+		CREATE FUNCTION reject_profile_scrub() RETURNS trigger LANGUAGE plpgsql AS $$
+		BEGIN RAISE EXCEPTION 'reject profile scrub'; END $$;
+		CREATE TRIGGER reject_profile_scrub BEFORE UPDATE ON profiles
+		FOR EACH ROW EXECUTE FUNCTION reject_profile_scrub();
+	`); err != nil {
+		t.Fatalf("install scrub failure trigger: %v", err)
+	}
+	if _, err := repo.CloseStudentAccount(ctx, userID); err == nil {
+		t.Fatal("CloseStudentAccount must fail when profile scrub fails")
+	}
+	var email string
+	var deletedAt *time.Time
+	if err := repo.pool.QueryRow(ctx, `SELECT email, deleted_at FROM users WHERE id = $1::uuid`, userID).Scan(&email, &deletedAt); err != nil || email != "closure-rollback@example.com" || deletedAt != nil {
+		t.Fatalf("failed closure partially changed account: email=%q deleted_at=%v err=%v", email, deletedAt, err)
+	}
+	if _, err := repo.GetByID(ctx, session.ID); err != nil {
+		t.Fatalf("failed closure revoked session: %v", err)
+	}
+}
+
+func TestSessionRepository_CloseStudentAccountSerializesSessionCreation(t *testing.T) {
+	repo := newSessionRepo(t)
+	ctx := context.Background()
+	userID := seedAuthUser(t, repo, "closure-race")
+	start := make(chan struct{})
+	results := make(chan error, 32)
+	var wg sync.WaitGroup
+	for i := 0; i < cap(results); i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			var err error
+			if i%2 == 0 {
+				_, _, err = repo.UpsertUserByFirebaseUID(ctx, "firebase-auth-closure-race", "closure-race@example.com")
+			} else {
+				err = repo.CreateSession(ctx, Session{
+					ID: uuid.NewString(), UserID: userID,
+					LastActivityAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(time.Hour),
+				})
+			}
+			results <- err
+		}(i)
+	}
+	close(start)
+	if _, err := repo.CloseStudentAccount(ctx, userID); err != nil {
+		t.Fatalf("CloseStudentAccount: %v", err)
+	}
+	wg.Wait()
+	close(results)
+	for err := range results {
+		if err != nil && !errors.Is(err, ErrAccountDeleted) {
+			t.Fatalf("concurrent session creation: %v", err)
+		}
+	}
+	var sessions int
+	if err := repo.pool.QueryRow(ctx, `SELECT COUNT(*) FROM user_sessions WHERE user_id = $1::uuid`, userID).Scan(&sessions); err != nil || sessions != 0 {
+		t.Fatalf("sessions after closure race: count=%d err=%v", sessions, err)
+	}
+	if err := repo.ClearDeletedAccountFirebaseUID(ctx, userID, "firebase-auth-closure-race"); err != nil {
+		t.Fatalf("clear deleted UID after race: %v", err)
+	}
+	if _, _, err := repo.UpsertUserByFirebaseUID(ctx, "firebase-auth-closure-race", "closure-race@example.com"); !errors.Is(err, ErrAccountDeleted) {
+		t.Fatalf("registration after closure race and Firebase cleanup: got %v, want %v", err, ErrAccountDeleted)
+	}
 }
 
 // newSessionRepo opens an isolated schema with the auth migration chain

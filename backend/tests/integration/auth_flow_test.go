@@ -129,6 +129,10 @@ func (v *flowVerifier) Verify(_ context.Context, bearerToken string) (*auth.Deco
 	return v.decoded, nil
 }
 
+func (v *flowVerifier) VerifyAndCheckRevoked(ctx context.Context, bearerToken string) (*auth.DecodedToken, error) {
+	return v.Verify(ctx, bearerToken)
+}
+
 type flowStore struct {
 	mu          sync.Mutex
 	userByUID   map[string]auth.User

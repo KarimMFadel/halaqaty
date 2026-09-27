@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/app/app_locale_controller.dart';
 import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
+import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/auth/presentation/auth_screens.dart';
 import 'package:halaqaty_mobile/features/profile/application/profile_controller.dart';
 import 'package:halaqaty_mobile/features/profile/data/profile_api_client.dart';
@@ -28,7 +29,7 @@ class _LanguageOption {
 ///
 /// Approved future-intended settings (appearance, notifications, privacy,
 /// support) stay visible but invoke only the shared under-implementation
-/// notice (FR-032/FR-033); avatar upload and account deletion stay omitted.
+/// notice (FR-032/FR-033); avatar upload stays omitted.
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key, this.onSaved});
 
@@ -296,6 +297,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             icon: Icons.help_outline,
                             label: isRtl ? 'المساعدة والدعم' : 'Help & support',
                           ),
+                          ListTile(
+                            key: const Key('deleteAccountTile'),
+                            leading: Icon(Icons.delete_outline,
+                                color: Theme.of(context).colorScheme.error),
+                            title: Text(
+                              isRtl ? 'حذف الحساب' : 'Delete account',
+                              style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error),
+                            ),
+                            onTap: _confirmAccountDeletion,
+                          ),
                           const SizedBox(height: 24),
                           const LogoutButton(),
                           const SizedBox(height: 24),
@@ -348,6 +360,64 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     // until the next save attempt, not a transient snackbar.
     setState(() => _saveSucceeded = true);
     widget.onSaved?.call();
+  }
+
+  Future<void> _confirmAccountDeletion() async {
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    var password = '';
+    final confirmedPassword = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title:
+            Text(isRtl ? 'حذف الحساب نهائياً؟' : 'Permanently delete account?'),
+        content: TextField(
+          obscureText: true,
+          onChanged: (value) => password = value,
+          decoration:
+              InputDecoration(labelText: isRtl ? 'كلمة المرور' : 'Password'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(isRtl ? 'إلغاء' : 'Cancel')),
+          FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              ),
+              onPressed: () => Navigator.pop(context, password),
+              child: Text(isRtl ? 'حذف الحساب' : 'Delete account')),
+        ],
+      ),
+    );
+    if (confirmedPassword == null || !mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    final controller = ref.read(profileControllerProvider.notifier);
+    final authController = ref.read(authControllerProvider.notifier);
+    final outcome = await controller.deleteAccount(password: confirmedPassword);
+    if (outcome != null) {
+      final message = outcome == AccountDeletionOutcome.pending
+          ? (isRtl
+              ? 'تم إغلاق الحساب، وسيُحذف تسجيل الدخول بأمان قريباً.'
+              : 'Account closed. Sign-in removal is pending secure cleanup.')
+          : (isRtl ? 'تم حذف الحساب.' : 'Account deleted.');
+      if (messenger.mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(message)));
+      }
+      try {
+        await authController.logout();
+      } catch (_) {
+        if (messenger.mounted) {
+          messenger.showSnackBar(SnackBar(
+            content: Text(isRtl
+                ? 'أُغلق الحساب، لكن تعذر تسجيل الخروج محلياً. أعد تشغيل التطبيق.'
+                : 'Account closed, but local sign-out failed. Restart the app.'),
+          ));
+        }
+      }
+    }
   }
 }
 

@@ -22,6 +22,7 @@ var profileRepoMigrations = []string{
 	"000010_auth_roles_profile.up.sql",
 	"000011_auth_roles_profile_alignment.up.sql",
 	"000012_auth_profiles_display_name.up.sql",
+	"000019_account_deletion_tombstone.up.sql",
 }
 
 // newProfileRepository opens an isolated schema with the auth/profile migration
@@ -186,5 +187,17 @@ func TestRepository_GetByUserID_UnknownUser(t *testing.T) {
 
 	if _, err := repo.GetByUserID(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, auth.ErrUserNotFound) {
 		t.Fatalf("unknown user: got %v want %v", err, auth.ErrUserNotFound)
+	}
+}
+
+func TestRepository_GetByUserID_HidesTombstonedUser(t *testing.T) {
+	repo := newProfileRepository(t)
+	ctx := context.Background()
+	userID := seedProfileUser(t, repo, "deleted-profile")
+	if _, err := repo.pool.Exec(ctx, `UPDATE users SET deleted_at = NOW(), firebase_uid = NULL, email = NULL WHERE id = $1::uuid`, userID); err != nil {
+		t.Fatalf("tombstone user: %v", err)
+	}
+	if _, err := repo.GetByUserID(ctx, userID); !errors.Is(err, auth.ErrUserNotFound) {
+		t.Fatalf("GetByUserID = %v, want ErrUserNotFound", err)
 	}
 }

@@ -3,6 +3,7 @@ package httpconst
 const (
 	ErrorMessageAuthMiddlewareNotConfigured = "auth middleware not configured"
 	ErrorMessageInternalServerError         = "internal server error"
+	ErrorMessageServiceUnavailable          = "service temporarily unavailable"
 	ErrorMessageForbidden                   = "forbidden"
 	ErrorMessageInvalidSession              = "invalid session"
 	ErrorMessageMissingCircleID             = "missing circle id"
@@ -29,6 +30,7 @@ const (
 	ErrorMessagePreferredLanguageInvalid    = "preferred_language must be one of: ar, en"
 	ErrorMessageDeviceNameTooLong           = "device_name must be at most 100 characters"
 	ErrorMessageEmailAlreadyRegistered      = "email is already registered to another account"
+	ErrorMessageAccountDeletionBlocked      = "account deletion is blocked until active responsibilities end"
 	ErrorMessageAuthHandlerNotConfigured    = "auth handler not configured"
 	ErrorMessageProfileHandlerNotConfigured = "profile handler not configured"
 

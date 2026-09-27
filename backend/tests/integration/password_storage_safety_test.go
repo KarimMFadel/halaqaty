@@ -67,6 +67,10 @@ func (v *safetyVerifier) Verify(_ context.Context, _ string) (*auth.DecodedToken
 	return &auth.DecodedToken{UID: "safety-firebase-uid", Email: "safety@halaqaty.app"}, nil
 }
 
+func (v *safetyVerifier) VerifyAndCheckRevoked(ctx context.Context, token string) (*auth.DecodedToken, error) {
+	return v.Verify(ctx, token)
+}
+
 // safetyMiddlewareStore satisfies middleware.SessionRepository.
 type safetyMiddlewareStore struct{ userID string }
 

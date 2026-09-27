@@ -12,6 +12,39 @@ import (
 
 const missingConnectionSessionUUID = "99999999-9999-4999-8999-999999999999"
 
+func TestSessionRepository_AdmissionRejectsDeletedAccountBeforeIssuingCredential(t *testing.T) {
+	repo := newSessionRepository(t)
+	ctx := context.Background()
+	teacher := seedRepoUser(t, repo, "deleted-admission-teacher")
+	student := seedRepoUser(t, repo, "deleted-admission-student")
+	circle := seedRepoCircle(t, repo, teacher)
+	if _, err := repo.pool.Exec(ctx, `
+		INSERT INTO circle_members (circle_id, user_id, role) VALUES ($1::uuid, $2::uuid, 'student')
+	`, circle, student); err != nil {
+		t.Fatalf("add student membership: %v", err)
+	}
+	created, err := repo.CreateAdHocSession(ctx, circle, teacher)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if _, _, err := repo.StartSessionWithConnection(ctx, created.ID, teacher, "deleted-admission-room", MediaGrants{CanPublishAudio: true}, (&connectionCallbacks{}).ensure, (&connectionCallbacks{}).issue); err != nil {
+		t.Fatalf("start session: %v", err)
+	}
+	if _, err := repo.pool.Exec(ctx, `UPDATE users SET deleted_at = NOW() WHERE id = $1::uuid`, student); err != nil {
+		t.Fatalf("tombstone student: %v", err)
+	}
+	cbs := &connectionCallbacks{}
+	if _, _, err := repo.JoinSessionWithConnection(ctx, created.ID, student, MediaGrants{CanPublishAudio: true}, cbs.issue); !errors.Is(err, ErrAccountDeleted) {
+		t.Fatalf("deleted account admission: got %v, want %v", err, ErrAccountDeleted)
+	}
+	if len(cbs.issuedRooms) != 0 {
+		t.Fatalf("deleted account received a media credential: %v", cbs.issuedRooms)
+	}
+	if rows := repoPresenceRows(t, repo, created.ID); len(rows) != 1 {
+		t.Fatalf("deleted account created presence: %+v", rows)
+	}
+}
+
 // connectionCallbacks records provider callbacks and can fail each one.
 type connectionCallbacks struct {
 	ensured      []MediaRoomRef

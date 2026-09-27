@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"unicode/utf8"
@@ -22,12 +23,69 @@ var supportedPreferredLanguages = map[string]struct{}{"ar": {}, "en": {}}
 
 // Handler exposes HTTP endpoints for authentication flows.
 type Handler struct {
-	service *Service
+	service  *Service
+	deletion *AccountDeletionService
+	logger   *slog.Logger
 }
 
 // NewHandler constructs an auth handler bound to the application service.
 func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
+}
+
+// SetAccountDeletionService wires the privacy-sensitive account closure flow.
+func (h *Handler) SetAccountDeletionService(service *AccountDeletionService) {
+	h.deletion = service
+}
+
+// SetLogger uses the API's structured logger for deletion stage events.
+func (h *Handler) SetLogger(logger *slog.Logger) { h.logger = logger }
+
+// DeleteMe handles DELETE /auth/me. The caller must explicitly confirm.
+func (h *Handler) DeleteMe(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.deletion == nil {
+		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
+		return
+	}
+	principal, ok := CurrentPrincipal(r.Context())
+	if !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	var req struct {
+		Confirm bool `json:"confirm"`
+	}
+	if !phttp.DecodeJSONBody(w, r, &req) {
+		return
+	}
+	if !req.Confirm {
+		phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{"confirm": "must be true"})
+		return
+	}
+	result, err := h.deletion.Delete(r.Context(), principal.UserID, principal.AuthTime)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrRecentReauthentication):
+			phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		case errors.Is(err, ErrAccountIneligible), errors.Is(err, ErrAccountActiveSession):
+			phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageAccountDeletionBlocked, http.StatusConflict)
+		case errors.Is(err, ErrAccountDeleted):
+			phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		default:
+			phttp.WriteError(w, httpconst.ErrorCodeServiceUnavailable, httpconst.ErrorMessageServiceUnavailable, http.StatusServiceUnavailable)
+		}
+		return
+	}
+	if result == AccountDeletionPending {
+		logger := h.logger
+		if logger == nil {
+			logger = slog.Default()
+		}
+		logger.WarnContext(r.Context(), "account_deletion_pending", "request_id", phttp.RequestIDFromContext(r.Context()), "stage", "firebase_identity_removal")
+		phttp.WriteJSON(w, http.StatusAccepted, map[string]string{"status": string(result)})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // Register handles POST /auth/register. It runs behind RequireVerifiedFirebase,
@@ -83,6 +141,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		PreferredLanguage: language,
 	})
 	if err != nil {
+		if errors.Is(err, ErrAccountDeleted) {
+			phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+			return
+		}
 		if errors.Is(err, ErrDuplicateEmail) {
 			phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageEmailAlreadyRegistered, http.StatusConflict)
 			return
@@ -130,6 +192,10 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 
 	response, err := h.service.CreateSession(r.Context(), principal.UserID, deviceName)
 	if err != nil {
+		if errors.Is(err, ErrAccountDeleted) {
+			phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+			return
+		}
 		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
 		return
 	}

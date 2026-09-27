@@ -58,6 +58,11 @@ class _TestProfileController extends StateNotifier<ProfileState>
   @override
   Future<bool> updateProfile({required UpdateProfileRequest request}) async =>
       false;
+
+  @override
+  Future<AccountDeletionOutcome?> deleteAccount(
+          {required String password}) async =>
+      null;
 }
 
 class _TestCircleApiClient extends CircleApiClient {
@@ -185,6 +190,11 @@ class _SpyProfileNotifier extends StateNotifier<ProfileState>
     updateCalled = true;
     return false;
   }
+
+  @override
+  Future<AccountDeletionOutcome?> deleteAccount(
+          {required String password}) async =>
+      null;
 }
 
 class _RecordingAuthNotifier extends StubAuthNotifier {

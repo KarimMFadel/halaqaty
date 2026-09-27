@@ -1,5 +1,21 @@
 # Feature 001 Cross-Artifact Validation Report
 
+## Account-deletion verification checkpoint (2026-09-27)
+
+| Gate | Result | Evidence / limitation |
+|---|---|---|
+| Go unit, contract, integration, performance, coverage | PASS | `go test -short ./...`, `make test-contract`, `go test -tags=integration ./...`, and `make coverage` passed against local PostgreSQL; combined aggregate `backend/internal` coverage was 81.1% (required ≥80%). |
+| Account-deletion retry and revocation checks | PASS | Focused auth/middleware tests cover repeated outage retention, concurrent retry, Firebase SDK `USER_NOT_FOUND`, fail-closed registration/session creation, and tombstone reprovision denial in DB integration tests. Retry/concurrency tests passed 100 repetitions. |
+| Go lint / format | PASS WITH BASELINE NOTE | `golangci-lint run ./...` passed; changed Go files are gofmt-clean. Repository-wide `gofmt -l .` reports unrelated unchanged files outside this diff. |
+| Flutter unit/widget | PASS | `flutter test test` — 538 tests, including real-router deletion-outcome and prepared-queue-order checks |
+| Flutter Android integration | PARTIAL | `flutter test integration_test/ -d emulator-5554` passed 36 device tests with 5 credential-dependent skips. A separate `account_deletion_live_test.dart` run then passed with a newly registered disposable Firebase/backend student: the backend returned 204, the app signed out, and the completed outcome was visible. Pending-cleanup behavior remains widget-tested but not live-device verified; four other fixture-dependent journeys remain skipped. |
+| Flutter analyze / format | PASS | `flutter analyze`; `dart format --set-exit-if-changed .` (158 files, no changes) |
+| OpenAPI lint | PASS | `make api-lint` — no errors |
+| Secret scan | PASS WITH INPUT WARNING | `gitleaks detect --source .` found no leaks; its PDF parser reported a damaged xref table while scanning a PDF |
+| Security review | APPROVED | Codex's review of auth, tombstone, transaction, session-admission, and Firebase-retry boundaries found no blocking issue. Karim explicitly approved the deletion-path security review and requested the commit on 2026-09-27. |
+
+T084 is complete with fresh backend coverage and retry/revocation evidence. T089 remains open for a live pending-cleanup device outcome, despite the successful 204 journey. T090 remains open pending that evidence; Karim's required manual security review is approved. Arabic RTL account-deletion screenshots are in `evidence/screenshots/account-deletion-rtl.png` and `evidence/screenshots/account-deletion-confirm-rtl.png`.
+
 **Feature**: Authentication, Roles, and User Profile  
 **Date**: 2026-07-31  
 **Artifacts analyzed**:

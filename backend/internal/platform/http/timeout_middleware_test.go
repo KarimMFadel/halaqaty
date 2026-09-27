@@ -14,8 +14,10 @@ import (
 )
 
 func TestTimeoutMiddleware_ReturnsJSONErrorEnvelope(t *testing.T) {
+	release := make(chan struct{})
+	defer close(release)
 	handler := TimeoutMiddleware(time.Millisecond, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		time.Sleep(10 * time.Millisecond)
+		<-release
 	}))
 	rec := httptest.NewRecorder()
 

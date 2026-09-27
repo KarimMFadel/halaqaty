@@ -110,6 +110,19 @@ class ProfileApiClient {
     return ProfileUser.fromJson(response.data as Map<String, dynamic>);
   }
 
+  Future<bool> deleteMe(
+      {required String firebaseIdToken, required String sessionId}) async {
+    final response = await _dio.delete<Map<String, dynamic>>(
+      '/auth/me',
+      data: const {'confirm': true},
+      options: Options(headers: {
+        ..._bearerHeader(firebaseIdToken),
+        'X-Halaqaty-Session-ID': sessionId,
+      }),
+    );
+    return response.statusCode == 202;
+  }
+
   Map<String, String> _bearerHeader(String token) =>
       {'Authorization': 'Bearer $token'};
 }

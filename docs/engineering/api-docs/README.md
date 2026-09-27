@@ -151,7 +151,7 @@ Standard HTTP semantics: `400` bad input · `401` unauthenticated · `403` forbi
 | `POST` | `/auth/fcm-token` | Bearer + Session ID | Register/upsert a device FCM token for push notifications |
 | `GET` | `/auth/me` | Bearer + Session ID | Get current user profile |
 | `PUT` | `/auth/me` | Bearer + Session ID | Update profile (name, avatar, language) |
-| `DELETE` | `/auth/me` | Bearer + Session ID | Delete account and all associated data (irreversible, GDPR-compliant) |
+| `DELETE` | `/auth/me` | Bearer + Session ID | Close an eligible student account, erase non-retained profile data, and remove the Firebase identity; authorized educational history retains display-name attribution (202 while identity cleanup is pending, 204 when complete) |
 
 ### Circles
 

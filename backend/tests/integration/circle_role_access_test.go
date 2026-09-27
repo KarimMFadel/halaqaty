@@ -39,6 +39,10 @@ func (v *circleTokenVerifier) Verify(_ context.Context, bearerToken string) (*au
 	return decoded, nil
 }
 
+func (v *circleTokenVerifier) VerifyAndCheckRevoked(ctx context.Context, bearerToken string) (*auth.DecodedToken, error) {
+	return v.Verify(ctx, bearerToken)
+}
+
 // circleRoleEnv holds the wired app and per-user credentials.
 type circleRoleEnv struct {
 	mux      *http.ServeMux
@@ -77,6 +81,7 @@ func setupCircleRoleEnv(t *testing.T) *circleRoleEnv {
 		"000013_create_circles.up.sql",
 		"000014_circle_members_circle_fk.up.sql",
 		"000015_circle_management.up.sql",
+		"000019_account_deletion_tombstone.up.sql",
 	} {
 		runMigrationFile(t, conn, ctx, file)
 	}

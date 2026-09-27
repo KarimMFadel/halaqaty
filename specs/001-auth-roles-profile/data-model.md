@@ -27,3 +27,13 @@ Role changes lock the target circle membership set in one transaction. The actor
 - User 1:1 Profile; User 1:N UserSession; User N:M Circle through CircleMember.
 - Session: active → revoked (logout) or expired (inactivity/expiry).
 - Membership: active role may transition only through a permitted manager mutation; removal is rejected if it leaves no teacher.
+
+## Account-deletion amendment
+
+`users.deleted_at TIMESTAMPTZ NULL` is the irreversible local closure marker. `users.firebase_uid` and `users.email` become nullable; their existing unique constraints still prevent duplicate active values. A row with `deleted_at IS NOT NULL` is never a login, registration, session, membership-management, or profile-edit principal. The UUID `users.id` remains for immutable history foreign keys. No global role or deletion-state table is added.
+
+Before closure, the transaction rejects accounts with an active teacher/supervisor membership, an owned active circle, or an active participant record in an active live session. Session admission locks the same user row and verifies it is not tombstoned, preventing a media credential from being issued after closure commits. The transaction sets `deleted_at`, clears `users.email`, deletes all `user_sessions` rows (invalidating every session ID and erasing session/device metadata), erases device tokens where present, and updates `profiles` so only `display_name` (plus technical keys/timestamps and the non-identifying language default) remains. `full_name`, `country`, `phone`, `bio`, `avatar_url`, and `completed_at` become NULL. The backend retains `firebase_uid` only while Firebase removal is pending; `deleted_at IS NOT NULL AND firebase_uid IS NOT NULL` identifies a retryable cleanup row. After successful Admin deletion (or user-not-found), set `firebase_uid = NULL`. Never roll back a committed `deleted_at` to regain access.
+
+Historical circle, session, message, queue, and recitation/progress rows keep their existing `users.id` foreign keys and authorized audience. Their display-name projection reads the retained `profiles.display_name`; it must never fall back to email, full name, Firebase UID, or private profile fields. A user may be an ordinary historical member without an active circle owned by them; teacher/ownership cases remain blocked until F-008 notification delivery.
+
+The new paired migration must have a down path that refuses to restore `NOT NULL` identity constraints if tombstones exist. It cannot reconstruct erased personal data. Any avatar object purge and external identity cleanup must be verified at the storage boundary rather than inferred from SQL state.

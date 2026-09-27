@@ -39,6 +39,13 @@ LIMIT $2
 const lockSessionAdvisoryQuery = `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`
 const tryLockSessionAdvisoryQuery = `SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0))`
 
+const lockActiveParticipantAccountQuery = `
+SELECT id
+FROM users
+WHERE id = $1::uuid AND deleted_at IS NULL
+FOR UPDATE
+`
+
 // lockSessionByIDQuery loads one session holding its row lock so join,
 // reconnect, leave, and removal decisions serialize per session.
 const lockSessionByIDQuery = `

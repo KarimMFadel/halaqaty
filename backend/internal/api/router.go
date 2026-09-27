@@ -195,7 +195,7 @@ func (r *Router) registerRoutes() {
 		if authH != nil {
 			sessionsHandler = http.HandlerFunc(authH.CreateSession)
 		}
-		r.mux.Handle(routeAuthSessions, r.mw.Auth.RequireBearer(sessionsHandler))
+		r.mux.Handle(routeAuthSessions, r.mw.Auth.RequireRevocationCheckedBearer(sessionsHandler))
 
 		// Backend-session-scoped endpoints.
 		var logoutHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -215,6 +215,16 @@ func (r *Router) registerRoutes() {
 		}
 		r.mux.Handle(routeAuthMeGet, r.requireWithUserLimit(profileGetHandler))
 		r.mux.Handle(routeAuthMePut, r.requireWithUserLimit(profilePutHandler))
+		var deleteAccountHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageAuthHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		if authH != nil {
+			deleteAccountHandler = http.HandlerFunc(authH.DeleteMe)
+		}
+		if r.mw.RateLimit != nil {
+			deleteAccountHandler = r.mw.RateLimit.Limit(deleteAccountHandler)
+		}
+		r.mux.Handle(routeAuthMeDelete, r.mw.Auth.RequireRevocationChecked(deleteAccountHandler))
 	}
 
 	if r.mw.Auth != nil {

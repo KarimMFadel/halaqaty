@@ -34,8 +34,11 @@ class _StubProfileNotifier extends StateNotifier<ProfileState>
   final String? saveErrorMessage;
 
   final String _preferredLanguage;
+  AccountDeletionOutcome? deletionOutcome;
+  String? lastDeletionPassword;
 
   bool updateCalled = false;
+  bool deleteCalled = false;
   int loadCalls = 0;
 
   @override
@@ -86,6 +89,14 @@ class _StubProfileNotifier extends StateNotifier<ProfileState>
       ),
     );
     return true;
+  }
+
+  @override
+  Future<AccountDeletionOutcome?> deleteAccount(
+      {required String password}) async {
+    deleteCalled = true;
+    lastDeletionPassword = password;
+    return deletionOutcome;
   }
 
   static ProfileUser _profile(String preferredLanguage) => ProfileUser(
@@ -145,17 +156,20 @@ Widget _buildScreen(_StubProfileNotifier stub, {StubAuthNotifier? auth}) {
 Widget _buildLocalizedScreen(
   _StubProfileNotifier stub, {
   Locale platformLocale = const Locale('ar'),
+  StubAuthNotifier? auth,
 }) {
   return ProviderScope(
     overrides: [
       platformLocaleProvider.overrideWithValue(platformLocale),
       profileControllerProvider.overrideWith((_) => stub),
       authControllerProvider.overrideWith(
-        (_) => StubAuthNotifier(
-            initialState: const AuthState(
-          status: AuthStatus.authenticated,
-          sessionId: 'session-1',
-        )),
+        (_) =>
+            auth ??
+            StubAuthNotifier(
+                initialState: const AuthState(
+              status: AuthStatus.authenticated,
+              sessionId: 'session-1',
+            )),
       ),
     ],
     child: Consumer(
@@ -536,16 +550,103 @@ void main() {
       );
     });
 
-    testWidgets(
-        'omitted avatar-upload and account-deletion actions stay '
-        'absent', (tester) async {
+    testWidgets('avatar upload stays omitted and account deletion is explicit',
+        (tester) async {
       await tester.pumpWidget(_buildScreen(_StubProfileNotifier()));
       await tester.pump();
 
       expect(find.text('Change photo'), findsNothing);
       expect(find.text('تغيير الصورة'), findsNothing);
-      expect(find.text('Delete account'), findsNothing);
+      expect(find.byKey(const Key('deleteAccountTile')), findsOneWidget);
+      expect(find.text('Delete account'), findsOneWidget);
       expect(find.text('حذف الحساب'), findsNothing);
+    });
+
+    testWidgets('canceling account deletion does not call the controller',
+        (tester) async {
+      final stub = _StubProfileNotifier();
+      await tester.pumpWidget(_buildScreen(stub));
+      await tester.pump();
+      await tester.ensureVisible(find.byKey(const Key('deleteAccountTile')));
+      await tester.tap(find.byKey(const Key('deleteAccountTile')));
+      await tester.pumpAndSettle();
+      expect(find.text('Permanently delete account?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(stub.deleteCalled, isFalse);
+    });
+
+    testWidgets('confirmed deletion passes password and explains pending state',
+        (tester) async {
+      final stub = _StubProfileNotifier()
+        ..deletionOutcome = AccountDeletionOutcome.pending;
+      final auth = _RecordingAuthNotifier();
+      await tester.pumpWidget(_buildLocalizedScreen(stub, auth: auth));
+      await tester.pump();
+      await tester.ensureVisible(find.byKey(const Key('deleteAccountTile')));
+      await tester.tap(find.byKey(const Key('deleteAccountTile')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, 'password123');
+      final confirmButton = find.widgetWithText(FilledButton, 'حذف الحساب');
+      final colorScheme = Theme.of(tester.element(confirmButton));
+      expect(
+        tester
+            .widget<FilledButton>(confirmButton)
+            .style
+            ?.backgroundColor
+            ?.resolve({}),
+        colorScheme.colorScheme.error,
+      );
+      await tester.tap(confirmButton);
+      await tester.pumpAndSettle();
+
+      expect(stub.deleteCalled, isTrue);
+      expect(stub.lastDeletionPassword, 'password123');
+      expect(auth.logoutCalled, isTrue);
+      expect(find.text('تم إغلاق الحساب، وسيُحذف تسجيل الدخول بأمان قريباً.'),
+          findsOneWidget);
+    });
+
+    testWidgets('completed deletion shows the English confirmation in LTR',
+        (tester) async {
+      final stub = _StubProfileNotifier(preferredLanguage: 'en')
+        ..deletionOutcome = AccountDeletionOutcome.complete;
+      await tester.pumpWidget(
+        _buildLocalizedScreen(stub, platformLocale: const Locale('en')),
+      );
+      await tester.pump();
+      await tester.ensureVisible(find.byKey(const Key('deleteAccountTile')));
+      await tester.tap(find.byKey(const Key('deleteAccountTile')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, 'password123');
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete account'));
+      await tester.pumpAndSettle();
+
+      expect(stub.lastDeletionPassword, 'password123');
+      expect(find.text('Account deleted.'), findsOneWidget);
+    });
+
+    testWidgets('delete account action uses the shared destructive theme role',
+        (tester) async {
+      await tester.pumpWidget(_buildScreen(_StubProfileNotifier()));
+      await tester.pump();
+      final context =
+          tester.element(find.byKey(const Key('deleteAccountTile')));
+      final errorColor = Theme.of(context).colorScheme.error;
+
+      expect(
+        tester
+            .widget<Icon>(find.descendant(
+              of: find.byKey(const Key('deleteAccountTile')),
+              matching: find.byIcon(Icons.delete_outline),
+            ))
+            .color,
+        errorColor,
+      );
+      expect(
+        tester.widget<Text>(find.text('Delete account')).style?.color,
+        errorColor,
+      );
     });
 
     testWidgets('large text on a compact width keeps the form usable',

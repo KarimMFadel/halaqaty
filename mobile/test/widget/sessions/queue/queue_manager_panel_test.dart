@@ -45,7 +45,11 @@ void main() {
     }
 
     await tester.tap(find.bySemanticsLabel('إعداد الجولة'));
-    await tester.tap(find.bySemanticsLabel('إعادة ترتيب الدور'));
+    final reorder = find.descendant(
+      of: find.bySemanticsLabel('إعادة ترتيب الدور'),
+      matching: find.byType(OutlinedButton),
+    );
+    expect(tester.widget<OutlinedButton>(reorder).onPressed, isNull);
     await tester.tap(find.bySemanticsLabel('نقل الطالب'));
     await tester.tap(find.bySemanticsLabel('اختيار التالي'));
     await tester.tap(find.bySemanticsLabel('بدء التلاوة'));
@@ -55,7 +59,6 @@ void main() {
 
     expect(actions, [
       'prepare',
-      'reorder',
       'move',
       'advance',
       'start',
@@ -195,6 +198,30 @@ void main() {
     expect(find.bySemanticsLabel('التقييم ممتاز'), findsOneWidget);
     semantics.dispose();
   });
+
+  testWidgets('prepared round displays authoritative order and empty state',
+      (tester) async {
+    await tester.pumpWidget(_panel(
+      direction: TextDirection.ltr,
+      queue:
+          _queueState(entryStatus: 'waiting', lifecycle: 'prepared', preorder: [
+        {'student_id': 'second', 'student_name': 'Sara', 'position': 2},
+        {'student_id': 'first', 'student_name': 'Ali', 'position': 1},
+      ]),
+      actions: <String>[],
+    ));
+    expect(find.text('1. Ali'), findsOneWidget);
+    expect(find.text('2. Sara'), findsOneWidget);
+    expect(tester.getTopLeft(find.text('1. Ali')).dy,
+        lessThan(tester.getTopLeft(find.text('2. Sara')).dy));
+
+    await tester.pumpWidget(_panel(
+      direction: TextDirection.ltr,
+      queue: _queueState(entryStatus: 'waiting', lifecycle: 'prepared'),
+      actions: <String>[],
+    ));
+    expect(find.text('No students in the prepared round'), findsOneWidget);
+  });
 }
 
 Widget _panel({
@@ -223,13 +250,18 @@ Widget _panel({
       ),
     );
 
-QueueState _queueState({required String entryStatus, String? grade}) =>
+QueueState _queueState({
+  required String entryStatus,
+  String? grade,
+  String lifecycle = 'active',
+  List<Map<String, dynamic>> preorder = const [],
+}) =>
     QueueState.fromJson({
       'session_id': 'session-1',
       'round_id': 'round-1',
       'round_number': 1,
       'round_type': 'revision',
-      'lifecycle': 'active',
+      'lifecycle': lifecycle,
       'surah_id': 2,
       'from_ayah': 1,
       'to_ayah': 5,
@@ -247,7 +279,7 @@ QueueState _queueState({required String entryStatus, String? grade}) =>
         'grade_correction': 'audited_any_time',
         'version': 1,
       },
-      'preorder': const [],
+      'preorder': preorder,
       'entries': [
         {
           'id': 'entry-1',

@@ -113,10 +113,20 @@ class SessionRoomScreen extends ConsumerWidget {
                             : 'Prepare round',
                         onConfirm: controller.prepareQueueRound,
                       ),
-                      // Reorder and policy editing are owned by later tasks;
-                      // until then they surface the shared notice (FR-032).
-                      onReorder: () =>
-                          showHalaqatyUnderImplementationNotice(context),
+                      onReorder: () {
+                        final queue = queueState.queue;
+                        if (queue != null && queue.lifecycle == 'prepared') {
+                          _showQueueReorderDialog(
+                            context,
+                            rtl: rtl,
+                            preorder: queue.preorder,
+                            onConfirm: (order) => controller.reorderQueue(
+                              order,
+                              expectedVersion: queue.version,
+                            ),
+                          );
+                        }
+                      },
                       onMove: () => _showMoveEntryDialog(
                         context,
                         rtl: rtl,
@@ -182,9 +192,39 @@ class SessionRoomScreen extends ConsumerWidget {
                         initialQueue: queueState.queue,
                         onConfirm: controller.resetQueueRound,
                       ),
-                      onEditPolicy: () =>
-                          showHalaqatyUnderImplementationNotice(context),
+                      onEditPolicy: () {
+                        final policy = queueState.queue?.policy;
+                        if (policy != null) {
+                          _showQueuePolicyDialog(
+                            context,
+                            rtl: rtl,
+                            policy: policy,
+                            onConfirm: (
+                                    {population,
+                                    unfinishedFinalization,
+                                    optOut,
+                                    gradeVisibility,
+                                    gradeCorrection}) =>
+                                controller.updateQueuePolicy(
+                              expectedVersion: policy.version,
+                              population: population,
+                              unfinishedFinalization: unfinishedFinalization,
+                              optOut: optOut,
+                              gradeVisibility: gradeVisibility,
+                              gradeCorrection: gradeCorrection,
+                            ),
+                          );
+                        }
+                      },
                     ),
+                    if (queueState.actionErrorMessage != null)
+                      Text(
+                        rtl
+                            ? SessionUiLabels.queueUpdateFailed
+                            : 'Unable to update queue',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.error),
+                      ),
                     if (_gradingEntry(queueState.queue) case final entry?)
                       QueueGradingPanel(
                         entry: entry,
@@ -426,7 +466,7 @@ QueueManagerPanelStatus _queuePanelStatus(
   return switch (queue?.status) {
     QueueControllerStatus.loading => QueueManagerPanelStatus.loading,
     QueueControllerStatus.idle => QueueManagerPanelStatus.empty,
-    QueueControllerStatus.ready when queue?.queue?.entries.isEmpty ?? true =>
+    QueueControllerStatus.ready when queue?.queue == null =>
       QueueManagerPanelStatus.empty,
     QueueControllerStatus.ready => QueueManagerPanelStatus.ready,
     QueueControllerStatus.error => QueueManagerPanelStatus.recoverableError,
@@ -547,6 +587,240 @@ typedef _GradeAction = Future<void> Function({
   String? notes,
   required bool clearNotes,
 });
+
+typedef _PolicyAction = Future<void> Function({
+  String? population,
+  String? unfinishedFinalization,
+  String? optOut,
+  String? gradeVisibility,
+  String? gradeCorrection,
+});
+
+Future<void> _showQueueReorderDialog(
+  BuildContext context, {
+  required bool rtl,
+  required List<QueuePreorderItem> preorder,
+  required Future<void> Function(List<String>) onConfirm,
+}) async {
+  final order = List<QueuePreorderItem>.of(preorder)
+    ..sort((a, b) => a.position.compareTo(b.position));
+  final originalOrder = [for (final student in order) student.studentId];
+  await showDialog<void>(
+    context: context,
+    builder: (_) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text(rtl ? SessionUiLabels.reorderQueue : 'Reorder queue'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var index = 0; index < order.length; index++)
+                ListTile(
+                  title: Text(order[index].studentName),
+                  leading: Text('${index + 1}'),
+                  trailing: Wrap(
+                    children: [
+                      IconButton(
+                        key: Key('queueMoveUp-${order[index].studentId}'),
+                        tooltip: rtl
+                            ? 'نقل ${order[index].studentName} للأعلى إلى الموضع $index'
+                            : 'Move ${order[index].studentName} up to position $index',
+                        onPressed: index == 0
+                            ? null
+                            : () => setDialogState(() {
+                                  final item = order.removeAt(index);
+                                  order.insert(index - 1, item);
+                                }),
+                        icon: const Icon(Icons.arrow_upward),
+                      ),
+                      IconButton(
+                        key: Key('queueMoveDown-${order[index].studentId}'),
+                        tooltip: rtl
+                            ? 'نقل ${order[index].studentName} للأسفل إلى الموضع ${index + 2}'
+                            : 'Move ${order[index].studentName} down to position ${index + 2}',
+                        onPressed: index == order.length - 1
+                            ? null
+                            : () => setDialogState(() {
+                                  final item = order.removeAt(index);
+                                  order.insert(index + 1, item);
+                                }),
+                        icon: const Icon(Icons.arrow_downward),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(rtl ? SessionUiLabels.cancel : 'Cancel'),
+          ),
+          FilledButton(
+            onPressed: !order.asMap().entries.any((entry) =>
+                    entry.value.studentId != originalOrder[entry.key])
+                ? null
+                : () {
+                    Navigator.of(context).pop();
+                    unawaited(onConfirm([
+                      for (final item in order) item.studentId,
+                    ]));
+                  },
+            child: Text(rtl ? 'حفظ' : 'Save'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<void> _showQueuePolicyDialog(
+  BuildContext context, {
+  required bool rtl,
+  required QueuePolicy policy,
+  required _PolicyAction onConfirm,
+}) async {
+  var population = policy.population;
+  var finalization = policy.unfinishedFinalization;
+  var optOut = policy.optOut;
+  var visibility = policy.gradeVisibility;
+  var correction = policy.gradeCorrection;
+  await showDialog<void>(
+    context: context,
+    builder: (_) => StatefulBuilder(
+      builder: (context, setDialogState) {
+        Widget choice(
+          String field,
+          String label,
+          String value,
+          List<String> values,
+          ValueChanged<String> onChanged,
+        ) =>
+            DropdownButtonFormField<String>(
+              key: Key('queuePolicy$field'),
+              initialValue: value,
+              isExpanded: true,
+              decoration: InputDecoration(labelText: label),
+              items: [
+                for (final option in values)
+                  DropdownMenuItem(
+                    value: option,
+                    child: Text(_queuePolicyValueLabel(option, rtl)),
+                  ),
+              ],
+              onChanged: (next) {
+                if (next != null) setDialogState(() => onChanged(next));
+              },
+            );
+
+        return AlertDialog(
+          title: Text(rtl ? SessionUiLabels.queuePolicy : 'Queue policy'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                choice(
+                    'Population',
+                    rtl ? 'المشاركون' : 'Population',
+                    population,
+                    const ['present_at_activation', 'all_active_students'],
+                    (value) => population = value),
+                choice(
+                    'Finalization',
+                    rtl ? 'إنهاء الجولة' : 'Unfinished turns',
+                    finalization,
+                    const ['mark_unfinished_skipped', 'preserve_last_state'],
+                    (value) => finalization = value),
+                choice(
+                    'OptOut',
+                    rtl ? 'الاعتذار' : 'Opt-out',
+                    optOut,
+                    const ['approval_required', 'auto_approve'],
+                    (value) => optOut = value),
+                choice(
+                    'Visibility',
+                    rtl ? 'ظهور التقييم' : 'Grade visibility',
+                    visibility,
+                    const [
+                      'managers_and_student',
+                      'managers_only',
+                      'all_participants'
+                    ],
+                    (value) => visibility = value),
+                choice(
+                    'Correction',
+                    rtl ? 'تصحيح التقييم' : 'Grade correction',
+                    correction,
+                    const [
+                      'audited_any_time',
+                      'before_round_finalization',
+                      'immutable'
+                    ],
+                    (value) => correction = value),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(rtl ? SessionUiLabels.cancel : 'Cancel'),
+            ),
+            FilledButton(
+              onPressed: population == policy.population &&
+                      finalization == policy.unfinishedFinalization &&
+                      optOut == policy.optOut &&
+                      visibility == policy.gradeVisibility &&
+                      correction == policy.gradeCorrection
+                  ? null
+                  : () {
+                      Navigator.of(context).pop();
+                      unawaited(onConfirm(
+                        population:
+                            population == policy.population ? null : population,
+                        unfinishedFinalization:
+                            finalization == policy.unfinishedFinalization
+                                ? null
+                                : finalization,
+                        optOut: optOut == policy.optOut ? null : optOut,
+                        gradeVisibility: visibility == policy.gradeVisibility
+                            ? null
+                            : visibility,
+                        gradeCorrection: correction == policy.gradeCorrection
+                            ? null
+                            : correction,
+                      ));
+                    },
+              child: Text(rtl ? 'حفظ' : 'Save'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+String _queuePolicyValueLabel(String value, bool rtl) => switch (value) {
+      'present_at_activation' =>
+        rtl ? 'الحاضرون عند البدء' : 'Present at activation',
+      'all_active_students' =>
+        rtl ? 'كل الطلاب النشطين' : 'All active students',
+      'mark_unfinished_skipped' =>
+        rtl ? 'تخطي غير المكتمل' : 'Skip unfinished turns',
+      'preserve_last_state' =>
+        rtl ? 'الإبقاء على الحالة' : 'Preserve last state',
+      'approval_required' => rtl ? 'موافقة مطلوبة' : 'Approval required',
+      'auto_approve' => rtl ? 'موافقة تلقائية' : 'Auto approve',
+      'managers_and_student' =>
+        rtl ? 'المديرون والطالب' : 'Managers and student',
+      'managers_only' => rtl ? 'المديرون فقط' : 'Managers only',
+      'all_participants' => rtl ? 'جميع المشاركين' : 'All participants',
+      'audited_any_time' => rtl ? 'في أي وقت مع تسجيل' : 'Audited any time',
+      'before_round_finalization' =>
+        rtl ? 'قبل إنهاء الجولة' : 'Before round finalization',
+      'immutable' => rtl ? 'غير قابل للتعديل' : 'Immutable',
+      _ => value,
+    };
 
 Future<void> _showGradeDialog(
   BuildContext context, {

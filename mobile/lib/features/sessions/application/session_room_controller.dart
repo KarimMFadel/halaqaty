@@ -222,6 +222,29 @@ class SessionRoomController extends StateNotifier<SessionRoomState> {
   Future<void> moveQueueEntry(String entryId, int newPosition) =>
       _queue?.moveEntry(entryId, newPosition) ?? Future.value();
 
+  Future<void> reorderQueue(List<String> orderedStudentIds,
+          {int? expectedVersion}) =>
+      _queue?.reorder(orderedStudentIds, expectedVersion: expectedVersion) ??
+      Future.value();
+
+  Future<void> updateQueuePolicy({
+    int? expectedVersion,
+    String? population,
+    String? unfinishedFinalization,
+    String? optOut,
+    String? gradeVisibility,
+    String? gradeCorrection,
+  }) =>
+      _queue?.updatePolicy(
+        expectedVersion: expectedVersion,
+        population: population,
+        unfinishedFinalization: unfinishedFinalization,
+        optOut: optOut,
+        gradeVisibility: gradeVisibility,
+        gradeCorrection: gradeCorrection,
+      ) ??
+      Future.value();
+
   Future<void> resetQueueRound({
     required String roundType,
     required int surahId,

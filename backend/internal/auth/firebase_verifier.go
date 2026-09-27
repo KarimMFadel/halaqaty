@@ -15,7 +15,7 @@ var (
 	// ErrExpiredToken indicates an expired Firebase ID token.
 	ErrExpiredToken = errors.New("expired bearer token")
 	// ErrRevocationCheckUnavailable means Firebase could not confirm token revocation.
-	ErrRevocationCheckUnavailable = errors.New("Firebase token revocation check is unavailable")
+	ErrRevocationCheckUnavailable = errors.New("firebase token revocation check is unavailable")
 )
 
 // DecodedToken is a normalized representation used by middleware/services.

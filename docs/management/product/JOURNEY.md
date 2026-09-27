@@ -153,21 +153,21 @@ Cross-Cutting: Offline Behavior
 
 ## T-08 — Schedule a Session
 
-**Actor:** Teacher  
+**Actor:** Teacher or supervisor
 **Entry:** Circle Dashboard → "Schedule Session"
 
-1. **Session type:** One-off / Recurring (weekly, biweekly, custom days)
+1. **Session type:** One-off / Recurring (selected weekdays on weekly or biweekly patterns; a positive whole-number interval of days or weeks; or explicitly selected dates)
 2. **Fields:**
    - Session title (optional, defaults to "Circle Session")
    - Date and time (date picker + time picker)
-   - Timezone (pre-filled from teacher profile, editable)
+   - Timezone (pre-filled from the scheduling manager's profile, editable)
    - Duration estimate (30 min / 1h / 2h / custom — informational only, no auto-end)
-   - Recurring: days of week + end date or "no end date"
+   - Recurring: pattern or selected dates + optional inclusive local end date or "no end date"
 3. Tap **"Schedule"**.
-4. **System:** `POST /api/v1/circles/:id/sessions` → creates session record(s) → sends push notifications to all circle members.
-5. Session appears on circle calendar and on each student's home screen.
+4. **System:** Warns about detected same- or cross-circle overlaps using only details the manager may view; the manager may still choose to save. F-006 creates the planned occurrence through its contract once designed. F-005 ad-hoc creation remains separate; F-008 owns push reminder delivery.
+5. The occurrence appears on the circle calendar and in each eligible member's unified calendar. The calendar initially shows the current month and allows navigation to earlier and later months; completed and cancelled occurrences remain visible to authorized members.
 
-**Decision from MVP Register:** UTC stored in DB, IANA timezone per user for display (OQ-019). One-off sessions supported (OQ-018).
+**Decision from MVP Register:** UTC stored in DB, IANA timezone per user for display (OQ-019). One-off sessions supported (OQ-018); teacher/supervisor planning, advisory overlaps, and separate cancellation recorded in OQ-060 and ADR-025.
 
 ---
 

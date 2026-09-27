@@ -428,25 +428,27 @@ Step 5: Media Routing
 
 #### Description
 
-Owns circle recurring schedules, one-off planned sessions, each member's combined local-time calendar, and durable attendance classification/correction. Attendance uses F-005 presence facts as evidence; joining a live session alone does not decide attendance. Push reminder delivery is owned by F-008. This feature is description-only in the current gap batch.
+Owns circle recurring schedules, one-off planned sessions, each member's combined local-time calendar, and durable attendance classification/correction. Active teachers and supervisors may schedule and cancel unstarted planned occurrences; only teachers correct attendance. Planned duration is 1–44,640 minutes (31 days), with no start-date or time-of-day scheduling cap. Attendance uses F-005 presence facts as evidence; joining a live session alone does not decide attendance. Push reminder delivery is owned by F-008. The approved F-006 product scope is recorded in [ADR-025](../../engineering/architecture/adr/ADR-025-schedule-policy-and-session-lifecycle-boundary.md) and [ADR-026](../../engineering/architecture/adr/ADR-026-schedule-occurrence-and-attendance-persistence.md); implementation and migration remain pending.
+
+**Gap-batch closure — 2026-09-27:** Karim marked the `019-gap-completion` shared batch done after its integration into `main` (`5231a49`, PR #23; branch-tip file contents match). F-006 continues in `006-schedule-calendar-attendance` using its existing Spec-Kit directory. This closes the shared branch batch, not the outstanding F-006/F-008 delivery criteria; F-019 remains Done.
 
 #### User Stories
 
-- As a teacher, I can set a recurring weekly schedule for my circle
+- As a teacher or supervisor, I can set recurring and one-off planned sessions for my circle
 - As a student in multiple circles, I can see a unified calendar of all my sessions
 - As a student, I receive configurable push notification reminders before sessions
 - As a teacher, I can record manual attendance (override for students who called ahead)
 
 #### Acceptance Criteria
 
-- [ ] Weekly recurring schedule per circle: day(s) of week, start time, end time, timezone
+- [ ] Multiple recurring entries per circle: selected weekdays on weekly/biweekly patterns, positive whole-number day/week intervals, or explicitly selected dates; local start/end time, IANA planning timezone, and optional inclusive local end date
 - [ ] A circle can have multiple schedule entries (e.g., Sun + Wed)
 - [ ] Push notifications: configurable reminder intervals (1hr, 30min, 15min, 5min before session)
 - [ ] Attendance policy consumes F-005 `session_participant_presence` facts; it classifies attendance rather than treating a join as an automatic final status
 - [ ] Manual override: teacher can mark Present / Absent / Excused for any student
 - [ ] Unified calendar: students in multiple circles see all sessions in one color-coded calendar view
-- [ ] Conflict detection: alert if two circles have overlapping scheduled times
-- [ ] Session lifecycle: Scheduled → Live (auto when teacher starts) → Completed (auto after end) → Cancelled (manual)
+- [ ] Overlap detection: warn the acting teacher or supervisor about same- or cross-circle commitments without blocking their choice; show eligible students their own calendar overlap warnings without restricting participation
+- [ ] Planned-session lifecycle: F-005 `scheduled → active → ended` appears as Scheduled → Live → Completed; an authorized manager may separately cancel an unstarted planned occurrence. Cancelled occurrences cannot start or generate attendance; completed history remains intact
 
 #### Circle Lifecycle State Machine
 

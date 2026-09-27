@@ -2,7 +2,7 @@
 
 > All frozen decisions for the Halaqaty MVP. Binding on all implementation. To change a decision, create an ADR in [`../../engineering/architecture/adr/`](../../engineering/architecture/adr/) and update this file with an entry in the Amendment Log.
 
-**Last updated:** 2026-09-26
+**Last updated:** 2026-09-27
 
 ---
 
@@ -102,8 +102,9 @@ provider registry, job framework, or new lifecycle end reason.
 
 | ID | Question | Decision | Rationale |
 |---|---|---|---|
-| OQ-018 | Non-recurring (one-off) sessions? | **Yes.** Teacher can create sessions not linked to a recurring schedule. | Covers Ramadan intensives, special sessions, and makeup classes. |
+| OQ-018 | Non-recurring (one-off) sessions? | **Yes.** An active circle teacher or supervisor can create sessions not linked to a recurring schedule (F-006 manager scope clarified by OQ-060). | Covers Ramadan intensives, special sessions, and makeup classes. |
 | OQ-019 | Timezone storage? | **UTC in DB.** IANA timezone string stored per user profile. All display in user's local timezone. | Standard best practice; avoids DST ambiguity. |
+| OQ-060 | F-006 recurrence, manager rights, overlaps, cancellation, and planned duration? | **Both selected weekdays on weekly/biweekly patterns and arbitrary positive day/week intervals or explicit dates.** Active teachers and supervisors may schedule and cancel unstarted planned occurrences. Same- and cross-circle overlaps warn but do not block a manager's choice. Planned duration is 1–44,640 minutes (31 days), with no restriction on permitted start dates or times; F-005's live-session limit is unchanged. Cancellation stays separate from F-005's three-state lifecycle; completed history is retained. F-006 may run a labelled partial pilot, but full push acceptance waits for F-008. | Records Karim's F-006 clarification and 2026-09-27 ADR-026 approval. The duration bound keeps calendar queries finite without imposing a future scheduling horizon. See ADR-025, ADR-026 and the F-006 spec. |
 
 ---
 
@@ -169,6 +170,8 @@ retaining each wave as a coherent implementation and review batch.
 
 | Date | Decision ID | Old Value | New Value | Rationale | ADR |
 |---|---|---|---|---|---|
+| 2026-09-27 | OQ-060 / F-006 planned duration | No explicit planned-duration bound | 1–44,640 minutes (31 days), without a start-date or time-of-day scheduling cap | Karim approved the bounded planning interval with the F-006 persistence design; F-005 live limits remain unchanged. | ADR-026 |
+| 2026-09-27 | OQ-060 / F-006 | Weekly, teacher-only planning and a misleading Completed → Cancelled sequence | Expanded recurrence; teacher/supervisor scheduling; advisory overlaps; cancellation separate from F-005 lifecycle; F-008 push dependency retained | Reconciles Karim's approved F-006 clarification with canonical product and architecture boundaries without inventing the future schema/API. | ADR-025 |
 | 2026-09-26 | OQ-006, OQ-056–OQ-059 | Deletion retention, reauthentication, eligible account types, and batch scope unspecified | Display name only remains; verified `auth_time` must be within five minutes; current path blocks managers; other unchecked F-001 flows stay out of scope | Implements the approved student-only account deletion amendment without bypassing F-008 notification delivery. | ADR-024 |
 | 2026-09-22 | F-019-UNIMPLEMENTED-ACTIONS | Prototype actions without existing behavior were omitted with other unsupported content | Intentionally planned actions remain visible and show the shared localized under-implementation notice with zero product side effects; unplanned actions remain omitted | Makes future scope visible without simulating completion or adding backend behavior. | — |
 | 2026-09-22 | F-019-NUMBERING | Wave 0 approved separately; remaining redesign planned as separate feature lifecycles | F-019 is the sole umbrella for Waves 0–5 | Keeps the complete modernization in one traceable lifecycle while retaining coherent wave-level implementation and review batches. | — |

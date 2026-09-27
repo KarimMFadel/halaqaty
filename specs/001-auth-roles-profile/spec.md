@@ -3,6 +3,7 @@
 **Feature Branch**: `[001-auth-roles-profile]`  
 **Created**: 2026-07-25  
 **Status**: Approved  
+**Account-deletion amendment**: Approved for student-account deletion; teacher-account deletion depends on F-008 notification delivery
 **Input**: User description: "Authentication, Roles, and User Profile"
 
 ## Clarifications
@@ -18,6 +19,15 @@
 - Q: Which component owns registration and sign-in? → A: The Flutter Firebase SDK owns password validation, identity creation, sign-in, and Firebase ID-token refresh. The Go API verifies Firebase ID tokens and creates or revokes durable per-device backend sessions; it never accepts passwords or returns Firebase tokens.
 - Q: How are initial circle roles assigned? → A: A creator may assign existing registered users as one or more teachers and an optional backup supervisor. Invite acceptance creates a student membership. Without a selected teacher, the creator becomes teacher; otherwise the creator becomes supervisor.
 - Q: Who may later change teacher or supervisor assignments? → A: A teacher or supervisor may change another member between student, supervisor, and teacher. Managers cannot change their own role or leave the circle with no teacher; students cannot manage roles.
+
+### Session 2026-09-26 — account deletion
+
+- Q: Which identity remains on retained teaching, chat, and recitation history? → A: Display name only; erase full name, email, phone, avatar reference, and other non-retained profile fields.
+- Q: How recent must reauthentication be? → A: The verified Firebase `auth_time`, not the ID token issue time, must be within five minutes of confirmation.
+- Q: What is the deletion order? → A: Reauthenticate immediately before confirmation, close backend access and revoke all sessions, then remove the Firebase identity.
+- Q: Can teacher-owned circles be archived and members notified now? → A: Wait for F-008 delivery; teacher-account deletion stays unavailable until then.
+- Implementation boundary for the student-only slice: accounts with an active teacher or supervisor membership or an owned active circle are excluded until the F-008-dependent manager path is specified and delivered.
+- Q: Does this batch include other unchecked F-001 account controls? → A: No; implement deletion and directly related privacy controls only.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -71,6 +81,24 @@ As a system owner, I need protected endpoints to enforce per-circle authorizatio
 
 ---
 
+### User Story 4 - Delete My Account (Priority: P2; amendment approved for student deletion)
+
+As a user, I can irreversibly close my account after confirming my identity so that my account and eligible personal data are removed while agreed teaching history remains intact.
+
+**Why this priority**: The F-001 feature board promises account deletion, but the approved original specification and running application do not implement it.
+
+**Independent Test**: A user with no active teacher or supervisor membership reauthenticates, confirms deletion, loses access from every signed-in device, and cannot sign in again with the deleted identity. Historical records retain only the approved attribution. A circle manager cannot complete deletion until the F-008-dependent circle consequences are available.
+
+**Acceptance Scenarios**:
+
+1. **Given** an authenticated student who recently reauthenticated, **When** they explicitly confirm deletion, **Then** the account becomes inaccessible, all backend sessions are revoked, the Firebase identity is removed, and the app shows a truthful completion outcome.
+2. **Given** a missing or stale reauthentication, **When** deletion is requested, **Then** no deletion occurs and the user is guided to reauthenticate.
+3. **Given** an active teacher or supervisor membership or an owned active circle, **When** deletion is requested before F-008 member notification exists, **Then** deletion is blocked with a clear reason and no circle is partly archived.
+4. **Given** the user has an active participant record in an active live session, **When** deletion is requested, **Then** it is blocked before mutation and the user can retry after leaving or the session ends.
+5. **Given** a partial failure between backend closure and Firebase identity removal, **When** the operation is retried, **Then** it resumes safely without restoring access or deleting extra history.
+
+---
+
 ### Edge Cases
 
 - Same-Firebase-UID re-registration returns HTTP 409 with a valid `BackendSessionResponse` (idempotent session replay — treated as success by mobile). Different-Firebase-UID registration with an already-bound email returns HTTP 409 with `ERR_CONFLICT` and no session body; Firebase Auth prevents this at the identity layer but the API enforces a safety net.
@@ -79,6 +107,10 @@ As a system owner, I need protected endpoints to enforce per-circle authorizatio
 - Backend session inactivity beyond 30 days forces re-authentication.
 - Missing full_name or country during first-time profile completion blocks completion until both are provided.
 - Backend authentication endpoints never accept passwords or return Firebase ID or refresh tokens.
+- A deleted account must not be able to create a new backend session using an old token, even if Firebase identity removal is delayed or fails.
+- Retained teaching, chat, and recitation history must remain accessible only to users who were already authorized for that history.
+- User-authored historical content remains intact; deletion erases account/profile identity fields other than the display name, not the contents of past messages or recitation records.
+- Account deletion is blocked without mutation while the user has an active participant record in an active live session; an already-issued media credential must not remain usable after deletion.
 
 ## Requirements *(mandatory)*
 
@@ -97,6 +129,14 @@ As a system owner, I need protected endpoints to enforce per-circle authorizatio
 - **FR-011**: System MUST return standardized error responses as `{ "error": { "code", "message", "fields?" } }` with documented codes for auth/profile/authorization failures.
 - **FR-012**: System MUST require `full_name` and `country` for first-time profile completion.
 - **FR-013**: System MUST enforce rate limits for REST requests per IP and per user, and WebSocket limits of max 3 active connections per user and max 30 messages/min/user/circle.
+- **FR-014**: The system MUST require explicit irreversible-deletion confirmation and a verified Firebase `auth_time` within five minutes before accepting an account-deletion request. The ID token's issue time MUST NOT substitute for `auth_time`.
+- **FR-015**: The system MUST make a deleted account non-authenticatable and revoke every backend session for that account before attempting Firebase identity removal.
+- **FR-016**: The system MUST erase the user's email, full name, phone, avatar reference, and other non-retained profile data while preserving existing circle, session, chat, and recitation history. History retains the user's display name only as human-readable identity attribution.
+- **FR-017**: The system MUST preserve historical records without hard-deleting referenced circle or user records, and MUST prevent a deleted identity from viewing or changing them.
+- **FR-018**: This student-only deletion batch MUST reject an account with any active teacher or supervisor membership or owned active circle before mutation. The future teacher-account path MUST require a designated supervisor for every owned active circle, archive those circles without automatic teacher transfer, and notify their members through F-008. Until that notification delivery exists, manager-account deletion MUST be unavailable.
+- **FR-019**: A deletion operation MUST be safely retryable across backend and Firebase steps, with a truthful pending or failure outcome and no restoration of backend access after a committed closure.
+- **FR-020**: The system MUST not represent a partly completed deletion as a successful 204 response or success screen.
+- **FR-021**: Before closing a student account, the system MUST reject deletion while the account has an active participant record in an active live session. Session admission and account closure MUST serialize on the user row so no media credential is issued after closure commits. The user may retry after leaving or after the live session ends.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -104,6 +144,7 @@ As a system owner, I need protected endpoints to enforce per-circle authorizatio
 - **Profile**: User-managed personal details including full_name, display_name, bio, country, avatar_url, and updated_at. `full_name` and `country` are mandatory on first completion.
 - **CircleMember**: Per-circle authorization record mapping user_id + circle_id to role (student/teacher/supervisor) and membership status.
 - **UserSession**: Backend session activity record used for inactivity timeout enforcement, including last_activity_at and revoked_at.
+- **Deleted account record**: A non-authenticatable reference retained solely to preserve authorized historical attribution and referential integrity, with personal fields limited by the approved retention decision.
 
 ## Success Criteria *(mandatory)*
 
@@ -113,6 +154,9 @@ As a system owner, I need protected endpoints to enforce per-circle authorizatio
 - **SC-002**: 100% of requests to protected endpoints with missing, invalid, or unauthorized credentials are rejected.
 - **SC-003**: At least 90% of users complete registration and first profile update without support assistance.
 - **SC-004**: 0 confirmed cases of plaintext password exposure in stored records or API responses.
+- **SC-005**: In acceptance tests, 100% of deleted-account backend sessions and subsequent sign-in attempts are rejected, including when Firebase cleanup is temporarily unavailable.
+- **SC-006**: In acceptance tests, 100% of manager deletions and deletions during active live sessions are blocked before mutation; student deletion preserves all historical circle, session, chat, and recitation rows.
+- **SC-007**: Retrying deletion after each simulated failure point never creates a new account session or removes additional teaching history.
 
 ## Assumptions
 
@@ -121,3 +165,5 @@ As a system owner, I need protected endpoints to enforce per-circle authorizatio
 - Basic profile fields are limited to onboarding-relevant identity data and exclude advanced settings.
 - API changes remain backward-compatible and contract-first through `docs/contracts/openapi.yaml`.
 - Full admin dashboard remains out of scope for this feature.
+- F-008 owns member notification delivery for manager-account deletion. This student-only amendment does not implement teacher/supervisor deletion; that path requires a later approved amendment after F-008 delivery exists.
+- This amendment covers deletion and directly related privacy controls. Avatar upload, email verification, Google/Apple sign-in, and password reset remain separate unchecked F-001 work and are not part of this batch.

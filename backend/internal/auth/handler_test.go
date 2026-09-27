@@ -1,9 +1,11 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,13 +19,14 @@ import (
 // stubAuthStore satisfies auth.Store for handler unit tests.
 type stubAuthStore struct {
 	profile    UserProfile
+	upsertErr  error
 	createErr  error
 	revokeErr  error
 	revokedIDs []string
 }
 
 func (s *stubAuthStore) UpsertUserByFirebaseUID(context.Context, string, string) (User, bool, error) {
-	return User{}, false, nil
+	return User{}, false, s.upsertErr
 }
 
 func (s *stubAuthStore) UpsertProfileOnRegister(context.Context, string, string, string) error {
@@ -126,6 +129,14 @@ func TestCreateSessionHandler_Rejections_MapToStatus(t *testing.T) {
 			wantCode:    http.StatusInternalServerError,
 			wantErrCode: httpconst.ErrorCodeInternalServerError,
 		},
+		{
+			name:        "deleted account returns 401",
+			handler:     NewHandler(NewService(&stubAuthStore{createErr: ErrAccountDeleted}, nil, time.Hour)),
+			principal:   true,
+			body:        `{}`,
+			wantCode:    http.StatusUnauthorized,
+			wantErrCode: httpconst.ErrorCodeUnauthorized,
+		},
 	}
 
 	for _, tc := range cases {
@@ -155,6 +166,17 @@ func TestCreateSessionHandler_Rejections_MapToStatus(t *testing.T) {
 	}
 }
 
+func TestRegisterDeletedAccountReturnsUnauthorized(t *testing.T) {
+	h := NewHandler(NewService(&stubAuthStore{upsertErr: ErrAccountDeleted}, nil, time.Hour))
+	r := newAuthHandlerRequest(http.MethodPost, "/auth/register", `{"display_name":"Student"}`)
+	r = r.WithContext(WithPrincipal(r.Context(), AuthPrincipal{FirebaseUID: "deleted-firebase"}))
+	w := httptest.NewRecorder()
+	h.Register(w, r)
+	if w.Code != http.StatusUnauthorized || decodeAuthErrorEnvelope(t, w).Error.Code != httpconst.ErrorCodeUnauthorized {
+		t.Fatalf("deleted registration: status=%d body=%s", w.Code, w.Body.String())
+	}
+}
+
 func TestCreateSessionHandler_ValidRequest_ReturnsSessionWithProfile(t *testing.T) {
 	t.Parallel()
 
@@ -180,6 +202,86 @@ func TestCreateSessionHandler_ValidRequest_ReturnsSessionWithProfile(t *testing.
 	}
 	if response.User.ID != store.profile.ID || response.User.DisplayName == nil || *response.User.DisplayName != displayName {
 		t.Fatalf("profile projection: %+v", response.User)
+	}
+}
+
+func TestDeleteMeRequiresConfirmationAndRecentAuthentication(t *testing.T) {
+	store := &accountDeletionStoreStub{uid: "firebase-user"}
+	admin := &accountAdminStub{}
+	deletion := NewAccountDeletionService(store, admin)
+	now := time.Now().UTC()
+	deletion.nowFn = func() time.Time { return now }
+	h := NewHandler(nil)
+	h.SetAccountDeletionService(deletion)
+
+	request := func(body string, authTime time.Time) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodDelete, "/auth/me", strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		r = r.WithContext(WithPrincipal(r.Context(), AuthPrincipal{UserID: "local-user", AuthTime: authTime}))
+		w := httptest.NewRecorder()
+		h.DeleteMe(w, r)
+		return w
+	}
+	if w := request(`{"confirm":false}`, now); w.Code != http.StatusBadRequest {
+		t.Fatalf("missing confirmation: got %d want 400", w.Code)
+	}
+	if w := request(`{"confirm":true}`, now.Add(-6*time.Minute)); w.Code != http.StatusUnauthorized {
+		t.Fatalf("stale authentication: got %d want 401", w.Code)
+	}
+	if len(store.closed) != 0 {
+		t.Fatalf("rejected requests closed account: %v", store.closed)
+	}
+	if w := request(`{"confirm":true}`, now); w.Code != http.StatusNoContent {
+		t.Fatalf("confirmed deletion: got %d want 204", w.Code)
+	}
+}
+
+func TestDeleteMeReturnsServiceUnavailableBeforeClosure(t *testing.T) {
+	store := &accountDeletionStoreStub{closeErr: errors.New("database unavailable")}
+	deletion := NewAccountDeletionService(store, &accountAdminStub{})
+	h := NewHandler(nil)
+	h.SetAccountDeletionService(deletion)
+	r := httptest.NewRequest(http.MethodDelete, "/auth/me", strings.NewReader(`{"confirm":true}`))
+	r.Header.Set("Content-Type", "application/json")
+	r = r.WithContext(WithPrincipal(r.Context(), AuthPrincipal{UserID: "local-user", AuthTime: time.Now().UTC()}))
+	w := httptest.NewRecorder()
+	h.DeleteMe(w, r)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("pre-closure store failure: got %d want 503", w.Code)
+	}
+	if decodeAuthErrorEnvelope(t, w).Error.Code != httpconst.ErrorCodeServiceUnavailable {
+		t.Fatalf("pre-closure failure used wrong error code: %s", w.Body.String())
+	}
+}
+
+func TestDeleteMeTombstoneRaceReturnsUnauthorized(t *testing.T) {
+	h := NewHandler(nil)
+	h.SetAccountDeletionService(NewAccountDeletionService(
+		&accountDeletionStoreStub{closeErr: ErrAccountDeleted}, &accountAdminStub{}))
+	r := newAuthHandlerRequest(http.MethodDelete, "/auth/me", `{"confirm":true}`)
+	r = r.WithContext(WithPrincipal(r.Context(), AuthPrincipal{UserID: "local-user", AuthTime: time.Now().UTC()}))
+	w := httptest.NewRecorder()
+	h.DeleteMe(w, r)
+	if w.Code != http.StatusUnauthorized || decodeAuthErrorEnvelope(t, w).Error.Code != httpconst.ErrorCodeUnauthorized {
+		t.Fatalf("tombstone race: status=%d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestDeleteMePendingLogsRequestAndStage(t *testing.T) {
+	var logs bytes.Buffer
+	h := NewHandler(nil)
+	h.SetLogger(slog.New(slog.NewJSONHandler(&logs, nil)))
+	h.SetAccountDeletionService(NewAccountDeletionService(
+		&accountDeletionStoreStub{uid: "firebase-user"},
+		&accountAdminStub{err: errors.New("Firebase unavailable")},
+	))
+	r := newAuthHandlerRequest(http.MethodDelete, "/auth/me", `{"confirm":true}`)
+	ctx := context.WithValue(r.Context(), phttp.RequestIDContextKey{}, "request-123")
+	r = r.WithContext(WithPrincipal(ctx, AuthPrincipal{UserID: "local-user", AuthTime: time.Now().UTC()}))
+	w := httptest.NewRecorder()
+	h.DeleteMe(w, r)
+	if w.Code != http.StatusAccepted || !strings.Contains(logs.String(), `"request_id":"request-123"`) || !strings.Contains(logs.String(), `"stage":"firebase_identity_removal"`) {
+		t.Fatalf("pending outcome missing correlated stage log: status=%d logs=%s", w.Code, logs.String())
 	}
 }
 

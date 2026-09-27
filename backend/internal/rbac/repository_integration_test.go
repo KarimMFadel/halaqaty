@@ -24,6 +24,7 @@ var rbacRepoMigrations = []string{
 	"000013_create_circles.up.sql",
 	"000014_circle_members_circle_fk.up.sql",
 	"000015_circle_management.up.sql",
+	"000019_account_deletion_tombstone.up.sql",
 }
 
 // newIntegrationRepository opens an isolated schema with the auth + circle
@@ -299,6 +300,13 @@ func TestRepository_SearchUsers_MatchesDisplayName(t *testing.T) {
 	}
 	if len(users) != 0 {
 		t.Fatalf("expected no matches, got %+v", users)
+	}
+	if _, err := repo.pool.Exec(ctx, `UPDATE users SET deleted_at = NOW(), firebase_uid = NULL, email = NULL WHERE id = $1::uuid`, omar); err != nil {
+		t.Fatalf("tombstone fallback-search user: %v", err)
+	}
+	users, err = repo.SearchUsers(ctx, "omar fall", 20)
+	if err != nil || len(users) != 0 {
+		t.Fatalf("tombstoned user still searchable: got %+v, err=%v", users, err)
 	}
 }
 

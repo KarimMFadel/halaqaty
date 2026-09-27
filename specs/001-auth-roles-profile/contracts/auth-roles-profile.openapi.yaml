@@ -115,6 +115,50 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+    delete:
+      operationId: deleteCurrentUser
+      summary: Close my account and remove my Firebase identity
+      description: |
+        Requires a Firebase bearer, matching X-Halaqaty-Session-ID, explicit
+        confirmation, and a verified Firebase auth_time no more
+        than five minutes old. The backend first closes access, revokes every
+        session, and erases non-retained profile data. It then removes the Firebase
+        identity. Authorized teaching, chat, and recitation history retains only
+        display-name attribution. Active teacher or supervisor deletion is blocked
+        in this student-only batch; deletion during an active live-session
+        participant record is also blocked. Teacher deletion requires F-008
+        member notification delivery. Pending cleanup needs no client retry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteAccountRequest'
+      responses:
+        '204':
+          description: Backend account closed and Firebase identity removal confirmed
+        '202':
+          description: Backend account closed; Firebase identity removal is pending backend retry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteAccountPendingResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Invalid credentials or verified Firebase auth_time older than five minutes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Manager deletion is unavailable in this student-only batch, or the user has an active live-session participant record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
   /circles/{circleId}/members/{userId}/role:
     put:
@@ -212,6 +256,24 @@ components:
           format: date-time
         user:
           $ref: '#/components/schemas/ProfileResponse'
+    DeleteAccountRequest:
+      type: object
+      required: [confirm]
+      additionalProperties: false
+      properties:
+        confirm:
+          type: boolean
+          enum: [true]
+          description: Explicit irreversible account-deletion confirmation.
+    DeleteAccountPendingResponse:
+      type: object
+      required: [status]
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [pending_identity_removal]
+          description: Backend access is closed; server-side Firebase removal will retry.
     UpdateProfileRequest:
       type: object
       properties:
@@ -312,6 +374,12 @@ components:
             $ref: '#/components/schemas/ErrorEnvelope'
     Conflict:
       description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ServiceUnavailable:
+      description: Account closure could not be committed; no deletion was started
       content:
         application/json:
           schema:

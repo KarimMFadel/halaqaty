@@ -11,6 +11,7 @@ const (
 	routeAuthLogout   = "POST /api/v1/auth/logout"
 	routeAuthMeGet    = "GET /api/v1/auth/me"
 	routeAuthMePut    = "PUT /api/v1/auth/me"
+	routeAuthMeDelete = "DELETE /api/v1/auth/me"
 )
 
 const (

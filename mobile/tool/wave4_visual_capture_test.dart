@@ -419,4 +419,9 @@ class _StubProfile extends StateNotifier<ProfileState>
     }
     return true;
   }
+
+  @override
+  Future<AccountDeletionOutcome?> deleteAccount(
+          {required String password}) async =>
+      null;
 }

@@ -48,8 +48,12 @@ class QueueManagerPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final rtl = Directionality.of(context) == TextDirection.rtl;
     final labels = _QueueLabels(rtl);
-    final isTerminal = status == QueueManagerPanelStatus.terminal;
+    final isTerminal = status == QueueManagerPanelStatus.terminal ||
+        queue?.lifecycle == 'finalized';
     final entries = queue?.entries ?? const <QueueEntry>[];
+    final preorder = List<QueuePreorderItem>.of(
+        queue?.preorder ?? const <QueuePreorderItem>[])
+      ..sort((a, b) => a.position.compareTo(b.position));
     final selected = _selectedEntry(entries);
     final dominant = _dominantAction(entries, selected);
 
@@ -73,6 +77,14 @@ class QueueManagerPanel extends StatelessWidget {
         ],
         const SizedBox(height: 8),
         _StatusMessage(status: status, labels: labels),
+        if (queue?.lifecycle == 'prepared' && preorder.isEmpty)
+          Text(rtl
+              ? 'لا يوجد طلاب في الجولة المحضّرة'
+              : 'No students in the prepared round'),
+        if (queue?.lifecycle == 'prepared')
+          for (final student in preorder)
+            Text('${student.position}. ${student.studentName}',
+                key: Key('queuePrepared-${student.studentId}')),
         if (selected != null) ...[
           const SizedBox(height: 8),
           Semantics(
@@ -141,7 +153,11 @@ class QueueManagerPanel extends StatelessWidget {
             ),
             _QueueAction(
               label: labels.reorder,
-              onPressed: isTerminal ? null : onReorder,
+              onPressed: isTerminal ||
+                      queue?.lifecycle != 'prepared' ||
+                      (queue?.preorder.length ?? 0) < 2
+                  ? null
+                  : onReorder,
             ),
             _QueueAction(
               label: labels.move,

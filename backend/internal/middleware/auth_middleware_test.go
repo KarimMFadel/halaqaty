@@ -111,6 +111,53 @@ func TestAuthMiddleware_RequireVerifiedFirebase(t *testing.T) {
 	}
 }
 
+func TestAuthMiddleware_RevocationUnavailableRejectsProvisioning(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		wrap func(*AuthMiddleware, http.Handler) http.Handler
+		path string
+	}{
+		{
+			name: "registration",
+			wrap: func(mw *AuthMiddleware, next http.Handler) http.Handler {
+				return mw.RequireVerifiedFirebase(next)
+			},
+			path: "/auth/register",
+		},
+		{
+			name: "backend session creation",
+			wrap: func(mw *AuthMiddleware, next http.Handler) http.Handler {
+				return mw.RequireRevocationCheckedBearer(next)
+			},
+			path: "/auth/sessions",
+		},
+		{
+			name: "account deletion with backend session",
+			wrap: func(mw *AuthMiddleware, next http.Handler) http.Handler {
+				return mw.RequireRevocationChecked(next)
+			},
+			path: "/auth/me",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			verifier := &stubVerifier{token: testValidToken, err: errors.New("Firebase revocation check unavailable")}
+			mw := NewAuthMiddleware(verifier, auth.NewSessionService(time.Hour), &stubSessionRepo{userID: testLocalUserID})
+			handlerCalled := false
+			protected := tc.wrap(mw, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				handlerCalled = true
+				w.WriteHeader(http.StatusCreated)
+			}))
+			req := httptest.NewRequest(http.MethodPost, tc.path, nil)
+			req.Header.Set(httpconst.HeaderAuthorization, "Bearer "+testValidToken)
+			rec := httptest.NewRecorder()
+			protected.ServeHTTP(rec, req)
+			if rec.Code != http.StatusUnauthorized || handlerCalled {
+				t.Fatalf("revocation outage: status=%d handlerCalled=%v", rec.Code, handlerCalled)
+			}
+		})
+	}
+}
+
 func TestAuthMiddleware_RequireBearer_ResolvesExistingUser(t *testing.T) {
 	verifier := &stubVerifier{token: testValidToken, decoded: testDecodedToken}
 	repo := &stubSessionRepo{userID: testLocalUserID}
@@ -210,6 +257,10 @@ func (v *stubVerifier) Verify(_ context.Context, bearerToken string) (*auth.Deco
 		return nil, v.err
 	}
 	return v.decoded, nil
+}
+
+func (v *stubVerifier) VerifyAndCheckRevoked(ctx context.Context, token string) (*auth.DecodedToken, error) {
+	return v.Verify(ctx, token)
 }
 
 type stubSessionRepo struct {

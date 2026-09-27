@@ -46,6 +46,10 @@ func (wiringVerifier) Verify(_ context.Context, bearerToken string) (*auth.Decod
 	return &auth.DecodedToken{UID: wiringFirebaseUID, Email: "wiring@halaqaty.app"}, nil
 }
 
+func (v wiringVerifier) VerifyAndCheckRevoked(ctx context.Context, bearerToken string) (*auth.DecodedToken, error) {
+	return v.Verify(ctx, bearerToken)
+}
+
 // wiringSessionRepo resolves the wiring principal and one live backend session.
 type wiringSessionRepo struct{}
 
@@ -179,6 +183,7 @@ func TestRegisterRoutes_EveryProtectedRouteRejectsUnauthenticatedRequests(t *tes
 		{http.MethodPost, "/api/v1/auth/logout"},
 		{http.MethodGet, "/api/v1/auth/me"},
 		{http.MethodPut, "/api/v1/auth/me"},
+		{http.MethodDelete, "/api/v1/auth/me"},
 		{http.MethodPost, "/api/v1/circles"},
 		{http.MethodPost, "/api/v1/circles/join"},
 		{http.MethodGet, "/api/v1/circles/discover"},
@@ -421,6 +426,32 @@ func TestRouter_PerUserRateLimitAppliesAfterAuthentication(t *testing.T) {
 	}
 	if envelope.Error.Message != httpconst.ErrorMessageRateLimitExceeded {
 		t.Fatalf("error message: got %q, want %q", envelope.Error.Message, httpconst.ErrorMessageRateLimitExceeded)
+	}
+}
+
+func TestDeleteAccountRequiresSessionAndPerUserBudget(t *testing.T) {
+	router := NewRouter(MiddlewareSet{
+		Auth:      wiringAuthMiddleware(),
+		RateLimit: middleware.NewRateLimitMiddleware(0, 1),
+	})
+
+	missingSession := wiringAuthenticatedRequest(http.MethodDelete, "/api/v1/auth/me", `{"confirm":true}`)
+	missingSession.Header.Del(httpconst.HeaderSessionID)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, missingSession)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("missing session: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	first := httptest.NewRecorder()
+	router.Handler().ServeHTTP(first, wiringAuthenticatedRequest(http.MethodDelete, "/api/v1/auth/me", `{"confirm":true}`))
+	if first.Code != http.StatusInternalServerError {
+		t.Fatalf("configured route without deletion handler: status=%d body=%s", first.Code, first.Body.String())
+	}
+	second := httptest.NewRecorder()
+	router.Handler().ServeHTTP(second, wiringAuthenticatedRequest(http.MethodDelete, "/api/v1/auth/me", `{"confirm":true}`))
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second account request: status=%d body=%s", second.Code, second.Body.String())
 	}
 }
 

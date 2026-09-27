@@ -63,6 +63,11 @@ class _Wave0ProfileController extends StateNotifier<ProfileState>
   @override
   Future<bool> updateProfile({required UpdateProfileRequest request}) async =>
       true;
+
+  @override
+  Future<AccountDeletionOutcome?> deleteAccount(
+          {required String password}) async =>
+      null;
 }
 
 class _Wave0CircleApi extends CircleApiClient {

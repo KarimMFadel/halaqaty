@@ -11,21 +11,46 @@ import (
 
 // mockFirebaseClient stubs firebaseTokenClient.
 type mockFirebaseClient struct {
-	token *firebaseauth.Token
-	err   error
+	token        *firebaseauth.Token
+	revokedToken *firebaseauth.Token
+	err          error
+	revokedErr   error
+	revokedCalls int
 }
 
 func (m *mockFirebaseClient) VerifyIDToken(_ context.Context, _ string) (*firebaseauth.Token, error) {
 	return m.token, m.err
 }
 
+func (m *mockFirebaseClient) VerifyIDTokenAndCheckRevoked(_ context.Context, _ string) (*firebaseauth.Token, error) {
+	m.revokedCalls++
+	return m.revokedToken, m.revokedErr
+}
+
+func TestFirebaseVerifier_VerifyAndCheckRevokedUsesRevocationAwareSDKMethod(t *testing.T) {
+	client := &mockFirebaseClient{revokedToken: &firebaseauth.Token{
+		UID: "firebase-uid-revocation", AuthTime: time.Now().UTC().Add(-time.Minute).Unix(),
+		Expires: time.Now().UTC().Add(time.Hour).Unix(), Claims: map[string]any{"email": "user@example.com"},
+	}}
+	verifier := NewFirebaseVerifier(client)
+	decoded, err := verifier.VerifyAndCheckRevoked(context.Background(), "signed-token")
+	if err != nil {
+		t.Fatalf("VerifyAndCheckRevoked: %v", err)
+	}
+	if client.revokedCalls != 1 || decoded.UID != "firebase-uid-revocation" || decoded.AuthTime.IsZero() {
+		t.Fatalf("revocation verification: calls=%d token=%+v", client.revokedCalls, decoded)
+	}
+}
+
 func TestFirebaseVerifier_Verify(t *testing.T) {
 	future := time.Now().UTC().Add(time.Hour).Unix()
+	authTime := time.Now().UTC().Add(-2 * time.Minute).Truncate(time.Second)
 
 	t.Run("returns DecodedToken on valid token", func(t *testing.T) {
 		client := &mockFirebaseClient{
 			token: &firebaseauth.Token{
 				UID:      "firebase-uid-1",
+				AuthTime: authTime.Unix(),
 				IssuedAt: time.Now().UTC().Add(-time.Minute).Unix(),
 				Expires:  future,
 				Claims: map[string]any{
@@ -46,6 +71,9 @@ func TestFirebaseVerifier_Verify(t *testing.T) {
 		}
 		if decoded.ExpiresAt.IsZero() {
 			t.Fatal("expected non-zero ExpiresAt")
+		}
+		if !decoded.AuthTime.Equal(authTime) {
+			t.Fatalf("AuthTime: got %v, want %v", decoded.AuthTime, authTime)
 		}
 	})
 

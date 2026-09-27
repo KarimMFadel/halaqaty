@@ -2,7 +2,7 @@
 
 > All frozen decisions for the Halaqaty MVP. Binding on all implementation. To change a decision, create an ADR in [`../../engineering/architecture/adr/`](../../engineering/architecture/adr/) and update this file with an entry in the Amendment Log.
 
-**Last updated:** 2026-09-03
+**Last updated:** 2026-09-26
 
 ---
 
@@ -15,6 +15,10 @@
 | OQ-003 | Session token expiry? | **Firebase default: 1hr auto-refresh.** Backend enforces 30-day inactivity logout. | Firebase handles silent refresh; 30-day rule protects abandoned devices. |
 | OQ-035 | Authentication, device sessions, and logout ownership? | **Flutter Firebase Auth owns password validation, identity creation, sign-in, and Firebase token refresh.** The Go API verifies Firebase ID tokens and owns durable per-device sessions. The backend never accepts passwords or returns Firebase tokens. Current-device logout revokes one backend session; logout-all-devices is a later explicit endpoint that revokes all sessions. | Preserves the Firebase identity boundary while allowing immediate server-side revocation and 30-day inactivity enforcement. |
 | OQ-036 | Initial circle roles, invitations, and supervisor management? | Roles are per-circle only. At creation, the creator may assign existing registered users as one or more teachers and one optional backup supervisor; if no teacher is selected, the creator becomes teacher, otherwise the creator is supervisor. For an active circle, a teacher or supervisor may issue a role-bound invitation for a teacher or student, while a student may issue a student-only invitation. Acceptance creates the bound circle membership and cannot change the assigned role. Any teacher or supervisor may change another member's teacher/supervisor/student role, but cannot change their own role or leave the circle with no teacher. | Supports shared teaching and member referrals while preventing invitation-based role escalation, global roles, self-lockout, and teacherless circles. |
+| OQ-056 | Which identity remains on retained history after account deletion? | **Display name only.** Erase email, full name, phone, avatar reference, and other non-retained profile data while preserving teaching, chat, and recitation history. | Preserves readable educational provenance without retaining unrelated identity fields. Approved by Karim 2026-09-26. |
+| OQ-057 | How recent must reauthentication be for account deletion? | A verified Firebase `auth_time` no more than five minutes before confirmation; token issue time is not a substitute. | Requires a fresh identity check for irreversible closure. Approved by Karim 2026-09-26. |
+| OQ-058 | Which accounts may use the current deletion batch? | Student-only. Block active teacher/supervisor memberships and owned active circles until the F-008 notification path is delivered. | Avoids orphaning managed circles. Approved by Karim 2026-09-26. |
+| OQ-059 | Which unchecked F-001 controls are included in this batch? | Account deletion and directly related privacy controls only. Avatar upload, email verification, Google/Apple sign-in, and password reset remain out of scope. | Keeps the approved batch limited to the requested gaps. Approved by Karim 2026-09-26. |
 | PRD-4 | Co-teacher model (distinct role vs supervisor)? | **Deferred post-pilot.** MVP: teacher + supervisor only. No co-teacher role. | Adds role complexity without proven need; supervisor covers 95% of pilot use cases. |
 
 ---
@@ -24,7 +28,7 @@
 | ID | Question | Decision | Rationale |
 |---|---|---|---|
 | OQ-005 | Cross-circle role combinations? | **Yes.** Roles are fully independent per circle. A user can be teacher in one circle and student in another. | This is real-world reality for a sheikh who teaches and also studies. |
-| OQ-006 | Circle ownership on account deletion? | **Circle archived.** Members notified. Teacher must designate a supervisor before deletion. No automatic transfer. | Prevents silent data loss; requires conscious handoff from the teacher. |
+| OQ-006 | Circle ownership on account deletion? | When the manager-deletion path is enabled, archive the circle and notify members; the teacher must designate a supervisor first, with no automatic transfer. **Until F-008 notification delivery exists, manager-account deletion is blocked without mutation.** | Prevents silent data loss and requires a conscious handoff; the current F-001 batch remains student-only. |
 | PRD-3 | Institution onboarding model? | **Self-serve in MVP.** Admin receives invite code, manages own school. Assisted onboarding deferred. | Reduces operational overhead; pilot scale doesn't need white-glove onboarding. |
 
 ---
@@ -165,6 +169,7 @@ retaining each wave as a coherent implementation and review batch.
 
 | Date | Decision ID | Old Value | New Value | Rationale | ADR |
 |---|---|---|---|---|---|
+| 2026-09-26 | OQ-006, OQ-056–OQ-059 | Deletion retention, reauthentication, eligible account types, and batch scope unspecified | Display name only remains; verified `auth_time` must be within five minutes; current path blocks managers; other unchecked F-001 flows stay out of scope | Implements the approved student-only account deletion amendment without bypassing F-008 notification delivery. | ADR-024 |
 | 2026-09-22 | F-019-UNIMPLEMENTED-ACTIONS | Prototype actions without existing behavior were omitted with other unsupported content | Intentionally planned actions remain visible and show the shared localized under-implementation notice with zero product side effects; unplanned actions remain omitted | Makes future scope visible without simulating completion or adding backend behavior. | — |
 | 2026-09-22 | F-019-NUMBERING | Wave 0 approved separately; remaining redesign planned as separate feature lifecycles | F-019 is the sole umbrella for Waves 0–5 | Keeps the complete modernization in one traceable lifecycle while retaining coherent wave-level implementation and review batches. | — |
 | 2026-09-16 | PROVIDER-BOUNDARY / F-018 | MinIO SDK-shaped storage seam; LiveKit SDK construction outside its adapter | Approved provider adapter boundary refactor preserving current providers, public behavior, and existing safety guarantees | Makes future approved replacements local to their integrations. Spec-Kit plus Superpowers workflow approved by Karim. | ADR-023 |

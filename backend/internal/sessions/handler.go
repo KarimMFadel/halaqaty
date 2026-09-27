@@ -345,6 +345,8 @@ func writeSessionError(w http.ResponseWriter, err error) {
 
 func sessionHTTPError(err error) (string, int) {
 	switch {
+	case errors.Is(err, ErrAccountDeleted):
+		return httpconst.ErrorCodeUnauthorized, http.StatusUnauthorized
 	case errors.Is(err, ErrSessionNotFound):
 		return httpconst.ErrorCodeNotFound, http.StatusNotFound
 	case errors.Is(err, ErrSessionNotStartable), errors.Is(err, ErrSessionAlreadyActive), errors.Is(err, ErrSessionAlreadyEnded), errors.Is(err, ErrSessionFull), errors.Is(err, ErrSessionLocked):

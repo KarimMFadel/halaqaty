@@ -54,6 +54,18 @@ func lockSessionAdvisory(ctx context.Context, q querier, sessionID string) error
 	return nil
 }
 
+func lockActiveParticipantAccount(ctx context.Context, q querier, userID string) error {
+	var id string
+	err := q.QueryRow(ctx, lockActiveParticipantAccountQuery, userID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrAccountDeleted
+	}
+	if err != nil {
+		return fmt.Errorf("lock active participant account: %w", err)
+	}
+	return nil
+}
+
 // scanSession scans the canonical session projection; pgx.ErrNoRows is
 // returned unwrapped so callers can map it to the domain error that matches
 // their operation.
@@ -265,6 +277,9 @@ func (r *Repository) StartSessionWithConnection(ctx context.Context, sessionID, 
 		if err != nil {
 			return fmt.Errorf("start session with connection: lock session: %w", err)
 		}
+		if err := lockActiveParticipantAccount(ctx, q, userID); err != nil {
+			return err
+		}
 		switch sess.Status {
 		case SessionStatusScheduled:
 			if err := ensure(ctx, roomRef, sess.MediaMode); err != nil {
@@ -374,6 +389,9 @@ func (r *Repository) JoinSession(ctx context.Context, sessionID, userID string) 
 		if err != nil {
 			return fmt.Errorf("join session: lock session: %w", err)
 		}
+		if err := lockActiveParticipantAccount(ctx, q, userID); err != nil {
+			return err
+		}
 		if err := validateActive(sess); err != nil {
 			return err
 		}
@@ -416,6 +434,9 @@ func (r *Repository) JoinSessionWithConnection(ctx context.Context, sessionID, u
 		}
 		if err != nil {
 			return fmt.Errorf("join session with connection: lock session: %w", err)
+		}
+		if err := lockActiveParticipantAccount(ctx, q, userID); err != nil {
+			return err
 		}
 		if err := validateActive(sess); err != nil {
 			return err
@@ -468,6 +489,9 @@ func (r *Repository) ReconnectPresence(ctx context.Context, sessionID, userID st
 		}
 		if err != nil {
 			return fmt.Errorf("reconnect presence: lock session: %w", err)
+		}
+		if err := lockActiveParticipantAccount(ctx, q, userID); err != nil {
+			return err
 		}
 		if err := validateActive(sess); err != nil {
 			return err

@@ -1,6 +1,9 @@
 package auth
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type principalContextKey struct{}
 
@@ -11,6 +14,7 @@ type AuthPrincipal struct {
 	FirebaseUID string
 	Email       string
 	Claims      map[string]any
+	AuthTime    time.Time
 }
 
 // WithPrincipal stores the authenticated principal in the request context.

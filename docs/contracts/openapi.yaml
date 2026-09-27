@@ -215,16 +215,50 @@ paths:
     delete:
       operationId: deleteCurrentUser
       tags: [Auth]
-      summary: Delete account and all associated data
+      summary: Close my account and remove my Firebase identity
       description: |
-        Permanently deletes the account, all circles owned by the user (archiving
-        them for members), all messages sent by the user, and all progress records.
-        This operation is irreversible and GDPR-compliant.
+        Requires a Firebase bearer and matching X-Halaqaty-Session-ID. Irreversibly
+        closes backend access and revokes every backend session before
+        backend-owned Firebase identity removal. Erases email and non-retained
+        profile data; authorized circle, session, chat, and recitation history
+        remains with display-name attribution. Requires Firebase reauthentication
+        within five minutes, measured from the verified auth_time claim rather
+        than token issuance time. Teacher deletion is blocked until F-008 can
+        deliver circle-member notifications. Active supervisors are also blocked
+        in this student-only batch. Deletion is also blocked while the account
+        has an active participant record in a live session. A pending Firebase cleanup is not
+        completion and requires no authenticated client retry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteAccountRequest'
       responses:
         '204':
-          description: Account deleted
+          description: Backend account closed and Firebase identity removal confirmed
+        '202':
+          description: Backend account closed; Firebase identity removal is pending backend retry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteAccountPendingResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          description: Invalid credentials or verified Firebase auth_time older than five minutes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Manager deletion is unavailable in this student-only batch, or the user has an active live-session participant record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
   # ── Circles ───────────────────────────────────────────────
   /circles:
@@ -2497,6 +2531,26 @@ components:
           description: Absolute backend-session expiry; sessions also expire after 30 days of inactivity.
         user:
           $ref: '#/components/schemas/UserProfile'
+
+    DeleteAccountRequest:
+      type: object
+      required: [confirm]
+      additionalProperties: false
+      properties:
+        confirm:
+          type: boolean
+          enum: [true]
+          description: Explicit irreversible account-deletion confirmation.
+
+    DeleteAccountPendingResponse:
+      type: object
+      required: [status]
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [pending_identity_removal]
+          description: Backend access is closed; server-side Firebase removal will retry.
 
     UpdateProfileRequest:
       type: object

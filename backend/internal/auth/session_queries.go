@@ -4,11 +4,95 @@ package auth
 // replay. The inserted flag uses the xmax = 0 idiom: a freshly inserted row
 // has no transaction ID stamped on it, an updated (conflict) row does.
 const upsertUserByFirebaseUIDQuery = `
-INSERT INTO users (firebase_uid, email) VALUES ($1, $2)
+INSERT INTO users (firebase_uid, email)
+SELECT $1, $2
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE deleted_firebase_uid_hash = $3)
 ON CONFLICT (firebase_uid) DO UPDATE SET
     email = EXCLUDED.email,
     updated_at = NOW()
+WHERE users.deleted_at IS NULL
 RETURNING id, firebase_uid, email, created_at, updated_at, (xmax = 0) AS inserted
+`
+
+const lockActiveAccountQuery = `
+SELECT firebase_uid
+FROM users
+WHERE id = $1::uuid AND deleted_at IS NULL
+FOR UPDATE
+`
+
+const lockFirebaseUIDQuery = `
+SELECT pg_advisory_xact_lock(hashtextextended($1, 0))
+`
+
+const getFirebaseUIDForActiveAccountQuery = `
+SELECT firebase_uid
+FROM users
+WHERE id = $1::uuid AND deleted_at IS NULL
+`
+
+const hasActiveManagerCircleQuery = `
+SELECT EXISTS (
+    SELECT 1
+    FROM circle_members cm
+    JOIN circles c ON c.id = cm.circle_id
+    WHERE cm.user_id = $1::uuid
+      AND NOT c.is_archived
+      AND cm.role IN ('teacher', 'supervisor')
+) OR EXISTS (
+    SELECT 1 FROM circles
+    WHERE teacher_id = $1::uuid AND NOT is_archived
+)
+`
+
+const hasActiveSessionParticipantQuery = `
+SELECT EXISTS (
+    SELECT 1
+    FROM session_participant_presence p
+    JOIN sessions s ON s.id = p.session_id
+    WHERE p.user_id = $1::uuid
+      AND p.removed_at IS NULL
+      AND p.is_currently_present
+      AND s.status = 'active'
+)
+`
+
+const closeAccountQuery = `
+UPDATE users
+SET deleted_at = NOW(), email = NULL, deleted_firebase_uid_hash = $2, updated_at = NOW()
+WHERE id = $1::uuid AND deleted_at IS NULL
+`
+
+const scrubClosedProfileQuery = `
+UPDATE profiles
+SET full_name = NULL,
+    country = NULL,
+    phone = NULL,
+    bio = NULL,
+    avatar_url = NULL,
+    completed_at = NULL,
+    preferred_language = 'ar',
+    updated_at = NOW()
+WHERE user_id = $1::uuid
+`
+
+const deleteUserSessionsQuery = `
+DELETE FROM user_sessions WHERE user_id = $1::uuid
+`
+
+const clearDeletedAccountFirebaseUIDQuery = `
+UPDATE users
+SET firebase_uid = NULL, updated_at = NOW()
+WHERE id = $1::uuid AND firebase_uid = $2 AND deleted_at IS NOT NULL
+`
+
+const listPendingFirebaseDeletionsQuery = `
+SELECT id::text, firebase_uid
+FROM users
+WHERE deleted_at IS NOT NULL AND firebase_uid IS NOT NULL
+  AND ($1::uuid IS NULL OR id > $1::uuid)
+ORDER BY id
+LIMIT $2
 `
 
 // upsertProfileOnRegisterQuery writes the registration profile fields once.
@@ -37,18 +121,19 @@ SELECT
 FROM users u
 LEFT JOIN profiles p ON p.user_id = u.id
 WHERE u.id = $1
+  AND u.deleted_at IS NULL
 `
 
 const getUserByFirebaseUIDQuery = `
 SELECT id, firebase_uid, email, created_at, updated_at
 FROM users
-WHERE firebase_uid = $1
+WHERE firebase_uid = $1 AND deleted_at IS NULL
 `
 
 const getUserByEmailQuery = `
 SELECT id, firebase_uid, email, created_at, updated_at
 FROM users
-WHERE email = $1
+WHERE email = $1 AND deleted_at IS NULL
 `
 
 const createEmptyProfileQuery = `
@@ -100,7 +185,7 @@ WHERE session_id = $1
 const getLocalUserIDByFirebaseUIDQuery = `
 SELECT id::text
 FROM users
-WHERE firebase_uid = $1
+WHERE firebase_uid = $1 AND deleted_at IS NULL
 `
 
 const touchSessionQuery = `
@@ -120,8 +205,10 @@ WHERE session_id = $1
 `
 
 const getCircleMemberRoleQuery = `
-SELECT role
-FROM circle_members
-WHERE circle_id = $1::uuid
-  AND user_id = $2::uuid
+SELECT cm.role
+FROM circle_members cm
+JOIN users u ON u.id = cm.user_id
+WHERE cm.circle_id = $1::uuid
+  AND cm.user_id = $2::uuid
+  AND u.deleted_at IS NULL
 `

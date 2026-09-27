@@ -25,6 +25,7 @@ var sessionRepoMigrations = []string{
 	"000014_circle_members_circle_fk.up.sql",
 	"000015_circle_management.up.sql",
 	"000016_live_sessions.up.sql",
+	"000019_account_deletion_tombstone.up.sql",
 }
 
 // newSessionRepository opens an isolated schema with the full migration chain

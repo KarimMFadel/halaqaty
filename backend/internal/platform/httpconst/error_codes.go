@@ -29,7 +29,9 @@ const (
 	ErrorCodeNotFound = "ERR_NOT_FOUND"
 	// ErrorCodeInternalServerError is returned when an unexpected server error occurs.
 	ErrorCodeInternalServerError = "ERR_INTERNAL_SERVER_ERROR"
-	ErrorCodeMediaUnavailable    = "ERR_MEDIA_UNAVAILABLE"
+	// ErrorCodeServiceUnavailable is returned for a temporary dependency failure.
+	ErrorCodeServiceUnavailable = "ERR_SERVICE_UNAVAILABLE"
+	ErrorCodeMediaUnavailable   = "ERR_MEDIA_UNAVAILABLE"
 	// ErrorCodeUploadTooLarge is returned when an upload body or file exceeds its limit (413).
 	ErrorCodeUploadTooLarge = "ERR_UPLOAD_TOO_LARGE"
 	// ErrorCodeUnsupportedMediaType is returned when the detected upload media type is outside the approved allowlist (415).

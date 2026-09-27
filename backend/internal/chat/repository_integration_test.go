@@ -30,6 +30,7 @@ var chatRepoMigrations = []string{
 	"000016_live_sessions.up.sql",
 	"000017_recitation_queue_system.up.sql",
 	"000018_real_time_chat.up.sql",
+	"000019_account_deletion_tombstone.up.sql",
 }
 
 // newChatRepo opens an isolated schema with the chat migration chain applied

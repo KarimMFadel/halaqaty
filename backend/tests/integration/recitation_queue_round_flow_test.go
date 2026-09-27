@@ -323,6 +323,7 @@ func newRoundFlowFixture(t *testing.T, population queue.PopulationPolicy) roundF
 		"000015_circle_management.up.sql",
 		"000016_live_sessions.up.sql",
 		"000017_recitation_queue_system.up.sql",
+		"000019_account_deletion_tombstone.up.sql",
 	} {
 		runMigrationFile(t, conn, ctx, migration)
 	}

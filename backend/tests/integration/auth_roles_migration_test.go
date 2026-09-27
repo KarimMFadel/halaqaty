@@ -24,7 +24,88 @@ const (
 	migration013Up   = "000013_create_circles.up.sql"
 	migration014Up   = "000014_circle_members_circle_fk.up.sql"
 	migration014Down = "000014_circle_members_circle_fk.down.sql"
+	migration019Up   = "000019_account_deletion_tombstone.up.sql"
+	migration019Down = "000019_account_deletion_tombstone.down.sql"
 )
+
+func TestAccountDeletionMigrationPreservesHistoryAndRefusesTombstoneRollback(t *testing.T) {
+	ctx := context.Background()
+	pool := openPool(t, ctx)
+	defer pool.Close()
+
+	conn := acquireConn(t, pool, ctx)
+	defer conn.Release()
+
+	schema := uniqueSchemaName(t)
+	createSchema(t, conn, ctx, schema)
+	defer dropSchema(t, pool, ctx, schema)
+
+	runMigrationFile(t, conn, ctx, migration010Up)
+	runMigrationFile(t, conn, ctx, migration011Up)
+	runMigrationFile(t, conn, ctx, migration012Up)
+	if _, err := conn.Exec(ctx, `CREATE TABLE retained_history (user_id UUID NOT NULL REFERENCES users(id) ON DELETE NO ACTION)`); err != nil {
+		t.Fatalf("create retained history fixture: %v", err)
+	}
+
+	userID := "11111111-1111-1111-1111-111111111111"
+	if _, err := conn.Exec(ctx, `INSERT INTO users (id, firebase_uid, email) VALUES ($1::uuid, 'firebase-a', 'a@example.com')`, userID); err != nil {
+		t.Fatalf("seed account and history: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `INSERT INTO profiles (user_id, display_name, full_name) VALUES ($1::uuid, 'Student', 'Private Name')`, userID); err != nil {
+		t.Fatalf("seed profile: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `INSERT INTO retained_history (user_id) VALUES ($1::uuid)`, userID); err != nil {
+		t.Fatalf("seed retained history: %v", err)
+	}
+	runMigrationFile(t, conn, ctx, migration019Up)
+
+	assertColumnNullable(t, conn, ctx, schema, "users", "firebase_uid")
+	assertColumnNullable(t, conn, ctx, schema, "users", "email")
+	assertColumnNullable(t, conn, ctx, schema, "users", "deleted_at")
+	assertConstraintExists(t, conn, ctx, schema, "retained_history", "retained_history_user_id_fkey")
+	if _, err := conn.Exec(ctx, `INSERT INTO users (firebase_uid, email) VALUES (NULL, NULL), (NULL, NULL)`); err != nil {
+		t.Fatalf("multiple tombstones must allow null identity values: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `INSERT INTO users (firebase_uid, email) VALUES ('firebase-b', 'a@example.com')`); err == nil {
+		t.Fatal("migration must preserve unique active emails")
+	}
+
+	if _, err := conn.Exec(ctx, `UPDATE users SET deleted_at = NOW(), email = NULL WHERE id = $1::uuid`, userID); err != nil {
+		t.Fatalf("tombstone account: %v", err)
+	}
+
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("could not determine test file path")
+	}
+	downPath := filepath.Join(filepath.Dir(currentFile), "..", "..", "migrations", migration019Down)
+	downSQL, err := os.ReadFile(downPath)
+	if err != nil {
+		t.Fatalf("read migration %s: %v", migration019Down, err)
+	}
+	if _, err := conn.Exec(ctx, string(downSQL)); err == nil || !strings.Contains(strings.ToLower(err.Error()), "tombstones") {
+		t.Fatalf("down migration error = %v, want tombstone-specific refusal", err)
+	}
+	assertColumnNullable(t, conn, ctx, schema, "users", "firebase_uid")
+	assertColumnNullable(t, conn, ctx, schema, "users", "email")
+
+	var retained int
+	if err := conn.QueryRow(ctx, `SELECT COUNT(*) FROM retained_history WHERE user_id = $1::uuid`, userID).Scan(&retained); err != nil || retained != 1 {
+		t.Fatalf("retained history after tombstone: count=%d err=%v", retained, err)
+	}
+	if _, err := conn.Exec(ctx, `DELETE FROM retained_history WHERE user_id = $1::uuid`, userID); err != nil {
+		t.Fatalf("remove history fixture: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `DELETE FROM users WHERE id = $1::uuid`, userID); err != nil {
+		t.Fatalf("remove account fixture: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `DELETE FROM users WHERE firebase_uid IS NULL AND email IS NULL`); err != nil {
+		t.Fatalf("remove null identity fixtures: %v", err)
+	}
+	runMigrationFile(t, conn, ctx, migration019Down)
+	assertColumnNotNull(t, conn, ctx, schema, "users", "firebase_uid")
+	assertColumnNotNull(t, conn, ctx, schema, "users", "email")
+}
 
 func TestAuthRolesAlignmentMigration_WithoutCircles(t *testing.T) {
 	ctx := context.Background()
@@ -246,6 +327,21 @@ func assertColumnNotNull(t *testing.T, conn *pgxpool.Conn, ctx context.Context, 
 	}
 	if !strings.EqualFold(nullable, "NO") {
 		t.Fatalf("column %s.%s should be NOT NULL, got is_nullable=%q", table, column, nullable)
+	}
+}
+
+func assertColumnNullable(t *testing.T, conn *pgxpool.Conn, ctx context.Context, schema, table, column string) {
+	var nullable string
+	err := conn.QueryRow(ctx, `
+		SELECT is_nullable
+		FROM information_schema.columns
+		WHERE table_schema = $1 AND table_name = $2 AND column_name = $3
+	`, schema, table, column).Scan(&nullable)
+	if err != nil {
+		t.Fatalf("lookup nullability %s.%s: %v", table, column, err)
+	}
+	if !strings.EqualFold(nullable, "YES") {
+		t.Fatalf("column %s.%s should be nullable, got is_nullable=%q", table, column, nullable)
 	}
 }
 

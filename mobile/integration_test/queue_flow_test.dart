@@ -85,6 +85,8 @@ void main() {
       await _pumpUntil(tester, () => queue.state.queue?.roundNumber == 1);
       expect(queue.state.queue?.lifecycle, 'active');
 
+      await tester.ensureVisible(find.text('Select next'));
+      await tester.pumpAndSettle();
       await tester.tap(find.bySemanticsLabel('Select next'));
       await tester.pump();
       expect(queue.state.queue?.selectedEntryId, 'entry-1');
@@ -193,6 +195,64 @@ void main() {
     await room.endSession();
     expect(room.state.status, SessionRoomStatus.ended);
   });
+
+  testWidgets('prepared queue reorder and policy save update the room snapshot',
+      (tester) async {
+    final backend = _QueueFlowBackend(preparedMode: true);
+    final realtime = _StreamingRealtimeClient();
+    final queue = QueueController(
+      backend,
+      () async => (token: 'token', sessionId: 'backend-session'),
+      realtime: realtime,
+      isManager: true,
+    );
+    final room = SessionRoomController(
+      _QueueFlowSessionApi(),
+      () async => (token: 'token', sessionId: 'backend-session'),
+      _RecordingMediaSession(),
+      realtime: realtime,
+      isModerator: true,
+      queue: queue,
+    );
+    addTearDown(queue.dispose);
+    await room.join(_liveSessionId);
+    await queue.prepareRound(
+      roundType: 'revision',
+      surahId: 2,
+      fromAyah: 1,
+      toAyah: 5,
+      gradingRequired: false,
+    );
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        sessionRoomControllerProvider(_liveSessionId).overrideWith((_) => room),
+      ],
+      child:
+          const MaterialApp(home: SessionRoomScreen(sessionId: _liveSessionId)),
+    ));
+    await tester.pump();
+
+    await tester.tap(find.bySemanticsLabel('Reorder queue'));
+    await tester.pump(_dialogSettle);
+    await tester.tap(find.byKey(const Key('queueMoveDown-student-1')));
+    await tester.pump();
+    await tester.tap(find.text('Save'));
+    await _pumpUntil(tester, () => backend.preorder.first == 'student-2');
+    expect(queue.state.queue!.preorder.first.studentId, 'student-2');
+
+    await tester.ensureVisible(find.text('Queue policy'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Queue policy'));
+    await tester.pump(_dialogSettle);
+    await tester.tap(find.byKey(const Key('queuePolicyOptOut')));
+    await tester.pump(_dialogSettle);
+    await tester.tap(find.text('Auto approve').last);
+    await tester.pump(_dialogSettle);
+    await tester.tap(find.text('Save'));
+    await _pumpUntil(
+        tester, () => queue.state.queue!.policy.optOut == 'auto_approve');
+    expect(queue.state.actionErrorMessage, isNull);
+  });
 }
 
 Future<void> _pumpUntil(
@@ -218,7 +278,12 @@ QueueEntry _entry(QueueController controller, String entryId) =>
     controller.state.queue!.entries.singleWhere((entry) => entry.id == entryId);
 
 class _QueueFlowBackend extends QueueApiClient {
-  _QueueFlowBackend() : super(Dio());
+  _QueueFlowBackend({this.preparedMode = false}) : super(Dio());
+
+  final bool preparedMode;
+  List<String> preorder = ['student-1', 'student-2'];
+  String optOutPolicy = 'approval_required';
+  int policyVersion = 1;
 
   int queueFetches = 0;
   int _roundNumber = 0;
@@ -264,6 +329,40 @@ class _QueueFlowBackend extends QueueApiClient {
       _BackendEntry('entry-2', 'student-2', 'Student B', 2, 'waiting', 1),
     ];
     return _snapshot();
+  }
+
+  @override
+  Future<QueueState> reorder({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+    required List<String> orderedIds,
+    required int expectedVersion,
+    String? idempotencyKey,
+  }) async {
+    if (expectedVersion != _queueVersion) throw StateError('Stale queue');
+    preorder = List.of(orderedIds);
+    _queueVersion++;
+    return _snapshot();
+  }
+
+  @override
+  Future<QueuePolicy> updatePolicy({
+    required String token,
+    required String sessionId,
+    required String liveSessionId,
+    required int expectedVersion,
+    String? population,
+    String? unfinishedFinalization,
+    String? optOut,
+    String? gradeVisibility,
+    String? gradeCorrection,
+    String? idempotencyKey,
+  }) async {
+    if (expectedVersion != policyVersion) throw StateError('Stale policy');
+    optOutPolicy = optOut ?? optOutPolicy;
+    policyVersion++;
+    return _snapshot().policy;
   }
 
   @override
@@ -410,7 +509,7 @@ class _QueueFlowBackend extends QueueApiClient {
         'round_id': 'round-$_roundNumber',
         'round_number': _roundNumber,
         'round_type': 'revision',
-        'lifecycle': 'active',
+        'lifecycle': preparedMode ? 'prepared' : 'active',
         'surah_id': 2,
         'from_ayah': 1,
         'to_ayah': 5,
@@ -420,13 +519,24 @@ class _QueueFlowBackend extends QueueApiClient {
         'policy': {
           'population': 'present_at_activation',
           'unfinished_finalization': 'mark_unfinished_skipped',
-          'opt_out': 'approval_required',
+          'opt_out': optOutPolicy,
           'grade_visibility': 'managers_and_student',
           'grade_correction': 'audited_any_time',
-          'version': 1,
+          'version': policyVersion,
         },
-        'preorder': const [],
-        'entries': _entries
+        'preorder': preparedMode
+            ? [
+                for (var index = 0; index < preorder.length; index++)
+                  {
+                    'student_id': preorder[index],
+                    'student_name': preorder[index] == 'student-1'
+                        ? 'Student A'
+                        : 'Student B',
+                    'position': index + 1,
+                  },
+              ]
+            : const [],
+        'entries': (preparedMode ? const <_BackendEntry>[] : _entries)
             .map((entry) => {
                   'id': entry.id,
                   'student_id': entry.studentId,

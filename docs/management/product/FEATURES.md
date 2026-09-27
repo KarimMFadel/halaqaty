@@ -92,7 +92,7 @@ Secure, multi-method user registration and authentication system with role-based
 - [ ] Firebase Auth registration/sign-in and ID-token refresh in the Flutter client; backend-validated per-device sessions with 30-day inactivity expiry and current-device logout
 - [ ] User profile: display name, avatar (stored in MinIO), bio (optional), preferred language
 - [ ] Password reset via email
-- [ ] Account deletion with data erasure (GDPR/privacy compliance)
+- [ ] Account deletion after recent Firebase reauthentication: invalidate every backend session, remove the Firebase identity and non-retained personal profile data, and preserve authorized teaching history with display-name attribution. This batch serves accounts with no active teacher/supervisor role or owned active circle. Manager deletion and circle archival wait for F-008 member notifications and the required supervisor handoff.
 - [ ] Device token registration for FCM push notifications
 
 
@@ -428,7 +428,7 @@ Step 5: Media Routing
 
 #### Description
 
-Recurring weekly schedule management with smart reminders and integrated attendance tracking.
+Owns circle recurring schedules, one-off planned sessions, each member's combined local-time calendar, and durable attendance classification/correction. Attendance uses F-005 presence facts as evidence; joining a live session alone does not decide attendance. Push reminder delivery is owned by F-008. This feature is description-only in the current gap batch.
 
 #### User Stories
 
@@ -479,7 +479,7 @@ stateDiagram-v2
 
 #### Description
 
-Full student progress intelligence layer built on top of the existing session and recitation queue data. Gives students a clear, Arabic-first view of their Quran memorization journey and gives teachers actionable insight into each student's attendance vs practice commitment.
+Owns student session history, recitation history, the Quran Map, progress summaries, and teacher insights derived from F-003 completed turns and F-006 attendance. It distinguishes attendance from practice and preserves each completed pass and its Ayah range. F-010 provides only the dashboard shell and navigation for these student views. This feature is description-only in the current gap batch.
 
 **Key insight — Attended ≠ Practiced:**
 - **Attended (حضر):** `session_attendance.status = 'present'`
@@ -595,7 +595,7 @@ Full student progress intelligence layer built on top of the existing session an
 
 #### Description
 
-Multi-channel notification system ensuring no important event is missed.
+Owns foreground notification history/preferences and background or closed-app delivery through FCM for approved product events, including session reminders, messages, grades, invitations, and queue turns. Circle-member notices required before manager-account deletion are also an F-008 dependency. F-008 remains proposed and requires feature approval before implementation; this gap batch only clarifies its definition.
 
 #### Notification Matrix
 
@@ -650,7 +650,7 @@ Integrated Quran text (Uthmani script) with Ayah-level interaction tied to memor
 
 #### Description
 
-Role-based dashboard shell for student self-tracking and teacher oversight across circles. The data and detail screens are provided by F-007 (Enhanced Student Progress Tracking).
+Owns role-based dashboard navigation and the teacher overview shell. Student history, Quran Map, and progress-detail content belong to F-007 and must not be duplicated here. The remaining F-010 scope should be reassessed after F-007 is defined and delivered; this gap batch only clarifies the boundary.
 
 #### Acceptance Criteria
 

@@ -110,6 +110,10 @@ func main() {
 
 	authService := auth.NewService(sessionRepo, auditLogger, cfg.SessionAbsoluteTTL)
 	authHandler := auth.NewHandler(authService)
+	authHandler.SetLogger(logger)
+	accountDeletion := auth.NewAccountDeletionService(sessionRepo, firebaseAuthClient)
+	accountDeletion.SetLogger(logger)
+	authHandler.SetAccountDeletionService(accountDeletion)
 	profileRepo := profile.NewRepository(pool)
 	profileService := profile.NewService(profileRepo)
 	profileHandler := profile.NewHandler(profileService)
@@ -307,6 +311,28 @@ func main() {
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
 	reconcilerCtx, stopReconciler := context.WithCancel(context.Background())
 	defer stopReconciler()
+	if pending, err := accountDeletion.ReconcilePending(reconcilerCtx, 50); err != nil {
+		logger.Error("account deletion reconciliation failed", "error", err)
+	} else if pending > 0 {
+		logger.Warn("Firebase account deletions remain pending", "count", pending)
+	}
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-reconcilerCtx.Done():
+				return
+			case <-ticker.C:
+				pending, err := accountDeletion.ReconcilePending(reconcilerCtx, 50)
+				if err != nil {
+					logger.Error("account deletion reconciliation failed", "error", err)
+				} else if pending > 0 {
+					logger.Warn("Firebase account deletions remain pending", "count", pending)
+				}
+			}
+		}
+	}()
 
 	// F-003 startup reconciliation: finalize any rounds left active/prepared
 	// after a previous crash or missed session-end observer callback.

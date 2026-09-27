@@ -61,6 +61,16 @@ func (m *AuthMiddleware) SetMetrics(am *metrics.AuthMetrics) {
 // endpoints that create backend sessions for an already-registered user and
 // therefore cannot yet require a session ID.
 func (m *AuthMiddleware) RequireBearer(next http.Handler) http.Handler {
+	return m.requireBearer(next, false)
+}
+
+// RequireRevocationCheckedBearer checks Firebase revocation before an existing
+// identity can create a backend session.
+func (m *AuthMiddleware) RequireRevocationCheckedBearer(next http.Handler) http.Handler {
+	return m.requireBearer(next, true)
+}
+
+func (m *AuthMiddleware) requireBearer(next http.Handler, checkRevoked bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if m == nil || m.verifier == nil || m.sessionRepo == nil {
 			phttp.WriteError(
@@ -73,7 +83,7 @@ func (m *AuthMiddleware) RequireBearer(next http.Handler) http.Handler {
 		}
 
 		start := time.Now()
-		principal, ok := m.authenticateBearer(r)
+		principal, ok := m.authenticateBearer(r, checkRevoked)
 		if !ok {
 			m.metrics.RecordRejection()
 			phttp.WriteError(
@@ -107,7 +117,7 @@ func (m *AuthMiddleware) RequireVerifiedFirebase(next http.Handler) http.Handler
 		}
 
 		start := time.Now()
-		decoded, ok := m.verifyBearer(r)
+		decoded, ok := m.verifyRevocationCheckedBearer(r)
 		if !ok {
 			m.metrics.RecordRejection()
 			phttp.WriteError(
@@ -123,6 +133,7 @@ func (m *AuthMiddleware) RequireVerifiedFirebase(next http.Handler) http.Handler
 			FirebaseUID: decoded.UID,
 			Email:       decoded.Email,
 			Claims:      decoded.Claims,
+			AuthTime:    decoded.AuthTime,
 		}
 		m.metrics.RecordRequest(time.Since(start))
 		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), principal)))
@@ -133,7 +144,16 @@ func (m *AuthMiddleware) RequireVerifiedFirebase(next http.Handler) http.Handler
 // session identified by X-Halaqaty-Session-ID. It is used for all protected
 // routes except registration and backend-session creation.
 func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
-	return m.RequireBearer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return m.requireSession(next, false)
+}
+
+// RequireRevocationChecked enforces a backend session and Firebase revocation check.
+func (m *AuthMiddleware) RequireRevocationChecked(next http.Handler) http.Handler {
+	return m.requireSession(next, true)
+}
+
+func (m *AuthMiddleware) requireSession(next http.Handler, checkRevoked bool) http.Handler {
+	return m.requireBearer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
 		reject := func(code, msg string, status int) {
@@ -197,11 +217,17 @@ func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 
 		m.metrics.RecordRequest(time.Since(start))
 		next.ServeHTTP(w, r)
-	}))
+	}), checkRevoked)
 }
 
-func (m *AuthMiddleware) authenticateBearer(r *http.Request) (AuthPrincipal, bool) {
-	decoded, ok := m.verifyBearer(r)
+func (m *AuthMiddleware) authenticateBearer(r *http.Request, checkRevoked bool) (AuthPrincipal, bool) {
+	var decoded *auth.DecodedToken
+	var ok bool
+	if checkRevoked {
+		decoded, ok = m.verifyRevocationCheckedBearer(r)
+	} else {
+		decoded, ok = m.verifyBearer(r)
+	}
 	if !ok {
 		return AuthPrincipal{}, false
 	}
@@ -216,6 +242,7 @@ func (m *AuthMiddleware) authenticateBearer(r *http.Request) (AuthPrincipal, boo
 		FirebaseUID: decoded.UID,
 		Email:       decoded.Email,
 		Claims:      decoded.Claims,
+		AuthTime:    decoded.AuthTime,
 	}, true
 }
 
@@ -230,6 +257,22 @@ func (m *AuthMiddleware) verifyBearer(r *http.Request) (*auth.DecodedToken, bool
 		return nil, false
 	}
 
+	return decoded, true
+}
+
+func (m *AuthMiddleware) verifyRevocationCheckedBearer(r *http.Request) (*auth.DecodedToken, bool) {
+	bearerToken, ok := extractBearerToken(r.Header.Get(httpconst.HeaderAuthorization))
+	if !ok {
+		return nil, false
+	}
+	verifier, ok := m.verifier.(auth.RevocationAwareTokenVerifier)
+	if !ok {
+		return nil, false
+	}
+	decoded, err := verifier.VerifyAndCheckRevoked(r.Context(), bearerToken)
+	if err != nil {
+		return nil, false
+	}
 	return decoded, true
 }
 

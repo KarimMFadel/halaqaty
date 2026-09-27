@@ -214,13 +214,13 @@ class QueueController extends StateNotifier<QueueControllerState> {
     }
   }
 
-  Future<void> reorder(List<String> orderedIds) =>
+  Future<void> reorder(List<String> orderedIds, {int? expectedVersion}) =>
       _runManager((credentials, queue) => _api.reorder(
             token: credentials.token,
             sessionId: credentials.sessionId,
             liveSessionId: _liveSessionId!,
             orderedIds: orderedIds,
-            expectedVersion: queue.version,
+            expectedVersion: expectedVersion ?? queue.version,
           ));
 
   Future<void> moveEntry(String entryId, int newPosition) =>
@@ -327,6 +327,7 @@ class QueueController extends StateNotifier<QueueControllerState> {
           ));
 
   Future<void> updatePolicy({
+    int? expectedVersion,
     String? population,
     String? unfinishedFinalization,
     String? optOut,
@@ -338,7 +339,7 @@ class QueueController extends StateNotifier<QueueControllerState> {
           token: credentials.token,
           sessionId: credentials.sessionId,
           liveSessionId: _liveSessionId!,
-          expectedVersion: queue.policy.version,
+          expectedVersion: expectedVersion ?? queue.policy.version,
           population: population,
           unfinishedFinalization: unfinishedFinalization,
           optOut: optOut,
@@ -385,6 +386,9 @@ class QueueController extends StateNotifier<QueueControllerState> {
         clearActionError: true,
       );
     } catch (error) {
+      if (error is QueueApiException && error.statusCode == 409) {
+        await _refresh();
+      }
       state = state.copyWith(actionErrorMessage: error.toString());
     }
   }

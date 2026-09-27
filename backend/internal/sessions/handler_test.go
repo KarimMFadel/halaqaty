@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 )
 
 const (
@@ -148,6 +149,13 @@ func TestHandlerSessionErrorMapping(t *testing.T) {
 		if !strings.Contains(rec.Body.String(), `"error"`) {
 			t.Fatalf("%s must use the standard error envelope: %s", tc.target, rec.Body.String())
 		}
+	}
+}
+
+func TestDeletedAccountSessionErrorIsUnauthorized(t *testing.T) {
+	code, status := sessionHTTPError(ErrAccountDeleted)
+	if code != httpconst.ErrorCodeUnauthorized || status != http.StatusUnauthorized {
+		t.Fatalf("deleted account: code=%q status=%d", code, status)
 	}
 }
 

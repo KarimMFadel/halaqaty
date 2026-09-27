@@ -17,10 +17,11 @@ on the Linux desktop target and would fail with `MissingPluginException` for
 | Job | Target and scope | Output artifact |
 | --- | --- | --- |
 | `flutter-unit-tests` | `flutter test test` on Ubuntu | Console output |
-| `flutter-integration-tests` | Functional integration files on Linux; four native screenshot suites are excluded | `flutter-integration-linux-logs` |
+| `flutter-integration-tests` | Functional integration files on Linux; five native screenshot suites are excluded | `flutter-integration-linux-logs` |
 
 Run these visual suites locally on the configured Android device/emulator:
 
+- `account_deletion_visual_test.dart`
 - `ux_visual_journey_test.dart`
 - `wave0_shell_visual_test.dart`
 - `wave1_circles_visual_test.dart`
@@ -50,7 +51,7 @@ dark outputs alongside the test assertions.
    run uses its original revision, not local edits.
 2. In GitHub **Actions → Tests (Unit & Integration)**, select the run for the
    updated commit. Inspect the Linux integration logs artifact if that job fails.
-3. Run the four visual suites locally on Android and review their screenshots;
+3. Run the five visual suites locally on Android and review their screenshots;
    their success is not represented in the GitHub workflow status.
 
 The `flutter_webrtc: libpulse NOT found` warning concerns system-audio loopback
@@ -69,3 +70,11 @@ flutter drive --driver=test_driver/wave2_screenshot_driver.dart --target=integra
 When adding a native screenshot suite, add it to the Linux exclusion list and
 document its local Android command. Confirm every functional integration file
 still has a CI execution path.
+
+For account deletion screenshots, run from `mobile/`:
+
+```sh
+flutter drive --driver=test_driver/account_deletion_screenshot_driver.dart --target=integration_test/account_deletion_visual_test.dart -d emulator-5554
+```
+
+The driver writes PNGs to `specs/001-auth-roles-profile/evidence/screenshots/`.

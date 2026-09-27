@@ -42,14 +42,15 @@ ON CONFLICT (circle_id, user_id) DO NOTHING
 const usersExistQuery = `
 SELECT id::text
 FROM users
-WHERE id = ANY($1::uuid[])
+WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL
 `
 
 const searchUsersQuery = `
 SELECT u.id::text, COALESCE(p.display_name, p.full_name)
 FROM users u
 JOIN profiles p ON p.user_id = u.id
-WHERE COALESCE(p.display_name, p.full_name) ILIKE '%' || $1 || '%' ESCAPE E'\\'
+WHERE u.deleted_at IS NULL
+  AND COALESCE(p.display_name, p.full_name) ILIKE '%' || $1 || '%' ESCAPE E'\\'
 ORDER BY COALESCE(p.display_name, p.full_name), u.id
 LIMIT $2
 `

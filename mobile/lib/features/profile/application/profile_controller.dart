@@ -43,6 +43,8 @@ class ProfileState {
 typedef ReadAuthState = AuthState Function();
 typedef Logout = Future<void> Function();
 
+enum AccountDeletionOutcome { complete, pending }
+
 class ProfileController extends StateNotifier<ProfileState> {
   ProfileController({
     required ProfileApiClient apiClient,
@@ -151,6 +153,52 @@ class ProfileController extends StateNotifier<ProfileState> {
       state = state.copyWith(isSaving: false, errorMessage: e.toString());
       return false;
     }
+  }
+
+  Future<AccountDeletionOutcome?> deleteAccount(
+      {required String password}) async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null ||
+        !user.providerData.any((p) => p.providerId == 'password')) {
+      state = state.copyWith(
+          errorMessage:
+              'Password reauthentication is unavailable for this account.');
+      return null;
+    }
+    try {
+      await user.reauthenticateWithCredential(EmailAuthProvider.credential(
+        email: user.email ?? '',
+        password: password,
+      ));
+      final token = await user.getIdToken(true);
+      if (token == null || token.isEmpty) {
+        state = state.copyWith(
+            errorMessage: 'Could not verify your identity. Please retry.');
+        return null;
+      }
+      final sessionId = _readAuthState().sessionId;
+      if (sessionId == null) {
+        state = state.copyWith(
+            errorMessage: 'Session is missing. Please sign in again.');
+        return null;
+      }
+      final pending = await _apiClient.deleteMe(
+          firebaseIdToken: token, sessionId: sessionId);
+      return pending
+          ? AccountDeletionOutcome.pending
+          : AccountDeletionOutcome.complete;
+    } on FirebaseAuthException catch (e) {
+      state =
+          state.copyWith(errorMessage: e.message ?? 'Reauthentication failed.');
+    } on DioException catch (e) {
+      state = state.copyWith(
+          errorMessage: _extractErrorMessage(e) ??
+              e.message ??
+              'Account deletion failed.');
+    } catch (e) {
+      state = state.copyWith(errorMessage: e.toString());
+    }
+    return null;
   }
 
   Future<_ProfileCredentials?> _loadCredentials() async {

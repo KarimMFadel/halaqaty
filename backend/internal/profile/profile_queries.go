@@ -15,7 +15,7 @@ SELECT
     p.completed_at
 FROM users u
 LEFT JOIN profiles p ON p.user_id = u.id
-WHERE u.id = $1
+WHERE u.id = $1 AND u.deleted_at IS NULL
 `
 
 // updateProfileFieldsByUserIDQuery updates only supplied fields via COALESCE.
@@ -36,7 +36,8 @@ INSERT INTO profiles (
     preferred_language,
     completed_at,
     updated_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'ar'), $9, NOW())
+) SELECT $1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'ar'), $9, NOW()
+WHERE EXISTS (SELECT 1 FROM users WHERE id = $1::uuid AND deleted_at IS NULL)
 ON CONFLICT (user_id) DO UPDATE SET
     full_name          = COALESCE($2, profiles.full_name),
     display_name       = COALESCE($3, profiles.display_name),

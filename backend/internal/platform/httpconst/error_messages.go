@@ -68,6 +68,7 @@ const (
 	ErrorMessageBioTooLong         = "bio must be at most 500 characters"
 	ErrorMessageAvatarURLInvalid   = "avatar_url must be a valid URI"
 	ErrorMessagePhoneTooLong       = "phone must be at most 50 characters"
+	ErrorMessageTimezoneInvalid    = "timezone must be a valid IANA timezone"
 
 	// Queue messages (F-003). User-safe: no internal, media, provider, or
 	// room detail ever appears in these strings.

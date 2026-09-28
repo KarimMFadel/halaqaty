@@ -31,6 +31,7 @@ func newHandlerTestService() (*Handler, *handlerStore) {
 				DisplayName:       &displayName,
 				Country:           &country,
 				PreferredLanguage: "ar",
+				Timezone:          "Africa/Cairo",
 				CreatedAt:         time.Now().UTC(),
 			},
 			CompletedAt: &completedAt,
@@ -362,6 +363,86 @@ func (s *handlerStore) UpdateByUserID(_ context.Context, in UpdateInput) error {
 	if in.Country != nil {
 		s.record.Profile.Country = strPtr(*in.Country)
 	}
+	if in.Timezone != nil {
+		s.record.Profile.Timezone = *in.Timezone
+	}
 	s.record.CompletedAt = in.CompletedAt
 	return nil
+}
+
+func TestHandler_GetMe_ReturnsStoredTimezone(t *testing.T) {
+	handler, _ := newHandlerTestService()
+
+	rec := httptest.NewRecorder()
+	handler.GetMe(rec, requestWithPrincipal(http.MethodGet, ""))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var got auth.UserProfile
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode profile response: %v", err)
+	}
+	if got.Timezone != "Africa/Cairo" {
+		t.Fatalf("timezone: got %q, want %q", got.Timezone, "Africa/Cairo")
+	}
+}
+
+func TestHandler_UpdateMe_TimezoneRoundTrip(t *testing.T) {
+	handler, _ := newHandlerTestService()
+
+	rec := httptest.NewRecorder()
+	handler.UpdateMe(rec, requestWithPrincipal(http.MethodPut, `{"timezone":"Europe/Berlin"}`))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var got auth.UserProfile
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode profile response: %v", err)
+	}
+	if got.Timezone != "Europe/Berlin" {
+		t.Fatalf("timezone after update: got %q, want %q", got.Timezone, "Europe/Berlin")
+	}
+}
+
+func TestHandler_UpdateMe_InvalidTimezoneRejectedWithValidationEnvelope(t *testing.T) {
+	handler, store := newHandlerTestService()
+
+	for _, body := range []string{`{"timezone":"Not/AZone"}`, `{"timezone":""}`} {
+		rec := httptest.NewRecorder()
+		handler.UpdateMe(rec, requestWithPrincipal(http.MethodPut, body))
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("body %s: status got %d, want %d body=%s", body, rec.Code, http.StatusBadRequest, rec.Body.String())
+		}
+		envelope := decodeHandlerError(t, rec)
+		if envelope.Error.Code != httpconst.ErrorCodeValidationFailed {
+			t.Fatalf("body %s: error code got %q, want %q", body, envelope.Error.Code, httpconst.ErrorCodeValidationFailed)
+		}
+		if got := envelope.Error.Fields[httpconst.FieldTimezone]; got != httpconst.ErrorMessageTimezoneInvalid {
+			t.Fatalf("body %s: timezone field got %q, want %q fields=%v", body, got, httpconst.ErrorMessageTimezoneInvalid, envelope.Error.Fields)
+		}
+		if store.record.Profile.Timezone != "Africa/Cairo" {
+			t.Fatalf("invalid timezone must not persist: got %q", store.record.Profile.Timezone)
+		}
+	}
+}
+
+func TestHandler_UpdateMe_OldClientWithoutTimezonePreservesStoredValue(t *testing.T) {
+	handler, _ := newHandlerTestService()
+
+	rec := httptest.NewRecorder()
+	handler.UpdateMe(rec, requestWithPrincipal(http.MethodPut, `{"bio":"old client update"}`))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var got auth.UserProfile
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode profile response: %v", err)
+	}
+	if got.Timezone != "Africa/Cairo" {
+		t.Fatalf("omitted timezone must preserve the stored value: got %q, want %q", got.Timezone, "Africa/Cairo")
+	}
 }

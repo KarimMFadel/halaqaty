@@ -27,6 +27,7 @@ type UpdateInput struct {
 	AvatarURL         *string
 	Phone             *string
 	PreferredLanguage *string
+	Timezone          *string
 	CompletedAt       *time.Time
 }
 
@@ -55,6 +56,7 @@ func (r *Repository) GetByUserID(ctx context.Context, userID string) (Record, er
 		&avatarURL,
 		&phone,
 		&profile.PreferredLanguage,
+		&profile.Timezone,
 		&profile.CreatedAt,
 		&completedAt,
 	)
@@ -92,6 +94,7 @@ func (r *Repository) UpdateByUserID(ctx context.Context, in UpdateInput) error {
 		derefOrNil(in.Phone),
 		derefOrNil(in.PreferredLanguage),
 		in.CompletedAt,
+		derefOrNil(in.Timezone),
 	)
 	if err != nil {
 		return fmt.Errorf("update profile by user id: %w", err)

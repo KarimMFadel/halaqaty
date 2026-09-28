@@ -104,6 +104,7 @@ func (r *SessionRepository) GetUserProfileByUserID(ctx context.Context, userID s
 		&avatarURL,
 		&phone,
 		&profile.PreferredLanguage,
+		&profile.Timezone,
 		&profile.CreatedAt,
 	)
 	if err != nil {

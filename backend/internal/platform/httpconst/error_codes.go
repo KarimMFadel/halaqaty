@@ -81,6 +81,7 @@ const (
 	FieldBio               = "bio"
 	FieldAvatarURL         = "avatar_url"
 	FieldPhone             = "phone"
+	FieldTimezone          = "timezone"
 	FieldCircleID          = "circle_id"
 	FieldUserID            = "user_id"
 	FieldRole              = "role"

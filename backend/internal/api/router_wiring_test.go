@@ -429,6 +429,36 @@ func TestRouter_PerUserRateLimitAppliesAfterAuthentication(t *testing.T) {
 	}
 }
 
+func TestRouter_PerIPRateLimitAppliesBeforeAuthentication(t *testing.T) {
+	router := NewRouter(MiddlewareSet{
+		Auth:           wiringAuthMiddleware(),
+		RateLimit:      middleware.NewRateLimitMiddleware(1, 0),
+		ProfileHandler: wiringProfileHandler(),
+	})
+
+	first := httptest.NewRecorder()
+	router.Handler().ServeHTTP(first, httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil))
+	if first.Code != http.StatusUnauthorized {
+		t.Fatalf("first request: got %d, want %d (IP budget must not block the first request)", first.Code, http.StatusUnauthorized)
+	}
+
+	second := httptest.NewRecorder()
+	router.Handler().ServeHTTP(second, httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil))
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second request: got %d, want %d (per-IP limiter must fire before authentication)", second.Code, http.StatusTooManyRequests)
+	}
+	var envelope phttp.ErrorEnvelope
+	if err := json.Unmarshal(second.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if envelope.Error.Code != httpconst.ErrorCodeRateLimitExceeded {
+		t.Fatalf("error code: got %q, want %q", envelope.Error.Code, httpconst.ErrorCodeRateLimitExceeded)
+	}
+	if envelope.Error.Message != httpconst.ErrorMessageRateLimitExceeded {
+		t.Fatalf("error message: got %q, want %q", envelope.Error.Message, httpconst.ErrorMessageRateLimitExceeded)
+	}
+}
+
 func TestDeleteAccountRequiresSessionAndPerUserBudget(t *testing.T) {
 	router := NewRouter(MiddlewareSet{
 		Auth:      wiringAuthMiddleware(),

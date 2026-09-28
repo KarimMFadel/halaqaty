@@ -25,8 +25,12 @@ var authRepoMigrations = []string{
 	"000012_auth_profiles_display_name.up.sql",
 	"000013_create_circles.up.sql",
 	"000014_circle_members_circle_fk.up.sql",
+	"000015_circle_management.up.sql",
 	"000016_live_sessions.up.sql",
+	"000017_recitation_queue_system.up.sql",
+	"000018_real_time_chat.up.sql",
 	"000019_account_deletion_tombstone.up.sql",
+	"000020_schedule_calendar_attendance.up.sql",
 }
 
 func TestSessionRepository_CloseStudentAccountPreservesHistoryAndErasesPrivateData(t *testing.T) {
@@ -40,7 +44,7 @@ func TestSessionRepository_CloseStudentAccountPreservesHistoryAndErasesPrivateDa
 		UPDATE profiles
 		SET display_name = 'Student', full_name = 'Private Name', country = 'EG',
 		    phone = '+201000000000', bio = 'private bio', avatar_url = 'https://example.test/avatar',
-		    preferred_language = 'en', completed_at = NOW()
+		    preferred_language = 'en', timezone = 'Africa/Cairo', completed_at = NOW()
 		WHERE user_id = $1::uuid;
 	`, userID); err != nil {
 		t.Fatalf("prepare profile: %v", err)
@@ -60,16 +64,16 @@ func TestSessionRepository_CloseStudentAccountPreservesHistoryAndErasesPrivateDa
 	if firebaseUID != "firebase-auth-closure-eligible" {
 		t.Fatalf("cleanup uid: got %q", firebaseUID)
 	}
-	var deletedAt, language string
+	var deletedAt, language, timezone string
 	var email, fullName, country, phone, bio, avatarURL, displayName sql.NullString
 	if err := repo.pool.QueryRow(ctx, `
 		SELECT u.deleted_at::text, u.email, p.full_name, p.country, p.phone, p.bio,
-		       p.avatar_url, p.display_name, p.preferred_language
+		       p.avatar_url, p.display_name, p.preferred_language, p.timezone
 		FROM users u JOIN profiles p ON p.user_id = u.id WHERE u.id = $1::uuid
-	`, userID).Scan(&deletedAt, &email, &fullName, &country, &phone, &bio, &avatarURL, &displayName, &language); err != nil {
+	`, userID).Scan(&deletedAt, &email, &fullName, &country, &phone, &bio, &avatarURL, &displayName, &language, &timezone); err != nil {
 		t.Fatalf("load closed account: %v", err)
 	}
-	if deletedAt == "" || email.Valid || fullName.Valid || country.Valid || phone.Valid || bio.Valid || avatarURL.Valid || !displayName.Valid || displayName.String != "Student" || language != "ar" {
+	if deletedAt == "" || email.Valid || fullName.Valid || country.Valid || phone.Valid || bio.Valid || avatarURL.Valid || !displayName.Valid || displayName.String != "Student" || language != "ar" || timezone != "UTC" {
 		t.Fatalf("closed account retained unexpected data: deleted=%q email=%+v full=%+v country=%+v phone=%+v bio=%+v avatar=%+v display=%+v language=%q", deletedAt, email, fullName, country, phone, bio, avatarURL, displayName, language)
 	}
 	if _, err := repo.GetByID(ctx, session.ID); !errors.Is(err, ErrSessionNotFound) {
@@ -409,7 +413,7 @@ func TestSessionRepository_CreateEmptyProfile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetUserProfileByUserID: %v", err)
 	}
-	if profile.ID != userID || profile.DisplayName != nil || profile.PreferredLanguage != "ar" {
+	if profile.ID != userID || profile.DisplayName != nil || profile.PreferredLanguage != "ar" || profile.Timezone != "UTC" {
 		t.Fatalf("empty profile projection: %+v", profile)
 	}
 }

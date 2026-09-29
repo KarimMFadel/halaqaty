@@ -49,6 +49,54 @@ func TestPlannedSessionService_CreateIsFutureOnlyAndDurationIsInformational(t *t
 	}
 }
 
+func TestPlannedSessionService_RequiresFreshReviewedOverlapWarnings(t *testing.T) {
+	ctx := context.Background()
+	pool := openRepoTestPool(t, ctx)
+	svc, teacher, circle := newPlannedSessionTestService(t, ctx, pool)
+	svc.now = func() time.Time { return time.Date(2030, 1, 1, 9, 0, 0, 0, time.UTC) }
+	date := time.Date(2030, 1, 2, 0, 0, 0, 0, time.UTC)
+	first := plannedSessionTestPlan(date, 60, "First")
+	if _, err := svc.Create(ctx, CreatePlannedSessionCommand{ActorID: teacher, CircleID: circle, IdempotencyKey: "overlap-first", Plan: first}); err != nil {
+		t.Fatalf("create first plan: %v", err)
+	}
+	second := plannedSessionTestPlan(date, 60, "Second")
+	second.StartLocalTime, second.EndLocalTime = LocalClock{Hour: 10, Minute: 30}, LocalClock{Hour: 11, Minute: 30}
+	preview, err := svc.overlap.Preview(ctx, teacher, circle, plannedRevision(second))
+	if err != nil || len(preview.Warnings) != 1 {
+		t.Fatalf("preview warnings=%#v err=%v; want one", preview.Warnings, err)
+	}
+	third := plannedSessionTestPlan(date, 60, "Third")
+	third.StartLocalTime, third.EndLocalTime = LocalClock{Hour: 10, Minute: 45}, LocalClock{Hour: 11, Minute: 45}
+	thirdPreview, err := svc.overlap.Preview(ctx, teacher, circle, plannedRevision(third))
+	if err != nil || len(thirdPreview.Warnings) != 1 {
+		t.Fatalf("third preview warnings=%#v err=%v", thirdPreview.Warnings, err)
+	}
+	if _, err := svc.Create(ctx, CreatePlannedSessionCommand{ActorID: teacher, CircleID: circle, IdempotencyKey: "overlap-third", Plan: third, ConfirmOverlaps: true, ConfirmedWarningIDs: []string{thirdPreview.Warnings[0].WarningID}}); err != nil {
+		t.Fatalf("create overlapping commitment after preview: %v", err)
+	}
+
+	cmd := CreatePlannedSessionCommand{ActorID: teacher, CircleID: circle, IdempotencyKey: "overlap-second", Plan: second, ConfirmOverlaps: true, ConfirmedWarningIDs: []string{preview.Warnings[0].WarningID}}
+	_, err = svc.Create(ctx, cmd)
+	var conflict *OverlapConfirmationError
+	if !errors.As(err, &conflict) || len(conflict.Warnings) != 2 {
+		t.Fatalf("write after stale review = %v, want refreshed two-warning conflict", err)
+	}
+	cmd.ConfirmedWarningIDs = []string{conflict.Warnings[0].WarningID, conflict.Warnings[1].WarningID}
+	created, err := svc.Create(ctx, cmd)
+	if err != nil {
+		t.Fatalf("write with all current IDs: %v", err)
+	}
+	cancelled := true
+	if _, err := svc.Change(ctx, ChangePlannedSessionCommand{ActorID: teacher, SessionID: created.ID, IdempotencyKey: "overlap-cancel", ExpectedVersion: created.Version, Cancelled: &cancelled}); err != nil {
+		t.Fatalf("cancel reviewed overlap plan: %v", err)
+	}
+	restored := false
+	_, err = svc.Change(ctx, ChangePlannedSessionCommand{ActorID: teacher, SessionID: created.ID, IdempotencyKey: "overlap-restore", ExpectedVersion: created.Version + 1, Cancelled: &restored})
+	if !errors.As(err, &conflict) || len(conflict.Warnings) != 2 {
+		t.Fatalf("restore overlapping plan = %v, want two refreshed warnings", err)
+	}
+}
+
 func TestPlannedSessionService_CreateRejectsPastStart(t *testing.T) {
 	ctx := context.Background()
 	pool := openRepoTestPool(t, ctx)

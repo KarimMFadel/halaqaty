@@ -105,6 +105,7 @@ func (h *ScheduleHandler) CreateSchedule(w http.ResponseWriter, r *http.Request)
 	}
 	created, err := h.service.Create(r.Context(), CreateScheduleCommand{
 		ActorID: actorID, CircleID: circleID, IdempotencyKey: key, Plan: plan,
+		ConfirmOverlaps: req.ConfirmOverlaps != nil && *req.ConfirmOverlaps, ConfirmedWarningIDs: req.ConfirmedWarningIDs,
 	})
 	if err != nil {
 		writeScheduleError(w, err)
@@ -164,7 +165,7 @@ func (h *ScheduleHandler) ChangeSchedule(w http.ResponseWriter, r *http.Request)
 	changed, err := h.service.Change(r.Context(), ChangeScheduleCommand{
 		ActorID: actorID, CircleID: circleID, ScheduleID: scheduleID, IdempotencyKey: key,
 		ExpectedVersion: *req.ExpectedVersion, EffectiveLocalDate: effective, Plan: plan,
-		Stop: req.Stop,
+		Stop: req.Stop, ConfirmOverlaps: *req.ConfirmOverlaps, ConfirmedWarningIDs: req.ConfirmedWarningIDs,
 	})
 	if err != nil {
 		writeScheduleError(w, err)
@@ -222,6 +223,8 @@ func (h *ScheduleHandler) ChangeScheduleOccurrence(w http.ResponseWriter, r *htt
 		OriginalLocalDate:          original,
 		ExpectedSeriesVersion:      *req.ExpectedSeriesVersion,
 		ExpectedOccurrenceVersion:  *req.ExpectedOccurrenceVersion,
+		ConfirmOverlaps:            *req.ConfirmOverlaps,
+		ConfirmedWarningIDs:        req.ConfirmedWarningIDs,
 		Title:                      req.Title,
 		Cancelled:                  req.Cancelled,
 		ReplacementDurationMinutes: req.DurationMinutes,
@@ -562,10 +565,17 @@ type scheduleConflictEnvelope struct {
 }
 
 func writeScheduleConflict(w http.ResponseWriter, message string) {
+	writeScheduleConflictWarnings(w, message, nil)
+}
+
+func writeScheduleConflictWarnings(w http.ResponseWriter, message string, warnings []OverlapWarning) {
 	var envelope scheduleConflictEnvelope
 	envelope.Error.Code = httpconst.ErrorCodeConflict
 	envelope.Error.Message = message
-	envelope.Error.Warnings = []OverlapWarning{}
+	envelope.Error.Warnings = warnings
+	if envelope.Error.Warnings == nil {
+		envelope.Error.Warnings = []OverlapWarning{}
+	}
 	phttp.WriteJSON(w, http.StatusConflict, envelope)
 }
 
@@ -580,6 +590,11 @@ func writeScheduleUnprocessable(w http.ResponseWriter, message string) {
 // writes, 409 surfaces conflicts and started history, 422 reports invalid
 // scheduling semantics, and anything unexpected stays a detail-free 500.
 func writeScheduleError(w http.ResponseWriter, err error) {
+	var overlapErr *OverlapConfirmationError
+	if errors.As(err, &overlapErr) {
+		writeScheduleConflictWarnings(w, "Review the updated scheduling conflicts before saving.", overlapErr.Warnings)
+		return
+	}
 	switch {
 	case errors.Is(err, ErrCircleNotFoundOrDenied):
 		phttp.WriteError(w, httpconst.ErrorCodeNotFound, httpconst.ErrorMessageCircleNotFound, http.StatusNotFound)

@@ -210,7 +210,7 @@ func seedCalendarMember(t *testing.T, ctx context.Context, pool *pgxpool.Pool, c
 
 func seedCalendarTimezone(t *testing.T, ctx context.Context, pool *pgxpool.Pool, userID, timezone string) {
 	t.Helper()
-	if _, err := pool.Exec(ctx, `INSERT INTO profiles(user_id,timezone) VALUES($1::uuid,$2)`, userID, timezone); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO profiles(user_id,timezone) VALUES($1::uuid,$2) ON CONFLICT (user_id) DO UPDATE SET timezone=EXCLUDED.timezone`, userID, timezone); err != nil {
 		t.Fatalf("seed profile timezone: %v", err)
 	}
 }

@@ -29,6 +29,8 @@ var (
 type CreateScheduleCommand struct {
 	ActorID, CircleID, IdempotencyKey string
 	Plan                              RevisionRecord
+	ConfirmOverlaps                   bool
+	ConfirmedWarningIDs               []string
 }
 
 // ChangeScheduleCommand changes the series from an inclusive local boundary.
@@ -38,6 +40,8 @@ type ChangeScheduleCommand struct {
 	EffectiveLocalDate                            time.Time
 	Plan                                          RevisionRecord
 	Stop                                          bool
+	ConfirmOverlaps                               bool
+	ConfirmedWarningIDs                           []string
 }
 
 // ChangeOccurrenceCommand patches one stable logical occurrence. Nil fields
@@ -51,6 +55,8 @@ type ChangeOccurrenceCommand struct {
 	ReplacementDurationMinutes                         *int
 	Title                                              *string
 	Cancelled                                          *bool
+	ConfirmOverlaps                                    bool
+	ConfirmedWarningIDs                                []string
 }
 
 // ScheduleView combines stable identity and its latest retained plan.
@@ -59,16 +65,16 @@ type ScheduleView struct {
 	Plan RevisionRecord
 }
 
-// ScheduleService implements US1 persistence and authorization. Overlap warning
-// enforcement (US4) must be composed before these commands are exposed by HTTP.
+// ScheduleService implements US1 persistence, authorization and US4 overlap confirmation.
 type ScheduleService struct {
-	repo *Repository
-	now  func() time.Time
+	repo    *Repository
+	overlap *OverlapService
+	now     func() time.Time
 }
 
 // NewScheduleService constructs the recurring-plan service.
 func NewScheduleService(repo *Repository) *ScheduleService {
-	return &ScheduleService{repo: repo, now: time.Now}
+	return &ScheduleService{repo: repo, overlap: NewOverlapService(repo), now: time.Now}
 }
 
 // List returns retained schedules to a current member, including archived circles.
@@ -106,11 +112,14 @@ func (s *ScheduleService) List(ctx context.Context, circleID, actorID string) ([
 // Create atomically stores a plan and its actor-scoped replay identity.
 func (s *ScheduleService) Create(ctx context.Context, cmd CreateScheduleCommand) (Schedule, error) {
 	var created Schedule
-	err := s.mutate(ctx, cmd.ActorID, cmd.CircleID, cmd.IdempotencyKey, "create", cmd, func(repo *Repository) (string, error) {
+	err := s.mutate(ctx, cmd.ActorID, cmd.CircleID, cmd.IdempotencyKey, "create", true, cmd, func(repo *Repository) (string, error) {
 		record := cmd.Plan
 		record.Version = 1
 		record.EffectiveLocalDate = record.AnchorLocalDate
 		if err := validateNewPlan(record, s.now()); err != nil {
+			return "", err
+		}
+		if err := s.overlap.Check(ctx, repo.tx, cmd.ActorID, cmd.CircleID, record, "", cmd.ConfirmOverlaps, cmd.ConfirmedWarningIDs); err != nil {
 			return "", err
 		}
 		var err error
@@ -127,7 +136,7 @@ func (s *ScheduleService) Create(ctx context.Context, cmd CreateScheduleCommand)
 // Change serializes series edits/stops with occurrence writes on the parent row.
 func (s *ScheduleService) Change(ctx context.Context, cmd ChangeScheduleCommand) (Schedule, error) {
 	var changed Schedule
-	err := s.mutate(ctx, cmd.ActorID, cmd.CircleID, cmd.IdempotencyKey, "change", cmd, func(repo *Repository) (string, error) {
+	err := s.mutate(ctx, cmd.ActorID, cmd.CircleID, cmd.IdempotencyKey, "change", !cmd.Stop, cmd, func(repo *Repository) (string, error) {
 		sch, err := lockSchedule(ctx, repo.tx, cmd.CircleID, cmd.ScheduleID)
 		if err != nil {
 			return "", err
@@ -152,6 +161,9 @@ func (s *ScheduleService) Change(ctx context.Context, cmd ChangeScheduleCommand)
 			if err = validateNewPlan(record, s.now()); err != nil {
 				return "", err
 			}
+			if err = s.overlap.Check(ctx, repo.tx, cmd.ActorID, cmd.CircleID, record, sch.ID, cmd.ConfirmOverlaps, cmd.ConfirmedWarningIDs); err != nil {
+				return "", err
+			}
 			changed, err = repo.AppendRevision(ctx, sch.ID, cmd.ExpectedVersion, record)
 			records = append(records, record)
 		}
@@ -173,7 +185,8 @@ func (s *ScheduleService) Change(ctx context.Context, cmd ChangeScheduleCommand)
 // ChangeOccurrence applies one exception and any materialized detail together.
 func (s *ScheduleService) ChangeOccurrence(ctx context.Context, cmd ChangeOccurrenceCommand) (OccurrenceException, error) {
 	var changed OccurrenceException
-	err := s.mutate(ctx, cmd.ActorID, cmd.CircleID, cmd.IdempotencyKey, "occurrence", cmd, func(repo *Repository) (string, error) {
+	serializable := cmd.Cancelled == nil || !*cmd.Cancelled
+	err := s.mutate(ctx, cmd.ActorID, cmd.CircleID, cmd.IdempotencyKey, "occurrence", serializable, cmd, func(repo *Repository) (string, error) {
 		sch, err := lockSchedule(ctx, repo.tx, cmd.CircleID, cmd.ScheduleID)
 		if err != nil {
 			return "", err
@@ -206,9 +219,6 @@ func (s *ScheduleService) ChangeOccurrence(ctx context.Context, cmd ChangeOccurr
 		prior.ScheduleID = sch.ID
 		prior.OriginalLocalDate = cmd.OriginalLocalDate
 		prior.UpdatedBy = cmd.ActorID
-		if err = validateOccurrenceFuture(record, prior, s.now()); err != nil {
-			return "", err
-		}
 		applyOccurrencePatch(&prior, cmd, s.now())
 		if err = validateException(prior); err != nil {
 			return "", err
@@ -227,6 +237,17 @@ func (s *ScheduleService) ChangeOccurrence(ctx context.Context, cmd ChangeOccurr
 		}
 		if err = validateOccurrenceFuture(record, prior, s.now()); err != nil {
 			return "", err
+		}
+		if prior.CancelledAt == nil && (cmd.Cancelled == nil || !*cmd.Cancelled) {
+			effectiveRecord, effectiveDate := resolvedException(record, prior)
+			plan := RevisionRecord{
+				Revision: Revision{Version: effectiveRecord.Version, Mode: ModeSelectedDates, AnchorLocalDate: effectiveDate, EffectiveLocalDate: effectiveDate, SelectedDates: []time.Time{effectiveDate}},
+				Title:    effectiveRecord.Title, StartLocalTime: effectiveRecord.StartLocalTime, EndLocalTime: effectiveRecord.EndLocalTime,
+				DurationMinutes: effectiveRecord.DurationMinutes, Timezone: effectiveRecord.Timezone,
+			}
+			if err := s.overlap.Check(ctx, repo.tx, cmd.ActorID, cmd.CircleID, plan, OccurrenceKey(sch.ID, cmd.OriginalLocalDate), cmd.ConfirmOverlaps, cmd.ConfirmedWarningIDs); err != nil {
+				return "", err
+			}
 		}
 		changed, err = repo.UpsertException(ctx, prior)
 		if err != nil {
@@ -338,7 +359,7 @@ func (s *ScheduleService) OccurrenceView(ctx context.Context, circleID, schedule
 	return view, err
 }
 
-func (s *ScheduleService) mutate(ctx context.Context, actor, circle, key, operation string, input any, execute func(*Repository) (string, error), replay func(*Repository, string) error) error {
+func (s *ScheduleService) mutate(ctx context.Context, actor, circle, key, operation string, serializable bool, input any, execute func(*Repository) (string, error), replay func(*Repository, string) error) error {
 	if strings.TrimSpace(key) == "" || len(key) > 200 {
 		return ErrInvalidScheduleCommand
 	}
@@ -347,7 +368,11 @@ func (s *ScheduleService) mutate(ctx context.Context, actor, circle, key, operat
 		return fmt.Errorf("encode schedule command: %w", err)
 	}
 	fingerprint := fmt.Sprintf("%s:%x", operation, sha256.Sum256(encoded))
-	return s.repo.withTx(ctx, func(q dbQuerier) error {
+	mutate := s.repo.withTx
+	if serializable {
+		mutate = s.repo.withSerializableTx
+	}
+	return mutate(ctx, func(q dbQuerier) error {
 		if _, err := RequireCircleManage(ctx, q, circle, actor); err != nil {
 			return err
 		}

@@ -71,7 +71,10 @@ func (h *CalendarHandler) CreateOneOff(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	view, err := h.planned.Create(r.Context(), CreatePlannedSessionCommand{ActorID: actorID, CircleID: circleID, IdempotencyKey: key, Plan: plan})
+	view, err := h.planned.Create(r.Context(), CreatePlannedSessionCommand{
+		ActorID: actorID, CircleID: circleID, IdempotencyKey: key, Plan: plan,
+		ConfirmOverlaps: req.ConfirmOverlaps != nil && *req.ConfirmOverlaps, ConfirmedWarningIDs: req.ConfirmedWarningIDs,
+	})
 	if err != nil {
 		writeCalendarError(w, err)
 		return
@@ -107,7 +110,10 @@ func (h *CalendarHandler) ChangeOneOff(w http.ResponseWriter, r *http.Request) {
 		phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{"plan": "provide exactly one plan or cancelled with expected_version and confirm_overlaps"})
 		return
 	}
-	cmd := ChangePlannedSessionCommand{ActorID: actorID, SessionID: sessionID, IdempotencyKey: key, ExpectedVersion: *req.ExpectedVersion, Cancelled: req.Cancelled}
+	cmd := ChangePlannedSessionCommand{
+		ActorID: actorID, SessionID: sessionID, IdempotencyKey: key, ExpectedVersion: *req.ExpectedVersion, Cancelled: req.Cancelled,
+		ConfirmOverlaps: *req.ConfirmOverlaps, ConfirmedWarningIDs: req.ConfirmedWarningIDs,
+	}
 	if req.Plan != nil {
 		plan, ok := oneOffPlan(w, *req.Plan)
 		if !ok {

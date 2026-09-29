@@ -69,6 +69,9 @@ func seedRepoUser(t *testing.T, ctx context.Context, pool *pgxpool.Pool, userID 
 	if err != nil {
 		t.Fatalf("seed user %s: %v", userID, err)
 	}
+	if _, err := pool.Exec(ctx, `INSERT INTO profiles(user_id, timezone) VALUES($1::uuid, 'UTC')`, userID); err != nil {
+		t.Fatalf("seed profile for %s: %v", userID, err)
+	}
 }
 
 func seedRepoCircle(t *testing.T, ctx context.Context, pool *pgxpool.Pool, circleID, teacherID, inviteCode string) {

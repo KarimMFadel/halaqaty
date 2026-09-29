@@ -56,6 +56,7 @@ type MiddlewareSet struct {
 	ChatUploadHandler     *chat.UploadHandler
 	ChatMediaHandler      *chat.MediaHandler
 	ScheduleHandler       *scheduling.ScheduleHandler
+	OverlapHandler        *scheduling.OverlapHandler
 	CalendarHandler       *scheduling.CalendarHandler
 	AttendanceHandler     *attendance.Handler
 	Timeout               time.Duration
@@ -422,6 +423,9 @@ func (r *Router) registerRoutes() {
 			r.mux.Handle(routeCircleSchedulesCreate, r.requireWithUserLimit(http.HandlerFunc(scheduleH.CreateSchedule)))
 			r.mux.Handle(routeCircleScheduleChange, r.requireWithUserLimit(http.HandlerFunc(scheduleH.ChangeSchedule)))
 			r.mux.Handle(routeScheduleOccurrenceChange, r.requireWithUserLimit(http.HandlerFunc(scheduleH.ChangeScheduleOccurrence)))
+		}
+		if r.mw.OverlapHandler != nil {
+			r.mux.Handle(routeCirclePlanningPreview, r.requireWithUserLimit(http.HandlerFunc(r.mw.OverlapHandler.Preview)))
 		}
 		if r.mw.CalendarHandler != nil {
 			calendarH := r.mw.CalendarHandler

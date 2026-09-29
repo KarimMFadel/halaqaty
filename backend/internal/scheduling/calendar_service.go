@@ -50,12 +50,16 @@ func NewCalendarService(schedules *Repository) *CalendarService {
 // Month returns authorized one-off and recurring items intersecting a month in the
 // viewer's stored timezone. A local 31-day lookback covers the maximum plan duration.
 func (s *CalendarService) Month(ctx context.Context, actorID, month string) (CalendarMonth, error) {
+	return s.month(ctx, actorID, month, s.pool)
+}
+
+func (s *CalendarService) month(ctx context.Context, actorID, month string, q dbQuerier) (CalendarMonth, error) {
 	parsed, err := time.Parse("2006-01", month)
 	if err != nil || len(month) != 7 || parsed.Format("2006-01") != month || parsed.Year() < 1 {
 		return CalendarMonth{}, fmt.Errorf("month %q: %w", month, ErrInvalidCalendarMonth)
 	}
 	var zone string
-	if err := s.pool.QueryRow(ctx, calendarViewerQuery, actorID).Scan(&zone); err != nil {
+	if err := q.QueryRow(ctx, calendarViewerQuery, actorID).Scan(&zone); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return CalendarMonth{}, ErrCalendarProfileNotFound
 		}
@@ -70,7 +74,7 @@ func (s *CalendarService) Month(ctx context.Context, actorID, month string) (Cal
 	fromDate := civilOf(monthStart).AddDate(0, 0, -MaxDurationMinutes/minutesPerDay)
 	toDate := civilOf(monthEnd).AddDate(0, 0, -1)
 
-	rows, err := s.pool.Query(ctx, calendarCirclesQuery, actorID)
+	rows, err := q.Query(ctx, calendarCirclesQuery, actorID)
 	if err != nil {
 		return CalendarMonth{}, fmt.Errorf("list calendar circles: %w", err)
 	}
@@ -94,7 +98,7 @@ func (s *CalendarService) Month(ctx context.Context, actorID, month string) (Cal
 		return CalendarMonth{Items: []CalendarItem{}, Warnings: WarningResult{Warnings: []OverlapWarning{}}}, nil
 	}
 	monthStartUTC, monthEndUTC := monthStart.UTC(), monthEnd.UTC()
-	rows, err = s.pool.Query(ctx, calendarOneOffsQuery, circleIDs, monthStartUTC, monthEndUTC)
+	rows, err = q.Query(ctx, calendarOneOffsQuery, circleIDs, monthStartUTC, monthEndUTC)
 	if err != nil {
 		return CalendarMonth{}, fmt.Errorf("query one-off calendar items: %w", err)
 	}
@@ -117,9 +121,10 @@ func (s *CalendarService) Month(ctx context.Context, actorID, month string) (Cal
 	}
 	rows.Close()
 
+	repo := &Repository{pool: s.pool, tx: q}
 	var schedules []Schedule
 	for _, circleID := range circleIDs {
-		entries, err := s.schedules.ListSchedules(ctx, circleID)
+		entries, err := repo.ListSchedules(ctx, circleID)
 		if err != nil {
 			return CalendarMonth{}, err
 		}
@@ -129,7 +134,7 @@ func (s *CalendarService) Month(ctx context.Context, actorID, month string) (Cal
 	for _, schedule := range schedules {
 		scheduleIDs = append(scheduleIDs, schedule.ID)
 	}
-	revisionsByID, err := s.schedules.LoadRevisions(ctx, scheduleIDs)
+	revisionsByID, err := repo.LoadRevisions(ctx, scheduleIDs)
 	if err != nil {
 		return CalendarMonth{}, err
 	}
@@ -163,7 +168,7 @@ func (s *CalendarService) Month(ctx context.Context, actorID, month string) (Cal
 		}
 	}
 	if len(scheduleIDs) > 0 {
-		rows, err = s.pool.Query(ctx, calendarExceptionsQuery, scheduleIDs, fromDate, toDate)
+		rows, err = q.Query(ctx, calendarExceptionsQuery, scheduleIDs, fromDate, toDate)
 		if err != nil {
 			return CalendarMonth{}, fmt.Errorf("query calendar exceptions: %w", err)
 		}
@@ -257,7 +262,7 @@ func (s *CalendarService) Month(ctx context.Context, actorID, month string) (Cal
 			return CalendarMonth{}, fmt.Errorf("query calendar exceptions: %w", err)
 		}
 		rows.Close()
-		rows, err = s.pool.Query(ctx, calendarMaterializedQuery, scheduleIDs, monthStartUTC, monthEndUTC)
+		rows, err = q.Query(ctx, calendarMaterializedQuery, scheduleIDs, monthStartUTC, monthEndUTC)
 		if err != nil {
 			return CalendarMonth{}, fmt.Errorf("query materialized calendar items: %w", err)
 		}
@@ -291,7 +296,13 @@ func (s *CalendarService) Month(ctx context.Context, actorID, month string) (Cal
 		}
 		return result.Items[i].StartsAt.Before(result.Items[j].StartsAt)
 	})
+	result.Warnings = WarningResult{Warnings: calendarWarnings(result.Items)}
 	return result, nil
+}
+
+func calendarWarnings(items []CalendarItem) []OverlapWarning {
+	intervals := eligibleOverlapIntervals(items)
+	return evaluateOverlapWarnings(intervals, intervals)
 }
 
 // ErrInvalidCalendarMonth means the requested month is not YYYY-MM.

@@ -5,6 +5,7 @@ package scheduling
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -96,6 +97,65 @@ func TestScheduleService_AuthorizationReplayAndSeries(t *testing.T) {
 	}
 }
 
+func TestScheduleService_RequiresFreshReviewedOverlapWarnings(t *testing.T) {
+	ctx := context.Background()
+	pool := openRepoTestPool(t, ctx)
+	teacher := "11111111-1111-1111-1111-111111111111"
+	circles := []string{"22222222-2222-2222-2222-222222222222", "33333333-3333-3333-3333-333333333333", "66666666-6666-6666-6666-666666666666", "77777777-7777-7777-7777-777777777777"}
+	seedRepoUser(t, ctx, pool, teacher)
+	for i, circle := range circles {
+		seedRepoCircle(t, ctx, pool, circle, teacher, fmt.Sprintf("HLQ-OVERLAP%d", i))
+		if _, err := pool.Exec(ctx, `INSERT INTO circle_members(circle_id,user_id,role) VALUES($1::uuid,$2::uuid,'teacher')`, circle, teacher); err != nil {
+			t.Fatal(err)
+		}
+	}
+	svc := NewScheduleService(NewScheduleRepository(pool))
+	svc.now = func() time.Time { return civilDate(2030, 1, 1) }
+	date := civilDate(2030, 1, 2)
+	base := intervalRecord(date, 1, IntervalUnitDay)
+	if _, err := svc.Create(ctx, CreateScheduleCommand{ActorID: teacher, CircleID: circles[0], IdempotencyKey: "overlap-base", Plan: base}); err != nil {
+		t.Fatalf("create base schedule: %v", err)
+	}
+	proposal := selectedDatesRecord(date, date)
+	proposal.StartLocalTime, proposal.EndLocalTime = LocalClock{Hour: 20, Minute: 30}, LocalClock{Hour: 21, Minute: 30}
+	proposal.DurationMinutes = 60
+	preview, err := svc.overlap.Preview(ctx, teacher, circles[1], proposal)
+	if err != nil || len(preview.Warnings) != 1 {
+		t.Fatalf("initial preview warnings=%#v err=%v; want one", preview.Warnings, err)
+	}
+	exactProposal := selectedDatesRecord(civilDate(2030, 1, 3), civilDate(2030, 1, 3))
+	exactProposal.StartLocalTime, exactProposal.EndLocalTime = proposal.StartLocalTime, proposal.EndLocalTime
+	exactProposal.DurationMinutes = proposal.DurationMinutes
+	exactPreview, err := svc.overlap.Preview(ctx, teacher, circles[3], exactProposal)
+	if err != nil || len(exactPreview.Warnings) != 1 {
+		t.Fatalf("write preview warnings=%#v err=%v; want one", exactPreview.Warnings, err)
+	}
+	if _, err := svc.Create(ctx, CreateScheduleCommand{ActorID: teacher, CircleID: circles[3], IdempotencyKey: "overlap-preview-confirmed", Plan: exactProposal,
+		ConfirmOverlaps: true, ConfirmedWarningIDs: []string{exactPreview.Warnings[0].WarningID}}); err != nil {
+		t.Fatalf("write with exact preview warning ID: %v", err)
+	}
+	newCommitment := selectedDatesRecord(date, date)
+	newCommitment.StartLocalTime, newCommitment.EndLocalTime = LocalClock{Hour: 21}, LocalClock{Hour: 21, Minute: 45}
+	newCommitment.DurationMinutes = 45
+	if _, err := svc.Create(ctx, CreateScheduleCommand{ActorID: teacher, CircleID: circles[2], IdempotencyKey: "overlap-later", Plan: newCommitment}); err != nil {
+		t.Fatalf("create commitment touching existing schedule: %v", err)
+	}
+	cmd := CreateScheduleCommand{ActorID: teacher, CircleID: circles[1], IdempotencyKey: "overlap-proposal", Plan: proposal,
+		ConfirmOverlaps: true, ConfirmedWarningIDs: []string{preview.Warnings[0].WarningID}}
+	if _, err := svc.Create(ctx, cmd); err == nil {
+		t.Fatal("write with stale reviewed warnings succeeded")
+	} else {
+		var conflict *OverlapConfirmationError
+		if !errors.As(err, &conflict) || len(conflict.Warnings) != 2 {
+			t.Fatalf("stale warning error=%v, want refreshed two-warning conflict", err)
+		}
+		cmd.ConfirmedWarningIDs = []string{conflict.Warnings[0].WarningID, conflict.Warnings[1].WarningID}
+	}
+	if _, err := svc.Create(ctx, cmd); err != nil {
+		t.Fatalf("write with refreshed reviewed warning IDs: %v", err)
+	}
+}
+
 func TestScheduleService_OccurrenceCASMaterializedAndHistory(t *testing.T) {
 	ctx := context.Background()
 	pool := openRepoTestPool(t, ctx)
@@ -140,6 +200,17 @@ func TestScheduleService_OccurrenceCASMaterializedAndHistory(t *testing.T) {
 	moved := civilDate(2030, 1, 5)
 	cmd.ReplacementLocalDate = &moved
 	cmd.IdempotencyKey = "move"
+	movePlan := plan
+	movePlan.Mode, movePlan.AnchorLocalDate, movePlan.EffectiveLocalDate = ModeSelectedDates, moved, moved
+	movePlan.SelectedDates, movePlan.IntervalCount, movePlan.IntervalUnit = []time.Time{moved}, 0, ""
+	warnings, err := svc.overlap.Warnings(ctx, pool, teacher, circle, movePlan, OccurrenceKey(sch.ID, cmd.OriginalLocalDate))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd.ConfirmOverlaps = len(warnings.Warnings) > 0
+	for _, warning := range warnings.Warnings {
+		cmd.ConfirmedWarningIDs = append(cmd.ConfirmedWarningIDs, warning.WarningID)
+	}
 	movedEx, err := svc.ChangeOccurrence(ctx, cmd)
 	if err != nil || movedEx.Version != 2 || !movedEx.OriginalLocalDate.Equal(civilDate(2030, 1, 2)) {
 		t.Fatalf("move=%+v %v", movedEx, err)
@@ -221,7 +292,8 @@ func TestScheduleService_OccurrenceViewProjection(t *testing.T) {
 	}
 	svc := NewScheduleService(NewScheduleRepository(pool))
 	svc.now = func() time.Time { return civilDate(2030, 1, 1) }
-	sch, err := svc.Create(ctx, CreateScheduleCommand{ActorID: teacher, CircleID: circle, IdempotencyKey: "create", Plan: intervalRecord(civilDate(2030, 1, 2), 1, IntervalUnitDay)})
+	plan := intervalRecord(civilDate(2030, 1, 2), 1, IntervalUnitDay)
+	sch, err := svc.Create(ctx, CreateScheduleCommand{ActorID: teacher, CircleID: circle, IdempotencyKey: "create", Plan: plan})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,22 +367,36 @@ func TestScheduleService_MovedExceptionsAcrossStopBoundary(t *testing.T) {
 	repo := NewScheduleRepository(pool)
 	svc := NewScheduleService(repo)
 	svc.now = func() time.Time { return civilDate(2030, 1, 1) }
-	sch, err := svc.Create(ctx, CreateScheduleCommand{ActorID: teacher, CircleID: circle, IdempotencyKey: "create", Plan: intervalRecord(civilDate(2030, 1, 2), 1, IntervalUnitDay)})
+	plan := intervalRecord(civilDate(2030, 1, 2), 1, IntervalUnitDay)
+	sch, err := svc.Create(ctx, CreateScheduleCommand{ActorID: teacher, CircleID: circle, IdempotencyKey: "create", Plan: plan})
 	if err != nil {
 		t.Fatal(err)
 	}
 	move := func(key string, original, replacement time.Time) error {
 		cmd := ChangeOccurrenceCommand{ActorID: teacher, CircleID: circle, ScheduleID: sch.ID, IdempotencyKey: key,
 			OriginalLocalDate: original, ExpectedSeriesVersion: 1, ReplacementLocalDate: &replacement}
-		_, err := svc.ChangeOccurrence(ctx, cmd)
+		candidate := selectedDatesRecord(replacement, replacement)
+		candidate.StartLocalTime, candidate.EndLocalTime = plan.StartLocalTime, plan.EndLocalTime
+		candidate.DurationMinutes, candidate.Timezone = plan.DurationMinutes, plan.Timezone
+		preview, err := svc.overlap.Preview(ctx, teacher, circle, candidate)
+		if err != nil {
+			return err
+		}
+		if len(preview.Warnings) > 0 {
+			cmd.ConfirmOverlaps = true
+			for _, warning := range preview.Warnings {
+				cmd.ConfirmedWarningIDs = append(cmd.ConfirmedWarningIDs, warning.WarningID)
+			}
+		}
+		_, err = svc.ChangeOccurrence(ctx, cmd)
 		return err
 	}
 	// Occurrence moved ahead of the stop boundary must survive the stop.
-	if err := move("move-kept", civilDate(2030, 1, 10), civilDate(2030, 1, 5)); err != nil {
+	if err := move("move-kept", civilDate(2030, 1, 10), civilDate(2030, 1, 6)); err != nil {
 		t.Fatalf("move kept: %v", err)
 	}
 	// Occurrence moved into the stopped range must be superseded by the stop.
-	if err := move("move-dropped", civilDate(2030, 1, 6), civilDate(2030, 1, 12)); err != nil {
+	if err := move("move-dropped", civilDate(2030, 1, 6), civilDate(2030, 1, 19)); err != nil {
 		t.Fatalf("move dropped: %v", err)
 	}
 	stopped, err := svc.Change(ctx, ChangeScheduleCommand{ActorID: teacher, CircleID: circle, ScheduleID: sch.ID, IdempotencyKey: "stop",
@@ -323,7 +409,7 @@ func TestScheduleService_MovedExceptionsAcrossStopBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(exceptions) != 1 || !exceptions[0].OriginalLocalDate.Equal(civilDate(2030, 1, 10)) ||
-		exceptions[0].ReplacementLocalDate == nil || !exceptions[0].ReplacementLocalDate.Equal(civilDate(2030, 1, 5)) {
+		exceptions[0].ReplacementLocalDate == nil || !exceptions[0].ReplacementLocalDate.Equal(civilDate(2030, 1, 6)) {
 		t.Fatalf("exceptions after stop=%+v, want only the kept move", exceptions)
 	}
 	// The retained moved occurrence stays editable across the stop boundary.
@@ -331,6 +417,16 @@ func TestScheduleService_MovedExceptionsAcrossStopBoundary(t *testing.T) {
 		OriginalLocalDate: civilDate(2030, 1, 10), ExpectedSeriesVersion: 2, ExpectedOccurrenceVersion: 1, Cancelled: boolPtr(true)})
 	if err != nil || cancelled.CancelledAt == nil {
 		t.Fatalf("cancel kept=%+v %v", cancelled, err)
+	}
+	uncancel := ChangeOccurrenceCommand{ActorID: teacher, CircleID: circle, ScheduleID: sch.ID, IdempotencyKey: "uncancel-kept",
+		OriginalLocalDate: civilDate(2030, 1, 10), ExpectedSeriesVersion: 2, ExpectedOccurrenceVersion: cancelled.Version, Cancelled: boolPtr(false)}
+	if _, err := svc.ChangeOccurrence(ctx, uncancel); err == nil {
+		t.Fatal("restoring an overlapping occurrence succeeded without confirmation")
+	} else {
+		var overlapErr *OverlapConfirmationError
+		if !errors.As(err, &overlapErr) || len(overlapErr.Warnings) == 0 {
+			t.Fatalf("restore overlap error=%v, want refreshed overlap warnings", err)
+		}
 	}
 	// A move may not resurrect an occurrence inside the stopped range.
 	moveIntoStop := ChangeOccurrenceCommand{ActorID: teacher, CircleID: circle, ScheduleID: sch.ID, IdempotencyKey: "move-into-stop",
@@ -363,6 +459,17 @@ func TestScheduleService_SeriesChangeSupersedesMovedExceptions(t *testing.T) {
 	move := func(key string, original, replacement time.Time) {
 		cmd := ChangeOccurrenceCommand{ActorID: teacher, CircleID: circle, ScheduleID: sch.ID, IdempotencyKey: key,
 			OriginalLocalDate: original, ExpectedSeriesVersion: 1, ReplacementLocalDate: &replacement}
+		movePlan := plan
+		movePlan.Mode, movePlan.AnchorLocalDate, movePlan.EffectiveLocalDate = ModeSelectedDates, replacement, replacement
+		movePlan.SelectedDates, movePlan.IntervalCount, movePlan.IntervalUnit = []time.Time{replacement}, 0, ""
+		warnings, err := svc.overlap.Warnings(ctx, pool, teacher, circle, movePlan, OccurrenceKey(sch.ID, original))
+		if err != nil {
+			t.Fatalf("preview move %s: %v", key, err)
+		}
+		cmd.ConfirmOverlaps = len(warnings.Warnings) > 0
+		for _, warning := range warnings.Warnings {
+			cmd.ConfirmedWarningIDs = append(cmd.ConfirmedWarningIDs, warning.WarningID)
+		}
 		if _, err := svc.ChangeOccurrence(ctx, cmd); err != nil {
 			t.Fatalf("move %s: %v", key, err)
 		}

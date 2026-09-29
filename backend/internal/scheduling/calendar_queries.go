@@ -3,6 +3,9 @@ package scheduling
 const calendarViewerQuery = `
 SELECT p.timezone FROM profiles p WHERE p.user_id=$1::uuid`
 
+const overlapCircleNameQuery = `
+SELECT name FROM circles WHERE id=$1::uuid`
+
 const calendarCirclesQuery = `
 SELECT c.id::text, c.name FROM circle_members cm
 JOIN circles c ON c.id=cm.circle_id

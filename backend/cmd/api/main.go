@@ -130,6 +130,7 @@ func main() {
 	// F-006 schedule management and personal calendar share the ADR-026 persistence.
 	scheduleRepo := scheduling.NewScheduleRepository(pool)
 	scheduleHandler := scheduling.NewScheduleHandler(scheduling.NewScheduleService(scheduleRepo))
+	overlapHandler := scheduling.NewOverlapHandler(scheduling.NewOverlapService(scheduleRepo))
 	attendanceRepo := attendance.NewRepository(pool)
 	attendanceHandler := attendance.NewHandler(attendance.NewCorrectionService(attendanceRepo))
 
@@ -307,6 +308,7 @@ func main() {
 		ChatUploadHandler: chatUploadHandler,
 		ChatMediaHandler:  chatMediaHandler,
 		ScheduleHandler:   scheduleHandler,
+		OverlapHandler:    overlapHandler,
 		CalendarHandler:   calendarHandler,
 		AttendanceHandler: attendanceHandler,
 		Timeout:           cfg.RequestTimeout,

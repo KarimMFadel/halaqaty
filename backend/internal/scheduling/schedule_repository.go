@@ -107,6 +107,35 @@ func (r *Repository) withTx(ctx context.Context, fn func(q dbQuerier) error) err
 	return nil
 }
 
+func (r *Repository) withSerializableTx(ctx context.Context, fn func(q dbQuerier) error) error {
+	if r.tx != nil {
+		return fn(r.tx)
+	}
+	for attempt := 0; attempt < 3; attempt++ {
+		tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+		if err != nil {
+			return fmt.Errorf("begin serializable schedule transaction: %w", err)
+		}
+		err = fn(tx)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "40001" {
+			_ = tx.Rollback(ctx)
+			continue
+		}
+		if err != nil {
+			_ = tx.Rollback(ctx)
+			return err
+		}
+		err = tx.Commit(ctx)
+		if errors.As(err, &pgErr) && pgErr.Code == "40001" {
+			_ = tx.Rollback(ctx)
+			continue
+		}
+		return err
+	}
+	return ErrScheduleConflict
+}
+
 // CreateSchedule persists a new recurring entry and its first revision (with
 // selected dates) in one transaction. The revision version is forced to 1.
 func (r *Repository) CreateSchedule(ctx context.Context, circleID, createdBy string, record RevisionRecord) (Schedule, error) {

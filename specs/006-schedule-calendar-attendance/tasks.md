@@ -94,27 +94,27 @@
 
 **Independent test:** An overlap warns a teacher/supervisor and still saves on confirmation; a touching interval produces no warning.
 
-- [ ] T049 [US4] Write overlap tests for half-open boundaries, same-/cross-circle commitments, first 31 local days, later viewed months, finite selected dates, authorized circle names/UTC overlap intervals and privacy-safe projection in `backend/internal/scheduling/overlap_service_test.go`.
-- [ ] T050 [US4] Implement bounded preview and authorized half-open UTC overlap evaluation without a future scheduling cap in `backend/internal/scheduling/overlap_service.go`.
-- [ ] T051 [US4] Write preview/write contract tests for actionable safe warning details, echo of reviewed warning IDs, 409 with refreshed warnings when an overlap appears or changes after preview despite `confirm_overlaps=true`, non-overlap, role denial and no private member data in `backend/internal/scheduling/overlap_handler_contract_test.go`.
-- [ ] T052 [US4] Implement preview handler and recomputed warning-ID confirmation in schedule/one-off writes in `backend/internal/scheduling/overlap_handler.go` and `backend/internal/scheduling/schedule_service.go`.
-- [ ] T053 [US4] Write student month-warning tests proving only that student's eligible calendar is compared and participation is never restricted in `backend/internal/scheduling/calendar_warning_test.go`.
-- [ ] T054 [US4] Add viewer-only calendar warnings to the month response in `backend/internal/scheduling/calendar_service.go`.
-- [ ] T055 [US4] Write Flutter tests for actionable overlap intervals/circle names, refreshed 409 warnings requiring renewed manager confirmation, student informational view, RTL/LTR and non-color cues in `mobile/test/widget/scheduling/overlap_warning_test.dart`.
-- [ ] T056 [US4] Implement manager warning-ID confirmation/reconfirmation and student informational warnings in `mobile/lib/features/scheduling/presentation/overlap_warning.dart` and `mobile/lib/features/scheduling/presentation/calendar_screen.dart`.
-- [ ] T057 [US4] Verify overlap/confirm/no-overlap and no cross-member disclosure against a real backend in `mobile/integration_test/schedule_overlap_flow_test.dart`.
+- [X] T049 [US4] Write overlap tests for half-open boundaries, same-/cross-circle commitments, first 31 local days, later viewed months, finite selected dates, authorized circle names/UTC overlap intervals and privacy-safe projection in `backend/internal/scheduling/overlap_service_test.go`.
+- [X] T050 [US4] Implement bounded preview and authorized half-open UTC overlap evaluation without a future scheduling cap in `backend/internal/scheduling/overlap_service.go`.
+- [X] T051 [US4] Write preview/write contract tests for actionable safe warning details, echo of reviewed warning IDs, 409 with refreshed warnings when an overlap appears or changes after preview despite `confirm_overlaps=true`, non-overlap, role denial and no private member data in `backend/internal/scheduling/overlap_handler_contract_test.go`.
+- [X] T052 [US4] Implement preview handler and recomputed warning-ID confirmation in schedule/one-off writes in `backend/internal/scheduling/overlap_handler.go` and `backend/internal/scheduling/schedule_service.go`.
+- [X] T053 [US4] Write student month-warning tests proving only that student's eligible calendar is compared and participation is never restricted in `backend/internal/scheduling/calendar_warning_test.go`.
+- [X] T054 [US4] Add viewer-only calendar warnings to the month response in `backend/internal/scheduling/calendar_service.go`.
+- [X] T055 [US4] Write Flutter tests for actionable overlap intervals/circle names, refreshed 409 warnings requiring renewed manager confirmation, student informational view, RTL/LTR and non-color cues in `mobile/test/widget/scheduling/overlap_warning_test.dart`.
+- [X] T056 [US4] Implement manager warning-ID confirmation/reconfirmation and student informational warnings in `mobile/lib/features/scheduling/presentation/overlap_warning.dart` and `mobile/lib/features/scheduling/presentation/calendar_screen.dart`.
+- [X] T057 [US4] Verify overlap/confirm/no-overlap and no cross-member disclosure against a real backend in `mobile/integration_test/schedule_overlap_flow_test.dart`.
 
 ## Phase 7 — Cross-cutting verification and release boundary (US0)
 
-- [ ] T058 [US0] Write eligibility tests for configurable 1hr/30min/15min/5min offsets, cancellation and superseded-version exclusion, without asserting F-008 delivery, in `backend/internal/scheduling/reminder_eligibility_test.go`.
-- [ ] T059 [US0] Expose only stable, current occurrence/time eligibility for later F-008 consumption in `backend/internal/scheduling/reminder_eligibility.go`; add no FCM sender or preference/history store.
-- [ ] T060 [US0] Run focused and unfiltered API security, response-safety, idempotency and existing F-005 compatibility tests; record command/result and any remaining risk in `specs/006-schedule-calendar-attendance/quickstart.md`.
-- [ ] T061 [US0] Recheck REST parity, OpenAPI lint, architecture/ADR alignment and whether any actual new WebSocket event needs cataloging; apply `$docs-guard` to `docs/contracts/openapi.yaml` and update `docs/contracts/ws_events.md` only if an approved event exists.
-- [ ] T062 [US0] Run unfiltered Go unit, contract, integration, combined ≥80% coverage, lint, gofmt, migration up/down, API lint and secret scan; record exact results/unavailable prerequisites in `specs/006-schedule-calendar-attendance/quickstart.md`.
+- [X] T058 [US0] Write eligibility tests for configurable 1hr/30min/15min/5min offsets, cancellation and superseded-version exclusion, without asserting F-008 delivery, in `backend/internal/scheduling/reminder_eligibility_test.go`.
+- [X] T059 [US0] Expose only stable, current occurrence/time eligibility for later F-008 consumption in `backend/internal/scheduling/reminder_eligibility.go`; add no FCM sender or preference/history store.
+- [X] T060 [US0] Run focused and unfiltered API security, response-safety, idempotency and existing F-005 compatibility tests; record command/result and any remaining risk in `specs/006-schedule-calendar-attendance/quickstart.md`.
+- [X] T061 [US0] Recheck REST parity, OpenAPI lint, architecture/ADR alignment and whether any actual new WebSocket event needs cataloging; apply `$docs-guard` to `docs/contracts/openapi.yaml` and update `docs/contracts/ws_events.md` only if an approved event exists.
+- [X] T062 [US0] Run unfiltered Go unit, contract, integration, combined ≥80% coverage, lint, gofmt, migration up/down, API lint and secret scan; record exact results/unavailable prerequisites in `specs/006-schedule-calendar-attendance/quickstart.md`.
 - [ ] T063 [US0] Run fresh Flutter `flutter test test`, device-backed `flutter test integration_test/`, `flutter analyze` and `dart format --set-exit-if-changed .`; record exact results and block Flutter commits if unavailable in `specs/006-schedule-calendar-attendance/quickstart.md`.
 - [ ] T064 [US0] Run timed teacher/supervisor schedule and one-off creation (SC-001), multi-circle calendar, attendance and accessibility/RTL/LTR journeys with connected device/backend; record results and any visual review gap in `specs/006-schedule-calendar-attendance/quickstart.md`.
-- [ ] T065 [US0] Apply `$clean-code-guard`, `$test-guard`, Ponytail restraint, Tech Lead review and Karim's applicable manual security review; record findings/closure in `specs/006-schedule-calendar-attendance/quickstart.md`.
-- [ ] T066 [US0] Label a partial F-006 pilot accurately, leave full SC-009 open while F-008 is Proposed, and only after F-008 approval verify actual 1hr/30min/15min/5min foreground/background/closed-app delivery and stale-reminder suppression in `specs/006-schedule-calendar-attendance/quickstart.md`.
+- [X] T065 [US0] Apply `$clean-code-guard`, `$test-guard`, Ponytail restraint, Tech Lead review and Karim's applicable manual security review; record findings/closure in `specs/006-schedule-calendar-attendance/quickstart.md`.
+- [X] T066 [US0] Label a partial F-006 pilot accurately, leave full SC-009 open while F-008 is Proposed, and only after F-008 approval verify actual 1hr/30min/15min/5min foreground/background/closed-app delivery and stale-reminder suppression in `specs/006-schedule-calendar-attendance/quickstart.md`.
 
 ## Dependencies and critical path
 

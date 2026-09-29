@@ -33,6 +33,8 @@ type PlannedSessionPlan struct {
 type CreatePlannedSessionCommand struct {
 	ActorID, CircleID, IdempotencyKey string
 	Plan                              PlannedSessionPlan
+	ConfirmOverlaps                   bool
+	ConfirmedWarningIDs               []string
 }
 
 // ChangePlannedSessionCommand edits or cancels an unstarted one-off plan.
@@ -42,6 +44,8 @@ type ChangePlannedSessionCommand struct {
 	ExpectedVersion                    int
 	Plan                               *PlannedSessionPlan
 	Cancelled                          *bool
+	ConfirmOverlaps                    bool
+	ConfirmedWarningIDs                []string
 }
 
 // PlannedSessionView contains the durable one-off plan and F-005 lifecycle.
@@ -58,13 +62,14 @@ type PlannedSessionView struct {
 
 // PlannedSessionService persists one-off plans without changing F-005 status semantics.
 type PlannedSessionService struct {
-	repo *Repository
-	now  func() time.Time
+	repo    *Repository
+	overlap *OverlapService
+	now     func() time.Time
 }
 
 // NewPlannedSessionService constructs the one-off planning service.
 func NewPlannedSessionService(repo *Repository) *PlannedSessionService {
-	return &PlannedSessionService{repo: repo, now: time.Now}
+	return &PlannedSessionService{repo: repo, overlap: NewOverlapService(repo), now: time.Now}
 }
 
 // Create stores a future one-off plan with its actor-scoped idempotency result.
@@ -96,7 +101,7 @@ func (s *PlannedSessionService) Change(ctx context.Context, cmd ChangePlannedSes
 
 func (s *PlannedSessionService) create(ctx context.Context, cmd CreatePlannedSessionCommand, fingerprint string) (PlannedSessionView, error) {
 	var view PlannedSessionView
-	err := s.repo.withTx(ctx, func(q dbQuerier) error {
+	err := s.repo.withSerializableTx(ctx, func(q dbQuerier) error {
 		if _, err := RequireCircleManage(ctx, q, cmd.CircleID, cmd.ActorID); err != nil {
 			return err
 		}
@@ -119,6 +124,9 @@ func (s *PlannedSessionService) insertOneOff(ctx context.Context, q dbQuerier, c
 	if err != nil {
 		return 0, nil, err
 	}
+	if err := s.overlap.Check(ctx, q, cmd.ActorID, cmd.CircleID, plannedRevision(plan), "", cmd.ConfirmOverlaps, cmd.ConfirmedWarningIDs); err != nil {
+		return 0, nil, err
+	}
 	var sessionID string
 	if err := q.QueryRow(ctx, insertPlannedSessionQuery, cmd.CircleID, cmd.ActorID, start).Scan(&sessionID); err != nil {
 		return 0, nil, fmt.Errorf("insert planned session: %w", err)
@@ -133,7 +141,11 @@ func (s *PlannedSessionService) insertOneOff(ctx context.Context, q dbQuerier, c
 
 func (s *PlannedSessionService) change(ctx context.Context, cmd ChangePlannedSessionCommand, fingerprint string) (PlannedSessionView, error) {
 	var view PlannedSessionView
-	err := s.repo.withTx(ctx, func(q dbQuerier) error {
+	mutate := s.repo.withTx
+	if cmd.Plan != nil || (cmd.Cancelled != nil && !*cmd.Cancelled) {
+		mutate = s.repo.withSerializableTx
+	}
+	err := mutate(ctx, func(q dbQuerier) error {
 		var err error
 		view, err = s.changeInTransaction(ctx, q, cmd, fingerprint)
 		return err
@@ -207,6 +219,32 @@ func (s *PlannedSessionService) applyOneOffChange(ctx context.Context, q dbQueri
 	}
 	if locked.version != cmd.ExpectedVersion {
 		return 0, nil, ErrScheduleConflict
+	}
+	var proposed *PlannedSessionPlan
+	if cmd.Plan != nil {
+		plan, _, _, err := validatePlannedSessionPlan(*cmd.Plan, s.now())
+		if err != nil {
+			return 0, nil, err
+		}
+		proposed = &plan
+	} else if cmd.Cancelled != nil && !*cmd.Cancelled {
+		view, err := loadOneOffPlannedSession(ctx, q, cmd.SessionID)
+		if err != nil {
+			return 0, nil, err
+		}
+		zone, err := LoadLocation(view.PlanningTimezone)
+		if err != nil {
+			return 0, nil, err
+		}
+		localDate := view.StartsAt.In(zone)
+		proposed = &PlannedSessionPlan{LocalDate: time.Date(localDate.Year(), localDate.Month(), localDate.Day(), 0, 0, 0, 0, zone),
+			StartLocalTime: view.StartLocalTime, EndLocalTime: view.EndLocalTime, DurationMinutes: view.DurationMinutes,
+			Timezone: view.PlanningTimezone, Title: view.Title}
+	}
+	if proposed != nil {
+		if err := s.overlap.Check(ctx, q, cmd.ActorID, circleID, plannedRevision(*proposed), cmd.SessionID, cmd.ConfirmOverlaps, cmd.ConfirmedWarningIDs); err != nil {
+			return 0, nil, err
+		}
 	}
 	if err := s.persistOneOffChange(ctx, q, cmd); err != nil {
 		return 0, nil, err

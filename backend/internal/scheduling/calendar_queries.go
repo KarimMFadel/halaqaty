@@ -10,7 +10,7 @@ WHERE cm.user_id=$1::uuid ORDER BY c.id`
 
 const calendarOneOffsQuery = `
 SELECT s.id::text, s.circle_id::text, c.name, COALESCE(d.title,'Circle Session'),
- s.status, s.scheduled_at, d.planned_end_at, d.planning_timezone, d.cancelled_at
+ s.status, s.scheduled_at, d.planned_end_at, d.planning_timezone, d.cancelled_at, d.version
 FROM sessions s JOIN planned_session_details d ON d.session_id=s.id AND d.schedule_id IS NULL
 JOIN circles c ON c.id=s.circle_id
 WHERE s.circle_id=ANY($1::uuid[]) AND s.scheduled_at<$3 AND d.planned_end_at>$2

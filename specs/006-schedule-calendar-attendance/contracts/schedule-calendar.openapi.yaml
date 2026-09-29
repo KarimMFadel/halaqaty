@@ -432,6 +432,7 @@ components:
         ends_at: { type: string, format: date-time }
         planning_timezone: { type: string }
         state: { type: string, enum: [scheduled, active, completed, cancelled] }
+        version: { type: integer, minimum: 1, nullable: true, description: 'One-off planned-session version to send as expected_version on edits; null for recurring occurrences' }
     WarningResult:
       type: object
       required: [warnings]

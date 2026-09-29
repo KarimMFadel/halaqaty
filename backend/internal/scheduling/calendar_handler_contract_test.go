@@ -123,7 +123,7 @@ func TestCalendarHandlerCreateOneOffContract(t *testing.T) {
 	var got CreatePlannedSessionCommand
 	planned := &plannedSessionCommandsStub{createFn: func(_ context.Context, cmd CreatePlannedSessionCommand) (PlannedSessionView, error) {
 		got = cmd
-		return PlannedSessionView{ID: calendarContractSessionID, CircleID: calendarContractCircleID, CircleName: "Contract Circle", Title: "Special review", StartsAt: time.Date(2030, 1, 6, 19, 30, 0, 0, time.UTC), EndsAt: time.Date(2030, 1, 6, 20, 0, 0, 0, time.UTC), PlanningTimezone: "Asia/Riyadh", Status: "scheduled"}, nil
+		return PlannedSessionView{ID: calendarContractSessionID, CircleID: calendarContractCircleID, CircleName: "Contract Circle", Title: "Special review", StartsAt: time.Date(2030, 1, 6, 19, 30, 0, 0, time.UTC), EndsAt: time.Date(2030, 1, 6, 20, 0, 0, 0, time.UTC), PlanningTimezone: "Asia/Riyadh", Version: 1, Status: "scheduled"}, nil
 	}}
 	handler := newCalendarContractHandler(planned, &occurrenceStartCommandsStub{}, &calendarMonthCommandsStub{})
 	rec := httptest.NewRecorder()
@@ -138,7 +138,7 @@ func TestCalendarHandlerCreateOneOffContract(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &item); err != nil {
 		t.Fatalf("decode CalendarItem: %v", err)
 	}
-	if item.OccurrenceKey != calendarContractSessionID || item.SessionID == nil || *item.SessionID != calendarContractSessionID || item.CircleID != calendarContractCircleID || item.CircleName != "Contract Circle" || item.Title != "Special review" || !item.StartsAt.Equal(time.Date(2030, 1, 6, 19, 30, 0, 0, time.UTC)) || !item.EndsAt.Equal(time.Date(2030, 1, 6, 20, 0, 0, 0, time.UTC)) || item.PlanningTimezone != "Asia/Riyadh" || item.State != "scheduled" {
+	if item.OccurrenceKey != calendarContractSessionID || item.SessionID == nil || *item.SessionID != calendarContractSessionID || item.CircleID != calendarContractCircleID || item.CircleName != "Contract Circle" || item.Title != "Special review" || !item.StartsAt.Equal(time.Date(2030, 1, 6, 19, 30, 0, 0, time.UTC)) || !item.EndsAt.Equal(time.Date(2030, 1, 6, 20, 0, 0, 0, time.UTC)) || item.PlanningTimezone != "Asia/Riyadh" || item.State != "scheduled" || item.Version == nil || *item.Version != 1 {
 		t.Fatalf("CalendarItem projection: %+v", item)
 	}
 
@@ -171,7 +171,7 @@ func TestCalendarHandlerChangeOneOffContract(t *testing.T) {
 	var got ChangePlannedSessionCommand
 	planned := &plannedSessionCommandsStub{changeFn: func(_ context.Context, cmd ChangePlannedSessionCommand) (PlannedSessionView, error) {
 		got = cmd
-		return PlannedSessionView{ID: calendarContractSessionID, CircleID: calendarContractCircleID, CircleName: "Contract Circle", Title: "Special review", StartsAt: time.Date(2030, 1, 6, 19, 30, 0, 0, time.UTC), EndsAt: time.Date(2030, 1, 6, 20, 0, 0, 0, time.UTC), PlanningTimezone: "Asia/Riyadh", Status: "scheduled", Cancelled: true}, nil
+		return PlannedSessionView{ID: calendarContractSessionID, CircleID: calendarContractCircleID, CircleName: "Contract Circle", Title: "Special review", StartsAt: time.Date(2030, 1, 6, 19, 30, 0, 0, time.UTC), EndsAt: time.Date(2030, 1, 6, 20, 0, 0, 0, time.UTC), PlanningTimezone: "Asia/Riyadh", Version: 2, Status: "scheduled", Cancelled: true}, nil
 	}}
 	handler := newCalendarContractHandler(planned, &occurrenceStartCommandsStub{}, &calendarMonthCommandsStub{})
 	rec := httptest.NewRecorder()
@@ -186,8 +186,8 @@ func TestCalendarHandlerChangeOneOffContract(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &item); err != nil {
 		t.Fatalf("decode CalendarItem: %v", err)
 	}
-	if item.State != "cancelled" {
-		t.Fatalf("cancelled state=%q", item.State)
+	if item.State != "cancelled" || item.Version == nil || *item.Version != 2 {
+		t.Fatalf("cancelled state=%q version=%v", item.State, item.Version)
 	}
 	t.Run("edit one-off maps plan fields to the existing service command", func(t *testing.T) {
 		editBody := `{"expected_version":1,"plan":{"mode":"one_off","title":"Updated review","anchor_local_date":"2030-01-08","local_start_time":"09:00","local_end_time":"10:30","duration_minutes":90,"timezone":"Asia/Riyadh"},"confirm_overlaps":false}`
@@ -344,7 +344,7 @@ func TestCalendarHandlerGetPersonalMonthContract(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode month response: %v", err)
 	}
-	if len(body.Items) != 1 || body.Items[0].OccurrenceKey != item.OccurrenceKey || body.Items[0].CircleID != item.CircleID || body.Items[0].CircleName != item.CircleName || body.Items[0].Title != item.Title || !body.Items[0].StartsAt.Equal(item.StartsAt) || !body.Items[0].EndsAt.Equal(item.EndsAt) || body.Items[0].State != "completed" || body.Items[0].PlanningTimezone != "Asia/Riyadh" {
+	if len(body.Items) != 1 || body.Items[0].OccurrenceKey != item.OccurrenceKey || body.Items[0].CircleID != item.CircleID || body.Items[0].CircleName != item.CircleName || body.Items[0].Title != item.Title || !body.Items[0].StartsAt.Equal(item.StartsAt) || !body.Items[0].EndsAt.Equal(item.EndsAt) || body.Items[0].State != "completed" || body.Items[0].PlanningTimezone != "Asia/Riyadh" || body.Items[0].Version != nil {
 		t.Fatalf("calendar item projection: %+v", body.Items)
 	}
 	if !body.Items[0].StartsAt.Equal(item.StartsAt) || !body.Items[0].EndsAt.Equal(item.EndsAt) || body.Warnings.Warnings == nil || len(body.Warnings.Warnings) != 0 {

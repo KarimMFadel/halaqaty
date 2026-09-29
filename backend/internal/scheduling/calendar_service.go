@@ -22,6 +22,7 @@ type CalendarItem struct {
 	EndsAt           time.Time `json:"ends_at"`
 	PlanningTimezone string    `json:"planning_timezone"`
 	State            string    `json:"state"`
+	Version          *int      `json:"version"`
 }
 
 // CalendarMonth is the response for one requested viewer-local month.
@@ -102,7 +103,7 @@ func (s *CalendarService) Month(ctx context.Context, actorID, month string) (Cal
 		var status string
 		var cancelledAt *time.Time
 		if err := rows.Scan(&item.OccurrenceKey, &item.CircleID, &item.CircleName, &item.Title, &status,
-			&item.StartsAt, &item.EndsAt, &item.PlanningTimezone, &cancelledAt); err != nil {
+			&item.StartsAt, &item.EndsAt, &item.PlanningTimezone, &cancelledAt, &item.Version); err != nil {
 			rows.Close()
 			return CalendarMonth{}, fmt.Errorf("scan one-off calendar item: %w", err)
 		}

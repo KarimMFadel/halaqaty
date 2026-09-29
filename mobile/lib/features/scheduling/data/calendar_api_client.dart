@@ -14,6 +14,7 @@ class CalendarItem {
     required this.planningTimezone,
     required this.state,
     this.sessionId,
+    this.version,
   });
 
   final String occurrenceKey;
@@ -26,6 +27,10 @@ class CalendarItem {
   final String planningTimezone;
   final String state;
 
+  /// One-off planned-session version for `expected_version` edits; null for
+  /// recurring occurrences.
+  final int? version;
+
   factory CalendarItem.fromJson(Map<String, dynamic> json) => CalendarItem(
         occurrenceKey: json['occurrence_key'] as String,
         sessionId: json['session_id'] as String?,
@@ -36,6 +41,7 @@ class CalendarItem {
         endsAt: DateTime.parse(json['ends_at'] as String).toUtc(),
         planningTimezone: json['planning_timezone'] as String,
         state: json['state'] as String,
+        version: json['version'] as int?,
       );
 }
 

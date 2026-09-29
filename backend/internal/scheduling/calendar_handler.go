@@ -203,11 +203,12 @@ func oneOffPlan(w http.ResponseWriter, req planInputRequest) (PlannedSessionPlan
 
 func oneOffItem(view PlannedSessionView) CalendarItem {
 	id := view.ID
+	version := view.Version
 	state := calendarState(view.Status, nil)
 	if view.Cancelled {
 		state = "cancelled"
 	}
-	return CalendarItem{OccurrenceKey: id, SessionID: &id, CircleID: view.CircleID, CircleName: view.CircleName, Title: view.Title, StartsAt: view.StartsAt, EndsAt: view.EndsAt, PlanningTimezone: view.PlanningTimezone, State: state}
+	return CalendarItem{OccurrenceKey: id, SessionID: &id, CircleID: view.CircleID, CircleName: view.CircleName, Title: view.Title, StartsAt: view.StartsAt, EndsAt: view.EndsAt, PlanningTimezone: view.PlanningTimezone, State: state, Version: &version}
 }
 
 func calendarOptionalTime(value *time.Time) any {

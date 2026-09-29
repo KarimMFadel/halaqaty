@@ -209,7 +209,7 @@ void main() {
     await dio.patch<Map<String, dynamic>>(
       '/sessions/${oneOff.sessionId}/planned-details',
       data: {
-        'expected_version': 1,
+        'expected_version': oneOff.version,
         'cancelled': true,
         'confirm_overlaps': false,
       },

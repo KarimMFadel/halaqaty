@@ -50,18 +50,38 @@ class CalendarWarning {
     required this.warningId,
     required this.firstCircleName,
     required this.secondCircleName,
+    required this.overlapStartsAt,
+    required this.overlapEndsAt,
   });
 
   final String warningId;
   final String firstCircleName;
   final String secondCircleName;
+  final DateTime overlapStartsAt;
+  final DateTime overlapEndsAt;
 
   factory CalendarWarning.fromJson(Map<String, dynamic> json) =>
       CalendarWarning(
         warningId: json['warning_id'] as String,
         firstCircleName: json['first_circle_name'] as String,
         secondCircleName: json['second_circle_name'] as String,
+        overlapStartsAt:
+            DateTime.parse(json['overlap_starts_at'] as String).toUtc(),
+        overlapEndsAt:
+            DateTime.parse(json['overlap_ends_at'] as String).toUtc(),
       );
+}
+
+List<CalendarWarning> calendarWarningsFromConflict(Object? response) {
+  if (response is! Map<String, dynamic>) return const [];
+  final error = response['error'];
+  if (error is! Map<String, dynamic>) return const [];
+  final warnings = error['warnings'];
+  if (warnings is! List<dynamic>) return const [];
+  return warnings
+      .whereType<Map<String, dynamic>>()
+      .map(CalendarWarning.fromJson)
+      .toList(growable: false);
 }
 
 class CalendarMonth {
@@ -106,10 +126,16 @@ class CalendarApiClient {
     required String circleId,
     required SchedulePlanInput plan,
     required String idempotencyKey,
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/circles/$circleId/planned-sessions',
-      data: plan.toJson(),
+      data: {
+        ...plan.toJson(),
+        'confirm_overlaps': confirmOverlaps,
+        'confirmed_warning_ids': confirmedWarningIDs,
+      },
       options: Options(headers: {
         ..._authHeaders(token, sessionId),
         'Idempotency-Key': idempotencyKey,

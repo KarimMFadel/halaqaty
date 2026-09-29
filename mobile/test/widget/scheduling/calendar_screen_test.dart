@@ -7,6 +7,53 @@ import 'package:halaqaty_mobile/features/scheduling/data/calendar_api_client.dar
 import 'package:halaqaty_mobile/features/scheduling/presentation/calendar_screen.dart';
 
 void main() {
+  testWidgets('shows informational overlap details without hiding sessions',
+      (tester) async {
+    final dio = _calendarDio(
+      [_item()],
+      warnings: [
+        {
+          'warning_id': 'w-1',
+          'first_circle_name': 'Tajweed Circle',
+          'second_circle_name': 'Review Circle',
+          'overlap_starts_at': '2026-10-06T15:30:00Z',
+          'overlap_ends_at': '2026-10-06T16:00:00Z',
+        }
+      ],
+    );
+    await tester.pumpWidget(_buildScreen(dio));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Schedule overlap'), findsOneWidget);
+    expect(find.textContaining('Tajweed Circle'), findsWidgets);
+    expect(find.textContaining('Review Circle'), findsOneWidget);
+    expect(find.textContaining('18:30–19:00'), findsOneWidget);
+    expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+    expect(find.byKey(const Key('calendarItem-sched-1:2026-10-06')),
+        findsOneWidget);
+  });
+
+  testWidgets('shows an accessible overlap cue in Arabic RTL', (tester) async {
+    final dio = _calendarDio(
+      [_item()],
+      warnings: [
+        {
+          'warning_id': 'w-1',
+          'first_circle_name': 'حلقة التجويد',
+          'second_circle_name': 'حلقة المراجعة',
+          'overlap_starts_at': '2026-10-06T15:30:00Z',
+          'overlap_ends_at': '2026-10-06T16:00:00Z',
+        }
+      ],
+    );
+    await tester.pumpWidget(_buildScreen(dio, rtl: true));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تنبيه: تداخل في المواعيد'), findsOneWidget);
+    expect(find.textContaining('حلقة التجويد'), findsOneWidget);
+    expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+  });
+
   testWidgets('shows sessions from multiple circles with accessible identity',
       (tester) async {
     await tester.pumpWidget(_buildScreen(_calendarDio([
@@ -135,6 +182,7 @@ Widget _buildScreen(Dio dio, {bool rtl = false}) => ProviderScope(
 
 Dio _calendarDio(
   List<Map<String, dynamic>> items, {
+  List<Map<String, dynamic>> warnings = const [],
   void Function(RequestOptions, RequestInterceptorHandler)? onRequest,
 }) {
   final dio = Dio(BaseOptions(baseUrl: 'http://localhost'));
@@ -148,7 +196,7 @@ Dio _calendarDio(
           statusCode: 200,
           data: {
             'items': items,
-            'warnings': {'warnings': []}
+            'warnings': {'warnings': warnings}
           },
         ));
       }

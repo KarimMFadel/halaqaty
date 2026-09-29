@@ -50,7 +50,9 @@ class _StubScheduleController extends StateNotifier<ScheduleEditorState>
   }
 
   @override
-  Future<bool> createSchedule(SchedulePlanInput plan) async {
+  Future<bool> createSchedule(SchedulePlanInput plan,
+      {bool confirmOverlaps = false,
+      List<String> confirmedWarningIDs = const []}) async {
     createdPlan = plan;
     return _finishSave();
   }
@@ -59,6 +61,8 @@ class _StubScheduleController extends StateNotifier<ScheduleEditorState>
   Future<bool> changeSeries({
     required CircleScheduleEntry schedule,
     required SchedulePlanInput plan,
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
   }) async {
     changedSchedule = schedule;
     changedPlan = plan;
@@ -80,6 +84,8 @@ class _StubScheduleController extends StateNotifier<ScheduleEditorState>
     String? replacementEndLocalTime,
     int? durationMinutes,
     bool cancel = false,
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
   }) async {
     occurrenceDate = localDate;
     occurrenceCancel = cancel;

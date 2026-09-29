@@ -182,12 +182,19 @@ class _SpyScheduleController extends StateNotifier<ScheduleEditorState>
   }
 
   @override
-  Future<bool> createSchedule(SchedulePlanInput plan) async => false;
+  Future<bool> createSchedule(
+    SchedulePlanInput plan, {
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
+  }) async =>
+      false;
 
   @override
   Future<bool> changeSeries({
     required CircleScheduleEntry schedule,
     required SchedulePlanInput plan,
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
   }) async =>
       false;
 
@@ -204,6 +211,8 @@ class _SpyScheduleController extends StateNotifier<ScheduleEditorState>
     String? replacementEndLocalTime,
     int? durationMinutes,
     bool cancel = false,
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
   }) async =>
       false;
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/scheduling/application/calendar_controller.dart';
 import 'package:halaqaty_mobile/features/scheduling/data/calendar_api_client.dart';
+import 'package:halaqaty_mobile/features/scheduling/presentation/overlap_warning.dart';
 
 class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
@@ -65,6 +66,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       key: const Key('calendarItems'),
       padding: const EdgeInsets.all(16),
       children: [
+        CalendarOverlapWarnings(
+          warnings: state.warnings,
+          rtl: rtl,
+          timezone: timezone,
+        ),
         if (state.status == CalendarStatus.error)
           _OfflineBanner(rtl: rtl, onRetry: _reload),
         ...state.items.map((item) => _CalendarItemCard(

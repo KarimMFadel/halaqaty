@@ -67,6 +67,8 @@ void main() {
         'local_end_time': '19:30',
         'duration_minutes': 90,
         'timezone': 'Africa/Cairo',
+        'confirm_overlaps': false,
+        'confirmed_warning_ids': <String>[],
         'week_cadence': 2,
         'weekdays': [1, 3],
       });
@@ -200,6 +202,7 @@ void main() {
       expect(body['effective_local_date'], '2026-10-07');
       expect(body['stop'], isFalse);
       expect(body['confirm_overlaps'], isFalse);
+      expect(body['confirmed_warning_ids'], <String>[]);
       expect(body['plan'], isA<Map<String, dynamic>>());
       expect(updated.version, 4);
     });
@@ -261,6 +264,7 @@ void main() {
       expect(body['expected_occurrence_version'], 0);
       expect(body['cancelled'], isTrue);
       expect(body['confirm_overlaps'], isFalse);
+      expect(body['confirmed_warning_ids'], <String>[]);
     });
 
     test('changeOccurrence move sends the replacement date and times',
@@ -634,6 +638,39 @@ void main() {
       expect(controller.state.status, ScheduleListStatus.ready);
       expect(controller.state.schedules.single.id, 'sched-1');
     });
+
+    test('a 409 exposes only the refreshed overlap warnings to confirmation UI',
+        () async {
+      final request = RequestOptions(path: '/circles/circle-1/schedules');
+      final api = _FakeScheduleApi()
+        ..createError = DioException(
+          requestOptions: request,
+          response: Response<Map<String, dynamic>>(
+            requestOptions: request,
+            statusCode: 409,
+            data: {
+              'error': {
+                'warnings': [
+                  {
+                    'warning_id': 'new-warning',
+                    'first_circle_name': 'Hifz',
+                    'second_circle_name': 'Review',
+                    'overlap_starts_at': '2026-10-06T15:30:00Z',
+                    'overlap_ends_at': '2026-10-06T16:00:00Z',
+                  }
+                ],
+              }
+            },
+          ),
+        );
+      final controller = _controller(api);
+      addTearDown(controller.dispose);
+
+      expect(await controller.createSchedule(_weekdayPlan()), isFalse);
+
+      expect(controller.state.overlapWarnings.single.warningId, 'new-warning');
+      expect(controller.state.saveError, ScheduleSaveError.conflict);
+    });
   });
 }
 
@@ -791,6 +828,8 @@ class _FakeScheduleApi extends ScheduleApiClient {
     required String circleId,
     required SchedulePlanInput plan,
     required String idempotencyKey,
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
   }) async {
     createCalls++;
     createKeys.add(idempotencyKey);
@@ -812,6 +851,8 @@ class _FakeScheduleApi extends ScheduleApiClient {
     required SchedulePlanInput plan,
     bool stop = false,
     required String idempotencyKey,
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
   }) async {
     changeCalls++;
     lastChangeStop = stop;
@@ -839,6 +880,8 @@ class _FakeScheduleApi extends ScheduleApiClient {
     String? title,
     bool cancel = false,
     required String idempotencyKey,
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
   }) async {
     occurrenceCalls++;
     lastOccurrenceDate = localDate;

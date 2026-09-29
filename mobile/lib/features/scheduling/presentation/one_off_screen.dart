@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/scheduling/application/calendar_controller.dart';
 import 'package:halaqaty_mobile/features/scheduling/data/schedule_api_client.dart';
+import 'package:halaqaty_mobile/features/scheduling/presentation/overlap_warning.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 class OneOffScreen extends ConsumerStatefulWidget {
@@ -180,9 +181,20 @@ class _OneOffScreenState extends ConsumerState<OneOffScreen> {
       timezone: _timezone.text.trim(),
       title: _title.text.trim().isEmpty ? 'Circle Session' : _title.text.trim(),
     );
-    final created = await ref
-        .read(oneOffControllerProvider(widget.circleId).notifier)
-        .create(plan);
+    final controller =
+        ref.read(oneOffControllerProvider(widget.circleId).notifier);
+    final created = await saveWithOverlapReconfirmation(
+      context: context,
+      rtl: rtl,
+      timezone: plan.timezone,
+      currentWarnings: () =>
+          ref.read(oneOffControllerProvider(widget.circleId)).overlapWarnings,
+      save: (confirmed, warningIDs) => controller.create(
+        plan,
+        confirmOverlaps: confirmed,
+        confirmedWarningIDs: warningIDs,
+      ),
+    );
     if (created && mounted) {
       Navigator.of(context).pop(true);
     }
@@ -273,6 +285,9 @@ class _OneOffScreenState extends ConsumerState<OneOffScreen> {
         CalendarFailure.permission => rtl
             ? 'لم يعد لديك إذن إنشاء جلسة لهذه الحلقة.'
             : 'You no longer have permission to plan a session for this circle.',
+        CalendarFailure.conflict => rtl
+            ? 'تغيرت التعارضات. راجع التحذيرات وحدّث تأكيدك.'
+            : 'The conflicts changed. Review the warnings and confirm again.',
         _ => rtl
             ? 'تعذر إنشاء الجلسة. تحقق من البيانات ثم أعد المحاولة.'
             : 'Could not create the session. Check the details and retry.',

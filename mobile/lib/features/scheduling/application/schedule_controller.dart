@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
+import 'package:halaqaty_mobile/features/scheduling/data/calendar_api_client.dart';
 import 'package:halaqaty_mobile/features/scheduling/data/schedule_api_client.dart';
 
 enum ScheduleListStatus { loading, ready, error }
@@ -32,6 +33,7 @@ class ScheduleEditorState {
     this.isSaving = false,
     this.saveSucceeded = false,
     this.saveError,
+    this.overlapWarnings = const [],
   });
 
   final ScheduleListStatus status;
@@ -40,6 +42,7 @@ class ScheduleEditorState {
   final bool isSaving;
   final bool saveSucceeded;
   final ScheduleSaveError? saveError;
+  final List<CalendarWarning> overlapWarnings;
 
   ScheduleEditorState copyWith({
     ScheduleListStatus? status,
@@ -50,6 +53,8 @@ class ScheduleEditorState {
     bool? saveSucceeded,
     ScheduleSaveError? saveError,
     bool clearSaveError = false,
+    List<CalendarWarning>? overlapWarnings,
+    bool clearOverlapWarnings = false,
   }) =>
       ScheduleEditorState(
         status: status ?? this.status,
@@ -58,6 +63,9 @@ class ScheduleEditorState {
         isSaving: isSaving ?? this.isSaving,
         saveSucceeded: saveSucceeded ?? this.saveSucceeded,
         saveError: clearSaveError ? null : (saveError ?? this.saveError),
+        overlapWarnings: clearOverlapWarnings
+            ? const []
+            : (overlapWarnings ?? this.overlapWarnings),
       );
 }
 
@@ -129,7 +137,9 @@ class ScheduleController extends StateNotifier<ScheduleEditorState> {
     }
   }
 
-  Future<bool> createSchedule(SchedulePlanInput plan) async {
+  Future<bool> createSchedule(SchedulePlanInput plan,
+      {bool confirmOverlaps = false,
+      List<String> confirmedWarningIDs = const []}) async {
     if (_hasPastPlannedDate(plan)) return _rejectPastDate();
     // The pending idempotency key is scoped to the exact payload: a retry of
     // the same write replays the key, but a changed payload is a new write
@@ -142,6 +152,8 @@ class ScheduleController extends StateNotifier<ScheduleEditorState> {
         circleId: circleId,
         plan: plan,
         idempotencyKey: key,
+        confirmOverlaps: confirmOverlaps,
+        confirmedWarningIDs: confirmedWarningIDs,
       );
     });
   }
@@ -150,6 +162,8 @@ class ScheduleController extends StateNotifier<ScheduleEditorState> {
   Future<bool> changeSeries({
     required CircleScheduleEntry schedule,
     required SchedulePlanInput plan,
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
   }) async {
     if (_hasPastPlannedDate(plan)) return _rejectPastDate();
     return _mutate('series:${schedule.id}', (credentials, key) async {
@@ -162,6 +176,8 @@ class ScheduleController extends StateNotifier<ScheduleEditorState> {
         effectiveLocalDate: _todayLocalDate(),
         plan: plan,
         idempotencyKey: key,
+        confirmOverlaps: confirmOverlaps,
+        confirmedWarningIDs: confirmedWarningIDs,
       );
     });
   }
@@ -195,6 +211,8 @@ class ScheduleController extends StateNotifier<ScheduleEditorState> {
     String? replacementEndLocalTime,
     int? durationMinutes,
     bool cancel = false,
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
   }) async {
     if (localDate.compareTo(_todayLocalDate()) < 0) return _rejectPastDate();
     return _mutate(
@@ -213,6 +231,8 @@ class ScheduleController extends StateNotifier<ScheduleEditorState> {
           durationMinutes: durationMinutes,
           cancel: cancel,
           idempotencyKey: key,
+          confirmOverlaps: confirmOverlaps,
+          confirmedWarningIDs: confirmedWarningIDs,
         );
       },
     );
@@ -233,6 +253,7 @@ class ScheduleController extends StateNotifier<ScheduleEditorState> {
     state = state.copyWith(
       isSaving: true,
       clearSaveError: true,
+      clearOverlapWarnings: true,
       saveSucceeded: false,
     );
     ScheduleCredentials credentials;
@@ -246,6 +267,10 @@ class ScheduleController extends StateNotifier<ScheduleEditorState> {
         isSaving: false,
         saveSucceeded: false,
         saveError: _classifySave(error),
+        overlapWarnings:
+            error is DioException && error.response?.statusCode == 409
+                ? calendarWarningsFromConflict(error.response?.data)
+                : const [],
       );
       return false;
     }

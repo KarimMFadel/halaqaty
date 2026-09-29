@@ -42,7 +42,7 @@ class CalendarState {
       );
 }
 
-enum CalendarFailure { network, permission, unknown }
+enum CalendarFailure { network, permission, conflict, unknown }
 
 typedef CalendarCredentials = ({String token, String sessionId});
 
@@ -168,10 +168,15 @@ final calendarControllerProvider =
 });
 
 class OneOffState {
-  const OneOffState({this.isSaving = false, this.failure});
+  const OneOffState({
+    this.isSaving = false,
+    this.failure,
+    this.overlapWarnings = const [],
+  });
 
   final bool isSaving;
   final CalendarFailure? failure;
+  final List<CalendarWarning> overlapWarnings;
 }
 
 class OneOffController extends StateNotifier<OneOffState> {
@@ -188,7 +193,9 @@ class OneOffController extends StateNotifier<OneOffState> {
   String? _pendingKey;
   static int _keyCounter = 0;
 
-  Future<bool> create(SchedulePlanInput plan) async {
+  Future<bool> create(SchedulePlanInput plan,
+      {bool confirmOverlaps = false,
+      List<String> confirmedWarningIDs = const []}) async {
     state = const OneOffState(isSaving: true);
     try {
       final credentials = await _credentials();
@@ -204,6 +211,8 @@ class OneOffController extends StateNotifier<OneOffState> {
         circleId: circleId,
         plan: plan,
         idempotencyKey: _pendingKey!,
+        confirmOverlaps: confirmOverlaps,
+        confirmedWarningIDs: confirmedWarningIDs,
       );
       _pendingPayload = null;
       _pendingKey = null;
@@ -215,10 +224,18 @@ class OneOffController extends StateNotifier<OneOffState> {
       }
       final failure = error is DioException && error.response?.statusCode == 403
           ? CalendarFailure.permission
-          : error is DioException && error.response?.statusCode == null
-              ? CalendarFailure.network
-              : CalendarFailure.unknown;
-      state = OneOffState(failure: failure);
+          : error is DioException && error.response?.statusCode == 409
+              ? CalendarFailure.conflict
+              : error is DioException && error.response?.statusCode == null
+                  ? CalendarFailure.network
+                  : CalendarFailure.unknown;
+      state = OneOffState(
+        failure: failure,
+        overlapWarnings:
+            error is DioException && error.response?.statusCode == 409
+                ? calendarWarningsFromConflict(error.response?.data)
+                : const [],
+      );
       return false;
     }
   }

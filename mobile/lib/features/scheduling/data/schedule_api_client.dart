@@ -141,10 +141,16 @@ class ScheduleApiClient {
     required String circleId,
     required SchedulePlanInput plan,
     required String idempotencyKey,
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/circles/$circleId/schedules',
-      data: plan.toJson(),
+      data: {
+        ...plan.toJson(),
+        'confirm_overlaps': confirmOverlaps,
+        'confirmed_warning_ids': confirmedWarningIDs,
+      },
       options: Options(headers: {
         ..._authHeaders(token, sessionId),
         _idempotencyHeader: idempotencyKey,
@@ -165,6 +171,8 @@ class ScheduleApiClient {
     required SchedulePlanInput plan,
     bool stop = false,
     required String idempotencyKey,
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
   }) async {
     final response = await _dio.patch<Map<String, dynamic>>(
       '/circles/$circleId/schedules/$scheduleId',
@@ -173,9 +181,8 @@ class ScheduleApiClient {
         'effective_local_date': effectiveLocalDate,
         'plan': plan.toJson(),
         'stop': stop,
-        // Overlap confirmation (US4) arrives with the warning UI; until then
-        // writes are submitted without confirmed warnings.
-        'confirm_overlaps': false,
+        'confirm_overlaps': confirmOverlaps,
+        'confirmed_warning_ids': confirmedWarningIDs,
       },
       options: Options(headers: {
         ..._authHeaders(token, sessionId),
@@ -206,6 +213,8 @@ class ScheduleApiClient {
     String? title,
     bool cancel = false,
     required String idempotencyKey,
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
   }) async {
     await _dio.patch<Map<String, dynamic>>(
       '/circles/$circleId/schedules/$scheduleId/occurrences/$localDate',
@@ -213,7 +222,8 @@ class ScheduleApiClient {
         'expected_series_version': expectedSeriesVersion,
         'expected_occurrence_version': expectedOccurrenceVersion,
         'cancelled': cancel,
-        'confirm_overlaps': false,
+        'confirm_overlaps': confirmOverlaps,
+        'confirmed_warning_ids': confirmedWarningIDs,
         if (replacementLocalDate != null)
           'replacement_local_date': replacementLocalDate,
         if (replacementLocalTime != null)

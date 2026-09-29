@@ -5,6 +5,7 @@ import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/core/validation.dart';
 import 'package:halaqaty_mobile/features/scheduling/application/schedule_controller.dart';
 import 'package:halaqaty_mobile/features/scheduling/data/schedule_api_client.dart';
+import 'package:halaqaty_mobile/features/scheduling/presentation/overlap_warning.dart';
 
 /// F-006 US1 schedule manager: list, create, change/stop series and edit or
 /// cancel one unstarted occurrence. Teachers and supervisors mutate; other
@@ -956,9 +957,23 @@ class _SchedulePlanFormState extends ConsumerState<_SchedulePlanForm> {
     final controller =
         ref.read(scheduleControllerProvider(widget.scope).notifier);
     final existing = widget.existing;
-    final saved = existing == null
-        ? await controller.createSchedule(_buildPlan())
-        : await controller.changeSeries(schedule: existing, plan: _buildPlan());
+    final plan = _buildPlan();
+    final saved = await saveWithOverlapReconfirmation(
+      context: context,
+      rtl: rtl,
+      timezone: plan.timezone,
+      currentWarnings: () =>
+          ref.read(scheduleControllerProvider(widget.scope)).overlapWarnings,
+      save: (confirmed, warningIDs) => existing == null
+          ? controller.createSchedule(plan,
+              confirmOverlaps: confirmed, confirmedWarningIDs: warningIDs)
+          : controller.changeSeries(
+              schedule: existing,
+              plan: plan,
+              confirmOverlaps: confirmed,
+              confirmedWarningIDs: warningIDs,
+            ),
+    );
     if (saved && mounted) {
       Navigator.of(context).pop();
     }
@@ -1177,22 +1192,31 @@ class _OccurrenceEditSheetState extends ConsumerState<_OccurrenceEditSheet> {
       final delta = (end - start) % 1440;
       durationMinutes = delta == 0 ? 1440 : delta;
     }
-    final saved = await ref
-        .read(scheduleControllerProvider(widget.scope).notifier)
-        .changeOccurrence(
-          schedule: widget.entry,
-          localDate: _formatDate(_originalDate),
-          replacementLocalDate:
-              _replacementDate == null ? null : _formatDate(_replacementDate!),
-          replacementLocalTime: _replacementStart == null
-              ? null
-              : _SchedulePlanFormState._formatClock(_replacementStart!),
-          replacementEndLocalTime: _replacementEnd == null
-              ? null
-              : _SchedulePlanFormState._formatClock(_replacementEnd!),
-          durationMinutes: durationMinutes,
-          cancel: _cancel,
-        );
+    final controller =
+        ref.read(scheduleControllerProvider(widget.scope).notifier);
+    final saved = await saveWithOverlapReconfirmation(
+      context: context,
+      rtl: rtl,
+      timezone: widget.entry.plan.timezone,
+      currentWarnings: () =>
+          ref.read(scheduleControllerProvider(widget.scope)).overlapWarnings,
+      save: (confirmed, warningIDs) => controller.changeOccurrence(
+        schedule: widget.entry,
+        localDate: _formatDate(_originalDate),
+        replacementLocalDate:
+            _replacementDate == null ? null : _formatDate(_replacementDate!),
+        replacementLocalTime: _replacementStart == null
+            ? null
+            : _SchedulePlanFormState._formatClock(_replacementStart!),
+        replacementEndLocalTime: _replacementEnd == null
+            ? null
+            : _SchedulePlanFormState._formatClock(_replacementEnd!),
+        durationMinutes: durationMinutes,
+        cancel: _cancel,
+        confirmOverlaps: confirmed,
+        confirmedWarningIDs: warningIDs,
+      ),
+    );
     if (saved && mounted) {
       Navigator.of(context).pop();
     }

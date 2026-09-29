@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/KarimMFadel/halaqaty/backend/internal/attendance"
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/chat"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
@@ -56,6 +57,7 @@ type MiddlewareSet struct {
 	ChatMediaHandler      *chat.MediaHandler
 	ScheduleHandler       *scheduling.ScheduleHandler
 	CalendarHandler       *scheduling.CalendarHandler
+	AttendanceHandler     *attendance.Handler
 	Timeout               time.Duration
 	// ChatUploadTimeout overrides Timeout on the upload routes; zero selects
 	// DefaultChatUploadTimeout.
@@ -427,6 +429,11 @@ func (r *Router) registerRoutes() {
 			r.mux.Handle(routeSessionPlannedDetailsChange, r.requireWithUserLimit(http.HandlerFunc(calendarH.ChangeOneOff)))
 			r.mux.Handle(routeScheduleOccurrenceStart, r.requireWithUserLimit(http.HandlerFunc(calendarH.StartOccurrence)))
 			r.mux.Handle(routeCalendarMeGet, r.requireWithUserLimit(http.HandlerFunc(calendarH.GetPersonalMonth)))
+		}
+		if r.mw.AttendanceHandler != nil {
+			attendanceH := r.mw.AttendanceHandler
+			r.mux.Handle(routeSessionAttendanceGet, r.requireWithUserLimit(http.HandlerFunc(attendanceH.GetAttendance)))
+			r.mux.Handle(routeSessionAttendanceCorrect, r.requireWithUserLimit(http.HandlerFunc(attendanceH.CorrectAttendance)))
 		}
 	}
 	if r.mw.SessionHandler != nil {

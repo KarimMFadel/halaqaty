@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/KarimMFadel/halaqaty/backend/internal/attendance"
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/chat"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
@@ -88,6 +89,16 @@ type wiringRoleRepo struct{}
 
 type wiringModerationService struct{ called bool }
 
+type wiringAttendanceCommands struct{}
+
+func (wiringAttendanceCommands) List(context.Context, string, string) ([]attendance.Record, error) {
+	return []attendance.Record{}, nil
+}
+
+func (wiringAttendanceCommands) Correct(_ context.Context, command attendance.CorrectionCommand) (attendance.Record, error) {
+	return attendance.Record{SessionID: command.SessionID, UserID: command.UserID, Status: command.Status}, nil
+}
+
 func (s *wiringModerationService) Delete(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error {
 	s.called = true
 	return nil
@@ -161,6 +172,7 @@ func fullWiringMiddlewareSet(authMW *middleware.AuthMiddleware, extras ...func(*
 		ChatMediaHandler:  chat.NewMediaHandler(nil),
 		ScheduleHandler:   scheduling.NewScheduleHandler(nil),
 		CalendarHandler:   scheduling.NewCalendarHandler(nil, nil, nil),
+		AttendanceHandler: attendance.NewHandler(wiringAttendanceCommands{}),
 	}
 	for _, apply := range extras {
 		apply(&mw)
@@ -204,6 +216,8 @@ func TestRegisterRoutes_EveryProtectedRouteRejectsUnauthenticatedRequests(t *tes
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/start"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/join"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/end"},
+		{http.MethodGet, "/api/v1/sessions/" + wiringSessionIDPath + "/attendance"},
+		{http.MethodPatch, "/api/v1/sessions/" + wiringSessionIDPath + "/attendance/" + wiringOtherUserID},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/lock"},
 		{http.MethodGet, "/api/v1/sessions/" + wiringSessionIDPath + "/participants"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/participants/mute-all"},
@@ -255,6 +269,20 @@ func TestRegisterRoutes_EveryProtectedRouteRejectsUnauthenticatedRequests(t *tes
 				t.Fatalf("error code: got %q, want %q", envelope.Error.Code, httpconst.ErrorCodeUnauthorized)
 			}
 		})
+	}
+}
+
+func TestRegisterRoutes_AttendanceUsesAuthenticatedPerUserLimit(t *testing.T) {
+	mw := fullWiringMiddlewareSet(wiringAuthMiddleware())
+	mw.RateLimit = middleware.NewRateLimitMiddleware(100, 1)
+	router := NewRouter(mw)
+	path := "/api/v1/sessions/" + wiringSessionIDPath + "/attendance"
+	for i, want := range []int{http.StatusOK, http.StatusTooManyRequests} {
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, wiringAuthenticatedRequest(http.MethodGet, path, ""))
+		if rec.Code != want {
+			t.Fatalf("request %d status = %d, want %d body=%s", i+1, rec.Code, want, rec.Body.String())
+		}
 	}
 }
 

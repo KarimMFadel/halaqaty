@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	apirouter "github.com/KarimMFadel/halaqaty/backend/internal/api"
+	"github.com/KarimMFadel/halaqaty/backend/internal/attendance"
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/chat"
 	chatminio "github.com/KarimMFadel/halaqaty/backend/internal/chat/minio"
@@ -129,6 +130,8 @@ func main() {
 	// F-006 schedule management and personal calendar share the ADR-026 persistence.
 	scheduleRepo := scheduling.NewScheduleRepository(pool)
 	scheduleHandler := scheduling.NewScheduleHandler(scheduling.NewScheduleService(scheduleRepo))
+	attendanceRepo := attendance.NewRepository(pool)
+	attendanceHandler := attendance.NewHandler(attendance.NewCorrectionService(attendanceRepo))
 
 	var sessionHandler *sessions.Handler
 	var liveSessionService *sessions.Service
@@ -155,6 +158,7 @@ func main() {
 		media := livekit.NewConfiguredAdapter(mediaCfg, policy)
 		liveVerifier := livekit.NewHandlerVerifier(mediaCfg.APIKey, mediaCfg.APISecret)
 		liveSessionRepo := sessions.NewSessionRepository(pool)
+		liveSessionRepo.SetAttendanceLifecycle(attendanceRepo)
 		liveSessionService, err = sessions.NewServiceWithRoomKey(liveSessionRepo, media, rbacRepo, roomKey)
 		if err != nil {
 			logger.Error("failed to initialize live session service", "error", err)
@@ -165,6 +169,7 @@ func main() {
 			logger.Error("failed to initialize session reconciler", "error", err)
 			os.Exit(1)
 		}
+		sessionReconciler.SetAttendanceFinalizer(attendanceRepo)
 		sessionTopicAuthorizer = liveSessionService
 		sessionHandler = sessions.NewHandler(liveSessionService)
 		sessionHandler.SetWebhookVerifier(liveVerifier)
@@ -303,6 +308,7 @@ func main() {
 		ChatMediaHandler:  chatMediaHandler,
 		ScheduleHandler:   scheduleHandler,
 		CalendarHandler:   calendarHandler,
+		AttendanceHandler: attendanceHandler,
 		Timeout:           cfg.RequestTimeout,
 		Logger:            logger,
 		Metrics:           authMetrics,

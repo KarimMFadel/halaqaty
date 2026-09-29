@@ -756,6 +756,7 @@ func TestSessionRepository_ListCircleSessions_ReturnsDiscoveryVisibleOnly(t *tes
 		hoursAgo  int
 	}{
 		{sessionID: active.ID, hoursAgo: 3},
+		{sessionID: ended.ID, hoursAgo: 2},
 		{sessionID: scheduled.ID, hoursAgo: 1},
 	} {
 		if _, err := repo.pool.Exec(ctx,
@@ -769,16 +770,16 @@ func TestSessionRepository_ListCircleSessions_ReturnsDiscoveryVisibleOnly(t *tes
 	if err != nil {
 		t.Fatalf("list circle sessions: %v", err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("items = %d, want only the scheduled and active sessions (ended and other-circle excluded)", len(items))
+	if len(items) != 3 {
+		t.Fatalf("items = %d, want scheduled, ended history, and active (other circle excluded)", len(items))
 	}
-	if items[0].ID != scheduled.ID || items[1].ID != active.ID {
-		t.Fatalf("order = [%s %s], want newest-first [scheduled active]", items[0].ID, items[1].ID)
+	if items[0].ID != scheduled.ID || items[1].ID != ended.ID || items[2].ID != active.ID {
+		t.Fatalf("order = [%s %s %s], want newest-first [scheduled ended active]", items[0].ID, items[1].ID, items[2].ID)
 	}
 	if items[0].MediaRoomRef != "" {
 		t.Fatalf("scheduled session must not carry a room ref: %+v", items[0])
 	}
-	if items[1].MediaRoomRef == "" {
+	if items[2].MediaRoomRef == "" {
 		t.Fatalf("active session must carry its room ref: %+v", items[1])
 	}
 	for _, item := range items {

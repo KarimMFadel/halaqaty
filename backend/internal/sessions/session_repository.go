@@ -22,12 +22,26 @@ type querier interface {
 // PostgreSQL is the sole source of truth; no session state is cached in
 // memory (constitution §III).
 type Repository struct {
-	pool *pgxpool.Pool
+	pool       *pgxpool.Pool
+	attendance AttendanceLifecycle
+}
+
+// AttendanceLifecycle runs F-006 persistence inside existing F-005 transactions.
+type AttendanceLifecycle interface {
+	SnapshotStartRoster(context.Context, pgx.Tx, string) error
+	CheckStudentJoin(context.Context, pgx.Tx, string, string) (bool, error)
+	RecordStudentJoin(context.Context, pgx.Tx, string, string) error
+	FinalizeSession(context.Context, pgx.Tx, string) error
 }
 
 // NewSessionRepository constructs a live-session repository on a pgx pool.
 func NewSessionRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
+}
+
+// SetAttendanceLifecycle configures transactional F-006 attendance hooks.
+func (r *Repository) SetAttendanceLifecycle(lifecycle AttendanceLifecycle) {
+	r.attendance = lifecycle
 }
 
 // withTx runs fn against a transaction and commits on success. Errors
@@ -52,6 +66,14 @@ func lockSessionAdvisory(ctx context.Context, q querier, sessionID string) error
 		return fmt.Errorf("lock session advisory key: %w", err)
 	}
 	return nil
+}
+
+func attendanceTransaction(q querier) (pgx.Tx, error) {
+	tx, ok := q.(pgx.Tx)
+	if !ok {
+		return nil, errors.New("attendance hook requires a PostgreSQL transaction")
+	}
+	return tx, nil
 }
 
 func lockActiveParticipantAccount(ctx context.Context, q querier, userID string) error {
@@ -212,8 +234,7 @@ func (r *Repository) CreateAdHocSession(ctx context.Context, circleID, createdBy
 	return created, nil
 }
 
-// ListCircleSessions returns only discovery-visible scheduled and active
-// sessions; ended history and F-006 scheduling data stay out of this flow.
+// ListCircleSessions returns scheduled, active and ended sessions for current circle history.
 func (r *Repository) ListCircleSessions(ctx context.Context, circleID string) ([]Session, error) {
 	rows, err := r.pool.Query(ctx, listCircleSessionsQuery, circleID)
 	if err != nil {
@@ -303,6 +324,7 @@ func (r *Repository) startSessionWithConnectionInTx(ctx context.Context, q queri
 		return Session{}, MediaConnection{}, err
 	}
 	var started Session
+	var activated bool
 	switch sess.Status {
 	case SessionStatusScheduled:
 		var cancelled bool
@@ -319,6 +341,7 @@ func (r *Repository) startSessionWithConnectionInTx(ctx context.Context, q queri
 		if err != nil {
 			return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: activate session: %w", err)
 		}
+		activated = true
 	case SessionStatusActive:
 		if sess.MediaRoomRef == "" {
 			return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: active session has no media room reference")
@@ -331,6 +354,15 @@ func (r *Repository) startSessionWithConnectionInTx(ctx context.Context, q queri
 	if err != nil {
 		return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: load presence: %w", err)
 	}
+	if activated && r.attendance != nil {
+		tx, err := attendanceTransaction(q)
+		if err != nil {
+			return Session{}, MediaConnection{}, err
+		}
+		if err := r.attendance.SnapshotStartRoster(ctx, tx, sessionID); err != nil {
+			return Session{}, MediaConnection{}, err
+		}
+	}
 	if !facts.currentlyPresent() {
 		if facts.found && !facts.removed {
 			if started.ParticipantCount >= maxParticipants {
@@ -338,6 +370,15 @@ func (r *Repository) startSessionWithConnectionInTx(ctx context.Context, q queri
 			}
 		} else if err := validateAdmission(started); err != nil {
 			return Session{}, MediaConnection{}, err
+		}
+		if r.attendance != nil {
+			tx, err := attendanceTransaction(q)
+			if err != nil {
+				return Session{}, MediaConnection{}, err
+			}
+			if _, err := r.attendance.CheckStudentJoin(ctx, tx, sessionID, userID); err != nil {
+				return Session{}, MediaConnection{}, err
+			}
 		}
 	}
 	connection, err := issue(ctx, started.MediaRoomRef, grants)
@@ -348,7 +389,19 @@ func (r *Repository) startSessionWithConnectionInTx(ctx context.Context, q queri
 		return started, connection, nil
 	}
 	started, err = admitIfCapacity(ctx, q, started, userID, facts)
-	return started, connection, err
+	if err != nil {
+		return Session{}, MediaConnection{}, err
+	}
+	if r.attendance != nil {
+		tx, err := attendanceTransaction(q)
+		if err != nil {
+			return Session{}, MediaConnection{}, err
+		}
+		if err := r.attendance.RecordStudentJoin(ctx, tx, sessionID, userID); err != nil {
+			return Session{}, MediaConnection{}, err
+		}
+	}
+	return started, connection, nil
 }
 
 func lockPlannedStart(ctx context.Context, q querier, sessionID string) error {
@@ -387,6 +440,15 @@ func (r *Repository) EndSession(ctx context.Context, sessionID string, reason En
 		}
 		if _, err := q.Exec(ctx, clearSessionPresenceQuery, sessionID); err != nil {
 			return fmt.Errorf("end session: clear presence: %w", err)
+		}
+		if r.attendance != nil {
+			tx, err := attendanceTransaction(q)
+			if err != nil {
+				return err
+			}
+			if err := r.attendance.FinalizeSession(ctx, tx, sessionID); err != nil {
+				return fmt.Errorf("end session: finalize attendance: %w", err)
+			}
 		}
 		ended = s
 		return nil
@@ -495,6 +557,15 @@ func (r *Repository) JoinSessionWithConnection(ctx context.Context, sessionID, u
 			} else if err := validateAdmission(sess); err != nil {
 				return err
 			}
+			if r.attendance != nil {
+				tx, err := attendanceTransaction(q)
+				if err != nil {
+					return err
+				}
+				if _, err := r.attendance.CheckStudentJoin(ctx, tx, sessionID, userID); err != nil {
+					return err
+				}
+			}
 		}
 		connection, err = issue(ctx, sess.MediaRoomRef, grants)
 		if err != nil {
@@ -505,7 +576,19 @@ func (r *Repository) JoinSessionWithConnection(ctx context.Context, sessionID, u
 			return nil
 		}
 		joined, err = admitIfCapacity(ctx, q, sess, userID, facts)
-		return err
+		if err != nil {
+			return err
+		}
+		if r.attendance != nil {
+			tx, err := attendanceTransaction(q)
+			if err != nil {
+				return err
+			}
+			if err := r.attendance.RecordStudentJoin(ctx, tx, sessionID, userID); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return Session{}, MediaConnection{}, err

@@ -277,6 +277,7 @@ class CircleDetailScreen extends ConsumerWidget {
                 isManager: currentRole == CircleRole.teacher ||
                     currentRole == CircleRole.supervisor,
                 isArchived: circle.isArchived,
+                canCorrectAttendance: currentRole == CircleRole.teacher,
               ),
             ],
           );

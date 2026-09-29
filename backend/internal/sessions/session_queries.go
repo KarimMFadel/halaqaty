@@ -30,7 +30,7 @@ WHERE id = $1::uuid
 const listCircleSessionsQuery = `
 SELECT ` + sessionColumns + `
 FROM sessions
-WHERE circle_id = $1::uuid AND status IN ('scheduled', 'active')
+WHERE circle_id = $1::uuid AND status IN ('scheduled', 'active', 'ended')
   AND NOT EXISTS (
       SELECT 1 FROM planned_session_details d
       LEFT JOIN schedule_occurrence_exceptions e

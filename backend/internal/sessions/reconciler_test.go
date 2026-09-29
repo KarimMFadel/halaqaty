@@ -30,6 +30,13 @@ type recoveryGatewayStub struct {
 	closed  []MediaRoomRef
 }
 
+type recoveryAttendanceStub struct{ finalized []string }
+
+func (s *recoveryAttendanceStub) Finalize(_ context.Context, sessionID string) error {
+	s.finalized = append(s.finalized, sessionID)
+	return nil
+}
+
 func (g *recoveryGatewayStub) EnsureRoom(_ context.Context, ref MediaRoomRef, _ MediaMode) error {
 	g.ensured = append(g.ensured, ref)
 	return nil
@@ -92,5 +99,23 @@ func TestReconcilerSweepProcessesBoundedLifecycleCandidates(t *testing.T) {
 	}
 	if len(gateway.closed) != 2 || gateway.closed[1] != "persisted-ended" {
 		t.Fatalf("closed rooms = %v", gateway.closed)
+	}
+}
+
+func TestReconcilerSweepRetriesEndedAttendanceFinalization(t *testing.T) {
+	store := &recoveryStoreStub{candidates: map[SessionStatus][]Session{
+		SessionStatusEnded: {{ID: "ended-recovery", Status: SessionStatusEnded}},
+	}}
+	attendance := &recoveryAttendanceStub{}
+	reconciler, err := NewReconciler(store, &recoveryGatewayStub{}, []byte("server-only-key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reconciler.SetAttendanceFinalizer(attendance)
+	if err := reconciler.Sweep(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(attendance.finalized) != 1 || attendance.finalized[0] != "ended-recovery" {
+		t.Fatalf("finalized sessions = %v, want [ended-recovery]", attendance.finalized)
 	}
 }

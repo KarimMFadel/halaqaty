@@ -31,14 +31,24 @@ type recoverySessionReader interface {
 	GetSession(context.Context, string) (Session, error)
 }
 
+type attendanceRecovery interface {
+	Finalize(context.Context, string) error
+}
+
 // Reconciler repairs the provider side of the session lifecycle without
 // adding another source of durable state. Repeated sweeps are safe because
 // provider operations are idempotent and PostgreSQL remains authoritative.
 type Reconciler struct {
-	store   RecoveryStore
-	gateway SessionMediaGateway
-	roomKey []byte
-	clock   func() time.Time
+	store      RecoveryStore
+	gateway    SessionMediaGateway
+	roomKey    []byte
+	clock      func() time.Time
+	attendance attendanceRecovery
+}
+
+// SetAttendanceFinalizer enables recovery of ended sessions whose attendance was not finalized.
+func (r *Reconciler) SetAttendanceFinalizer(finalizer attendanceRecovery) {
+	r.attendance = finalizer
 }
 
 // NewReconciler constructs a bounded session reconciler. The key is backend
@@ -138,6 +148,11 @@ func (r *Reconciler) reconcileCandidate(ctx context.Context, sess Session) error
 			}
 			return r.gateway.EnsureRoom(attemptCtx, current.MediaRoomRef, current.MediaMode)
 		case SessionStatusEnded:
+			if r.attendance != nil {
+				if err := r.attendance.Finalize(attemptCtx, current.ID); err != nil {
+					return fmt.Errorf("finalize recovered attendance: %w", err)
+				}
+			}
 			if current.MediaRoomRef == "" {
 				return nil
 			}

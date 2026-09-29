@@ -8,6 +8,7 @@ import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/auth/presentation/auth_screens.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_discovery_screen.dart';
 import 'package:halaqaty_mobile/features/profile/presentation/profile_screen.dart';
+import 'package:halaqaty_mobile/features/scheduling/presentation/calendar_screen.dart';
 
 final _homeNavigatorKey =
     GlobalKey<NavigatorState>(debugLabel: 'homeNavigator');
@@ -67,6 +68,10 @@ GoRouter buildHalaqatyRouter(AuthStatus status) {
               GoRoute(
                 path: '/home',
                 builder: (context, state) => const HomeScreen(),
+              ),
+              GoRoute(
+                path: '/calendar',
+                builder: (context, state) => const CalendarScreen(),
               ),
             ],
           ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
@@ -39,6 +40,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(isRtl ? 'الرئيسية' : 'Home'),
+        actions: [
+          IconButton(
+            tooltip: isRtl ? 'التقويم' : 'Calendar',
+            onPressed: () => context.push('/calendar'),
+            icon: const Icon(Icons.calendar_month_outlined),
+          ),
+        ],
       ),
       body: SafeArea(
         child: RefreshIndicator(

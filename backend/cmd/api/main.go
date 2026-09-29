@@ -27,6 +27,7 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/queue"
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
 	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
+	"github.com/KarimMFadel/halaqaty/backend/internal/scheduling"
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions/livekit"
 )
@@ -125,6 +126,10 @@ func main() {
 	queueOptOuts := queue.NewOptOutService(queueRepo)
 	queueHandler := queue.NewHandler(queueRepo, queueRounds, queue.NewTurnService(queueRepo), queue.NewPolicyService(queueRepo), queueOptOuts)
 
+	// F-006 schedule management and personal calendar share the ADR-026 persistence.
+	scheduleRepo := scheduling.NewScheduleRepository(pool)
+	scheduleHandler := scheduling.NewScheduleHandler(scheduling.NewScheduleService(scheduleRepo))
+
 	var sessionHandler *sessions.Handler
 	var liveSessionService *sessions.Service
 	var sessionReconciler *sessions.Reconciler
@@ -164,6 +169,15 @@ func main() {
 		sessionHandler = sessions.NewHandler(liveSessionService)
 		sessionHandler.SetWebhookVerifier(liveVerifier)
 	}
+	var occurrenceStarts scheduling.OccurrenceStartCommands
+	if liveSessionService != nil {
+		occurrenceStarts = scheduling.NewOccurrenceStartService(scheduleRepo, liveSessionService)
+	}
+	calendarHandler := scheduling.NewCalendarHandler(
+		scheduling.NewPlannedSessionService(scheduleRepo),
+		occurrenceStarts,
+		scheduling.NewCalendarService(scheduleRepo),
+	)
 
 	authMetrics := new(metrics.AuthMetrics)
 	authMW := middleware.NewAuthMiddleware(verifier, sessionService, sessionRepo)
@@ -287,6 +301,8 @@ func main() {
 		// upload/renewal routes unregistered in that case.
 		ChatUploadHandler: chatUploadHandler,
 		ChatMediaHandler:  chatMediaHandler,
+		ScheduleHandler:   scheduleHandler,
+		CalendarHandler:   calendarHandler,
 		Timeout:           cfg.RequestTimeout,
 		Logger:            logger,
 		Metrics:           authMetrics,

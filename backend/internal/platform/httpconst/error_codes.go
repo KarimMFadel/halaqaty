@@ -132,4 +132,12 @@ const (
 	FieldDMPeerID        = "dm_peer_id"
 	FieldDurationSeconds = "duration_seconds"
 	FieldMessageID       = "message_id"
+
+	// Schedule request fields (F-006 US1), named as in the canonical schedule
+	// contracts.
+	FieldScheduleID         = "schedule_id"
+	FieldLocalDate          = "local_date"
+	FieldPlan               = "plan"
+	FieldEffectiveLocalDate = "effective_local_date"
+	FieldConfirmOverlaps    = "confirm_overlaps"
 )

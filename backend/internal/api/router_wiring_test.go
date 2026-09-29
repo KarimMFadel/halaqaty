@@ -19,6 +19,7 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/profile"
 	"github.com/KarimMFadel/halaqaty/backend/internal/queue"
 	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
+	"github.com/KarimMFadel/halaqaty/backend/internal/scheduling"
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
 	"github.com/google/uuid"
 )
@@ -158,6 +159,8 @@ func fullWiringMiddlewareSet(authMW *middleware.AuthMiddleware, extras ...func(*
 		ChatSendLimiter:   chat.NewChatSendLimiter(30),
 		ChatUploadHandler: chat.NewUploadHandler(nil),
 		ChatMediaHandler:  chat.NewMediaHandler(nil),
+		ScheduleHandler:   scheduling.NewScheduleHandler(nil),
+		CalendarHandler:   scheduling.NewCalendarHandler(nil, nil, nil),
 	}
 	for _, apply := range extras {
 		apply(&mw)
@@ -225,6 +228,14 @@ func TestRegisterRoutes_EveryProtectedRouteRejectsUnauthenticatedRequests(t *tes
 		{http.MethodPatch, "/api/v1/sessions/" + wiringSessionIDPath + "/queue/policy"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/queue/opt-out"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/queue/opt-out-requests/" + wiringRequestID + "/decision"},
+		{http.MethodGet, "/api/v1/circles/" + wiringCircleID + "/schedules"},
+		{http.MethodPost, "/api/v1/circles/" + wiringCircleID + "/schedules"},
+		{http.MethodPatch, "/api/v1/circles/" + wiringCircleID + "/schedules/" + wiringSessionIDPath},
+		{http.MethodPatch, "/api/v1/circles/" + wiringCircleID + "/schedules/" + wiringSessionIDPath + "/occurrences/2030-01-02"},
+		{http.MethodPost, "/api/v1/circles/" + wiringCircleID + "/schedules/" + wiringSessionIDPath + "/occurrences/2030-01-02/start"},
+		{http.MethodPost, "/api/v1/circles/" + wiringCircleID + "/planned-sessions"},
+		{http.MethodPatch, "/api/v1/sessions/" + wiringSessionIDPath + "/planned-details"},
+		{http.MethodGet, "/api/v1/calendar/me?month=2030-01"},
 	}
 
 	for _, route := range sessionRoutes {

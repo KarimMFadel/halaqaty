@@ -17,6 +17,7 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/queue"
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
 	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
+	"github.com/KarimMFadel/halaqaty/backend/internal/scheduling"
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
 )
 
@@ -53,6 +54,8 @@ type MiddlewareSet struct {
 	ChatSendLimiter       *chat.ChatSendLimiter
 	ChatUploadHandler     *chat.UploadHandler
 	ChatMediaHandler      *chat.MediaHandler
+	ScheduleHandler       *scheduling.ScheduleHandler
+	CalendarHandler       *scheduling.CalendarHandler
 	Timeout               time.Duration
 	// ChatUploadTimeout overrides Timeout on the upload routes; zero selects
 	// DefaultChatUploadTimeout.
@@ -407,6 +410,23 @@ func (r *Router) registerRoutes() {
 		}
 		if r.mw.ChatMediaHandler != nil {
 			r.mux.Handle(routeMessageMediaURL, r.requireWithUserLimit(http.HandlerFunc(r.mw.ChatMediaHandler.RenewMessageMediaURL)))
+		}
+		// F-006 US1 schedule management. The service enforces circle
+		// membership/role inside each command transaction, so the routes need
+		// only authentication and the per-user budget.
+		if r.mw.ScheduleHandler != nil {
+			scheduleH := r.mw.ScheduleHandler
+			r.mux.Handle(routeCircleSchedulesGet, r.requireWithUserLimit(http.HandlerFunc(scheduleH.ListSchedules)))
+			r.mux.Handle(routeCircleSchedulesCreate, r.requireWithUserLimit(http.HandlerFunc(scheduleH.CreateSchedule)))
+			r.mux.Handle(routeCircleScheduleChange, r.requireWithUserLimit(http.HandlerFunc(scheduleH.ChangeSchedule)))
+			r.mux.Handle(routeScheduleOccurrenceChange, r.requireWithUserLimit(http.HandlerFunc(scheduleH.ChangeScheduleOccurrence)))
+		}
+		if r.mw.CalendarHandler != nil {
+			calendarH := r.mw.CalendarHandler
+			r.mux.Handle(routeCirclePlannedSessionsCreate, r.requireWithUserLimit(http.HandlerFunc(calendarH.CreateOneOff)))
+			r.mux.Handle(routeSessionPlannedDetailsChange, r.requireWithUserLimit(http.HandlerFunc(calendarH.ChangeOneOff)))
+			r.mux.Handle(routeScheduleOccurrenceStart, r.requireWithUserLimit(http.HandlerFunc(calendarH.StartOccurrence)))
+			r.mux.Handle(routeCalendarMeGet, r.requireWithUserLimit(http.HandlerFunc(calendarH.GetPersonalMonth)))
 		}
 	}
 	if r.mw.SessionHandler != nil {

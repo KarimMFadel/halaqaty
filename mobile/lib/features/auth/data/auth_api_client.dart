@@ -13,6 +13,7 @@ class BackendUser {
     this.country,
     this.avatarUrl,
     required this.preferredLanguage,
+    this.timezone = 'UTC',
     required this.createdAt,
   });
 
@@ -24,6 +25,10 @@ class BackendUser {
   final String? country;
   final String? avatarUrl;
   final String preferredLanguage;
+
+  /// The stored IANA timezone (F-006 additive `/auth/me` field); old payloads
+  /// without the key fall back to `UTC`.
+  final String timezone;
   final DateTime createdAt;
 
   factory BackendUser.fromJson(Map<String, dynamic> json) => BackendUser(
@@ -35,6 +40,7 @@ class BackendUser {
         country: json['country'] as String?,
         avatarUrl: json['avatar_url'] as String?,
         preferredLanguage: json['preferred_language'] as String,
+        timezone: json['timezone'] as String? ?? 'UTC',
         createdAt: DateTime.parse(json['created_at'] as String),
       );
 }

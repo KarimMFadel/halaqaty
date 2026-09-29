@@ -5,6 +5,9 @@ package sessions
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -77,6 +80,40 @@ func fillToCapacity(t *testing.T, repo *Repository, sessionID string) {
 	if _, err := repo.pool.Exec(context.Background(),
 		`UPDATE sessions SET participant_count = 50 WHERE id = $1::uuid`, sessionID); err != nil {
 		t.Fatalf("fill session to capacity: %v", err)
+	}
+}
+
+func applyF006Migration(t *testing.T, repo *Repository) {
+	t.Helper()
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("could not determine test file path")
+	}
+	migrationPath := filepath.Join(filepath.Dir(thisFile), "..", "..", "migrations", "000020_schedule_calendar_attendance.up.sql")
+	sql, err := os.ReadFile(migrationPath)
+	if err != nil {
+		t.Fatalf("read F-006 migration: %v", err)
+	}
+	if _, err := repo.pool.Exec(context.Background(), string(sql)); err != nil {
+		t.Fatalf("apply F-006 migration: %v", err)
+	}
+}
+
+func seedOneOffPlannedDetails(t *testing.T, repo *Repository, sessionID string, cancelled bool) {
+	t.Helper()
+	var cancelledAt any
+	if cancelled {
+		cancelledAt = time.Now()
+	}
+	_, err := repo.pool.Exec(context.Background(), `
+		INSERT INTO planned_session_details (
+			session_id, title, start_local_time, end_local_time, duration_minutes,
+			planned_end_at, planning_timezone, cancelled_at, version
+		) VALUES ($1::uuid, 'Planned', TIME '10:00', TIME '11:00', 60,
+			NOW() + INTERVAL '1 hour', 'UTC', $2, 1)
+	`, sessionID, cancelledAt)
+	if err != nil {
+		t.Fatalf("seed planned session details: %v", err)
 	}
 }
 
@@ -206,6 +243,180 @@ func TestSessionRepository_StartSessionWithConnection_ProviderFailure_RollsBackA
 				t.Fatalf("provider failure must leave no presence behind: %+v", rows)
 			}
 		})
+	}
+}
+
+func TestSessionRepository_StartSessionWithConnection_CancelledPlannedDetail_DeniesActivation(t *testing.T) {
+	repo := newSessionRepository(t)
+	applyF006Migration(t, repo)
+	ctx := context.Background()
+	teacher := seedRepoUser(t, repo, "swc-cancelled-detail")
+	circle := seedRepoCircle(t, repo, teacher)
+	created, err := repo.CreateAdHocSession(ctx, circle, teacher)
+	if err != nil {
+		t.Fatalf("create planned session: %v", err)
+	}
+	seedOneOffPlannedDetails(t, repo, created.ID, true)
+
+	cbs := &connectionCallbacks{}
+	_, _, err = repo.StartSessionWithConnection(ctx, created.ID, teacher, "room-cancelled",
+		MediaGrants{}, cbs.ensure, cbs.issue)
+	if err == nil {
+		t.Fatal("cancelled planned detail must deny start")
+	}
+	if len(cbs.ensured) != 0 || len(cbs.issuedRooms) != 0 {
+		t.Fatalf("cancelled plan must be rejected before provider calls: ensured=%v issued=%v", cbs.ensured, cbs.issuedRooms)
+	}
+	after, err := repo.GetSession(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("get session after denied start: %v", err)
+	}
+	if after.Status != SessionStatusScheduled || after.MediaRoomRef != "" || after.ParticipantCount != 0 {
+		t.Fatalf("denied start changed F-005 lifecycle: %+v", after)
+	}
+	if rows := repoPresenceRows(t, repo, created.ID); len(rows) != 0 {
+		t.Fatalf("denied start admitted presence: %+v", rows)
+	}
+}
+
+func TestSessionRepository_StartSessionWithConnection_CancelledOccurrenceException_DeniesActivation(t *testing.T) {
+	repo := newSessionRepository(t)
+	applyF006Migration(t, repo)
+	ctx := context.Background()
+	teacher := seedRepoUser(t, repo, "swc-cancelled-exception")
+	circle := seedRepoCircle(t, repo, teacher)
+	created, err := repo.CreateAdHocSession(ctx, circle, teacher)
+	if err != nil {
+		t.Fatalf("create planned occurrence session: %v", err)
+	}
+	var scheduleID string
+	if err := repo.pool.QueryRow(ctx, `
+		INSERT INTO schedules (circle_id, created_by, current_version)
+		VALUES ($1::uuid, $2::uuid, 1)
+		RETURNING id::text
+	`, circle, teacher).Scan(&scheduleID); err != nil {
+		t.Fatalf("create schedule: %v", err)
+	}
+	if _, err := repo.pool.Exec(ctx, `
+		INSERT INTO planned_session_details (
+			session_id, schedule_id, original_local_date, title, start_local_time,
+			end_local_time, duration_minutes, planned_end_at, planning_timezone, version
+		) VALUES ($1::uuid, $2::uuid, DATE '2030-01-01', 'Planned', TIME '10:00',
+			TIME '11:00', 60, TIMESTAMPTZ '2030-01-01 11:00:00+00', 'UTC', 1)
+	`, created.ID, scheduleID); err != nil {
+		t.Fatalf("seed recurring planned details: %v", err)
+	}
+	if _, err := repo.pool.Exec(ctx, `
+		INSERT INTO schedule_occurrence_exceptions (
+			schedule_id, original_local_date, series_version, version, cancelled_at, updated_by
+		) VALUES ($1::uuid, DATE '2030-01-01', 1, 1, NOW(), $2::uuid)
+	`, scheduleID, teacher); err != nil {
+		t.Fatalf("seed cancelled occurrence exception: %v", err)
+	}
+
+	cbs := &connectionCallbacks{}
+	_, _, err = repo.StartSessionWithConnection(ctx, created.ID, teacher, "room-cancelled-exception",
+		MediaGrants{}, cbs.ensure, cbs.issue)
+	if !errors.Is(err, ErrSessionNotStartable) {
+		t.Fatalf("cancelled occurrence error = %v, want %v", err, ErrSessionNotStartable)
+	}
+	if len(cbs.ensured) != 0 || len(cbs.issuedRooms) != 0 {
+		t.Fatalf("cancelled occurrence must be rejected before provider calls: ensured=%v issued=%v", cbs.ensured, cbs.issuedRooms)
+	}
+}
+
+func TestSessionRepository_StartSessionWithConnection_PlannedDetailProviderFailure_RollsBack(t *testing.T) {
+	repo := newSessionRepository(t)
+	applyF006Migration(t, repo)
+	ctx := context.Background()
+	teacher := seedRepoUser(t, repo, "swc-detail-rollback")
+	circle := seedRepoCircle(t, repo, teacher)
+	created, err := repo.CreateAdHocSession(ctx, circle, teacher)
+	if err != nil {
+		t.Fatalf("create planned session: %v", err)
+	}
+	seedOneOffPlannedDetails(t, repo, created.ID, false)
+
+	cbs := &connectionCallbacks{issueErr: errors.New("provider unavailable")}
+	if _, _, err := repo.StartSessionWithConnection(ctx, created.ID, teacher, "room-detail-rollback",
+		MediaGrants{}, cbs.ensure, cbs.issue); err == nil {
+		t.Fatal("credential issuance failure must be returned")
+	}
+	after, err := repo.GetSession(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("get session after provider failure: %v", err)
+	}
+	if after.Status != SessionStatusScheduled || after.MediaRoomRef != "" || after.ParticipantCount != 0 {
+		t.Fatalf("provider failure changed F-005 lifecycle: %+v", after)
+	}
+	if rows := repoPresenceRows(t, repo, created.ID); len(rows) != 0 {
+		t.Fatalf("provider failure admitted presence: %+v", rows)
+	}
+	var cancelledAt *time.Time
+	if err := repo.pool.QueryRow(ctx, `SELECT cancelled_at FROM planned_session_details WHERE session_id=$1::uuid`, created.ID).Scan(&cancelledAt); err != nil {
+		t.Fatalf("read planned detail after failure: %v", err)
+	}
+	if cancelledAt != nil {
+		t.Fatalf("provider failure changed cancellation state: %v", cancelledAt)
+	}
+}
+
+func TestSessionRepository_F006AdHocSession_RemainsStartableWithoutPlannedDetails(t *testing.T) {
+	repo := newSessionRepository(t)
+	applyF006Migration(t, repo)
+	ctx := context.Background()
+	teacher := seedRepoUser(t, repo, "swc-f006-adhoc")
+	circle := seedRepoCircle(t, repo, teacher)
+	created, err := repo.CreateAdHocSession(ctx, circle, teacher)
+	if err != nil {
+		t.Fatalf("create ad-hoc session: %v", err)
+	}
+	cbs := &connectionCallbacks{}
+	started, _, err := repo.StartSessionWithConnection(ctx, created.ID, teacher, "room-f006-adhoc",
+		MediaGrants{CanPublishAudio: true}, cbs.ensure, cbs.issue)
+	if err != nil {
+		t.Fatalf("start ad-hoc session: %v", err)
+	}
+	if started.Status != SessionStatusActive || started.ParticipantCount != 1 {
+		t.Fatalf("ad-hoc session did not follow the F-005 lifecycle: %+v", started)
+	}
+	var detailCount int
+	if err := repo.pool.QueryRow(ctx, `SELECT COUNT(*) FROM planned_session_details WHERE session_id=$1::uuid`, created.ID).Scan(&detailCount); err != nil {
+		t.Fatalf("count planned details: %v", err)
+	}
+	if detailCount != 0 {
+		t.Fatalf("F-005 ad-hoc session unexpectedly acquired planned metadata: %d rows", detailCount)
+	}
+}
+
+func TestSessionRepository_F006ActiveSession_EndUsesF005Lifecycle(t *testing.T) {
+	repo := newSessionRepository(t)
+	applyF006Migration(t, repo)
+	ctx := context.Background()
+	teacher := seedRepoUser(t, repo, "swc-f006-end")
+	circle := seedRepoCircle(t, repo, teacher)
+	created, err := repo.CreateAdHocSession(ctx, circle, teacher)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	seedOneOffPlannedDetails(t, repo, created.ID, false)
+	if _, _, err := repo.StartSessionWithConnection(ctx, created.ID, teacher, "room-f006-end",
+		MediaGrants{}, (&connectionCallbacks{}).ensure, (&connectionCallbacks{}).issue); err != nil {
+		t.Fatalf("start session: %v", err)
+	}
+	ended, err := repo.EndSession(ctx, created.ID, EndReasonManual)
+	if err != nil {
+		t.Fatalf("end active planned session: %v", err)
+	}
+	if ended.Status != SessionStatusEnded || ended.EndReason != EndReasonManual {
+		t.Fatalf("active session must use F-005 End semantics: %+v", ended)
+	}
+	var cancelledAt *time.Time
+	if err := repo.pool.QueryRow(ctx, `SELECT cancelled_at FROM planned_session_details WHERE session_id=$1::uuid`, created.ID).Scan(&cancelledAt); err != nil {
+		t.Fatalf("read planned detail: %v", err)
+	}
+	if cancelledAt != nil {
+		t.Fatalf("ending an active session must not mark the plan cancelled: %v", cancelledAt)
 	}
 }
 
@@ -574,6 +785,31 @@ func TestSessionRepository_ListCircleSessions_ReturnsDiscoveryVisibleOnly(t *tes
 		if item.CircleID != circle {
 			t.Fatalf("session of another circle leaked into discovery: %+v", item)
 		}
+	}
+}
+
+func TestSessionRepository_ListCircleSessions_ExcludesCancelledPlannedDetails(t *testing.T) {
+	repo := newSessionRepository(t)
+	applyF006Migration(t, repo)
+	ctx := context.Background()
+	teacher := seedRepoUser(t, repo, "list-cancelled-planned")
+	circle := seedRepoCircle(t, repo, teacher)
+	cancelled, err := repo.CreateAdHocSession(ctx, circle, teacher)
+	if err != nil {
+		t.Fatalf("create cancelled planned session: %v", err)
+	}
+	seedOneOffPlannedDetails(t, repo, cancelled.ID, true)
+	active, err := repo.CreateAdHocSession(ctx, circle, teacher)
+	if err != nil {
+		t.Fatalf("create ad-hoc session: %v", err)
+	}
+
+	items, err := repo.ListCircleSessions(ctx, circle)
+	if err != nil {
+		t.Fatalf("list circle sessions: %v", err)
+	}
+	if len(items) != 1 || items[0].ID != active.ID {
+		t.Fatalf("discovery items = %+v, want only uncancelled ad-hoc session %s", items, active.ID)
 	}
 }
 

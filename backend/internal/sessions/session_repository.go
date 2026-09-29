@@ -267,63 +267,105 @@ func (r *Repository) StartSessionWithConnection(ctx context.Context, sessionID, 
 	var started Session
 	var connection MediaConnection
 	err := r.withTx(ctx, func(q querier) error {
-		if err := lockSessionAdvisory(ctx, q, sessionID); err != nil {
-			return err
-		}
-		sess, err := scanSession(q.QueryRow(ctx, lockSessionByIDQuery, sessionID))
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrSessionNotFound
-		}
-		if err != nil {
-			return fmt.Errorf("start session with connection: lock session: %w", err)
-		}
-		if err := lockActiveParticipantAccount(ctx, q, userID); err != nil {
-			return err
-		}
-		switch sess.Status {
-		case SessionStatusScheduled:
-			if err := ensure(ctx, roomRef, sess.MediaMode); err != nil {
-				return fmt.Errorf("start session with connection: %w", err)
-			}
-			started, err = scanSession(q.QueryRow(ctx, startSessionQuery, sessionID, string(roomRef)))
-			if err != nil {
-				return fmt.Errorf("start session with connection: activate session: %w", err)
-			}
-		case SessionStatusActive:
-			if sess.MediaRoomRef == "" {
-				return fmt.Errorf("start session with connection: active session has no media room reference")
-			}
-			started = sess
-		default:
-			return ErrSessionAlreadyEnded
-		}
-		facts, err := loadPresenceEligibility(ctx, q, sessionID, userID)
-		if err != nil {
-			return fmt.Errorf("start session with connection: load presence: %w", err)
-		}
-		if !facts.currentlyPresent() {
-			if facts.found && !facts.removed {
-				if started.ParticipantCount >= maxParticipants {
-					return ErrSessionFull
-				}
-			} else if err := validateAdmission(started); err != nil {
-				return err
-			}
-		}
-		connection, err = issue(ctx, started.MediaRoomRef, grants)
-		if err != nil {
-			return fmt.Errorf("start session with connection: %w", err)
-		}
-		if facts.currentlyPresent() {
-			return nil
-		}
-		started, err = admitIfCapacity(ctx, q, started, userID, facts)
-		return err
+		var startErr error
+		started, connection, startErr = r.startSessionWithConnectionInTx(ctx, q, sessionID, userID, roomRef, grants, ensure, issue)
+		return startErr
 	})
 	if err != nil {
 		return Session{}, MediaConnection{}, err
 	}
 	return started, connection, nil
+}
+
+// StartSessionWithConnectionInTx runs the F-005 media, activation, credential,
+// and starter-admission flow on a caller-owned transaction. Scheduling uses
+// this seam while it retains its occurrence lock and materializes a planned
+// session in the same transaction.
+func (r *Repository) StartSessionWithConnectionInTx(ctx context.Context, tx pgx.Tx, sessionID, userID string, roomRef MediaRoomRef, grants MediaGrants, ensure func(context.Context, MediaRoomRef, MediaMode) error, issue func(context.Context, MediaRoomRef, MediaGrants) (MediaConnection, error)) (Session, MediaConnection, error) {
+	return r.startSessionWithConnectionInTx(ctx, tx, sessionID, userID, roomRef, grants, ensure, issue)
+}
+
+func (r *Repository) startSessionWithConnectionInTx(ctx context.Context, q querier, sessionID, userID string, roomRef MediaRoomRef, grants MediaGrants, ensure func(context.Context, MediaRoomRef, MediaMode) error, issue func(context.Context, MediaRoomRef, MediaGrants) (MediaConnection, error)) (Session, MediaConnection, error) {
+	if err := lockPlannedStart(ctx, q, sessionID); err != nil {
+		return Session{}, MediaConnection{}, err
+	}
+	if err := lockSessionAdvisory(ctx, q, sessionID); err != nil {
+		return Session{}, MediaConnection{}, err
+	}
+	sess, err := scanSession(q.QueryRow(ctx, lockSessionByIDQuery, sessionID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Session{}, MediaConnection{}, ErrSessionNotFound
+	}
+	if err != nil {
+		return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: lock session: %w", err)
+	}
+	if err := lockActiveParticipantAccount(ctx, q, userID); err != nil {
+		return Session{}, MediaConnection{}, err
+	}
+	var started Session
+	switch sess.Status {
+	case SessionStatusScheduled:
+		var cancelled bool
+		if err := q.QueryRow(ctx, plannedStartCancelledQuery, sessionID).Scan(&cancelled); err != nil {
+			return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: check planned cancellation: %w", err)
+		}
+		if cancelled {
+			return Session{}, MediaConnection{}, ErrSessionNotStartable
+		}
+		if err := ensure(ctx, roomRef, sess.MediaMode); err != nil {
+			return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: %w", err)
+		}
+		started, err = scanSession(q.QueryRow(ctx, startSessionQuery, sessionID, string(roomRef)))
+		if err != nil {
+			return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: activate session: %w", err)
+		}
+	case SessionStatusActive:
+		if sess.MediaRoomRef == "" {
+			return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: active session has no media room reference")
+		}
+		started = sess
+	default:
+		return Session{}, MediaConnection{}, ErrSessionAlreadyEnded
+	}
+	facts, err := loadPresenceEligibility(ctx, q, sessionID, userID)
+	if err != nil {
+		return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: load presence: %w", err)
+	}
+	if !facts.currentlyPresent() {
+		if facts.found && !facts.removed {
+			if started.ParticipantCount >= maxParticipants {
+				return Session{}, MediaConnection{}, ErrSessionFull
+			}
+		} else if err := validateAdmission(started); err != nil {
+			return Session{}, MediaConnection{}, err
+		}
+	}
+	connection, err := issue(ctx, started.MediaRoomRef, grants)
+	if err != nil {
+		return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: %w", err)
+	}
+	if facts.currentlyPresent() {
+		return started, connection, nil
+	}
+	started, err = admitIfCapacity(ctx, q, started, userID, facts)
+	return started, connection, err
+}
+
+func lockPlannedStart(ctx context.Context, q querier, sessionID string) error {
+	var scheduleID *string
+	err := q.QueryRow(ctx, plannedStartIdentityQuery, sessionID).Scan(&scheduleID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("start session with connection: load planned identity: %w", err)
+	}
+	if scheduleID != nil {
+		if err := q.QueryRow(ctx, lockPlannedStartScheduleQuery, *scheduleID).Scan(new(string)); err != nil {
+			return fmt.Errorf("start session with connection: lock planned schedule: %w", err)
+		}
+	}
+	return nil
 }
 
 // EndSession applies the active→ended compare-and-set with its durable end

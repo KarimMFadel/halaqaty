@@ -11,6 +11,7 @@ class ProfileUser {
     this.bio,
     this.country,
     required this.preferredLanguage,
+    this.timezone = 'UTC',
     this.avatarUrl,
     this.phone,
     required this.createdAt,
@@ -23,6 +24,10 @@ class ProfileUser {
   final String? bio;
   final String? country;
   final String preferredLanguage;
+
+  /// The viewer's stored IANA timezone (F-006). Pre-F-006 profiles were
+  /// backfilled to `UTC`, so an old payload without the key falls back to it.
+  final String timezone;
   final String? avatarUrl;
   final String? phone;
   final DateTime createdAt;
@@ -35,6 +40,7 @@ class ProfileUser {
         bio: json['bio'] as String?,
         country: json['country'] as String?,
         preferredLanguage: json['preferred_language'] as String? ?? 'ar',
+        timezone: json['timezone'] as String? ?? 'UTC',
         avatarUrl: json['avatar_url'] as String?,
         phone: json['phone'] as String?,
         createdAt: DateTime.parse(json['created_at'] as String),
@@ -48,6 +54,7 @@ class UpdateProfileRequest {
     this.bio,
     this.country,
     this.preferredLanguage,
+    this.timezone,
     this.avatarUrl,
     this.phone,
   });
@@ -57,6 +64,10 @@ class UpdateProfileRequest {
   final String? bio;
   final String? country;
   final String? preferredLanguage;
+
+  /// Optional IANA timezone update; omitted keys preserve the stored value
+  /// (contracts/profile-timezone.md).
+  final String? timezone;
   final String? avatarUrl;
   final String? phone;
 
@@ -66,6 +77,7 @@ class UpdateProfileRequest {
         if (bio != null) 'bio': bio,
         if (country != null) 'country': country,
         if (preferredLanguage != null) 'preferred_language': preferredLanguage,
+        if (timezone != null) 'timezone': timezone,
         if (avatarUrl != null) 'avatar_url': avatarUrl,
         if (phone != null) 'phone': phone,
       };

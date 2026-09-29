@@ -11,6 +11,8 @@ const (
 	HeaderForwardedFor  = "X-Forwarded-For"
 	HeaderSessionID     = "X-Halaqaty-Session-ID"
 	HeaderRequestID     = "X-Request-ID"
+	HeaderCacheControl  = "Cache-Control"
+	HeaderPragma        = "Pragma"
 	// HeaderIdempotencyKey is the required retry-identity header of the
 	// idempotent chat send contracts (F-003, F-004).
 	HeaderIdempotencyKey = "Idempotency-Key"
@@ -22,6 +24,8 @@ const (
 
 const (
 	ContentTypeApplicationJSON = "application/json"
+	CacheControlNoStore        = "no-store"
+	PragmaNoCache              = "no-cache"
 )
 
 // IsJSONContentType reports whether the header value is application/json.

@@ -101,6 +101,17 @@ const (
 	ErrorMessageChatSearchInvalid          = "q must be between 2 and 200 characters"
 	ErrorMessageChatPinLimit               = "circle has reached the maximum of five pinned messages"
 
+	// Schedule messages (F-006 US1). User-safe: no internal detail, circle
+	// data, or identifiers appear in these strings.
+	ErrorMessageScheduleNotFound             = "schedule not found"
+	ErrorMessageScheduleOccurrenceNotFound   = "schedule occurrence not found"
+	ErrorMessageScheduleConflict             = "schedule has changed; refresh and retry with the current version"
+	ErrorMessageScheduleOccurrenceStarted    = "occurrence has already started"
+	ErrorMessageSchedulePlanInvalid          = "schedule plan is invalid"
+	ErrorMessageSchedulePastPlannedTime      = "planned time must be in the present or future"
+	ErrorMessageScheduleIdempotencyConflict  = "idempotency key was already used for a different command"
+	ErrorMessageScheduleIdempotencyKeyNeeded = "Idempotency-Key header is required and must be at most 128 characters"
+
 	// Chat media (F-004 US3). User-safe: no filenames, object keys, URLs, or
 	// identifiers appear in these strings.
 	ErrorMessageUploadTooLarge          = "file exceeds its size limit"

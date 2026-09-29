@@ -19,7 +19,9 @@ class _StubProfileNotifier extends StateNotifier<ProfileState>
     this.hangLoad = false,
     this.saveErrorMessage,
     String preferredLanguage = 'ar',
+    String timezone = 'UTC',
   })  : _preferredLanguage = preferredLanguage,
+        _timezone = timezone,
         super(const ProfileState());
 
   final Map<String, String> serverFieldErrors;
@@ -34,12 +36,14 @@ class _StubProfileNotifier extends StateNotifier<ProfileState>
   final String? saveErrorMessage;
 
   final String _preferredLanguage;
+  final String _timezone;
   AccountDeletionOutcome? deletionOutcome;
   String? lastDeletionPassword;
 
   bool updateCalled = false;
   bool deleteCalled = false;
   int loadCalls = 0;
+  UpdateProfileRequest? lastRequest;
 
   @override
   Future<void> loadProfile() async {
@@ -54,13 +58,14 @@ class _StubProfileNotifier extends StateNotifier<ProfileState>
       return;
     }
     state = ProfileState(
-      profile: _profile(_preferredLanguage),
+      profile: _profile(_preferredLanguage, _timezone),
     );
   }
 
   @override
   Future<bool> updateProfile({required UpdateProfileRequest request}) async {
     updateCalled = true;
+    lastRequest = request;
     if (serverFieldErrors.isNotEmpty) {
       state = state.copyWith(
         isSaving: false,
@@ -83,6 +88,7 @@ class _StubProfileNotifier extends StateNotifier<ProfileState>
         bio: request.bio,
         country: request.country,
         preferredLanguage: request.preferredLanguage ?? 'ar',
+        timezone: request.timezone ?? 'UTC',
         avatarUrl: request.avatarUrl,
         phone: request.phone,
         createdAt: DateTime.parse('2026-01-01T00:00:00Z'),
@@ -99,7 +105,8 @@ class _StubProfileNotifier extends StateNotifier<ProfileState>
     return deletionOutcome;
   }
 
-  static ProfileUser _profile(String preferredLanguage) => ProfileUser(
+  static ProfileUser _profile(String preferredLanguage, String timezone) =>
+      ProfileUser(
         id: 'user-1',
         firebaseUid: 'firebase-1',
         fullName: 'Ali Mahmoud',
@@ -107,6 +114,7 @@ class _StubProfileNotifier extends StateNotifier<ProfileState>
         bio: 'Bio',
         country: 'EG',
         preferredLanguage: preferredLanguage,
+        timezone: timezone,
         avatarUrl: null,
         phone: null,
         createdAt: DateTime.parse('2026-01-01T00:00:00Z'),
@@ -273,6 +281,88 @@ void main() {
 
       expect(find.byKey(const Key('profileSaveSuccess')), findsOneWidget);
       expect(find.text('Profile updated'), findsOneWidget);
+    });
+  });
+
+  group('ProfileScreen timezone (F-006)', () {
+    testWidgets('the timezone field is seeded from the stored profile timezone',
+        (tester) async {
+      await tester.pumpWidget(
+        _buildScreen(_StubProfileNotifier(timezone: 'Africa/Cairo')),
+      );
+      await tester.pump();
+
+      expect(
+        _field(tester, const Key('profileTimezoneField')).controller?.text,
+        'Africa/Cairo',
+      );
+    });
+
+    testWidgets(
+        'a profile loaded without a stored timezone shows the UTC '
+        'fallback (old payload compatibility)', (tester) async {
+      await tester.pumpWidget(_buildScreen(_StubProfileNotifier()));
+      await tester.pump();
+
+      expect(
+        _field(tester, const Key('profileTimezoneField')).controller?.text,
+        'UTC',
+      );
+    });
+
+    testWidgets('an edited timezone is saved with the profile request',
+        (tester) async {
+      final stub = _StubProfileNotifier();
+      await tester.pumpWidget(_buildScreen(stub));
+      await tester.pump();
+
+      await tester.enterText(
+        find.byKey(const Key('profileTimezoneField')),
+        'Europe/Berlin',
+      );
+      await tester.ensureVisible(find.byKey(const Key('profileSaveButton')));
+      await tester.tap(find.byKey(const Key('profileSaveButton')));
+      await tester.pumpAndSettle();
+
+      expect(stub.updateCalled, isTrue);
+      expect(stub.lastRequest?.timezone, 'Europe/Berlin');
+    });
+
+    testWidgets(
+        'an invalid timezone shows a validation message and blocks '
+        'the save', (tester) async {
+      final stub = _StubProfileNotifier();
+      await tester.pumpWidget(_buildScreen(stub));
+      await tester.pump();
+
+      await tester.enterText(
+        find.byKey(const Key('profileTimezoneField')),
+        'nowhere',
+      );
+      await tester.ensureVisible(find.byKey(const Key('profileSaveButton')));
+      await tester.tap(find.byKey(const Key('profileSaveButton')));
+      await tester.pump();
+
+      expect(
+        find.text('Enter a valid time zone, e.g. Africa/Cairo'),
+        findsOneWidget,
+      );
+      expect(stub.updateCalled, isFalse);
+    });
+
+    testWidgets('a server-side timezone rejection maps to the field',
+        (tester) async {
+      final stub = _StubProfileNotifier(
+        serverFieldErrors: const {'timezone': 'unknown IANA timezone'},
+      );
+      await tester.pumpWidget(_buildScreen(stub));
+      await tester.pump();
+
+      await tester.ensureVisible(find.byKey(const Key('profileSaveButton')));
+      await tester.tap(find.byKey(const Key('profileSaveButton')));
+      await tester.pump();
+
+      expect(find.text('unknown IANA timezone'), findsOneWidget);
     });
   });
 

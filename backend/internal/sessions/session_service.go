@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
+	"github.com/jackc/pgx/v5"
 )
 
 // Per-circle roles as stored in circle_members (F-002). Only teachers and
@@ -37,6 +38,10 @@ type Store interface {
 
 type circleSessionListStore interface {
 	ListCircleSessions(context.Context, string) ([]Session, error)
+}
+
+type transactionalConnectionStartStore interface {
+	StartSessionWithConnectionInTx(context.Context, pgx.Tx, string, string, MediaRoomRef, MediaGrants, func(context.Context, MediaRoomRef, MediaMode) error, func(context.Context, MediaRoomRef, MediaGrants) (MediaConnection, error)) (Session, MediaConnection, error)
 }
 
 // CircleRoleReader is the F-002 authorization port: it returns the caller's
@@ -193,6 +198,55 @@ func (s *Service) StartSession(ctx context.Context, actorID, sessionID string) (
 		_ = s.queueObserver.OnSessionStarted(ctx, sessionID)
 	}
 	return started, conn, nil
+}
+
+// StartSessionWithConnectionInTx starts a materialized planned session using
+// the caller's transaction, retaining its scheduling lock through media
+// activation and starter admission. The caller commits or rolls back tx.
+func (s *Service) StartSessionWithConnectionInTx(ctx context.Context, tx pgx.Tx, actorID, sessionID string) (Session, MediaConnection, error) {
+	var circleID string
+	var status SessionStatus
+	var roomRef MediaRoomRef
+	var mode MediaMode
+	err := tx.QueryRow(ctx, findSessionStartContextQuery, sessionID).Scan(&circleID, &status, &roomRef, &mode)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Session{}, MediaConnection{}, ErrSessionNotFound
+	}
+	if err != nil {
+		return Session{}, MediaConnection{}, fmt.Errorf("start session in transaction: load session: %w", err)
+	}
+	if _, err := s.authorize(ctx, circleID, actorID, true); err != nil {
+		return Session{}, MediaConnection{}, err
+	}
+	if status == SessionStatusScheduled {
+		if len(s.roomKey) == 0 {
+			return Session{}, MediaConnection{}, errors.New("session room key is required")
+		}
+		roomRef, err = StableMediaRoomRef(sessionID, s.roomKey)
+		if err != nil {
+			return Session{}, MediaConnection{}, fmt.Errorf("derive media room reference: %w", err)
+		}
+	} else if status == SessionStatusEnded {
+		return Session{}, MediaConnection{}, ErrSessionAlreadyEnded
+	} else if roomRef == "" {
+		return Session{}, MediaConnection{}, errors.New("active session has no media room reference")
+	}
+	store, ok := s.store.(transactionalConnectionStartStore)
+	if !ok {
+		return Session{}, MediaConnection{}, errors.New("transactional session start is not configured")
+	}
+	return store.StartSessionWithConnectionInTx(ctx, tx, sessionID, actorID, roomRef, MediaGrants{CanPublishAudio: true}, func(ensureCtx context.Context, candidate MediaRoomRef, candidateMode MediaMode) error {
+		if err := s.gateway.EnsureRoom(ensureCtx, candidate, candidateMode); err != nil {
+			return fmt.Errorf("ensure media room: %w: %v", ErrMediaUnavailable, err)
+		}
+		return nil
+	}, func(issueCtx context.Context, persistedRoomRef MediaRoomRef, grants MediaGrants) (MediaConnection, error) {
+		connection, err := s.gateway.IssueConnection(issueCtx, persistedRoomRef, actorID, grants)
+		if err != nil {
+			return MediaConnection{}, fmt.Errorf("issue connection: %w: %v", ErrMediaUnavailable, err)
+		}
+		return connection, nil
+	})
 }
 
 // JoinSession admits any active circle member to an active session and issues

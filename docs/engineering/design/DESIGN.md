@@ -9,6 +9,10 @@ modernization roadmap are governed by
 [UI_UX_GOVERNANCE.md](UI_UX_GOVERNANCE.md). This file remains the canonical
 catalogue for visual tokens and component values.
 
+The current page-by-page gaps and future decisions are tracked in
+[FUTURE_UI_FOLLOW_UPS.md](FUTURE_UI_FOLLOW_UPS.md); fresh emulator evidence is
+indexed in [README.md](README.md).
+
 ---
 
 ## 🎨 Brand Identity

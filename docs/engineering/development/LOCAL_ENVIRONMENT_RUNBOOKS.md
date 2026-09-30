@@ -168,6 +168,24 @@ emulator network routing.
    the debug connection):
    `xvfb-run -a flutter test integration_test/<file> -d linux`
 
+Practical traps when reproducing the Linux gate from a Windows checkout:
+
+- Delete `linux/flutter/ephemeral/` and `.dart_tool/` in the container copy
+  before `flutter pub get`/`flutter test` — the checkout's plugin symlinks
+  were created on Windows and the Linux tool fails with
+  `Cannot create link ... .plugin_symlinks/<plugin> (OS Error: File exists)`.
+- Do not bind-mount the Windows checkout for the build; the first Linux build
+  on a mounted volume can exceed 30 minutes. `docker cp` the project into a
+  long-lived container (`docker create ... sleep infinity`) and reuse its
+  `build/` cache across iterations; keep `halaqaty-pub-cache` mounted.
+- Screenshot suites (`wave*_visual_test.dart`, `ux_visual_journey_test.dart`,
+  `account_deletion_visual_test.dart`) can never pass on Linux:
+  `takeScreenshot` throws `MissingPluginException (captureScreenshot)`. Run
+  them on `emulator-5554` only. If the emulator shows `offline` and relaunch
+  fails with `Running multiple emulators with the same AVD`, kill stuck
+  `emulator.exe`/`qemu-system-x86_64.exe` processes, delete `*.lock` under
+  `%USERPROFILE%\.android\avd\<avd>.avd\`, then restart `adb` and relaunch.
+
 Real-stack fixtures must be configured before the run; a skipped fixture is
 not a passing gate. `chat_direct_flow_test.dart` needs four distinct isolated
 accounts with `T064_{TEACHER,STUDENT,SUPERVISOR,OPERATOR}_{TOKEN,SESSION,USER_ID}`.

@@ -1,21 +1,21 @@
 # Development Guide
 
-> How we build Halaqaty — Spec-Kit, Copilot, and the quality gates that protect production.
+> How we build Halaqaty — Spec-Kit, supported coding agents, and the quality gates that protect production.
 
 ---
 
 ## Why Spec-Kit?
 
-Traditional "vibe coding" — describing a feature in chat and accepting whatever Copilot generates — produces fast but fragile results. Field names are invented, edge cases are missed, and implementations drift from the product spec within days.
+Ad-hoc implementation can invent fields, miss edge cases, and drift from approved product scope.
 
-Halaqaty uses **[Spec-Kit](https://github.com/github/spec-kit)** (`v0.8.1`), an open-source spec-driven development toolkit by GitHub. The specification is the source of truth. Code is its generated output.
+Halaqaty uses **[Spec-Kit](https://github.com/github/spec-kit)** (`v0.8.1`) to define and track feature scope. Specs, plans, contracts, and tasks govern implementation; code is implemented and reviewed against them.
 
 Before any production line is written:
 
 1. A **specification** defines user stories, acceptance criteria, and requirements — based on our product docs.
 2. A **plan** translates the spec into technical architecture, data models, and API contracts.
 3. A **task list** breaks the plan into parallelizable implementation steps.
-4. Copilot **implements** against the frozen spec and plan — not against a vague prompt.
+4. A supported coding agent implements against the approved artifacts and current task list.
 
 Every PR is fully traceable: user story → contract → implementation → tests.
 
@@ -32,7 +32,7 @@ tokens, passwords, and Firebase Admin service-account files local and ignored.
 |---|---|---|
 | `uv` | 0.11+ | See below |
 | `specify-cli` | 0.8.1 | See below |
-| VS Code | Latest | with **GitHub Copilot** extension |
+| Coding agent | — | Codex, OpenCode, or GitHub Copilot with the required Spec-Kit integration |
 | Git | 2.x+ | — |
 | `golangci-lint` | v1.64.x | `go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8` |
 | `gitleaks` | latest | `go install github.com/zricethezav/gitleaks/v8@latest` |
@@ -68,18 +68,18 @@ specify check
 
 ## Slash Command Reference
 
-All Spec-Kit commands are available in **VS Code Copilot Chat** and **GitHub Copilot Agent** using the `/` prefix:
+Use the `/speckit.*` commands provided by the Spec-Kit integration in your coding environment. Command availability and invocation can vary by harness.
 
 | Command | Phase | Purpose |
 |---|---|---|
 | `/speckit.constitution` | Setup | Review or amend the governing constitution in `.specify/memory/constitution.md` |
 | `/speckit.specify` | 1. Specify | Create a feature specification → `specs/NNN-feature-name/spec.md` + feature branch |
-| `/speckit.clarify` | 2. Clarify | Ask 5-7 structured questions to resolve ambiguities in the spec |
+| `/speckit.clarify` | 2. Clarify | Resolve material ambiguities in the spec |
 | `/speckit.checklist` | 3. Checklist | Validate that spec is complete, clear, and consistent (unit test your English!) |
 | `/speckit.plan` | 4. Plan | Generate `plan.md`, `data-model.md`, `contracts/`, `quickstart.md` from the spec |
 | `/speckit.tasks` | 5. Tasks | Generate parallelizable `tasks.md` from the plan |
 | `/speckit.analyze` | 6. Analyze | Cross-artifact consistency check before implementation |
-| `/speckit.implement` | 7. Implement | Copilot executes all tasks — writes code, tests, and migrations |
+| `/speckit.implement` | 7. Implement | Execute approved tasks with code, tests, and migrations |
 | `/speckit.git.feature` | Branch | Create and name the feature branch per spec-kit convention |
 | `/speckit.git.commit` | Commit | Structured commit with spec traceability |
 | `/speckit.git.validate` | Validate | Validate git state before opening a PR |
@@ -91,12 +91,12 @@ All Spec-Kit commands are available in **VS Code Copilot Chat** and **GitHub Cop
 
 Every feature in Halaqaty follows this exact pipeline. **No shortcuts.**
 
-### Complete 7-Phase Spec-Kit Workflow
+### Required 7-Phase Spec-Kit Workflow
 
 ```mermaid
 flowchart LR
     S1["1️⃣ /speckit.specify\nProduct requirements\n→ spec.md"]
-    S2["2️⃣ /speckit.clarify\nResolve ambiguities\n(5-7 questions)"]
+    S2["2️⃣ /speckit.clarify\nResolve material ambiguities"]
     S3["3️⃣ /speckit.checklist\nValidate spec quality\n(completeness · clarity)"]
     S4["4️⃣ /speckit.plan\nArchitecture design\n→ plan.md · data-model.md\n→ contracts/"]
     S5["5️⃣ /speckit.tasks\nBreak into tasks\n→ tasks.md with P hints"]
@@ -114,11 +114,11 @@ flowchart LR
     style S7 fill:#e8f5e9,stroke:#4CAF50
 ```
 
-> **No shortcuts.** Every feature must complete all 7 phases. All agent roles remain available throughout, but only the smallest relevant set is dispatched for each phase. See [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) for agent roles.
+Every feature completes all seven phases. Use only the agents needed for the current work. The [agent workflow harness](docs/engineering/collaboration/AGENT_WORKFLOW_HARNESS.md) defines how Spec-Kit, implementation skills, role agents, and quality guards fit together.
 
 **Phase 1: Specify** → **Phase 2: Clarify** → **Phase 3: Checklist** → **Phase 4: Plan** → **Phase 5: Tasks** → **Phase 6: Analyze** → **Phase 7: Implement**
 
-The Team Leader can consult any role throughout the cycle, but dispatches only agents whose specialty is material to the current phase. See [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) and [`docs/engineering/collaboration/AGENT_WORKFLOW_HARNESS.md`](docs/engineering/collaboration/AGENT_WORKFLOW_HARNESS.md).
+See the [agent workflow harness](docs/engineering/collaboration/AGENT_WORKFLOW_HARNESS.md) for role selection, ownership, and review rules.
 
 ### ✅ Pre-flight checklist
 
@@ -128,14 +128,14 @@ Before running any Spec-Kit command, verify:
 [ ] Feature is listed in docs/management/product/FEATURES.md with status ≥ 🟡 Approved
 [ ] All open questions for this feature are Decided in docs/management/product/MVP_DECISION_REGISTER.md
 [ ] User journey for this feature is documented in docs/management/product/JOURNEY.md
-[ ] You are on main branch, up to date (git pull)
+[ ] You are on the intended feature branch/worktree and its base is current
 ```
 
 ---
 
 ### Step 1 — Create the spec
 
-Open Copilot Chat in VS Code and run:
+In your supported Spec-Kit environment, run:
 
 ```
 /speckit.specify [describe the feature in plain language, including doc references]
@@ -149,9 +149,7 @@ Flows: register, login, email verification, password reset, silent token refresh
 See docs/management/product/FEATURES.md F-001 and docs/management/product/JOURNEY.md T-01 to T-04 for acceptance criteria.
 ```
 
-This automatically:
-- Creates branch `001-auth` (or next available number)
-- Creates `specs/001-auth/spec.md` with structured user stories and acceptance criteria
+This creates or updates the feature's `spec.md` with user stories and acceptance criteria. Create or select its `NNN-feature-name` branch with `/speckit.git.feature` when needed.
 
 **Review before continuing.** Check:
 - User stories match `docs/management/product/FEATURES.md` acceptance criteria
@@ -160,19 +158,19 @@ This automatically:
 
 ---
 
-### Step 2 — Clarify ambiguities *(optional but recommended)*
+### Step 2 — Clarify ambiguities
 
 ```
 /speckit.clarify
 ```
 
-Run this if the spec has open areas or if agents ask clarifying questions. Generates structured questions; answer them to close gaps before planning.
+Resolve material ambiguities before planning. If requirements are already clear, record that outcome and continue.
 
-**When to run**: Whenever a relevant agent identifies a material ambiguity. The Team Leader consolidates cross-domain input into 5-7 non-duplicative questions total, then uses `/speckit.clarify` to resolve them formally.
+Consolidate related questions; ask only what changes scope, contracts, security, architecture, or user-visible behavior.
 
 ---
 
-### Step 3 — Validate spec quality *(optional but recommended)*
+### Step 3 — Validate spec quality
 
 ```
 /speckit.checklist
@@ -191,17 +189,9 @@ Agents validate spec quality (not implementation) — checking completeness, cla
 **Example:**
 ```
 /speckit.plan
-Go backend, Echo v4. Firebase Auth JWT middleware. PostgreSQL users table via golang-migrate.
-Flutter + Riverpod 2.x. See docs/engineering/architecture/ARCHITECTURE.md for full schema and endpoint definitions.
+Use the approved backend and mobile stack. Follow `docs/engineering/architecture/ARCHITECTURE.md`, relevant ADRs, and the canonical contracts; do not add schema or API scope without approval.
 Constitution: .specify/memory/constitution.md
 ```
-
-**Agents involved**:
-- **Architect** designs system architecture and validates service boundaries
-- **Golang Developer** designs backend APIs and database schema
-- **Flutter Engineer** designs mobile state management and UX
-- **Tech Lead** reviews for security and quality implications
-- **Team Leader** documents dependencies and integration points
 
 This creates:
 - `specs/001-auth/plan.md` — implementation plan
@@ -224,16 +214,11 @@ This creates:
 
 Creates `specs/001-auth/tasks.md` with tasks annotated `[P]` for parallelizable work.
 
-**Team Leader** sequences tasks respecting dependencies and ensuring:
-- Golang Developer backend tasks are ready before Flutter Engineer needs APIs
-- Architect schema/API design tasks precede implementation
-- Tech Lead quality gates (review, security) are included in Definition of Done
-
 Review it — confirm parallel tasks are genuinely independent.
 
 ---
 
-### Step 6 — Cross-artifact analysis *(optional but recommended)*
+### Step 6 — Cross-artifact analysis
 
 ```
 /speckit.analyze
@@ -255,13 +240,7 @@ Checks consistency across spec, plan, data model, and contracts. Fix any inconsi
 /speckit.implement
 ```
 
-**Agents execute**:
-- **Golang Developer** implements backend tasks
-- **Flutter Engineer** implements mobile tasks
-- **Tech Lead** reviews every code change (hard gate — no merge without approval)
-- **Team Leader** unblocks any cross-team dependencies
-
-Copilot generates all code, tests, and migration files per the task list. Monitor actively — intervene if the implementation deviates from the spec or constitution.
+The assigned domain owner implements tasks against the approved artifacts. Apply test-first development, focused review, and the required project quality guards; see the [agent workflow harness](docs/engineering/collaboration/AGENT_WORKFLOW_HARNESS.md).
 
 ---
 
@@ -271,20 +250,21 @@ All of these must be **green** before opening a PR:
 
 | Gate | Command | Requirement |
 |---|---|---|
-| Go unit tests | `go test ./...` | 100% pass |
-| Flutter tests | `flutter test` | 100% pass |
-| Go integration tests | `go test -tags=integration ./...` | 100% pass |
+| Go unit tests | `go test -short ./...` (in `backend/`) | All pass |
+| Go contract tests | `make test-contract` (in `backend/`) | All contract tests pass |
+| Flutter tests | `flutter test test` (in `mobile/`) | All pass |
+| Go integration tests | `go test -tags=integration ./...` (in `backend/`, with `DATABASE_URL`) | All pass |
+| Flutter integration | `flutter test integration_test/` (in `mobile/`, with device and backend configured) | All pass |
 | Go coverage floor | `make coverage` (from `backend/`) | ≥80% aggregate over `backend/internal/` |
-| DB migration (fresh schema) | `make migrate-fresh` | No errors |
-| Go linter | `golangci-lint run` | Zero violations |
-| Dart analyzer | `flutter analyze` | Zero issues |
-| Dart formatter | `dart format --set-exit-if-changed .` | No diff |
-| Go formatter | `gofmt -l .` | Empty output |
-| Secret scan | `gitleaks detect` | No findings |
+| Go linter | `golangci-lint run ./...` (in `backend/`) | Zero violations |
+| Dart analyzer | `flutter analyze` (in `mobile/`) | Zero issues |
+| Dart formatter | `dart format --set-exit-if-changed .` (in `mobile/`) | No diff |
+| Go formatter | `gofmt -l .` (in `backend/`) | Empty output |
+| Secret scan | `make secrets` (from repo root) | No findings |
 | **OpenAPI spec lint** | `make api-lint` | Zero errors (Spectral OAS rules) |
 | **Tech Lead Code Review** | Via GitHub PR | **Approved** (hard gate) |
 
-> **Tip:** Run `make lint` to execute golangci-lint + flutter analyze + spectral lint + gitleaks in one command.
+> These commands require the documented local services/devices where noted. Report unavailable or skipped checks explicitly; an unrun gate is not a pass. See [AGENTS.md](AGENTS.md) for the complete gate matrix and [local environment runbooks](docs/engineering/development/LOCAL_ENVIRONMENT_RUNBOOKS.md) for environment-specific setup.
 
 ### About `make api-lint` (Spectral)
 
@@ -294,7 +274,7 @@ The linting rules are configured in **`.spectral.yaml`** at the repo root. Open 
 
 ---
 
-### Step 9 — Open PR
+### Step 9 — Commit and open PR
 
 ```
 /speckit.git.commit
@@ -315,94 +295,21 @@ Implements: specs/NNN-feature-name/
 - Tasks: specs/NNN-feature-name/tasks.md
 ```
 
-PRs are **opened by Copilot**, reviewed and **merged by Karim only**. No merge without all green gates.
+Follow the [Code Review Policy](#code-review-policy) and [AGENTS.md](AGENTS.md) for applicable gates and required reviews.
 
-### Code Review Policy (Solo Founder)
+### Code Review Policy
 
-Halaqaty is currently a solo-founder project with AI agent assistance. Review process:
-
-**Standard flow:** Copilot AI agents open PRs following the Spec-Kit workflow. The Tech Lead agent performs automated review as the first layer. Karim reviews and merges all PRs as the sole human reviewer.
-
-**Security-sensitive code — mandatory manual deep-review by Karim:**
-- Authentication and JWT validation (`/auth/*` handlers, middleware)
-- Authorization and RBAC (circle membership, role validation)
-- Data deletion paths (account, circle, message deletion)
-- Firebase Auth integration points
-- File upload and MinIO access controls
-
-**Accepted risk (solo context):** Logic errors in non-security code may not be caught before merge. Mitigated by: comprehensive automated tests, feature flags for rollback without deployment, and incremental release strategy (alpha → pilot → beta).
-
-**Escalation:** When unsure about security implications — do not merge until sure. Consult the Tech Lead agent for security-specific review.
+All PRs require the applicable quality gates and Tech Lead review. Karim's manual deep-review is mandatory for auth, RBAC, deletion, Firebase Auth, and MinIO/upload changes. See [AGENTS.md](AGENTS.md) for current gate and review requirements.
 
 ---
 
-## 🤝 Agent Collaboration Model
+## 🤝 Agent Collaboration
 
-Halaqaty development is powered by 5 specialized Copilot agents working autonomously and collaboratively:
-
-### Engineering Agents
-
-| Agent | Focus | Responsibilities |
-|-------|-------|---|
-| **Senior Golang Developer** | Backend services, APIs, concurrency, database | Design/implement REST APIs, database schema, WebSocket, LiveKit integration, security |
-| **Senior Flutter Mobile Engineer** | Mobile UI, state management, RTL/Arabic support | Develop Flutter features, handle real-time UX, optimize performance, Arabic-first design |
-| **Architect** | System design, service boundaries, technology choices | Define architecture, data model, API contracts, ensure scalability and consistency |
-| **Tech Lead** | Code quality, security, performance, testing standards | Review all code changes (hard gate), enforce quality standards, mentor developers |
-| **Team Leader** | Coordination, delivery tracking, Spec-Kit enforcement | Manage sprint planning, track dependencies, enforce Spec-Kit workflow, unblock teams |
-
-### How Agents Collaborate
-
-**Autonomous Communication** (no explicit prompting needed):
-- Agents are aware of each other's roles and responsibilities
-- They communicate asynchronously on integration points
-- When ambiguous: relevant agents submit material questions and the Team Leader asks Karim **5-7 consolidated questions total** through `/speckit.clarify`
-- When blocked: Agents escalate to Team Leader or relevant peer
-
-**Throughout Spec-Kit Phases**:
-1. **Specify**: Relevant agents review feasibility and constraints
-2. **Clarify**: Relevant agents submit material questions; Team Leader consolidates them through `/speckit.clarify`
-3. **Checklist**: Checklist agent consults a domain specialist only when needed
-4. **Plan**: Team Leader selects Architect, Backend, Mobile, or other specialists only for affected domains
-5. **Tasks**: Team Leader sequences with explicit dependencies
-6. **Analyze**: Verify consistency before implementation
-7. **Implement**: The assigned domain owner executes; other agents join only for dependencies or review
-
-### Clarification Protocols
-
-Relevant agents submit focused questions in their specialties. The Team Leader removes overlap and asks Karim 5-7 questions total through `/speckit.clarify`:
-
-| Agent | Asks About | Example |
-|-------|---|---|
-| **Golang Dev** | API design, error codes, performance constraints | "What error code when student tries to recite twice?" |
-| **Flutter Eng** | User flow, platform behavior, offline handling | "Should queue UI update in real-time?" |
-| **Architect** | Scale requirements, reliability expectations, budget | "What's growth timeline to 500 users?" |
-| **Tech Lead** | Quality/testing expectations, security standards | "What test coverage for WebSocket handlers?" |
-| **Team Leader** | Release priorities, deadlines, scope boundaries | "What features are must-have for MVP?" |
-
-**Key Principle**: `DO NOT GUESS` — Agents ask before investing time in wrong direction.
-
-### Full Collaboration Guide
-
-See [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) for:
-- Detailed agent responsibilities
-- Autonomous decision boundaries
-- Escalation paths
-- Communication patterns
-- Integration point management
+Use the [agent workflow harness](docs/engineering/collaboration/AGENT_WORKFLOW_HARNESS.md) as the authoritative guide to supported harnesses, role selection, clarification, delegation, project guards, and review. The [agent collaboration guide](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) contains role-specific detail.
 
 ---
 
-```
-🔵 Proposed → 🟡 Approved → 🔧 In Progress → ✅ Shipped → 🔒 Frozen (post-MVP, behind flag)
-```
-
-| Status | Meaning | Gate |
-|---|---|---|
-| 🔵 Proposed | Idea or backlog item | — |
-| 🟡 Approved | Spec-ready: all open questions resolved, journey documented | PM approval |
-| 🔧 In Progress | `/speckit.specify` run, branch is open | Spec file exists |
-| ✅ Shipped | PR merged, deployed | All quality gates green |
-| 🔒 Frozen | Post-MVP, behind feature flag | Feature flag `false` in all envs |
+Current feature status and its meanings are maintained in [FEATURES.md](docs/management/product/FEATURES.md).
 
 ---
 
@@ -418,85 +325,9 @@ Examples: `001-auth`, `002-circles`, `003-queue`, `004-chat`
 
 ---
 
-## Project Structure (when code exists)
+## Project Structure
 
-```
-halaqaty/
-├── .specify/                        ← Spec-Kit config and templates
-│   └── memory/
-│       └── constitution.md          ← THE governing document — read this first
-├── .github/
-│   ├── prompts/                     ← Spec-Kit slash command definitions
-│   ├── agents/                      ← Spec-Kit + custom Copilot agents
-│   └── workflows/                   ← GitHub Actions CI/CD
-├── docs/                            ← Human-readable strategy & product docs
-│   ├── management/                  ← Business & product strategy
-│   │   ├── product/
-│   │   │   ├── FEATURES.md          ← Feature status board (index)
-│   │   │   ├── PRD.md               ← Product Requirements Document
-│   │   │   ├── JOURNEY.md           ← Full user journey (teacher-first)
-│   │   │   └── MVP_DECISION_REGISTER.md ← All frozen MVP decisions
-│   │   ├── planning/
-│   │   │   └── PROJECT_PLAN.md              ← Master project plan
-│   │   ├── business/
-│   │   └── arabic/
-│   └── engineering/                 ← Technical architecture & deployment
-│       ├── architecture/
-│       │   ├── ARCHITECTURE.md      ← DB schema, API endpoints, security
-│       │   └── adr/                 ← Architecture Decision Records
-│       │       ├── README.md        ← ADR index
-│       │       ├── ADR-001-modular-monolith.md
-│       │       ├── ADR-002-go-framework.md
-│       │       ├── ADR-003-flutter-state-management.md
-│       │       ├── ADR-004-auth-boundary.md
-│       │       ├── ADR-005-feature-flags.md
-│       │       └── ADR-006-db-migrations.md
-│       ├── deployment/
-│       │   └── DEPLOYMENT.md        ← Deployment strategy
-│       ├── development/
-│       │   └── EXECUTION_PLAYBOOK.md ← Development execution workflow
-│       └── collaboration/
-│           └── AGENT_COLLABORATION_GUIDE.md
-├── specs/                           ← Spec-Kit generated (per feature) — DO NOT EDIT MANUALLY
-│   ├── 001-auth/
-│   │   ├── spec.md
-│   │   ├── plan.md
-│   │   ├── data-model.md
-│   │   ├── contracts/
-│   │   ├── tasks.md
-│   │   └── quickstart.md
-│   └── ...
-├── Makefile                         ← root: aggregate + cross-cutting targets (delegates to sub-Makefiles)
-├── backend/                         ← Go service (backend owners)
-│   ├── Makefile                     ← Go-only: test, lint, build, migrate-*
-│   ├── cmd/
-│   │   └── api/                     ← Go entry point (main.go)
-│   ├── internal/                    ← Go domain packages
-│   │   ├── auth/
-│   │   ├── circles/
-│   │   ├── chat/
-│   │   ├── sessions/
-│   │   ├── queue/
-│   │   ├── progress/
-│   │   ├── schedule/
-│   │   ├── notifications/
-│   │   └── shared/
-│   ├── migrations/                  ← golang-migrate SQL files
-│   │   ├── 000001_create_users.up.sql
-│   │   ├── 000001_create_users.down.sql
-│   │   └── ...
-│   ├── go.mod
-│   └── go.sum
-├── mobile/                          ← Flutter application
-│   ├── Makefile                     ← Flutter-only: test, analyze, build-apk, build-ios
-│   ├── lib/
-│   │   ├── features/                ← Feature-first Flutter structure
-│   │   ├── core/
-│   │   └── main.dart
-│   └── pubspec.yaml
-├── docker-compose.yml               ← MVP deployment
-└── DEVELOPMENT.md                   ← This file
-```
+See the [repository overview](README.md) for the current top-level structure and [docs/README.md](docs/README.md) for the documentation map.
 
 ---
 
@@ -505,7 +336,8 @@ halaqaty/
 | Document | Purpose |
 |---|---|
 | [`.specify/memory/constitution.md`](.specify/memory/constitution.md) | **Read first.** Governing principles for all code. Defines Spec-Kit workflow (all 7 phases), agent collaboration, and tech stack. |
-| [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) | **Agent workflows.** How 5 engineering agents collaborate, clarification protocols, autonomous decision boundaries, escalation paths. |
+| [`docs/engineering/collaboration/AGENT_WORKFLOW_HARNESS.md`](docs/engineering/collaboration/AGENT_WORKFLOW_HARNESS.md) | **Agent workflow.** How Spec-Kit, implementation skills, role agents, and project quality guards fit together. |
+| [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) | Role-specific responsibilities and collaboration guidance. |
 | [`docs/management/product/FEATURES.md`](docs/management/product/FEATURES.md) | Feature status board — what's Approved vs Proposed |
 | [`docs/engineering/architecture/ARCHITECTURE.md`](docs/engineering/architecture/ARCHITECTURE.md) | DB schema, API endpoints, security model |
 | [`docs/management/product/JOURNEY.md`](docs/management/product/JOURNEY.md) | Screen-by-screen user journey with error/offline states |
@@ -518,4 +350,4 @@ halaqaty/
 
 ---
 
-*Built with [Spec-Kit](https://github.com/github/spec-kit) · Powered by [GitHub Copilot](https://github.com/features/copilot)*
+*Built with [Spec-Kit](https://github.com/github/spec-kit) · Implemented with supported coding agents*

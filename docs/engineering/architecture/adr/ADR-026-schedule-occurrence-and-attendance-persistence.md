@@ -1,6 +1,6 @@
 # ADR-026: Schedule Occurrence and Attendance Persistence
 
-**Status:** Accepted — approved by Karim on 2026-09-27; implemented as a partial F-006 pilot
+**Status:** Accepted — approved by Karim on 2026-09-27; F-006 was marked Done administratively at Karim's direction on 2026-09-30. Real-stack acceptance T063/T067 and F-008 reminder delivery T066 remain open and unverified.
 **Date:** 2026-09-27
 **Decider:** Karim (product owner)
 

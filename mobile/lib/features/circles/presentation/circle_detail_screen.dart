@@ -115,6 +115,16 @@ class CircleDetailScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
                 Text(circle.description!),
               ],
+              // FR-030: keep current and available sessions prominent before
+              // secondary circle metadata and management actions.
+              CircleSessionsSection(
+                key: const Key('circleSessionsSection'),
+                circleId: circle.id,
+                isManager: currentRole == CircleRole.teacher ||
+                    currentRole == CircleRole.supervisor,
+                isArchived: circle.isArchived,
+                canCorrectAttendance: currentRole == CircleRole.teacher,
+              ),
               const SizedBox(height: 16),
               Card(
                 child: Column(
@@ -290,17 +300,6 @@ class CircleDetailScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-              // FR-030: ad-hoc session list/create/start/join over the
-              // existing F-005 APIs; create/start stay manager-only and
-              // archived circles stay read-only.
-              CircleSessionsSection(
-                key: const Key('circleSessionsSection'),
-                circleId: circle.id,
-                isManager: currentRole == CircleRole.teacher ||
-                    currentRole == CircleRole.supervisor,
-                isArchived: circle.isArchived,
-                canCorrectAttendance: currentRole == CircleRole.teacher,
-              ),
             ],
           );
         },

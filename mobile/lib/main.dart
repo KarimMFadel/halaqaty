@@ -49,6 +49,7 @@ class _MyAppState extends ConsumerState<MyApp> {
     }
     return MaterialApp.router(
       title: 'Halaqaty',
+      debugShowCheckedModeBanner: false,
       theme: halaqatyLightTheme(),
       darkTheme: halaqatyDarkTheme(),
       // Explicit root Directionality: the default delegates support English

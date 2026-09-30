@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:halaqaty_mobile/app/app_locale_controller.dart';
 import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 
@@ -249,6 +250,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       ? _submitProgress(context)
                       : Text(isRtl ? 'إنشاء حساب' : 'Register'),
                 ),
+                TextButton(
+                  key: const Key('registerToLoginLink'),
+                  onPressed: () => context.push('/login'),
+                  child: Text(
+                    isRtl
+                        ? 'لديك حساب بالفعل؟ تسجيل الدخول'
+                        : 'Already registered? Sign in',
+                  ),
+                ),
               ],
             ),
           ),
@@ -391,6 +401,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: isLoading
                       ? _submitProgress(context)
                       : Text(isRtl ? 'دخول' : 'Sign In'),
+                ),
+                TextButton(
+                  key: const Key('loginToRegisterLink'),
+                  onPressed: () => context.push('/register'),
+                  child: Text(
+                    isRtl
+                        ? 'ليس لديك حساب؟ إنشاء حساب'
+                        : 'No account yet? Create one',
+                  ),
                 ),
               ],
             ),

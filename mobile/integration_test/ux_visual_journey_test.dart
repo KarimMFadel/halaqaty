@@ -7,6 +7,7 @@ import 'package:halaqaty_mobile/app/app_locale_controller.dart';
 import 'package:halaqaty_mobile/app/home_screen.dart';
 import 'package:halaqaty_mobile/core/theme/halaqaty_theme.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
+import 'package:halaqaty_mobile/features/auth/data/auth_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 import 'package:halaqaty_mobile/features/circles/application/create_circle_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
@@ -34,8 +35,17 @@ class _VisualCircleApi extends CircleApiClient {
 
   static final circle = CircleSummary(
     id: 'visual-circle',
-    name: 'حلقة طويلة لاختبار عرض الاسم في الواجهات المختلفة',
-    description: 'Visual regression fixture',
+    name: 'حلقة الإتقان',
+    description: 'المراجعة: الجزء الخامس',
+    maxCapacity: 20,
+    genderRestriction: 'mixed',
+    language: 'ar',
+    createdAt: DateTime.utc(2026, 1, 1),
+  );
+  static final secondCircle = CircleSummary(
+    id: 'visual-circle-2',
+    name: 'نور البيان',
+    description: 'الحفظ: سورة مريم',
     maxCapacity: 20,
     genderRestriction: 'mixed',
     language: 'ar',
@@ -47,7 +57,7 @@ class _VisualCircleApi extends CircleApiClient {
     required String firebaseIdToken,
     required String sessionId,
   }) async =>
-      [circle];
+      [circle, secondCircle];
 
   @override
   Future<CircleDiscoveryPage> discoverCircles({
@@ -56,7 +66,7 @@ class _VisualCircleApi extends CircleApiClient {
     String? query,
     String? cursor,
   }) async =>
-      CircleDiscoveryPage(circles: [circle]);
+      CircleDiscoveryPage(circles: [circle, secondCircle]);
 }
 
 class _VisualProfileController extends StateNotifier<ProfileState>
@@ -69,8 +79,8 @@ class _VisualProfileController extends StateNotifier<ProfileState>
       profile: ProfileUser(
         id: 'visual-user',
         firebaseUid: 'visual-firebase',
-        fullName: 'Ali Mahmoud',
-        displayName: 'Ali',
+        fullName: 'كريم فاضل',
+        displayName: 'كريم',
         bio: null,
         country: 'EG',
         preferredLanguage: 'ar',
@@ -97,9 +107,16 @@ class _VisualAuthController extends StateNotifier<AuthState>
   void updateTimezone(String timezone) {}
 
   _VisualAuthController()
-      : super(const AuthState(
+      : super(AuthState(
           status: AuthStatus.authenticated,
           sessionId: 'visual-session',
+          user: BackendUser(
+            id: 'visual-user',
+            firebaseUid: 'visual-firebase',
+            displayName: 'كريم',
+            preferredLanguage: 'ar',
+            createdAt: DateTime.utc(2026, 1, 1),
+          ),
         ));
 
   @override
@@ -241,6 +258,13 @@ void main() {
           _scope(direction, const HomeScreen(), brightness: brightness),
         );
         await tester.pumpAndSettle();
+        expect(
+          find.text(
+              direction == TextDirection.rtl ? 'أهلاً، كريم' : 'Hello, كريم'),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('homeQuickDiscover')), findsOneWidget);
+        expect(find.byKey(const Key('homeQuickInvite')), findsOneWidget);
         expect(find.byKey(const Key('homeNextSession')), findsOneWidget);
         await binding.takeScreenshot('ux_home_$suffix');
 
@@ -288,6 +312,12 @@ void main() {
             _shellScope(rtl ? const Locale('ar') : const Locale('en')),
           );
           await tester.pumpAndSettle();
+          expect(
+            find.text(rtl ? 'أهلاً، كريم' : 'Hello, كريم'),
+            findsOneWidget,
+          );
+          expect(find.byKey(const Key('homeQuickDiscover')), findsOneWidget);
+          expect(find.byKey(const Key('homeQuickInvite')), findsOneWidget);
           await binding.takeScreenshot('ux_shell_home_$suffix');
 
           await _openShellDestination(tester, 1);

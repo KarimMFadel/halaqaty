@@ -12,6 +12,7 @@ import 'package:halaqaty_mobile/features/chat/application/chat_moderation_contro
 import 'package:halaqaty_mobile/features/chat/data/chat_api_client.dart';
 import 'package:halaqaty_mobile/features/chat/data/chat_realtime_client.dart';
 import 'package:halaqaty_mobile/features/chat/data/pending_message_store.dart';
+import 'package:halaqaty_mobile/features/chat/presentation/chat_widgets.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/group_chat_screen.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_detail_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
@@ -67,6 +68,17 @@ StubAuthNotifier _authenticatedAuth() => StubAuthNotifier(
     );
 
 void main() {
+  testWidgets('pin action is grouped with its message bubble', (tester) async {
+    final api = _FakeChatApi()..pages.add(_page([_message('pinnable')]));
+    await _pumpChat(tester, direction: TextDirection.ltr, api: api);
+
+    final pinButton = find.descendant(
+      of: find.byType(ChatMessageBubble),
+      matching: find.byTooltip('Pin message'),
+    );
+    expect(pinButton, findsOneWidget);
+  });
+
   testWidgets(
       'renders message text literally without interpreting markup (RTL + LTR)',
       (tester) async {
@@ -659,7 +671,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // The chat tile sits below the fold in the details ListView.
-      await tester.ensureVisible(find.byKey(const Key('openCircleChat')));
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('openCircleChat')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('openCircleChat')));
       await tester.pumpAndSettle();

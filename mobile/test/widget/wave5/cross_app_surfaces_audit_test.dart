@@ -348,7 +348,7 @@ Icon _trailingIcon(WidgetTester tester, Finder tileFinder) =>
     tester.widget<ListTile>(tileFinder).trailing! as Icon;
 
 Finder _tileWith(String label) =>
-    find.ancestor(of: find.text(label), matching: find.byType(ListTile)).first;
+    find.ancestor(of: find.text(label), matching: find.byType(ListTile));
 
 bool _isTrue(Object? flag) => flag == true || flag.toString() == 'isTrue';
 
@@ -545,7 +545,14 @@ void main() {
       await tester.pumpAndSettle();
 
       for (final label in ['الأعضاء', 'المحادثة']) {
-        final icon = _trailingIcon(tester, _tileWith(label));
+        final tile = _tileWith(label);
+        await tester.scrollUntilVisible(
+          tile,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        final icon = _trailingIcon(tester, tile);
         expect(
           icon.icon?.matchTextDirection,
           isTrue,
@@ -723,6 +730,11 @@ void main() {
 
       // Any clipped diacritic or overflowing name throws in the test harness.
       final card = find.byKey(const Key('homeCircle-circle-1'));
+      await tester.scrollUntilVisible(
+        card,
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(card, findsOneWidget);
       final semantics = tester.widget<Semantics>(
         find.ancestor(

@@ -13,6 +13,9 @@ import 'package:halaqaty_mobile/features/circles/presentation/circle_detail_scre
 import 'package:halaqaty_mobile/features/profile/application/profile_controller.dart';
 import 'package:halaqaty_mobile/features/profile/data/profile_api_client.dart';
 import 'package:halaqaty_mobile/features/profile/presentation/profile_screen.dart';
+import 'package:halaqaty_mobile/features/scheduling/application/schedule_controller.dart';
+import 'package:halaqaty_mobile/features/scheduling/data/schedule_api_client.dart';
+import 'package:halaqaty_mobile/features/scheduling/presentation/schedule_editor_screen.dart';
 import 'package:halaqaty_mobile/features/sessions/application/circle_sessions_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/data/session_api_client.dart';
 import 'package:halaqaty_mobile/main.dart';
@@ -27,6 +30,9 @@ import '../../helpers/stub_auth_notifier.dart';
 class _TestAuthController extends StateNotifier<AuthState>
     implements AuthController {
   _TestAuthController(super.initialState);
+
+  @override
+  void updateTimezone(String timezone) {}
 
   @override
   Future<void> logout() async {
@@ -158,6 +164,62 @@ class _SpyCircleSessionsController extends StateNotifier<CircleSessionsState>
   }
 }
 
+/// Schedule stub that counts invocations: the F-006 schedule entry now
+/// navigates to the real (stubbed) editor instead of the placeholder notice.
+class _SpyScheduleController extends StateNotifier<ScheduleEditorState>
+    implements ScheduleController {
+  _SpyScheduleController()
+      : super(const ScheduleEditorState(status: ScheduleListStatus.ready));
+
+  int loadCalls = 0;
+
+  @override
+  String get circleId => 'circle-1';
+
+  @override
+  bool get canManage => false;
+
+  @override
+  Future<void> load() async {
+    loadCalls++;
+  }
+
+  @override
+  Future<bool> createSchedule(
+    SchedulePlanInput plan, {
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
+  }) async =>
+      false;
+
+  @override
+  Future<bool> changeSeries({
+    required CircleScheduleEntry schedule,
+    required SchedulePlanInput plan,
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
+  }) async =>
+      false;
+
+  @override
+  Future<bool> stopSeries({required CircleScheduleEntry schedule}) async =>
+      false;
+
+  @override
+  Future<bool> changeOccurrence({
+    required CircleScheduleEntry schedule,
+    required String localDate,
+    String? replacementLocalDate,
+    String? replacementLocalTime,
+    String? replacementEndLocalTime,
+    int? durationMinutes,
+    bool cancel = false,
+    bool confirmOverlaps = false,
+    List<String> confirmedWarningIDs = const [],
+  }) async =>
+      false;
+}
+
 /// Profile stub that counts invocations for zero-side-effect assertions.
 class _SpyProfileNotifier extends StateNotifier<ProfileState>
     implements ProfileController {
@@ -242,6 +304,7 @@ Future<void> _pumpCircleDetail(
   required _SpyCircleSessionsController sessionsSpy,
   required _RouteCounter routes,
   required void Function() onDetailFetch,
+  _SpyScheduleController? scheduleSpy,
 }) {
   return tester.pumpWidget(
     ProviderScope(
@@ -263,6 +326,9 @@ Future<void> _pumpCircleDetail(
         ),
         circleSessionsControllerProvider('circle-1')
             .overrideWith((_) => sessionsSpy),
+        // The student fixture opens the schedule manager read-only.
+        scheduleControllerProvider((circleId: 'circle-1', canManage: false))
+            .overrideWith((_) => scheduleSpy ?? _SpyScheduleController()),
       ],
       child: MaterialApp(
         navigatorObservers: [routes],
@@ -282,7 +348,7 @@ Icon _trailingIcon(WidgetTester tester, Finder tileFinder) =>
     tester.widget<ListTile>(tileFinder).trailing! as Icon;
 
 Finder _tileWith(String label) =>
-    find.ancestor(of: find.text(label), matching: find.byType(ListTile)).first;
+    find.ancestor(of: find.text(label), matching: find.byType(ListTile));
 
 bool _isTrue(Object? flag) => flag == true || flag.toString() == 'isTrue';
 
@@ -479,7 +545,14 @@ void main() {
       await tester.pumpAndSettle();
 
       for (final label in ['الأعضاء', 'المحادثة']) {
-        final icon = _trailingIcon(tester, _tileWith(label));
+        final tile = _tileWith(label);
+        await tester.scrollUntilVisible(
+          tile,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        final icon = _trailingIcon(tester, tile);
         expect(
           icon.icon?.matchTextDirection,
           isTrue,
@@ -657,6 +730,11 @@ void main() {
 
       // Any clipped diacritic or overflowing name throws in the test harness.
       final card = find.byKey(const Key('homeCircle-circle-1'));
+      await tester.scrollUntilVisible(
+        card,
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(card, findsOneWidget);
       final semantics = tester.widget<Semantics>(
         find.ancestor(
@@ -675,11 +753,12 @@ void main() {
     });
   });
 
-  group('under-implementation notices (FR-032/FR-033, SC-009)', () {
+  group('circle detail schedule entry (F-006 US1)', () {
     testWidgets(
-        'circle detail schedule action shows only the shared notice (LTR)',
-        (tester) async {
+        'the schedule action opens the schedule manager, read-only for a '
+        'student (LTR)', (tester) async {
       final sessionsSpy = _SpyCircleSessionsController();
+      final scheduleSpy = _SpyScheduleController();
       final routes = _RouteCounter();
       var detailFetches = 0;
       await _pumpCircleDetail(
@@ -688,105 +767,81 @@ void main() {
         sessionsSpy: sessionsSpy,
         routes: routes,
         onDetailFetch: () => detailFetches++,
+        scheduleSpy: scheduleSpy,
       );
       await tester.pumpAndSettle();
       final baselinePushes = routes.pushes;
 
-      final schedule = find.text('Schedule');
-      expect(
+      final schedule = find.byKey(const Key('openCircleSchedule'));
+      await tester.scrollUntilVisible(
         schedule,
-        findsOneWidget,
-        reason: 'the approved design keeps the planned schedule action '
-            'visible and tappable (compatibility inventory §6)',
+        250,
+        scrollable: find.byType(Scrollable).first,
       );
-
-      await tester.ensureVisible(schedule);
+      expect(schedule, findsOneWidget);
       // Let the scroll finish before hit-testing (matches the management
       // tile pattern in circle_detail_screen_test.dart).
       await tester.pumpAndSettle();
       await tester.tap(schedule);
-      await tester.pump();
-
-      expect(
-        find.byKey(const Key('halaqatyUnderImplementationSnackBar')),
-        findsOneWidget,
-      );
-      expect(
-        find.text(
-          'This feature is under implementation and is not available yet.',
-        ),
-        findsOneWidget,
-      );
-
-      // Re-invocation replaces the prior instance instead of stacking.
-      await tester.ensureVisible(schedule);
       await tester.pumpAndSettle();
-      await tester.tap(schedule);
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const Key('halaqatyUnderImplementationSnackBar')),
-        findsOneWidget,
-      );
 
-      // Dismissible via its action.
-      await tester.tap(find.text('Dismiss'));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const Key('halaqatyUnderImplementationSnackBar')),
-        findsNothing,
-      );
+      expect(find.byType(ScheduleEditorScreen), findsOneWidget);
+      expect(routes.pushes, baselinePushes + 1);
+      expect(scheduleSpy.loadCalls, greaterThanOrEqualTo(1));
+      // The viewer (student) scope has no mutation affordance.
+      expect(find.byKey(const Key('scheduleAddButton')), findsNothing);
 
-      // Zero navigation, controller/API calls, or state mutation.
+      await tester.pageBack();
+      await tester.pumpAndSettle();
       expect(find.byType(CircleDetailScreen), findsOneWidget);
-      expect(routes.pushes, baselinePushes);
       expect(detailFetches, 1);
       expect(sessionsSpy.loadCalls, 1, reason: 'only the initial section load');
       expect(sessionsSpy.createCalls, 0);
     });
 
-    testWidgets(
-        'circle detail schedule action shows only the shared notice (RTL)',
+    testWidgets('the schedule action opens the schedule manager (RTL)',
         (tester) async {
       final sessionsSpy = _SpyCircleSessionsController();
-      final routes = _RouteCounter();
+      final scheduleSpy = _SpyScheduleController();
       var detailFetches = 0;
       await _pumpCircleDetail(
         tester,
         direction: TextDirection.rtl,
         sessionsSpy: sessionsSpy,
-        routes: routes,
+        routes: _RouteCounter(),
         onDetailFetch: () => detailFetches++,
+        scheduleSpy: scheduleSpy,
       );
       await tester.pumpAndSettle();
 
-      final schedule = find.text('المواعيد');
-      expect(
+      final schedule = find.byKey(const Key('openCircleSchedule'));
+      await tester.scrollUntilVisible(
         schedule,
-        findsOneWidget,
-        reason: 'the approved design keeps the planned schedule action '
-            'visible and tappable (compatibility inventory §6)',
+        250,
+        scrollable: find.byType(Scrollable).first,
       );
-
-      await tester.ensureVisible(schedule);
+      expect(schedule, findsOneWidget);
       await tester.pumpAndSettle();
       await tester.tap(schedule);
-      await tester.pump();
+      await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const Key('halaqatyUnderImplementationSnackBar')),
-        findsOneWidget,
-      );
-      expect(
-        find.text('هذه الميزة قيد التنفيذ وغير متاحة حالياً.'),
-        findsOneWidget,
-      );
+      expect(find.byType(ScheduleEditorScreen), findsOneWidget);
+      // Pushed Material routes inherit MaterialApp's direction, not the
+      // home wrapper's; per-direction copy is covered in
+      // schedule_editor_test.dart.
+      expect(find.text('Circle schedule'), findsOneWidget);
+      expect(scheduleSpy.loadCalls, greaterThanOrEqualTo(1));
 
+      await tester.pageBack();
+      await tester.pumpAndSettle();
       expect(find.byType(CircleDetailScreen), findsOneWidget);
       expect(detailFetches, 1);
       expect(sessionsSpy.loadCalls, 1);
       expect(sessionsSpy.createCalls, 0);
     });
+  });
 
+  group('under-implementation notices (FR-032/FR-033)', () {
     testWidgets(
         'profile notice tiles replace the notice and cause zero side '
         'effects in RTL', (tester) async {
@@ -887,7 +942,7 @@ void main() {
     test('button themes expose a visible 2dp focus border in both schemes', () {
       final cases = [
         (halaqatyLightTheme(), HalaqatyColors.primaryDark),
-        (halaqatyDarkTheme(), HalaqatyColors.primaryLight),
+        (halaqatyDarkTheme(), HalaqatyColors.darkPrimary),
       ];
       for (final (theme, color) in cases) {
         for (final style in [

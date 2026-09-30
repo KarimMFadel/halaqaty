@@ -217,6 +217,27 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  /// Keep timezone-dependent planning and calendar providers in sync after a
+  /// successful profile save, without waiting for the next auth refresh.
+  void updateTimezone(String timezone) {
+    final user = state.user;
+    if (user == null) return;
+    state = state.copyWith(
+      user: BackendUser(
+        id: user.id,
+        firebaseUid: user.firebaseUid,
+        fullName: user.fullName,
+        displayName: user.displayName,
+        bio: user.bio,
+        country: user.country,
+        avatarUrl: user.avatarUrl,
+        preferredLanguage: user.preferredLanguage,
+        timezone: timezone,
+        createdAt: user.createdAt,
+      ),
+    );
+  }
+
   Future<String?> _requireFirebaseIDToken() async {
     final firebaseUser = _firebaseAuth.currentUser;
     if (firebaseUser == null) {

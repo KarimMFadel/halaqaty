@@ -769,6 +769,9 @@ Future<({String token, String sessionId})> _sessionCredentials() async =>
 // ---------------------------------------------------------------------------
 
 class _CaptureAuth extends StateNotifier<AuthState> implements AuthController {
+  @override
+  void updateTimezone(String timezone) {}
+
   _CaptureAuth.authenticated({String userId = 'user-1'})
       : super(AuthState(
           status: AuthStatus.authenticated,

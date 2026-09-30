@@ -125,6 +125,13 @@ void main() {
     }
   });
 
+  test('light theme uses the approved warm ivory page background', () {
+    expect(
+      halaqatyLightTheme().scaffoldBackgroundColor,
+      const Color(0xFFF8F6F0),
+    );
+  });
+
   group('bundled typography mapping (spec clarification 2026-09-22)', () {
     final themes = <String, ThemeData>{
       'light': halaqatyLightTheme(),

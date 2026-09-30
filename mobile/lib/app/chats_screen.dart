@@ -47,14 +47,14 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
       body: SafeArea(
         child: switch ((
           state.isLoading,
-          state.failure != null,
+          state.myCirclesFailure != null,
           state.myCircles.isEmpty,
         )) {
           // Initial wait: branded loading, never a bare spinner.
           (true, _, true) => const HalaqatyLoading(key: Key('chatsLoading')),
           // Failed load with nothing to show: error, not a fake empty state.
           (false, true, true) => CircleLoadError(
-              failure: state.failure!,
+              failure: state.myCirclesFailure!,
               onRetry: _reload,
             ),
           // Genuinely empty after a successful load.
@@ -71,9 +71,9 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  if (state.failure != null) ...[
+                  if (state.myCirclesFailure != null) ...[
                     CircleLoadError(
-                      failure: state.failure!,
+                      failure: state.myCirclesFailure!,
                       onRetry: _reload,
                     ),
                     const SizedBox(height: 12),

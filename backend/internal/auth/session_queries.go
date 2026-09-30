@@ -72,6 +72,7 @@ SET full_name = NULL,
     avatar_url = NULL,
     completed_at = NULL,
     preferred_language = 'ar',
+    timezone = 'UTC',
     updated_at = NOW()
 WHERE user_id = $1::uuid
 `
@@ -117,6 +118,7 @@ SELECT
     p.avatar_url,
     p.phone,
     COALESCE(p.preferred_language, 'ar') AS preferred_language,
+    COALESCE(p.timezone, 'UTC') AS timezone,
     u.created_at
 FROM users u
 LEFT JOIN profiles p ON p.user_id = u.id

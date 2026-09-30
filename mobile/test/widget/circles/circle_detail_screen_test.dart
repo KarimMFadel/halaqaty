@@ -33,7 +33,13 @@ void main() {
     await tester.pump();
 
     expect(find.text('Circle details'), findsOneWidget);
+    expect(find.byKey(const Key('circleIdentityHeader')), findsOneWidget);
     expect(find.text('Maximum capacity'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Members'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Members'), findsOneWidget);
     final membersTile = tester.widget<ListTile>(
       find
@@ -44,6 +50,63 @@ void main() {
           .first,
     );
     expect((membersTile.trailing! as Icon).icon, Icons.chevron_right);
+  });
+
+  testWidgets('CircleDetailScreen: prioritizes sessions and groups shortcuts',
+      (tester) async {
+    tester.view.physicalSize = const Size(900, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          circleDetailProvider('circle-1').overrideWith(
+            (_) => Future.value(_circle()),
+          ),
+          circleMembersProvider('circle-1').overrideWith(
+            (_) => Future.value([
+              CircleMember(
+                userId: 'teacher-1',
+                displayName: 'Teacher',
+                role: CircleRole.teacher,
+                joinedAt: DateTime.utc(2026, 8, 1),
+              ),
+            ]),
+          ),
+        ],
+        child: const MaterialApp(
+          home: CircleDetailScreen(
+            circleId: 'circle-1',
+            currentUserId: 'teacher-1',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final sessionsTop = tester
+        .getTopLeft(
+          find.byKey(const Key('circleSessionsSection')),
+        )
+        .dy;
+    final metadataTop = tester.getTopLeft(find.text('Maximum capacity')).dy;
+    final membersTop = tester.getTopLeft(find.text('Members')).dy;
+    final chatTop =
+        tester.getTopLeft(find.byKey(const Key('openCircleChat'))).dy;
+    final scheduleTop =
+        tester.getTopLeft(find.byKey(const Key('openCircleSchedule'))).dy;
+    final managementTop =
+        tester.getTopLeft(find.byKey(const Key('openCircleManagement'))).dy;
+    final retirementTop =
+        tester.getTopLeft(find.byKey(const Key('openCircleRetirement'))).dy;
+
+    expect(sessionsTop, lessThan(metadataTop));
+    expect(membersTop, lessThan(chatTop));
+    expect(chatTop, lessThan(scheduleTop));
+    expect(scheduleTop, lessThan(managementTop));
+    expect(managementTop, lessThan(retirementTop));
   });
 
   testWidgets('CircleDetailScreen: constrains long circle names',
@@ -90,8 +153,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('تفاصيل الحلقة'), findsOneWidget);
-    expect(find.text('الأعضاء'), findsOneWidget);
-    expect(find.text('المحادثة'), findsOneWidget);
     final banner = tester.widget<Container>(
       find.byKey(const Key('circleArchivedBanner')),
     );
@@ -106,6 +167,11 @@ void main() {
       ),
     );
     expect(archiveIcon.color, scheme.onSecondaryContainer);
+    await tester.scrollUntilVisible(
+      find.text('الأعضاء'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
     final membersTile = tester.widget<ListTile>(
       find
           .ancestor(
@@ -116,6 +182,12 @@ void main() {
     );
     // Material mirrors this directional icon once for RTL.
     expect((membersTile.trailing! as Icon).icon, Icons.chevron_right);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('openCircleChat')),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('المحادثة'), findsOneWidget);
   });
 
   testWidgets('CircleDetailScreen: keeps provider errors private',
@@ -263,6 +335,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('circleArchivedBanner')), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('openCircleChat')),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.byKey(const Key('openCircleChat')), findsOneWidget);
     expect(find.byKey(const Key('openCircleManagement')), findsNothing);
     expect(find.byKey(const Key('openCircleRetirement')), findsNothing);
@@ -297,10 +374,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('Members'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
     final membersTile = find.ancestor(
       of: find.text('Members'),
       matching: find.byType(ListTile),
     );
+    await tester.pumpAndSettle();
     await tester.tap(membersTile.first);
     await tester.pumpAndSettle();
 

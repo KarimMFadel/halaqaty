@@ -589,7 +589,7 @@ stateDiagram-v2
     ended --> [*]
 
     note right of scheduled : Session stored in DB\nNo ready media room yet\nQueue rounds not yet possible
-    note right of active : Queue rounds active\nWS events flowing\nAttendance auto-tracked
+    note right of active : Queue rounds active\nWS events flowing\nF-005 presence tracked; F-006 attendance separate
 ```
 
 ### 4.1 Entity-Relationship Diagram
@@ -601,13 +601,16 @@ erDiagram
         varchar firebase_uid UK
         bytea deleted_firebase_uid_hash UK
         timestamptz deleted_at
-        varchar display_name
         varchar email UK
-        varchar timezone
-        text avatar_url
-        varchar preferred_lang
         timestamptz created_at
         timestamptz updated_at
+    }
+    profiles {
+        uuid user_id PK,FK
+        varchar display_name
+        text avatar_url
+        varchar preferred_language
+        varchar timezone
     }
     user_sessions {
         uuid id PK
@@ -764,11 +767,64 @@ erDiagram
     schedules {
         uuid id PK
         uuid circle_id FK
-        int day_of_week
-        time start_time
-        time end_time
+        uuid created_by FK
+        int current_version
+        date stopped_from_local_date
+    }
+    schedule_revisions {
+        uuid schedule_id PK,FK
+        int version PK
+        date effective_local_date
+        varchar mode
+        date anchor_local_date
+        time start_local_time
+        time end_local_time
+        int duration_minutes
         varchar timezone
-        bool is_active
+        date end_local_date
+    }
+    schedule_selected_dates {
+        uuid schedule_id PK,FK
+        int revision PK,FK
+        date local_date PK
+    }
+    schedule_occurrence_exceptions {
+        uuid schedule_id PK,FK
+        date original_local_date PK
+        int version
+        timestamptz cancelled_at
+    }
+    planned_session_details {
+        uuid session_id PK,FK
+        uuid schedule_id FK
+        date original_local_date
+        time start_local_time
+        time end_local_time
+        int duration_minutes
+        timestamptz planned_end_at
+        varchar planning_timezone
+        timestamptz cancelled_at
+    }
+    session_attendance {
+        uuid session_id PK,FK
+        uuid user_id PK,FK
+        varchar roster_source
+        varchar base_status
+        varchar effective_status
+        timestamptz first_presence_at
+    }
+    attendance_corrections {
+        uuid id PK
+        uuid session_id FK
+        uuid user_id FK
+        uuid actor_id FK
+        varchar new_status
+        timestamptz at
+    }
+    schedule_request_replays {
+        uuid actor_id PK,FK
+        varchar idempotency_key PK
+        varchar fingerprint
     }
     quran_surahs {
         int id PK
@@ -794,6 +850,7 @@ erDiagram
     }
 
     users ||--o{ circle_members : "joins circles"
+    users ||--o| profiles : "has profile"
     circles ||--o{ circle_members : "has members"
     users ||--o{ circles : "teaches (teacher_id)"
     circles ||--o{ sessions : "hosts"
@@ -803,6 +860,13 @@ erDiagram
     messages ||--o{ chat_event_outbox : "projects events"
     messages ||--o{ message_moderation_audits : "has moderation audit"
     circles ||--o{ schedules : "has schedules"
+    schedules ||--o{ schedule_revisions : "has revisions"
+    schedule_revisions ||--o{ schedule_selected_dates : "selects dates"
+    schedules ||--o{ schedule_occurrence_exceptions : "overrides occurrences"
+    schedules ||--o{ planned_session_details : "materializes occurrences"
+    sessions ||--o| planned_session_details : "has planned details"
+    sessions ||--o{ session_attendance : "classifies roster"
+    session_attendance ||--o{ attendance_corrections : "has corrections"
     sessions ||--o{ session_participant_presence : "tracks live presence"
     sessions ||--o{ recitation_queue : "has rounds"
     recitation_queue ||--o{ recitation_queue_entries : "has entries"
@@ -831,7 +895,7 @@ erDiagram
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | |
 | updated_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | |
 
-`profiles` (created by F-001 migrations) is the 1:1 extension keyed by `user_id` with `display_name`, `full_name`, `country`, `phone`, `bio`, `avatar_url`, `preferred_language`, and completion/audit timestamps. Account deletion retains `display_name` for authorized history attribution, clears all non-retained profile fields, and resets the language preference. `users.id` remains for historical foreign keys. The deletion migration/worker protocol is defined by [ADR-024](adr/ADR-024-account-deletion-tombstone-and-firebase-cleanup.md); `DELETE /auth/me` is implemented for eligible student accounts.
+`profiles` (created by F-001 migrations) is the 1:1 extension keyed by `user_id` with `display_name`, `full_name`, `country`, `phone`, `bio`, `avatar_url`, `preferred_language`, and completion/audit timestamps. F-006 adds a stored IANA `timezone` there, with `UTC` backfill for existing profiles and additive `/auth/me` read/update; the viewer's stored zone determines the calendar month and local display. Account deletion retains `display_name` for authorized history attribution, clears all non-retained profile fields, resets the language preference, and resets timezone to `UTC`. `users.id` remains for historical foreign keys. The deletion migration/worker protocol is defined by [ADR-024](adr/ADR-024-account-deletion-tombstone-and-firebase-cleanup.md); `DELETE /auth/me` is implemented for eligible student accounts.
 
 #### `device_tokens`
 | Column | Type | Constraints | Description |
@@ -934,7 +998,14 @@ queue cleanup.
 #### `session_attendance` (F-006)
 
 F-006 owns attendance classification and manual overrides. It derives its policy
-from F-005 participant-presence facts and must not alter them.
+from F-005 participant-presence facts and must not alter them. `session_attendance`
+is keyed by `(session_id,user_id)` and stores the eligible roster source, first
+presence, base status, effective status and finalization time. Start snapshots
+active students; a later-enrolled student's authorized join transaction persists
+eligibility immediately, so subsequent membership removal cannot rewrite history.
+End/recovery finalizes Present through `actual_start + 10m`, Late afterward, and
+Absent for eligible nonparticipants. Append-only `attendance_corrections` stores
+teacher, time, reason, previous and new status; latest correction survives replay.
 
 #### `recitation_queue`
 | Column | Type | Constraints | Description |
@@ -1108,16 +1179,33 @@ ended session.
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
 
 #### `schedules`
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| circle_id | UUID | FK → circles.id NOT NULL | |
-| day_of_week | INTEGER | CHECK BETWEEN 0 AND 6 | 0=Sunday, 6=Saturday |
-| start_time | TIME | NOT NULL | Stored in local time; use timezone column to convert to UTC |
-| end_time | TIME | NOT NULL | Stored in local time; use timezone column to convert to UTC |
-| timezone | VARCHAR(50) | NOT NULL | IANA timezone string; used to interpret start_time/end_time as local and convert to UTC |
-| is_active | BOOLEAN | DEFAULT TRUE | |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+
+The approved [ADR-026](adr/ADR-026-schedule-occurrence-and-attendance-persistence.md)
+and [F-006 data model](../../../specs/006-schedule-calendar-attendance/data-model.md)
+define the pending additive migration. `schedules` holds circle identity, creator,
+current version and optional stop date. `schedule_revisions` holds effective-dated
+weekday/biweekly, positive day/week interval, or selected-date rules, retained
+local start/end clocks, 1–44,640 minute planned duration, IANA planning zone and
+optional inclusive end date. `schedule_selected_dates` and
+`schedule_occurrence_exceptions` persist finite dates and one-occurrence edits or
+cancellations. Open-ended occurrences are computed for the requested month with
+a duration-based lookback and arithmetic jump from the anchor, without a future
+scheduling horizon.
+
+An occurrence keeps `(schedule_id, original_local_date)` as its logical identity.
+Recurring start locks the parent schedule and performs materialization plus the
+existing F-005 media/activation/admission flow in one transaction; cancellation
+and series edit take the same lock. `planned_session_details` carries local clock
+inputs, resolved end, zone, recurrence key and separate cancellation; one-offs
+have no schedule key. F-005's `scheduled → active → ended` status and raw presence
+facts remain unchanged. `schedule_request_replays` provides scoped idempotency;
+unique occurrence/attendance keys and schedule-version CAS protect retries.
+The migration remains unapplied until its paired up/down scripts and tests exist.
+The migration indexes revisions by `(schedule_id, effective_local_date DESC,
+version DESC)`, selected dates by local date, attendance by
+`(session_id,effective_status)`, and correction history by
+`(session_id,user_id,at,id)`; the exact FK/check/index definitions live in the
+F-006 data model and must be verified on fresh and upgraded schemas.
 
 #### `parent_links`
 Removed from MVP scope. The product currently supports direct student and teacher accounts without parent-linked account management.
@@ -1274,13 +1362,25 @@ does not expose separate add/delete entry controls.
 > **Note:** `POST /circles/{id}/progress` (manual student self-logging) was explicitly decided out of scope (OQ-020). All progress records are auto-generated from session-based recitations only.
 
 ### `/schedule`
+
+These are approved F-006 contract surfaces in `docs/contracts/openapi.yaml`;
+handlers and migration are not yet implemented. Active teachers and supervisors
+manage plans. Same- and cross-circle overlaps warn with authorized circle/time
+details, and newly detected conflicts require renewed confirmation. Students
+receive warnings for their own calendar only. Current membership gates all reads.
+
 | Method | Path | Status | Description |
 |--------|------|--------|-------------|
-| GET | `/circles/{id}/schedules` | ✅ | List schedules for a circle |
-| POST | `/circles/{id}/schedules` | ✅ | Create a schedule (teacher only) |
-| PUT | `/circles/{id}/schedules/{schedId}` | 🔲 | Update a schedule |
-| DELETE | `/circles/{id}/schedules/{schedId}` | 🔲 | Delete a schedule |
-| GET | `/schedule/me` | 🔲 | My unified calendar across all circles |
+| POST | `/circles/{circleId}/planning-preview` | 🔲 | Preview authorized overlap warnings |
+| GET/POST | `/circles/{circleId}/schedules` | 🔲 | List/create versioned circle schedules |
+| PATCH | `/circles/{circleId}/schedules/{scheduleId}` | 🔲 | Change or stop future series occurrences |
+| PATCH | `/circles/{circleId}/schedules/{scheduleId}/occurrences/{localDate}` | 🔲 | Edit or cancel one unstarted occurrence |
+| POST | `/circles/{circleId}/schedules/{scheduleId}/occurrences/{localDate}/start` | 🔲 | Materialize and start through F-005, returning its media response |
+| POST | `/circles/{circleId}/planned-sessions` | 🔲 | Create a one-off planned session |
+| PATCH | `/sessions/{sessionId}/planned-details` | 🔲 | Edit or cancel an unstarted one-off |
+| GET | `/calendar/me` | 🔲 | One month in the viewer's stored timezone |
+| GET | `/sessions/{sessionId}/attendance` | 🔲 | Role-filtered attendance |
+| PATCH | `/sessions/{sessionId}/attendance/{userId}` | 🔲 | Teacher correction with audit |
 
 ### `/config`
 | Method | Path | Status | Description |
@@ -1327,7 +1427,7 @@ All rows below require `Authorization: Bearer <firebase-jwt>` and `X-Halaqaty-Se
 | Create circle | authenticated user | `401` invalid credentials, `400` invalid role assignment input |
 | Join by invite | authenticated user | `401` invalid credentials, `404` invalid invite, `409` already member |
 | Update circle settings, archive circle, remove member | teacher | `401` invalid credentials, `403` non-teacher, `404` missing circle/member |
-| Create/start/end session, create schedules | teacher or supervisor for F-005 ad-hoc lifecycle; teacher for scheduling | `401` invalid credentials, `403` unauthorized role, `404` missing circle/session |
+| Create/start/end ad-hoc session; manage F-006 schedules and planned sessions | teacher or supervisor for F-005 ad-hoc lifecycle and F-006 planning; only current active circle managers may act | `401` invalid credentials, `403` unauthorized role, `404` missing circle/session |
 | Join live session, list members, read queue/chat | active member | `401` invalid credentials, `403` non-member, `404` missing resource |
 | Grade recitation | teacher or supervisor | `401` invalid credentials, `403` student/non-member, `404` missing queue entry |
 | Change another member role | teacher or supervisor | `401` invalid credentials, `403` self-change/final-teacher/student/non-member/cross-circle, `404` missing member |
@@ -1408,8 +1508,9 @@ idx_<table>_<col>_partial_<condition>   -- partial (e.g., idx_messages_circle_id
 **Policy:** All tables containing user-modifiable data should have an `updated_at TIMESTAMPTZ DEFAULT NOW()` column.
 
 **Current coverage:**
-- ✅ users, circles, circle_members, circle_invites, schedules, sessions, messages, memorization_progress
-- ⚠️ **Audit required:** recitation_queue, recitation_queue_entries, session_attendance, device_tokens, message_reads
+- ✅ users, circles, circle_members, circle_invites, sessions, messages, memorization_progress
+- ✅ schedules, schedule_occurrence_exceptions, session_attendance (migration 000020)
+- ⚠️ **Audit required:** recitation_queue, recitation_queue_entries, planned_session_details, device_tokens, message_reads
 
 **Tables that should NOT have `updated_at`:**
 - Reference data (quran_surahs, quran_divisions) — immutable

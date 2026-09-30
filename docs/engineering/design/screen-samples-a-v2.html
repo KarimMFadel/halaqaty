@@ -292,13 +292,21 @@
   #halaqaty-screen-samples .toggle::after { content:""; display:block; width:14px; height:14px; border-radius:50%; background:var(--hq-paper); }
   #halaqaty-screen-samples [dir="ltr"] .toggle::after { margin-left:auto; }
   #halaqaty-screen-samples .dark {
-    --hq-ivory:#0a0a0a; --hq-paper:#121212; --hq-emerald:#4cb368; --hq-emerald-deep:#ededed;
-    --hq-emerald-soft:#2c2c2c; --hq-gold:#d4a574; --hq-gold-soft:#8b6f47; --hq-ink:#ededed;
-    --hq-muted:#bdbdbd; --hq-line:#49454e; --hq-danger:#ef5350;
+    --hq-ivory:#151816; --hq-paper:#202722; --hq-emerald:#b5c9ae; --hq-emerald-deep:#d9e5d4;
+    --hq-emerald-soft:#354638; --hq-gold:#d6c08a; --hq-gold-soft:#493f2c; --hq-ink:#e6e9e3;
+    --hq-muted:#b3bcb2; --hq-line:#465047; --hq-danger:#d97970;
     box-shadow:0 14px 34px rgb(0 0 0 / .34);
   }
-  #halaqaty-screen-samples .dark .hero { background:#0f5627; color:#ededed; }
-  #halaqaty-screen-samples .dark .bottom-nav .active { background:#d4a574; color:#1c1c1e; }
+  #halaqaty-screen-samples .dark .hero,
+  #halaqaty-screen-samples .dark .detail-head { background:var(--hq-paper); color:var(--hq-ink); border:1px solid var(--hq-line); }
+  #halaqaty-screen-samples .dark .primary,
+  #halaqaty-screen-samples .dark .primary-green { background:var(--hq-emerald); color:#20291f; }
+  #halaqaty-screen-samples .dark .bottom-nav .active { background:var(--hq-gold-soft); color:#e8d8b1; }
+  #halaqaty-screen-samples .dark .tag,
+  #halaqaty-screen-samples .dark .status-pill,
+  #halaqaty-screen-samples .dark .achievement,
+  #halaqaty-screen-samples .dark .checkin,
+  #halaqaty-screen-samples .dark .badge { color:#e8d8b1; }
   #halaqaty-screen-samples .scale-preview { overflow-y:auto; font-size:14px; line-height:1.65; }
   #halaqaty-screen-samples .scale-preview h4 { margin:0 0 7px; font-size:22px; line-height:1.45; }
   #halaqaty-screen-samples .scale-preview p { margin:0 0 12px; }
@@ -344,7 +352,7 @@
           <span class="avatar">ك</span>
         </div>
         <main class="screen">
-          <div class="greeting">السلام عليكم، كريم</div>
+          <div class="greeting">أهلاً، كريم</div>
           <div class="hint">لنواصل رحلة الحفظ اليوم</div>
           <section class="hero">
             <div class="hero-label">الجلسة القادمة · بعد ٢٠ دقيقة</div>
@@ -763,7 +771,7 @@
         <div class="status"><span>٩:٤١</span><span>● ◒ ◔</span></div>
         <div class="topbar"><div class="brand"><img class="brand-mark" src="../../../mobile/assets/brand/logo.svg" alt="Halaqaty Rub el Hizb mark"><span>حِلْقَتي</span></div><span class="avatar">ك</span></div>
         <main class="screen">
-          <div class="greeting">مساء الخير، كريم</div>
+          <div class="greeting">أهلاً، كريم</div>
           <div class="hint">محتوى واضح بدون وهج زائد</div>
           <section class="hero"><div class="hero-label">الجلسة القادمة · غدًا</div><div class="hero-title">حلقة الإتقان</div><div class="hero-meta"><span>٧:٣٠ م</span><span>مراجعة</span></div><button class="primary">عرض التفاصيل</button></section>
           <div class="section-head"><strong>الوصول السريع</strong></div>

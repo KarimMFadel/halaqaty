@@ -1,6 +1,6 @@
 # Halaqaty — Feature Specification & Status Board
 
-> **Version:** 1.0 | **Status:** Implementation Phase | **Last Updated:** 2026-09-24
+> **Version:** 1.0 | **Status:** Implementation Phase | **Last Updated:** 2026-09-30
 
 **Related Documents:** [FEATURES_AR.md](../arabic/FEATURES_AR.md) · [PROJECT_PLAN.md](../planning/PROJECT_PLAN.md) · [ARCHITECTURE.md](../../engineering/architecture/ARCHITECTURE.md) · [DEVELOPMENT.md](../../../DEVELOPMENT.md) · [AGENT_COLLABORATION_GUIDE.md](../../engineering/collaboration/AGENT_COLLABORATION_GUIDE.md)
 
@@ -42,12 +42,12 @@ This is a **living document**. It tracks every feature from proposal through del
 
 | ID | Feature | Priority | Status | Phase | Owner |
 |----|---------|----------|--------|-------|-------|
-| [F-001](#f-001-user-management--authentication) | User Management & Authentication | P0 | 🟡 Approved | 1 | Backend |
-| [F-002](#f-002-circle-management) | Circle Management | P0 | 🟡 Approved | 1 | Full Stack |
-| [F-003](#f-003-recitation-queue-system) | 🔥 Recitation Queue System | P0 | 🟡 Approved | 2 | Full Stack |
-| [F-004](#f-004-real-time-chat) | Real-time Chat | P0 | 🟡 Approved | 1 | Backend |
-| [F-005](#f-005-live-sessions-livekit) | Live Sessions (Audio-only, LiveKit) | P0 | 🟡 Approved | 2 | Full Stack |
-| [F-006](#f-006-schedule--calendar) | Schedule & Calendar | P0 | 🟡 Approved | 2 | Full Stack |
+| [F-001](#f-001-user-management--authentication) | User Management & Authentication | P0 | 🟢 Done† | 1 | Backend |
+| [F-002](#f-002-circle-management) | Circle Management | P0 | 🟢 Done† | 1 | Full Stack |
+| [F-003](#f-003-recitation-queue-system) | 🔥 Recitation Queue System | P0 | 🟢 Done | 2 | Full Stack |
+| [F-004](#f-004-real-time-chat) | Real-time Chat | P0 | 🟢 Done | 1 | Backend |
+| [F-005](#f-005-live-sessions-livekit) | Live Sessions (Audio-only, LiveKit) | P0 | 🟢 Done† | 2 | Full Stack |
+| [F-006](#f-006-schedule--calendar) | Schedule & Calendar | P0 | 🟢 Done† | 2 | Full Stack |
 | [F-007](#f-007-enhanced-student-progress-tracking) | Enhanced Student Progress Tracking | P1 | 🟡 Approved | 3 | Full Stack |
 | [F-008](#f-008-notification-system) | Notification System | P1 | 🔵 Proposed | 2 | Backend |
 | [F-009](#f-009-built-in-digital-mushaf) | Built-in Digital Mushaf | P2 | 🔵 Proposed | 4 | Mobile |
@@ -59,8 +59,14 @@ This is a **living document**. It tracks every feature from proposal through del
 | [F-015](#f-015-certificate-system) | Certificate System | P3 | 🔵 Proposed | 4 | Full Stack |
 | [F-016](#f-016-desktop-app) | Desktop App (Flutter) | P3 | 🔵 Proposed | 5 | Mobile |
 | [F-017](#f-017-institutional-platform) | 🏢 Institutional Platform | P3 | 🔵 Proposed | 5 | Full Stack |
-| [F-018](#f-018-provider-adapter-boundaries) | Provider Adapter Boundaries | P1 | 🟡 Approved | Platform | Full Stack |
+| [F-018](#f-018-provider-adapter-boundaries) | Provider Adapter Boundaries | P1 | 🟢 Done | Platform | Full Stack |
 | [F-019](#f-019-mobile-app-shell-and-uiux-modernization) | Mobile App Shell and UI/UX Modernization | P0 | 🟢 Done | Mobile UX | Mobile |
+
+† Karim directed that F-001, F-002, F-005, and F-006 be marked Done on
+2026-09-30. These are owner-directed administrative closures. Outstanding
+Spec-Kit evidence remains open: F-001 T080/T089/T090, F-002 T078, F-005 T047,
+and F-006 T063/T066/T067. Their reports state which checks remain unverified;
+this status does not claim those checks passed.
 
 ---
 
@@ -70,11 +76,16 @@ This is a **living document**. It tracks every feature from proposal through del
 
 ### F-001: User Management & Authentication
 
-**Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 1
+**Priority:** P0 | **Status:** 🟢 Done† | **Phase:** 1
 
 #### Description
 
 Secure, multi-method user registration and authentication system with role-based access control. This is the foundation everything else depends on.
+
+**Status — 🟢 Done (owner-directed administrative closure, 2026-09-30):**
+Karim directed that F-001 be marked Done. Spec-Kit tasks T080, T089, and T090
+remain open for the coverage record, the live pending-deletion device outcome,
+and final gate/review evidence; see the [validation report](../../../specs/001-auth-roles-profile/validation-report.md).
 
 #### User Stories
 
@@ -103,11 +114,15 @@ Secure, multi-method user registration and authentication system with role-based
 
 ### F-002: Circle Management
 
-**Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 1
+**Priority:** P0 | **Status:** 🟢 Done† | **Phase:** 1
 
 #### Description
 
 Circles are the core organizational unit. A circle is a Quran memorization group with a teacher, students, optional supervisors, and associated sessions, chat, and progress records.
+
+**Status — 🟢 Done (owner-directed administrative closure, 2026-09-30):**
+Karim directed that F-002 be marked Done. The final Tech Lead/RBAC and data-
+retention review task T078 remains open in the [F-002 task record](../../../specs/002-circle-management/tasks.md).
 
 #### User Stories
 
@@ -143,11 +158,14 @@ Circles are the core organizational unit. A circle is a Quran memorization group
 
 ### F-003: Recitation Queue System
 
-**Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 2
+**Priority:** P0 | **Status:** 🟢 Done | **Phase:** 2
 
 #### Description
 
 The most unique and differentiating feature of Halaqaty. An intelligent, real-time ordered queue for student recitation during live sessions. This replaces the chaotic verbal ordering common in circles today.
+
+**Status — 🟢 Done:** All F-003 implementation and verification tasks are
+closed in the [F-003 task record](../../../specs/003-recitation-queue-system/tasks.md).
 
 #### User Stories
 
@@ -268,11 +286,14 @@ The following **5-grade scale** applies to all recitation entries. This is the c
 
 ### F-004: Real-time Chat
 
-**Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 1
+**Priority:** P0 | **Status:** 🟢 Done | **Phase:** 1
 
 #### Description
 
 Full-featured messaging within circles, replacing WhatsApp/Telegram group chats and enabling structured communication between teachers and students.
+
+**Status — 🟢 Done:** All F-004 implementation and verification tasks are
+closed in the [F-004 task record](../../../specs/004-real-time-chat/tasks.md).
 
 #### User Stories
 
@@ -310,11 +331,16 @@ Full-featured messaging within circles, replacing WhatsApp/Telegram group chats 
 
 ### F-005: Live Sessions (LiveKit)
 
-**Priority:** P0 | **Status:** 🟡 Approved | **Phase:** 2
+**Priority:** P0 | **Status:** 🟢 Done† | **Phase:** 2
 
 #### Description
 
 Audio-only sessions powered by LiveKit (open-source, self-hosted WebRTC SFU). Halaqaty has no third-party 40-minute meeting limit, but caps each MVP session at 4 hours per OQ-016. This is the primary replacement for Zoom/Google Meet in MVP. Video is deferred to a separately approved post-MVP feature.
+
+**Status — 🟢 Done (owner-directed administrative closure, 2026-09-30):**
+Karim directed that F-005 be marked Done. F-005 task T047 remains open for the
+focused provider-failure, credential-refresh, and reconnect-flow verification
+listed in the [F-005 task record](../../../specs/005-live-sessions-livekit/tasks.md).
 
 #### User Stories
 
@@ -428,25 +454,34 @@ Step 5: Media Routing
 
 #### Description
 
-Owns circle recurring schedules, one-off planned sessions, each member's combined local-time calendar, and durable attendance classification/correction. Attendance uses F-005 presence facts as evidence; joining a live session alone does not decide attendance. Push reminder delivery is owned by F-008. This feature is description-only in the current gap batch.
+Owns circle recurring schedules, one-off planned sessions, each member's combined local-time calendar, and durable attendance classification/correction. Active teachers and supervisors may schedule and cancel unstarted planned occurrences; only teachers correct attendance. Planned duration is 1–44,640 minutes (31 days), with no start-date or time-of-day scheduling cap. Attendance uses F-005 presence facts as evidence; joining a live session alone does not decide attendance. Push reminder delivery is owned by F-008. The approved F-006 product scope is recorded in [ADR-025](../../engineering/architecture/adr/ADR-025-schedule-policy-and-session-lifecycle-boundary.md) and [ADR-026](../../engineering/architecture/adr/ADR-026-schedule-occurrence-and-attendance-persistence.md).
+
+**Status — 🟢 Done (owner-directed administrative closure, 2026-09-30):**
+Karim directed the implemented F-006 feature to be marked Done. The recorded
+device run passed its runnable journeys but skipped required fixture-dependent
+real-stack checks; T063 and T067 remain open. F-008 is still Proposed, so
+reminder delivery and full SC-009 acceptance remain open under T066. These
+exceptions are not represented as passed verification.
+
+**Gap-batch closure — 2026-09-27:** Karim marked the `019-gap-completion` shared batch done after its integration into `main` (`5231a49`, PR #23; branch-tip file contents match). F-006 continues in `006-schedule-calendar-attendance` using its existing Spec-Kit directory. This closes the shared branch batch, not the outstanding F-006/F-008 delivery criteria; F-019 remains Done.
 
 #### User Stories
 
-- As a teacher, I can set a recurring weekly schedule for my circle
+- As a teacher or supervisor, I can set recurring and one-off planned sessions for my circle
 - As a student in multiple circles, I can see a unified calendar of all my sessions
 - As a student, I receive configurable push notification reminders before sessions
 - As a teacher, I can record manual attendance (override for students who called ahead)
 
 #### Acceptance Criteria
 
-- [ ] Weekly recurring schedule per circle: day(s) of week, start time, end time, timezone
+- [ ] Multiple recurring entries per circle: selected weekdays on weekly/biweekly patterns, positive whole-number day/week intervals, or explicitly selected dates; local start/end time, IANA planning timezone, and optional inclusive local end date
 - [ ] A circle can have multiple schedule entries (e.g., Sun + Wed)
 - [ ] Push notifications: configurable reminder intervals (1hr, 30min, 15min, 5min before session)
 - [ ] Attendance policy consumes F-005 `session_participant_presence` facts; it classifies attendance rather than treating a join as an automatic final status
 - [ ] Manual override: teacher can mark Present / Absent / Excused for any student
 - [ ] Unified calendar: students in multiple circles see all sessions in one color-coded calendar view
-- [ ] Conflict detection: alert if two circles have overlapping scheduled times
-- [ ] Session lifecycle: Scheduled → Live (auto when teacher starts) → Completed (auto after end) → Cancelled (manual)
+- [ ] Overlap detection: warn the acting teacher or supervisor about same- or cross-circle commitments without blocking their choice; show eligible students their own calendar overlap warnings without restricting participation
+- [ ] Planned-session lifecycle: F-005 `scheduled → active → ended` appears as Scheduled → Live → Completed; an authorized manager may separately cancel an unstarted planned occurrence. Cancelled occurrences cannot start or generate attendance; completed history remains intact
 
 #### Circle Lifecycle State Machine
 
@@ -854,7 +889,7 @@ This single feature could generate more revenue than all individual subscription
 
 ### F-018: Provider Adapter Boundaries
 
-**Priority:** P1 | **Status:** 🟡 Approved | **Phase:** Platform
+**Priority:** P1 | **Status:** 🟢 Done | **Phase:** Platform
 
 #### Description
 
@@ -953,7 +988,7 @@ All open questions from feature discussions, consolidated:
 | OQ-015 | Student video permission model? | F-005 | Decided | MVP is audio-only; no video permission in MVP |
 | OQ-016 | Max session duration for server sizing? | F-005 | Decided | Max 4 hours per session. Idle room timeout: 30 minutes after last participant leaves. |
 | OQ-017 | Recording visibility (teacher-only vs all)? | F-005 | Deferred | Recording disabled until privacy framework approval; finalize model before activation |
-| OQ-018 | Non-recurring (one-off) sessions? | F-006 | Decided | Yes — teacher can create one-off sessions not linked to a recurring schedule. |
+| OQ-018 | Non-recurring (one-off) sessions? | F-006 | Decided | Yes — active teachers and supervisors can create one-off sessions not linked to a recurring schedule. |
 | OQ-019 | Timezone storage strategy? | F-006 | Decided | UTC stored in DB. IANA timezone string stored per user profile. All display in user's local timezone. |
 | OQ-020 | Student self-logging (outside sessions)? | F-007 | Decided | No in MVP. Progress records are generated from session-based recitations only. |
 | OQ-021 | Multiple passes on same section? | F-007 | Decided | Yes — each queue entry creates a new progress record. Full history of all passes is retained. |

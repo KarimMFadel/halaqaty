@@ -13,14 +13,18 @@ import 'package:halaqaty_mobile/app/welcome_screen.dart';
 import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/core/theme/halaqaty_theme.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
+import 'package:halaqaty_mobile/features/auth/data/auth_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_discovery_controller.dart';
 import 'package:halaqaty_mobile/features/circles/application/create_circle_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/auth/presentation/auth_screens.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_discovery_screen.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_join_screen.dart';
 import 'package:halaqaty_mobile/features/profile/application/profile_controller.dart';
 import 'package:halaqaty_mobile/features/profile/data/profile_api_client.dart';
 import 'package:halaqaty_mobile/features/profile/presentation/profile_screen.dart';
+import 'package:halaqaty_mobile/features/scheduling/application/calendar_controller.dart';
+import 'package:halaqaty_mobile/features/scheduling/data/calendar_api_client.dart';
 import 'package:halaqaty_mobile/main.dart';
 
 class _TestAuthController extends StateNotifier<AuthState>
@@ -30,6 +34,9 @@ class _TestAuthController extends StateNotifier<AuthState>
   int signInCalls = 0;
   int registerCalls = 0;
   String? lastPreferredLanguage;
+
+  @override
+  void updateTimezone(String timezone) {}
 
   @override
   Future<void> logout() async {
@@ -138,11 +145,32 @@ class _TestCircleApiClient extends CircleApiClient {
       const CircleDiscoveryPage(circles: []);
 }
 
+class _TestCalendarController extends CalendarController {
+  _TestCalendarController({this.items = const []})
+      : super(
+          CalendarApiClient(Dio()),
+          () async => (token: 'token', sessionId: 'session'),
+          timezone: 'Africa/Cairo',
+        );
+
+  final List<CalendarItem> items;
+
+  @override
+  Future<void> load() async {
+    state = CalendarState(
+      status: CalendarStatus.ready,
+      month: DateTime(DateTime.now().year, DateTime.now().month),
+      items: items,
+    );
+  }
+}
+
 Future<void> _pumpApp(
   WidgetTester tester,
   _TestAuthController controller, {
   List<_TestProfileController>? profileControllers,
   _TestCircleApiClient? circleApiClient,
+  _TestCalendarController? calendarController,
   String? firebaseToken,
   ProfileUser? profileToLoad,
   bool profileUpdateResult = false,
@@ -176,6 +204,9 @@ Future<void> _pumpApp(
             readAuthState: () => controller.state,
             logout: controller.logout,
           ),
+        ),
+        calendarControllerProvider.overrideWith(
+          (_) => calendarController ?? _TestCalendarController(),
         ),
       ],
       child: const MyApp(),
@@ -283,6 +314,141 @@ void main() {
 
     expect(find.byKey(const Key('circleLoadError')), findsNothing);
     expect(apiClient.listCirclesCalls, 2);
+  });
+
+  testWidgets('shows the next scheduled session from the current calendar',
+      (WidgetTester tester) async {
+    final start = DateTime.now().toUtc().add(const Duration(hours: 1));
+    final calendar = _TestCalendarController(items: [
+      CalendarItem(
+        occurrenceKey: 'schedule-1:${start.toIso8601String()}',
+        circleId: 'circle-1',
+        circleName: 'Tajweed Circle',
+        title: 'Review session',
+        startsAt: start,
+        endsAt: start.add(const Duration(hours: 1)),
+        planningTimezone: 'Africa/Cairo',
+        state: 'scheduled',
+      ),
+    ]);
+    await _pumpApp(
+      tester,
+      _TestAuthController(
+        const AuthState(
+          status: AuthStatus.authenticated,
+          sessionId: 'session-1',
+        ),
+      ),
+      calendarController: calendar,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('homeNextSession')), findsOneWidget);
+    expect(find.text('Tajweed Circle'), findsOneWidget);
+    expect(find.text('Review session'), findsOneWidget);
+  });
+
+  testWidgets('home follows the design with a named greeting and quick actions',
+      (WidgetTester tester) async {
+    final start = DateTime.now().toUtc().add(const Duration(days: 1));
+    final circleApi = _TestCircleApiClient()
+      ..circles = [
+        CircleSummary(
+          id: 'circle-1',
+          name: 'حلقة الإتقان',
+          description: 'المراجعة: الجزء الخامس',
+          maxCapacity: 20,
+          genderRestriction: 'mixed',
+          language: 'ar',
+          createdAt: DateTime.utc(2026, 1, 1),
+        ),
+      ];
+    await _pumpApp(
+      tester,
+      _TestAuthController(
+        AuthState(
+          status: AuthStatus.authenticated,
+          sessionId: 'session-1',
+          user: BackendUser(
+            id: 'user-1',
+            firebaseUid: 'firebase-1',
+            displayName: 'كريم',
+            preferredLanguage: 'ar',
+            createdAt: DateTime.utc(2026, 1, 1),
+          ),
+        ),
+      ),
+      circleApiClient: circleApi,
+      calendarController: _TestCalendarController(items: [
+        CalendarItem(
+          occurrenceKey: 'schedule-1:${start.toIso8601String()}',
+          circleId: 'circle-1',
+          circleName: 'حلقة الإتقان',
+          title: 'مراجعة سورة البقرة',
+          startsAt: start,
+          endsAt: start.add(const Duration(hours: 1)),
+          planningTimezone: 'Africa/Cairo',
+          state: 'scheduled',
+        ),
+      ]),
+      firebaseToken: 'firebase-token',
+      platformLocale: const Locale('ar'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Banner), findsNothing);
+    expect(find.text('حِلْقَتي'), findsOneWidget);
+    expect(find.byKey(const Key('homeProfileAction')), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('homeGreeting'))).data,
+      'أهلاً، كريم',
+    );
+    expect(find.byKey(const Key('homeQuickDiscover')), findsOneWidget);
+    expect(find.byKey(const Key('homeQuickInvite')), findsOneWidget);
+    expect(find.byKey(const Key('homeNextSession')), findsOneWidget);
+    final nextSession = tester.widget<Card>(
+      find.byKey(const Key('homeNextSession')),
+    );
+    final scheme = Theme.of(
+      tester.element(find.byKey(const Key('homeNextSession'))),
+    ).colorScheme;
+    expect(
+      nextSession.color,
+      scheme.brightness == Brightness.light ? scheme.primary : scheme.surface,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('homeCircle-circle-1')),
+      300,
+    );
+    expect(find.byKey(const Key('homeCircle-circle-1')), findsOneWidget);
+    expect(find.byKey(const Key('homeCircleInitial-circle-1')), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('homeQuickDiscover')),
+      -300,
+    );
+    await tester.tap(find.byKey(const Key('homeQuickDiscover')));
+    await tester.pumpAndSettle();
+    expect(find.byType(CircleDiscoveryScreen), findsOneWidget);
+  });
+
+  testWidgets('home invite quick action opens the invite form',
+      (WidgetTester tester) async {
+    await _pumpApp(
+      tester,
+      _TestAuthController(
+        const AuthState(
+          status: AuthStatus.authenticated,
+          sessionId: 'session-1',
+        ),
+      ),
+      firebaseToken: 'firebase-token',
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('homeQuickInvite')));
+    await tester.pumpAndSettle();
+    expect(find.byType(CircleJoinScreen), findsOneWidget);
   });
 
   testWidgets('switches to the chats tab', (WidgetTester tester) async {
@@ -873,6 +1039,15 @@ void main() {
     testWidgets('dark theme keeps selected-state meaning and font mapping',
         (WidgetTester tester) async {
       final dark = halaqatyDarkTheme();
+      expect(dark.scaffoldBackgroundColor, const Color(0xFF151816));
+      expect(dark.colorScheme.surface, const Color(0xFF202722));
+      expect(
+        dark.colorScheme.surfaceContainerHighest,
+        const Color(0xFF28312B),
+      );
+      expect(dark.colorScheme.primary, const Color(0xFFB5C9AE));
+      expect(dark.colorScheme.secondary, const Color(0xFFD6C08A));
+      expect(dark.colorScheme.onSurface, const Color(0xFFE6E9E3));
       expect(
         dark.navigationBarTheme.indicatorColor,
         dark.colorScheme.secondaryContainer,
@@ -955,6 +1130,8 @@ void main() {
         firebaseToken: 'firebase-token',
       );
       await tester.pumpAndSettle();
+      final homeCircle = find.byKey(const Key('homeCircle-circle-1'));
+      await tester.scrollUntilVisible(homeCircle, 250);
       expect(find.byKey(const Key('homeCircle-circle-1')), findsOneWidget);
 
       apiClient.listCirclesError = connectionError();
@@ -966,12 +1143,18 @@ void main() {
           .loadMyCircles();
       await tester.pump();
 
-      expect(find.byKey(const Key('homeCircle-circle-1')), findsOneWidget);
       expect(find.byKey(const Key('circleLoadError')), findsOneWidget);
+      await tester.scrollUntilVisible(homeCircle, 250);
+      expect(find.byKey(const Key('homeCircle-circle-1')), findsOneWidget);
 
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('circleLoadRetry')),
+        -250,
+      );
       await tester.tap(find.byKey(const Key('circleLoadRetry')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('circleLoadError')), findsNothing);
+      await tester.scrollUntilVisible(homeCircle, 250);
       expect(find.byKey(const Key('homeCircle-circle-1')), findsOneWidget);
     });
 

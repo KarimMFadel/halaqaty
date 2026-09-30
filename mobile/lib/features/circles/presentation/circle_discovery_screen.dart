@@ -37,51 +37,82 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(circleDiscoveryControllerProvider);
     final rtl = Directionality.of(context) == TextDirection.rtl;
-    return Scaffold(
-      appBar: AppBar(title: Text(rtl ? 'اكتشاف الحلقات' : 'Discover circles')),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: TextField(
-                key: const Key('circleDiscoverySearchField'),
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  labelText:
-                      rtl ? 'ابحث عن حلقة عامة' : 'Search public circles',
-                  prefixIcon: const Icon(Icons.search),
-                ),
-                onSubmitted: (query) => ref
-                    .read(circleDiscoveryControllerProvider.notifier)
-                    .discover(query: query),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  FilledButton.icon(
-                    key: const Key('openCreateCircleButton'),
-                    onPressed: _openCreate,
-                    icon: const Icon(Icons.add),
-                    label: Text(rtl ? 'إنشاء حلقة' : 'Create circle'),
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    key: const Key('openInviteJoinButton'),
-                    onPressed: widget.onOpenInvite ?? _openInvite,
-                    icon: const Icon(Icons.link),
-                    label: Text(
-                      rtl ? 'لديّ رابط دعوة' : 'I have an invite link',
+    return DefaultTabController(
+      length: 2,
+      child: Builder(
+        builder: (context) => Scaffold(
+          appBar:
+              AppBar(title: Text(rtl ? 'اكتشاف الحلقات' : 'Discover circles')),
+          body: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: TextField(
+                    key: const Key('circleDiscoverySearchField'),
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      labelText:
+                          rtl ? 'ابحث عن حلقة عامة' : 'Search public circles',
+                      prefixIcon: const Icon(Icons.search),
                     ),
+                    onSubmitted: (query) {
+                      DefaultTabController.of(context).animateTo(1);
+                      ref
+                          .read(circleDiscoveryControllerProvider.notifier)
+                          .discover(query: query);
+                    },
                   ),
-                ],
-              ),
+                ),
+                TabBar(
+                  tabs: [
+                    Tab(
+                      key: const Key('circleTabMyCircles'),
+                      height: 48,
+                      child: SizedBox(
+                        height: 48,
+                        child: Center(
+                          child: Text(rtl ? 'حلقاتي' : 'My circles'),
+                        ),
+                      ),
+                    ),
+                    Tab(
+                      key: const Key('circleTabDiscover'),
+                      height: 48,
+                      child: SizedBox(
+                        height: 48,
+                        child: Center(child: Text(rtl ? 'اكتشاف' : 'Discover')),
+                      ),
+                    ),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      FilledButton.icon(
+                        key: const Key('openCreateCircleButton'),
+                        onPressed: _openCreate,
+                        icon: const Icon(Icons.add),
+                        label: Text(rtl ? 'إنشاء حلقة' : 'Create circle'),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        key: const Key('openInviteJoinButton'),
+                        onPressed: widget.onOpenInvite ?? _openInvite,
+                        icon: const Icon(Icons.link),
+                        label: Text(
+                          rtl ? 'لديّ رابط دعوة' : 'I have an invite link',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(child: _content(state, rtl)),
+              ],
             ),
-            Expanded(child: _content(state, rtl)),
-          ],
+          ),
         ),
       ),
     );
@@ -98,40 +129,61 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
         .where((circle) => !joinedCircleIds.contains(circle.id))
         .toList();
 
-    return RefreshIndicator(
-      onRefresh: _refresh,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (state.failure != null &&
-              state.myCircles.isEmpty &&
-              state.publicCircles.isEmpty)
-            CircleLoadError(
-              failure: state.failure!,
-              onRetry: _refresh,
-            ),
-          if (state.myCircles.isNotEmpty) ...[
-            Text(
-              rtl ? 'حلقاتي' : 'My circles',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            ...state.myCircles.map((circle) => _myCircleCard(circle, rtl)),
-            const SizedBox(height: 16),
-          ],
-          Text(
-            rtl ? 'الحلقات العامة' : 'Public circles',
-            style: Theme.of(context).textTheme.titleLarge,
+    return TabBarView(
+      children: [
+        RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(
+                rtl ? 'حلقاتي' : 'My circles',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              if (state.myCirclesFailure != null)
+                CircleLoadError(
+                  failure: state.myCirclesFailure!,
+                  onRetry: _refresh,
+                ),
+              if (state.myCirclesFailure == null && state.myCircles.isEmpty)
+                Text(
+                  rtl
+                      ? 'لم تنضم إلى أي حلقة بعد. اكتشف الحلقات العامة أو استخدم رابط دعوة.'
+                      : 'You have not joined a circle yet. Discover public circles or use an invite link.',
+                )
+              else if (state.myCircles.isNotEmpty)
+                ...state.myCircles.map((circle) => _myCircleCard(circle, rtl)),
+            ],
           ),
-          const SizedBox(height: 8),
-          if (publicCircles.isEmpty)
-            Text(rtl ? 'لا توجد حلقات عامة متاحة' : 'No public circles')
-          else
-            ...publicCircles.map(
-              (circle) => _circleCard(circle, state, rtl),
-            ),
-        ],
-      ),
+        ),
+        RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(
+                rtl ? 'الحلقات العامة' : 'Public circles',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              if (state.publicCirclesFailure != null)
+                CircleLoadError(
+                  failure: state.publicCirclesFailure!,
+                  onRetry: _refresh,
+                ),
+              if (state.publicCirclesFailure == null && publicCircles.isEmpty)
+                Text(rtl ? 'لا توجد حلقات عامة متاحة' : 'No public circles')
+              else if (publicCircles.isNotEmpty)
+                ...publicCircles.map(
+                  (circle) => _circleCard(circle, state, rtl),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -145,6 +197,7 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
     return Card(
       child: ListTile(
         key: Key('openCircle-${circle.id}'),
+        leading: _circleMark(context),
         title: CircleNameText(name: circle.name),
         subtitle: circle.description == null
             ? null
@@ -178,10 +231,18 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              CircleNameText(
-                name: circle.name,
-                maxLines: 2,
-                style: Theme.of(context).textTheme.titleLarge,
+              Row(
+                children: [
+                  _circleMark(context),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: CircleNameText(
+                      name: circle.name,
+                      maxLines: 2,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                ],
               ),
               if (circle.description case final description?) ...[
                 const SizedBox(height: 6),
@@ -287,5 +348,14 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
   String _genderText(String gender, bool rtl) {
     final label = circleAudienceLabel(gender, rtl);
     return rtl ? 'الفئة: $label' : 'Audience: $label';
+  }
+
+  CircleAvatar _circleMark(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return CircleAvatar(
+      backgroundColor: scheme.secondaryContainer,
+      foregroundColor: scheme.onSecondaryContainer,
+      child: const Icon(Icons.auto_stories),
+    );
   }
 }

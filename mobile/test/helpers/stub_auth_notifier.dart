@@ -27,4 +27,7 @@ class StubAuthNotifier extends StateNotifier<AuthState>
 
   @override
   Future<void> logout() async {}
+
+  @override
+  void updateTimezone(String timezone) {}
 }

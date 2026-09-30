@@ -46,7 +46,7 @@ tags:
   - name: Chat
     description: Circle and direct messages
   - name: Schedules
-    description: Weekly recurring schedules
+    description: F-006 circle plans, personal calendar, and attendance
   - name: Progress
     description: Student progress tracking — attendance history, Quran map, recitation stats (F-007)
   - name: Config
@@ -192,7 +192,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
     put:
       operationId: updateCurrentUser
-      description: Update profile (name, avatar, language)
+      description: Update profile (name, avatar, language, stored IANA timezone). Omitted timezone preserves its current value.
       tags: [Auth]
       summary: Update profile (name, avatar, language)
       requestBody:
@@ -1769,55 +1769,346 @@ paths:
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/InternalServerError' }
 
-  # ── Schedules ─────────────────────────────────────────────
-  /circles/{circleId}/schedules:
-    parameters:
-      - $ref: '#/components/parameters/CircleId'
-    get:
-      operationId: listCircleSchedules
-      description: List schedules for a circle
-      tags: [Schedules]
-      summary: List schedules for a circle
-      responses:
-        '200':
-          description: Schedules
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Schedule'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+  # ── Schedules (F-006) ──
+  /circles/{circleId}/planning-preview:
     post:
-      operationId: createCircleSchedule
-      description: Create a recurring schedule entry (teacher only)
+      operationId: previewCirclePlan
+      summary: Preview authorized overlap warnings before a scheduling write
+      description: Evaluates only commitments visible to the acting teacher or supervisor; does not save.
       tags: [Schedules]
-      summary: Create a recurring schedule entry (teacher only)
+      parameters:
+        - $ref: '#/components/parameters/CircleId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateScheduleRequest'
+              $ref: '#/components/schemas/PlanInput'
       responses:
-        '201':
-          description: Schedule created
+        '200':
+          description: Preview of the first 31 local days or finite selected dates; later windows are evaluated when viewed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Schedule'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: '#/components/schemas/WarningResult'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /circles/{circleId}/schedules:
+    get:
+      operationId: listCircleSchedules
+      summary: List schedules for a circle
+      description: Requires current circle membership; archived circles are read-only.
+      tags: [Schedules]
+      parameters:
+        - $ref: '#/components/parameters/CircleId'
+      responses:
+        '200':
+          description: Authorized schedules
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Schedule' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+    post:
+      operationId: createCircleSchedule
+      summary: Create a recurrence after authorized warnings are reviewed
+      description: Requires an active teacher or supervisor; a write with warnings must echo the warning IDs reviewed by the manager. New or changed warnings return 409 for renewed confirmation.
+      tags: [Schedules]
+      parameters:
+        - $ref: '#/components/parameters/CircleId'
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlanInput' }
+      responses:
+        '201':
+          description: Created schedule
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Schedule' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /circles/{circleId}/schedules/{scheduleId}:
+    patch:
+      operationId: changeCircleSchedule
+      summary: Change or stop future occurrences with version check
+      description: Supersedes unstarted exceptions in the effective range and preserves earlier history.
+      tags: [Schedules]
+      parameters:
+        - $ref: '#/components/parameters/CircleId'
+        - $ref: '#/components/parameters/ScheduleId'
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expected_version, effective_local_date, plan, confirm_overlaps]
+              properties:
+                expected_version: { type: integer, minimum: 1 }
+                effective_local_date: { type: string, format: date }
+                plan: { $ref: '#/components/schemas/PlanInput' }
+                stop: { type: boolean, default: false }
+                confirm_overlaps: { type: boolean }
+                confirmed_warning_ids: { $ref: '#/components/schemas/ConfirmedWarningIds' }
+      responses:
+        '200':
+          description: Changed series; started/completed history preserved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Schedule' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /circles/{circleId}/schedules/{scheduleId}/occurrences/{localDate}:
+    patch:
+      operationId: changeScheduleOccurrence
+      summary: Edit or cancel one unstarted occurrence
+      description: Uses the original local date as stable identity, including after a move.
+      tags: [Schedules]
+      parameters:
+        - $ref: '#/components/parameters/CircleId'
+        - $ref: '#/components/parameters/ScheduleId'
+        - $ref: '#/components/parameters/LocalDate'
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expected_series_version, expected_occurrence_version, confirm_overlaps]
+              properties:
+                expected_series_version: { type: integer, minimum: 1 }
+                expected_occurrence_version: { type: integer, minimum: 0 }
+                replacement_local_date: { type: string, format: date }
+                replacement_local_time: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+                replacement_end_local_time: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+                duration_minutes: { type: integer, minimum: 1, maximum: 44640 }
+                title: { type: string, maxLength: 200 }
+                cancelled: { type: boolean }
+                confirm_overlaps: { type: boolean }
+                confirmed_warning_ids: { $ref: '#/components/schemas/ConfirmedWarningIds' }
+      responses:
+        '200':
+          description: Updated logical occurrence
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalendarItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /circles/{circleId}/schedules/{scheduleId}/occurrences/{localDate}/start:
+    post:
+      operationId: startPlannedOccurrence
+      summary: Materialize and start a recurring occurrence once using F-005 start semantics
+      description: Denies cancelled, ended, archived or unauthorized occurrences; an already-active replay returns 200 with a fresh caller-specific media connection and does not create a duplicate session.
+      tags: [Schedules]
+      parameters:
+        - $ref: '#/components/parameters/CircleId'
+        - $ref: '#/components/parameters/ScheduleId'
+        - $ref: '#/components/parameters/LocalDate'
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      responses:
+        '200':
+          description: Existing or newly started F-005 session with caller-specific media connection; same body and no-store headers as /sessions/{sessionId}/start
+          headers:
+            Cache-Control: { description: Prevent credential storage, schema: { type: string, enum: [no-store] } }
+            Pragma: { description: Legacy cache prevention, schema: { type: string, enum: [no-cache] } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionStartResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /circles/{circleId}/planned-sessions:
+    post:
+      operationId: createOneOffPlannedSession
+      summary: Create one unlinked future planned session
+      description: Requires mode one_off and an active teacher or supervisor.
+      tags: [Schedules]
+      parameters:
+        - $ref: '#/components/parameters/CircleId'
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlanInput' }
+      responses:
+        '201':
+          description: Created one-off calendar item
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalendarItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /sessions/{sessionId}/planned-details:
+    patch:
+      operationId: changeOneOffPlannedSession
+      summary: Edit or cancel an unstarted one-off planned session
+      description: Cancellation remains separate from the F-005 session status.
+      tags: [Schedules]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expected_version, confirm_overlaps]
+              properties:
+                expected_version: { type: integer, minimum: 1 }
+                plan: { $ref: '#/components/schemas/PlanInput' }
+                cancelled: { type: boolean }
+                confirm_overlaps: { type: boolean }
+                confirmed_warning_ids: { $ref: '#/components/schemas/ConfirmedWarningIds' }
+      responses:
+        '200':
+          description: Updated one-off item
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalendarItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /calendar/me:
+    get:
+      operationId: getMyCalendarMonth
+      summary: Get one requested calendar month in the viewer's IANA timezone
+      description: Requires current membership for each item; includes past authorized history and resolved local times.
+      tags: [Schedules]
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema: { type: string, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$' }
+      responses:
+        '200':
+          description: Eligible items and viewer-only overlap warnings; current month is the client initial request
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, warnings]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CalendarItem' }
+                  warnings: { $ref: '#/components/schemas/WarningResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /sessions/{sessionId}/attendance:
+    get:
+      operationId: getSessionAttendance
+      summary: Get completed attendance; teacher/supervisor all, student self only
+      description: Revoked members are denied historical access; archived circles allow current members to read.
+      tags: [Schedules]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Role-filtered attendance
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Attendance' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /sessions/{sessionId}/attendance/{userId}:
+    patch:
+      operationId: correctSessionAttendance
+      summary: Teacher-only audited correction of one student's completed attendance
+      description: Adds an append-only correction without changing F-005 presence.
+      tags: [Schedules]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, reason]
+              properties:
+                status: { type: string, enum: [present, late, absent, excused] }
+                reason: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        '200':
+          description: Corrected attendance with audit identity
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attendance' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   # ── Progress (F-007) ──────────────────────────────────────
   /students/me/circles/history:
@@ -2391,6 +2682,21 @@ components:
       schema:
         type: string
         format: uuid
+    ScheduleId:
+      name: scheduleId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    LocalDate:
+      name: localDate
+      in: path
+      required: true
+      description: Original planned local date; stable after an occurrence move
+      schema:
+        type: string
+        format: date
     SessionId:
       name: sessionId
       in: path
@@ -2425,7 +2731,7 @@ components:
       name: Idempotency-Key
       in: header
       required: true
-      description: Opaque retry key required for F-004 chat mutations; replaying different input returns 409.
+      description: Opaque retry key required for F-004 chat and F-006 scheduling mutations; replaying different input returns 409.
       schema:
         type: string
         minLength: 1
@@ -2573,6 +2879,10 @@ components:
         preferred_language:
           type: string
           enum: [ar, en]
+        timezone:
+          type: string
+          description: Valid IANA timezone name; omitted value preserves the stored timezone
+          example: Africa/Cairo
         avatar_url:
           type: string
           format: uri
@@ -2607,6 +2917,10 @@ components:
         preferred_language:
           type: string
           enum: [ar, en]
+        timezone:
+          type: string
+          description: Stored IANA timezone used for the viewer's calendar month and local display; existing profiles default to UTC
+          example: Africa/Cairo
         phone:
           type: string
           nullable: true
@@ -3445,47 +3759,94 @@ components:
         expires_at: { type: string, format: date-time }
 
     # ── Schedules ──────────────────────────────────────────
-    CreateScheduleRequest:
+    PlanInput:
       type: object
-      required: [day_of_week, start_time, end_time, timezone]
+      required: [mode, anchor_local_date, local_start_time, local_end_time, duration_minutes, timezone]
+      description: Server validates mode-specific selectors, nominal local end clock against positive elapsed duration, and present/future first planned instant; no future date cap
       properties:
-        day_of_week:
-          type: integer
-          minimum: 0
-          maximum: 6
-          description: 0 = Sunday, 6 = Saturday
-        start_time:
-          type: string
-          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
-          description: Local time in HH:MM format (interpreted using timezone)
-          example: "20:00"
-        end_time:
-          type: string
-          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
-          example: "21:30"
-        timezone:
-          type: string
-          description: IANA timezone string
-          example: Asia/Riyadh
-        is_recurring:
-          type: boolean
-          default: true
-
+        mode: { type: string, enum: [weekday_pattern, interval, selected_dates, one_off] }
+        title: { type: string, maxLength: 200, default: Circle Session }
+        anchor_local_date: { type: string, format: date }
+        local_start_time: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        local_end_time: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        duration_minutes: { type: integer, minimum: 1, maximum: 44640 }
+        timezone: { type: string, description: IANA timezone }
+        end_local_date: { type: string, format: date, nullable: true }
+        week_cadence: { type: integer, enum: [1, 2] }
+        weekdays: { type: array, minItems: 1, uniqueItems: true, items: { type: integer, minimum: 0, maximum: 6 } }
+        interval_count: { type: integer, minimum: 1 }
+        interval_unit: { type: string, enum: [day, week] }
+        selected_dates: { type: array, items: { type: string, format: date } }
+        confirm_overlaps: { type: boolean, default: false, description: Relevant on writes only; true also requires all current warning IDs in confirmed_warning_ids }
+        confirmed_warning_ids: { $ref: '#/components/schemas/ConfirmedWarningIds' }
+    ConfirmedWarningIds:
+      type: array
+      uniqueItems: true
+      items: { type: string, minLength: 1 }
+      description: IDs of warnings actually reviewed; new or changed warnings cause 409 with refreshed warnings
     Schedule:
-      allOf:
-        - $ref: '#/components/schemas/CreateScheduleRequest'
-        - type: object
+      type: object
+      required: [id, circle_id, version, plan]
+      properties:
+        id: { type: string, format: uuid }
+        circle_id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        stopped_from_local_date: { type: string, format: date, nullable: true }
+        plan: { $ref: '#/components/schemas/PlanInput' }
+        occurrence_versions:
+          type: object
+          description: 'On schedule-list reads, retained exception versions keyed by original local date (YYYY-MM-DD), including moved occurrences; an absent key means version 0.'
+          additionalProperties: { type: integer, minimum: 1 }
+    CalendarItem:
+      type: object
+      required: [occurrence_key, circle_id, circle_name, title, starts_at, ends_at, planning_timezone, state]
+      properties:
+        occurrence_key: { type: string, description: 'Stable schedule UUID plus original local date, or one-off session UUID' }
+        session_id: { type: string, format: uuid, nullable: true }
+        circle_id: { type: string, format: uuid }
+        circle_name: { type: string }
+        title: { type: string }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        planning_timezone: { type: string }
+        state: { type: string, enum: [scheduled, active, completed, cancelled] }
+        version: { type: integer, minimum: 1, nullable: true, description: 'One-off planned-session version to send as expected_version on edits; null for recurring occurrences' }
+    WarningResult:
+      type: object
+      required: [warnings]
+      properties:
+        warnings:
+          type: array
+          items:
+            type: object
+            required: [warning_id, first_occurrence_key, second_occurrence_key, first_circle_name, second_circle_name, overlap_starts_at, overlap_ends_at]
+            properties:
+              warning_id: { type: string, description: Stable digest of occurrence identities and overlapping UTC instants for this evaluated warning }
+              first_occurrence_key: { type: string }
+              second_occurrence_key: { type: string }
+              first_circle_name: { type: string, description: Authorized caller-visible circle name }
+              second_circle_name: { type: string, description: Authorized caller-visible circle name }
+              overlap_starts_at: { type: string, format: date-time, description: UTC overlap start }
+              overlap_ends_at: { type: string, format: date-time, description: UTC overlap end }
+    Attendance:
+      type: object
+      required: [session_id, user_id, status, source]
+      properties:
+        session_id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        status: { type: string, enum: [present, late, absent, excused] }
+        source: { type: string, enum: [automatic, manual] }
+        first_presence_at: { type: string, format: date-time, nullable: true }
+        correction_id: { type: string, format: uuid, nullable: true }
+        correction:
+          type: object
+          nullable: true
           properties:
-            id:
-              type: string
-              format: uuid
-            circle_id:
-              type: string
-              format: uuid
-            next_occurrence:
-              type: string
-              format: date-time
-              description: UTC datetime of the next occurrence
+            actor_id: { type: string, format: uuid }
+            at: { type: string, format: date-time }
+            reason: { type: string }
+            previous_status: { type: string, enum: [present, late, absent, excused] }
+            new_status: { type: string, enum: [present, late, absent, excused] }
 
     # ── Progress (F-007) ───────────────────────────────────
 
@@ -3901,6 +4262,8 @@ components:
             message:
               type: string
               description: Human-readable description
+            warnings:
+              $ref: '#/components/schemas/WarningResult'
 
     ValidationError:
       type: object

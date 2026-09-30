@@ -11,6 +11,7 @@ SELECT
     p.avatar_url,
     p.phone,
     COALESCE(p.preferred_language, 'ar') AS preferred_language,
+    COALESCE(p.timezone, 'UTC') AS timezone,
     u.created_at,
     p.completed_at
 FROM users u
@@ -21,7 +22,7 @@ WHERE u.id = $1 AND u.deleted_at IS NULL
 // updateProfileFieldsByUserIDQuery updates only supplied fields via COALESCE.
 // Parameters: $1=user_id, $2=full_name, $3=display_name, $4=bio, $5=country,
 //
-//	$6=avatar_url, $7=phone, $8=preferred_language, $9=completed_at.
+//	$6=avatar_url, $7=phone, $8=preferred_language, $9=completed_at, $10=timezone.
 //
 // Passing NULL for a parameter leaves the existing column value unchanged.
 const updateProfileFieldsByUserIDQuery = `
@@ -35,8 +36,9 @@ INSERT INTO profiles (
     phone,
     preferred_language,
     completed_at,
+    timezone,
     updated_at
-) SELECT $1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'ar'), $9, NOW()
+) SELECT $1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'ar'), $9, COALESCE($10, 'UTC'), NOW()
 WHERE EXISTS (SELECT 1 FROM users WHERE id = $1::uuid AND deleted_at IS NULL)
 ON CONFLICT (user_id) DO UPDATE SET
     full_name          = COALESCE($2, profiles.full_name),
@@ -47,5 +49,6 @@ ON CONFLICT (user_id) DO UPDATE SET
     phone              = COALESCE($7, profiles.phone),
     preferred_language = COALESCE($8, profiles.preferred_language),
     completed_at       = COALESCE($9, profiles.completed_at),
+    timezone           = COALESCE($10, profiles.timezone),
     updated_at         = NOW()
 `

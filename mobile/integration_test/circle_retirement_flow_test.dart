@@ -82,7 +82,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('openCircleRetirement')));
+    final retirementButton = find.byKey(const Key('openCircleRetirement'));
+    await tester.scrollUntilVisible(
+      retirementButton,
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(retirementButton);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('archiveCircleButton')));
     await tester.pumpAndSettle();

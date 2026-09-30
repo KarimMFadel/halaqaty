@@ -15,6 +15,7 @@ class CircleSessionsSection extends ConsumerStatefulWidget {
     required this.circleId,
     required this.isManager,
     required this.isArchived,
+    this.canCorrectAttendance = false,
   });
 
   final String circleId;
@@ -22,6 +23,7 @@ class CircleSessionsSection extends ConsumerStatefulWidget {
   /// Teacher/supervisor: may create, and may start scheduled sessions.
   final bool isManager;
   final bool isArchived;
+  final bool canCorrectAttendance;
 
   @override
   ConsumerState<CircleSessionsSection> createState() =>
@@ -42,7 +44,9 @@ class _CircleSessionsSectionState extends ConsumerState<CircleSessionsSection> {
   }
 
   static bool _isVisible(SessionModel session) =>
-      session.status == 'scheduled' || session.status == 'active';
+      session.status == 'scheduled' ||
+      session.status == 'active' ||
+      session.status == 'ended';
 
   @override
   Widget build(BuildContext context) {
@@ -126,8 +130,9 @@ class _CircleSessionsSectionState extends ConsumerState<CircleSessionsSection> {
           ...sessions.map((session) => _SessionTile(
                 session: session,
                 rtl: rtl,
-                enabled: canMutate,
+                enabled: !degraded && (session.status == 'ended' || canMutate),
                 canStart: widget.isManager && session.status == 'scheduled',
+                canCorrectAttendance: widget.canCorrectAttendance,
               )),
       ],
     );
@@ -157,6 +162,8 @@ class _CircleSessionsSectionState extends ConsumerState<CircleSessionsSection> {
         builder: (_) => SessionRoomScreen(
           sessionId: created.id,
           canStart: created.status == 'scheduled',
+          canCorrectAttendance: widget.canCorrectAttendance,
+          isEnded: created.status == 'ended',
         ),
       ),
     );
@@ -169,29 +176,38 @@ class _SessionTile extends StatelessWidget {
     required this.rtl,
     required this.enabled,
     required this.canStart,
+    required this.canCorrectAttendance,
   });
 
   final SessionModel session;
   final bool rtl;
   final bool enabled;
   final bool canStart;
+  final bool canCorrectAttendance;
 
   @override
   Widget build(BuildContext context) {
     final active = session.status == 'active';
+    final ended = session.status == 'ended';
     return Card(
       child: ListTile(
         key: Key('circleSession-${session.id}'),
         enabled: enabled,
-        leading: Icon(active ? Icons.volume_up : Icons.schedule),
+        leading: Icon(active
+            ? Icons.volume_up
+            : ended
+                ? Icons.check_circle_outline
+                : Icons.schedule),
         title: Text(
           active
               ? (rtl
                   ? CircleSessionUiLabels.activeAr
                   : CircleSessionUiLabels.activeEn)
-              : (rtl
-                  ? CircleSessionUiLabels.scheduledAr
-                  : CircleSessionUiLabels.scheduledEn),
+              : ended
+                  ? (rtl ? 'مكتملة' : 'Completed')
+                  : (rtl
+                      ? CircleSessionUiLabels.scheduledAr
+                      : CircleSessionUiLabels.scheduledEn),
         ),
         subtitle: Text(
           rtl
@@ -205,6 +221,8 @@ class _SessionTile extends StatelessWidget {
                     builder: (_) => SessionRoomScreen(
                       sessionId: session.id,
                       canStart: canStart,
+                      canCorrectAttendance: canCorrectAttendance,
+                      isEnded: session.status == 'ended',
                     ),
                   ),
                 )

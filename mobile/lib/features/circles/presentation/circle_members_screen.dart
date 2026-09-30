@@ -50,23 +50,13 @@ class CircleMembersScreen extends ConsumerWidget {
     }
   }
 
-  Color _getRoleColor(CircleRole role) {
-    switch (role) {
-      case CircleRole.student:
-        return Colors.blue;
-      case CircleRole.supervisor:
-        return Colors.green;
-      case CircleRole.teacher:
-        return Colors.purple;
-    }
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final membersAsync = ref.watch(circleMembersProvider(circleId));
     final circleAsync = ref.watch(circleDetailProvider(circleId));
     final isArchived = circleAsync.valueOrNull?.isArchived ?? false;
     final rtl = Directionality.of(context) == TextDirection.rtl;
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -79,17 +69,17 @@ class CircleMembersScreen extends ConsumerWidget {
               key: const Key('circleArchivedReadOnlyBanner'),
               padding: const EdgeInsets.all(12),
               width: double.infinity,
-              color: Colors.amber.shade100,
+              color: scheme.secondaryContainer,
               child: Row(
                 children: [
-                  const Icon(Icons.archive, color: Colors.amber),
+                  Icon(Icons.archive, color: scheme.onSecondaryContainer),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       rtl
                           ? 'الحلقة مؤرشفة. لا يمكن تعديل الأعضاء.'
                           : 'This circle is archived. Members cannot be changed.',
-                      style: const TextStyle(color: Colors.black87),
+                      style: TextStyle(color: scheme.onSecondaryContainer),
                     ),
                   ),
                 ],
@@ -141,12 +131,12 @@ class CircleMembersScreen extends ConsumerWidget {
                             child: Chip(
                               label: Text(
                                 roleLabel,
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: scheme.onSurfaceVariant,
                                   fontSize: 12,
                                 ),
                               ),
-                              backgroundColor: _getRoleColor(member.role),
+                              backgroundColor: scheme.surfaceContainerHighest,
                             ),
                           ),
                           if (canOpenDirectChat(

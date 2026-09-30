@@ -65,6 +65,27 @@ void main() {
     expect(find.text('انضمام'), findsNothing);
   });
 
+  testWidgets('completed history opens attendance without a join action',
+      (tester) async {
+    await tester.pumpWidget(_app(
+      WidgetSessionApi(),
+      canStart: false,
+      direction: TextDirection.ltr,
+      isEnded: true,
+    ));
+
+    expect(find.text('Session ended'), findsOneWidget);
+    expect(find.byKey(const Key('sessionReviewAttendance')), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const Key('sessionRoomPrimaryAction')),
+          )
+          .onPressed,
+      isNull,
+    );
+  });
+
   testWidgets('the connecting wait uses branded loading, not a bare spinner',
       (tester) async {
     await tester.pumpWidget(_app(WidgetSessionApi(),
@@ -134,7 +155,8 @@ void main() {
 Widget _app(SessionApiClient api,
         {required bool canStart,
         required TextDirection direction,
-        TextScaler textScaler = TextScaler.noScaling}) =>
+        TextScaler textScaler = TextScaler.noScaling,
+        bool isEnded = false}) =>
     ProviderScope(
       overrides: [
         sessionRoomControllerProvider('session-1').overrideWith(
@@ -152,7 +174,11 @@ Widget _app(SessionApiClient api,
         ),
         home: Directionality(
           textDirection: direction,
-          child: SessionRoomScreen(sessionId: 'session-1', canStart: canStart),
+          child: SessionRoomScreen(
+            sessionId: 'session-1',
+            canStart: canStart,
+            isEnded: isEnded,
+          ),
         ),
       ),
     );

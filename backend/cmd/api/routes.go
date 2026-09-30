@@ -28,4 +28,16 @@ const (
 	routeUploadsImage    = apirouter.RouteUploadsImage
 	routeUploadsFile     = apirouter.RouteUploadsFile
 	routeMessageMediaURL = apirouter.RouteMessageMediaURL
+
+	routeCirclePlanningPreview       = apirouter.RouteCirclePlanningPreview
+	routeCircleSchedulesGet          = apirouter.RouteCircleSchedulesGet
+	routeCircleSchedulesCreate       = apirouter.RouteCircleSchedulesCreate
+	routeCircleScheduleChange        = apirouter.RouteCircleScheduleChange
+	routeScheduleOccurrenceChange    = apirouter.RouteScheduleOccurrenceChange
+	routeScheduleOccurrenceStart     = apirouter.RouteScheduleOccurrenceStart
+	routeCirclePlannedSessionsCreate = apirouter.RouteCirclePlannedSessionsCreate
+	routeSessionPlannedDetailsChange = apirouter.RouteSessionPlannedDetailsChange
+	routeCalendarMeGet               = apirouter.RouteCalendarMeGet
+	routeSessionAttendanceGet        = apirouter.RouteSessionAttendanceGet
+	routeSessionAttendanceCorrect    = apirouter.RouteSessionAttendanceCorrect
 )

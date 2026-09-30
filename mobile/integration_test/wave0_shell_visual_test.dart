@@ -16,6 +16,9 @@ import 'package:halaqaty_mobile/main.dart';
 /// Home states, and Chats tab in Arabic RTL / English LTR × light / dark.
 class _Wave0AuthController extends StateNotifier<AuthState>
     implements AuthController {
+  @override
+  void updateTimezone(String timezone) {}
+
   _Wave0AuthController(super.initialState);
 
   @override

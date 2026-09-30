@@ -72,6 +72,7 @@ type UserProfile struct {
 	AvatarURL         *string   `json:"avatar_url"`
 	Phone             *string   `json:"phone"`
 	PreferredLanguage string    `json:"preferred_language"`
+	Timezone          string    `json:"timezone"`
 	CreatedAt         time.Time `json:"created_at"`
 }
 

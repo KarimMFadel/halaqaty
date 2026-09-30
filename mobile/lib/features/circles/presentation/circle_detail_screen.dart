@@ -11,6 +11,8 @@ import 'package:halaqaty_mobile/features/circles/presentation/circle_members_scr
 import 'package:halaqaty_mobile/features/circles/presentation/circle_name_text.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_retirement_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_ui_labels.dart';
+import 'package:halaqaty_mobile/features/scheduling/presentation/schedule_editor_screen.dart';
+import 'package:halaqaty_mobile/features/scheduling/presentation/one_off_screen.dart';
 import 'package:halaqaty_mobile/features/sessions/presentation/circle_sessions_section.dart';
 
 class CircleDetailScreen extends ConsumerWidget {
@@ -82,15 +84,47 @@ class CircleDetailScreen extends ConsumerWidget {
                   ),
                 ),
               const SizedBox(height: 16),
-              CircleNameText(
-                name: circle.name,
-                maxLines: 2,
-                style: Theme.of(context).textTheme.headlineMedium,
+              Card(
+                key: const Key('circleIdentityHeader'),
+                margin: EdgeInsets.zero,
+                color: scheme.surfaceContainerHighest,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 24,
+                        backgroundColor: scheme.secondaryContainer,
+                        foregroundColor: scheme.onSecondaryContainer,
+                        child: Icon(Icons.auto_stories,
+                            color: scheme.onSecondaryContainer),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: CircleNameText(
+                          name: circle.name,
+                          maxLines: 2,
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               if (circle.description != null) ...[
                 const SizedBox(height: 8),
                 Text(circle.description!),
               ],
+              // FR-030: keep current and available sessions prominent before
+              // secondary circle metadata and management actions.
+              CircleSessionsSection(
+                key: const Key('circleSessionsSection'),
+                circleId: circle.id,
+                isManager: currentRole == CircleRole.teacher ||
+                    currentRole == CircleRole.supervisor,
+                isArchived: circle.isArchived,
+                canCorrectAttendance: currentRole == CircleRole.teacher,
+              ),
               const SizedBox(height: 16),
               Card(
                 child: Column(
@@ -174,18 +208,61 @@ class CircleDetailScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              // Planned in the approved design but without F-002/F-005
-              // schedule behavior: the shared under-implementation notice
-              // only (FR-032/FR-033, compatibility inventory §6).
+              // F-006 US1: the circle schedule manager. Every member can
+              // read; teachers and supervisors get the mutation affordances,
+              // and archived circles open read-only.
               ListTile(
+                key: const Key('openCircleSchedule'),
                 leading: const Icon(Icons.calendar_month_outlined),
                 title: Text(rtl
                     ? CircleDetailLabels.scheduleAr
                     : CircleDetailLabels.scheduleEn),
                 // Material mirrors this direction-aware icon once for RTL.
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => showHalaqatyUnderImplementationNotice(context),
+                onTap: () {
+                  // The viewer's stored timezone seeds the schedule form's
+                  // planning-zone default (FR-006); read lazily on tap so
+                  // the auth stack is only needed when the entry is used.
+                  final viewerTimezone =
+                      ref.read(authControllerProvider).user?.timezone ?? 'UTC';
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ScheduleEditorScreen(
+                        circleId: circle.id,
+                        circleName: circle.name,
+                        canManage: currentRole == CircleRole.teacher ||
+                            currentRole == CircleRole.supervisor,
+                        isArchived: circle.isArchived,
+                        initialTimezone: viewerTimezone,
+                      ),
+                    ),
+                  );
+                },
               ),
+              if (!circle.isArchived &&
+                  (currentRole == CircleRole.teacher ||
+                      currentRole == CircleRole.supervisor))
+                ListTile(
+                  key: const Key('createOneOffSession'),
+                  leading: const Icon(Icons.event_available_outlined),
+                  title: Text(
+                      rtl ? 'إنشاء جلسة لمرة واحدة' : 'Plan one-off session'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    final viewerTimezone =
+                        ref.read(authControllerProvider).user?.timezone ??
+                            'UTC';
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => OneOffScreen(
+                          circleId: circle.id,
+                          circleName: circle.name,
+                          initialTimezone: viewerTimezone,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               if (!circle.isArchived &&
                   userId != null &&
                   (currentRole == CircleRole.teacher ||
@@ -223,16 +300,6 @@ class CircleDetailScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-              // FR-030: ad-hoc session list/create/start/join over the
-              // existing F-005 APIs; create/start stay manager-only and
-              // archived circles stay read-only.
-              CircleSessionsSection(
-                key: const Key('circleSessionsSection'),
-                circleId: circle.id,
-                isManager: currentRole == CircleRole.teacher ||
-                    currentRole == CircleRole.supervisor,
-                isArchived: circle.isArchived,
-              ),
             ],
           );
         },

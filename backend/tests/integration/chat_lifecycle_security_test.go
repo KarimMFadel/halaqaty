@@ -306,12 +306,6 @@ type chatLifecycleEnv struct {
 func setupChatLifecycleEnv(t *testing.T) *chatLifecycleEnv {
 	t.Helper()
 	base := setupCircleRoleEnv(t)
-	ctx := context.Background()
-	conn := acquireConn(t, base.pool, ctx)
-	for _, migration := range []string{"000016_live_sessions.up.sql", "000017_recitation_queue_system.up.sql", "000018_real_time_chat.up.sql"} {
-		runMigrationFile(t, conn, ctx, migration)
-	}
-	conn.Release()
 
 	tokens := make(map[string]*auth.DecodedToken, len(circleRoleUsers))
 	for _, user := range circleRoleUsers {

@@ -163,6 +163,9 @@ ChatMessagePage _page(
 
 class _IntegrationAuthNotifier extends StateNotifier<AuthState>
     implements AuthController {
+  @override
+  void updateTimezone(String timezone) {}
+
   _IntegrationAuthNotifier({required String userId})
       : super(AuthState(
           status: AuthStatus.authenticated,

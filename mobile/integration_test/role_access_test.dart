@@ -8,6 +8,9 @@ import 'package:integration_test/integration_test.dart';
 
 class _IntegrationAuthNotifier extends StateNotifier<AuthState>
     implements AuthController {
+  @override
+  void updateTimezone(String timezone) {}
+
   _IntegrationAuthNotifier({required AuthStatus status})
       : super(AuthState(status: status));
 

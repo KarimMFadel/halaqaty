@@ -21,11 +21,47 @@ FROM sessions
 WHERE id = $1::uuid
 `
 
+const findSessionStartContextQuery = `
+SELECT circle_id::text, status, COALESCE(media_room_ref, ''), media_mode
+FROM sessions
+WHERE id = $1::uuid
+`
+
 const listCircleSessionsQuery = `
 SELECT ` + sessionColumns + `
 FROM sessions
-WHERE circle_id = $1::uuid AND status IN ('scheduled', 'active')
+WHERE circle_id = $1::uuid AND status IN ('scheduled', 'active', 'ended')
+  AND NOT EXISTS (
+      SELECT 1 FROM planned_session_details d
+      LEFT JOIN schedule_occurrence_exceptions e
+        ON e.schedule_id = d.schedule_id AND e.original_local_date = d.original_local_date
+        AND e.series_version = (SELECT current_version FROM schedules WHERE id = d.schedule_id)
+      WHERE d.session_id = sessions.id
+        AND (d.cancelled_at IS NOT NULL OR e.cancelled_at IS NOT NULL)
+  )
 ORDER BY created_at DESC, id DESC
+`
+
+const plannedStartIdentityQuery = `
+SELECT schedule_id::text
+FROM planned_session_details
+WHERE session_id = $1::uuid
+`
+
+const lockPlannedStartScheduleQuery = `
+SELECT id FROM schedules WHERE id = $1::uuid FOR UPDATE
+`
+
+const plannedStartCancelledQuery = `
+SELECT EXISTS (
+    SELECT 1
+    FROM planned_session_details d
+    LEFT JOIN schedule_occurrence_exceptions e
+      ON e.schedule_id = d.schedule_id AND e.original_local_date = d.original_local_date
+      AND e.series_version = (SELECT current_version FROM schedules WHERE id = d.schedule_id)
+    WHERE d.session_id = $1::uuid
+      AND (d.cancelled_at IS NOT NULL OR e.cancelled_at IS NOT NULL)
+)
 `
 
 const listRecoveryCandidatesQuery = `
@@ -59,7 +95,7 @@ FOR UPDATE
 // opaque room reference exactly when the transition applies (ADR-015).
 const startSessionQuery = `
 UPDATE sessions
-SET status = 'active', actual_start = NOW(), media_room_ref = $2, updated_at = NOW()
+SET status = 'active', actual_start = clock_timestamp(), media_room_ref = $2, updated_at = clock_timestamp()
 WHERE id = $1::uuid AND status = 'scheduled'
 RETURNING ` + sessionColumns
 
@@ -104,8 +140,9 @@ WHERE session_id = $1::uuid AND user_id = $2::uuid
 
 // insertPresenceQuery records the first join of a participant.
 const insertPresenceQuery = `
+WITH admission AS (SELECT clock_timestamp() AS joined_at)
 INSERT INTO session_participant_presence (session_id, user_id, first_joined_at, last_joined_at, is_currently_present)
-VALUES ($1::uuid, $2::uuid, NOW(), NOW(), TRUE)
+SELECT $1::uuid, $2::uuid, admission.joined_at, admission.joined_at, TRUE FROM admission
 `
 
 // markPresencePresentQuery transitions an eligible absent participant back to

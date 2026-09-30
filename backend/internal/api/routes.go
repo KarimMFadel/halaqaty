@@ -111,6 +111,39 @@ const (
 	routeMessageMediaURL  = "POST /api/v1/messages/{messageId}/media-url"
 )
 
+// F-006 schedule/calendar/attendance route patterns. Handler wiring arrives
+// with T021/T034/T045/T052; these constants are the single source for the
+// route strings.
+const (
+	routeCirclePlanningPreview       = "POST /api/v1/circles/{circleId}/planning-preview"
+	routeCircleSchedulesGet          = "GET /api/v1/circles/{circleId}/schedules"
+	routeCircleSchedulesCreate       = "POST /api/v1/circles/{circleId}/schedules"
+	routeCircleScheduleChange        = "PATCH /api/v1/circles/{circleId}/schedules/{scheduleId}"
+	routeScheduleOccurrenceChange    = "PATCH /api/v1/circles/{circleId}/schedules/{scheduleId}/occurrences/{localDate}"
+	routeScheduleOccurrenceStart     = "POST /api/v1/circles/{circleId}/schedules/{scheduleId}/occurrences/{localDate}/start"
+	routeCirclePlannedSessionsCreate = "POST /api/v1/circles/{circleId}/planned-sessions"
+	routeSessionPlannedDetailsChange = "PATCH /api/v1/sessions/{sessionId}/planned-details"
+	routeCalendarMeGet               = "GET /api/v1/calendar/me"
+	routeSessionAttendanceGet        = "GET /api/v1/sessions/{sessionId}/attendance"
+	routeSessionAttendanceCorrect    = "PATCH /api/v1/sessions/{sessionId}/attendance/{userId}"
+)
+
+// Exported F-006 schedule/calendar/attendance route aliases consumed by the
+// cmd/api route-parity composition tests.
+const (
+	RouteCirclePlanningPreview       = routeCirclePlanningPreview
+	RouteCircleSchedulesGet          = routeCircleSchedulesGet
+	RouteCircleSchedulesCreate       = routeCircleSchedulesCreate
+	RouteCircleScheduleChange        = routeCircleScheduleChange
+	RouteScheduleOccurrenceChange    = routeScheduleOccurrenceChange
+	RouteScheduleOccurrenceStart     = routeScheduleOccurrenceStart
+	RouteCirclePlannedSessionsCreate = routeCirclePlannedSessionsCreate
+	RouteSessionPlannedDetailsChange = routeSessionPlannedDetailsChange
+	RouteCalendarMeGet               = routeCalendarMeGet
+	RouteSessionAttendanceGet        = routeSessionAttendanceGet
+	RouteSessionAttendanceCorrect    = routeSessionAttendanceCorrect
+)
+
 // Exported F-004 chat route aliases consumed by the cmd/api route-parity
 // composition tests.
 const (

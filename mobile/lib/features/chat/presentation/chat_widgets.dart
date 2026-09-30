@@ -16,6 +16,7 @@ class ChatMessageBubble extends StatelessWidget {
     required this.isOwn,
     this.canDelete = false,
     this.onDelete,
+    this.onTogglePin,
     this.hasTerminalFailure = false,
   });
 
@@ -23,6 +24,7 @@ class ChatMessageBubble extends StatelessWidget {
   final bool isOwn;
   final bool canDelete;
   final VoidCallback? onDelete;
+  final VoidCallback? onTogglePin;
 
   /// A terminally failed draft shows the failure strip instead of the
   /// delivery badge — one message never claims "sending" and "failed" at
@@ -34,6 +36,9 @@ class ChatMessageBubble extends StatelessWidget {
     final labels = _ChatLabels(Directionality.of(context) == TextDirection.rtl);
     final colorScheme = Theme.of(context).colorScheme;
     final senderLabel = message.senderName ?? labels.memberFallback;
+    final pinLabel = Directionality.of(context) == TextDirection.rtl
+        ? (message.pinnedAt == null ? 'تثبيت الرسالة' : 'إلغاء تثبيت الرسالة')
+        : (message.pinnedAt == null ? 'Pin message' : 'Unpin message');
 
     return Align(
       // Own messages sit on the directional end: right in LTR, left in RTL.
@@ -77,6 +82,25 @@ class ChatMessageBubble extends StatelessWidget {
               Text(message.content)
             else
               ChatMediaMessageBody(key: ValueKey(message.id), message: message),
+            if (onTogglePin != null)
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: Semantics(
+                  button: true,
+                  label: pinLabel,
+                  child: ConstrainedBox(
+                    constraints:
+                        const BoxConstraints(minWidth: 48, minHeight: 48),
+                    child: IconButton(
+                      tooltip: pinLabel,
+                      icon: Icon(message.pinnedAt == null
+                          ? Icons.push_pin_outlined
+                          : Icons.push_pin),
+                      onPressed: onTogglePin,
+                    ),
+                  ),
+                ),
+              ),
             if (canDelete && onDelete != null)
               Semantics(
                 button: true,

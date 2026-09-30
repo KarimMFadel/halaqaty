@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/KarimMFadel/halaqaty/backend/internal/attendance"
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/chat"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
@@ -19,6 +20,7 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/profile"
 	"github.com/KarimMFadel/halaqaty/backend/internal/queue"
 	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
+	"github.com/KarimMFadel/halaqaty/backend/internal/scheduling"
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
 	"github.com/google/uuid"
 )
@@ -86,6 +88,16 @@ func (wiringSessionRepo) GetLocalUserIDByFirebaseUID(_ context.Context, firebase
 type wiringRoleRepo struct{}
 
 type wiringModerationService struct{ called bool }
+
+type wiringAttendanceCommands struct{}
+
+func (wiringAttendanceCommands) List(context.Context, string, string) ([]attendance.Record, error) {
+	return []attendance.Record{}, nil
+}
+
+func (wiringAttendanceCommands) Correct(_ context.Context, command attendance.CorrectionCommand) (attendance.Record, error) {
+	return attendance.Record{SessionID: command.SessionID, UserID: command.UserID, Status: command.Status}, nil
+}
 
 func (s *wiringModerationService) Delete(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error {
 	s.called = true
@@ -158,6 +170,9 @@ func fullWiringMiddlewareSet(authMW *middleware.AuthMiddleware, extras ...func(*
 		ChatSendLimiter:   chat.NewChatSendLimiter(30),
 		ChatUploadHandler: chat.NewUploadHandler(nil),
 		ChatMediaHandler:  chat.NewMediaHandler(nil),
+		ScheduleHandler:   scheduling.NewScheduleHandler(nil),
+		CalendarHandler:   scheduling.NewCalendarHandler(nil, nil, nil),
+		AttendanceHandler: attendance.NewHandler(wiringAttendanceCommands{}),
 	}
 	for _, apply := range extras {
 		apply(&mw)
@@ -201,6 +216,8 @@ func TestRegisterRoutes_EveryProtectedRouteRejectsUnauthenticatedRequests(t *tes
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/start"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/join"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/end"},
+		{http.MethodGet, "/api/v1/sessions/" + wiringSessionIDPath + "/attendance"},
+		{http.MethodPatch, "/api/v1/sessions/" + wiringSessionIDPath + "/attendance/" + wiringOtherUserID},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/lock"},
 		{http.MethodGet, "/api/v1/sessions/" + wiringSessionIDPath + "/participants"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/participants/mute-all"},
@@ -225,6 +242,14 @@ func TestRegisterRoutes_EveryProtectedRouteRejectsUnauthenticatedRequests(t *tes
 		{http.MethodPatch, "/api/v1/sessions/" + wiringSessionIDPath + "/queue/policy"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/queue/opt-out"},
 		{http.MethodPost, "/api/v1/sessions/" + wiringSessionIDPath + "/queue/opt-out-requests/" + wiringRequestID + "/decision"},
+		{http.MethodGet, "/api/v1/circles/" + wiringCircleID + "/schedules"},
+		{http.MethodPost, "/api/v1/circles/" + wiringCircleID + "/schedules"},
+		{http.MethodPatch, "/api/v1/circles/" + wiringCircleID + "/schedules/" + wiringSessionIDPath},
+		{http.MethodPatch, "/api/v1/circles/" + wiringCircleID + "/schedules/" + wiringSessionIDPath + "/occurrences/2030-01-02"},
+		{http.MethodPost, "/api/v1/circles/" + wiringCircleID + "/schedules/" + wiringSessionIDPath + "/occurrences/2030-01-02/start"},
+		{http.MethodPost, "/api/v1/circles/" + wiringCircleID + "/planned-sessions"},
+		{http.MethodPatch, "/api/v1/sessions/" + wiringSessionIDPath + "/planned-details"},
+		{http.MethodGet, "/api/v1/calendar/me?month=2030-01"},
 	}
 
 	for _, route := range sessionRoutes {
@@ -244,6 +269,20 @@ func TestRegisterRoutes_EveryProtectedRouteRejectsUnauthenticatedRequests(t *tes
 				t.Fatalf("error code: got %q, want %q", envelope.Error.Code, httpconst.ErrorCodeUnauthorized)
 			}
 		})
+	}
+}
+
+func TestRegisterRoutes_AttendanceUsesAuthenticatedPerUserLimit(t *testing.T) {
+	mw := fullWiringMiddlewareSet(wiringAuthMiddleware())
+	mw.RateLimit = middleware.NewRateLimitMiddleware(100, 1)
+	router := NewRouter(mw)
+	path := "/api/v1/sessions/" + wiringSessionIDPath + "/attendance"
+	for i, want := range []int{http.StatusOK, http.StatusTooManyRequests} {
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, wiringAuthenticatedRequest(http.MethodGet, path, ""))
+		if rec.Code != want {
+			t.Fatalf("request %d status = %d, want %d body=%s", i+1, rec.Code, want, rec.Body.String())
+		}
 	}
 }
 
@@ -416,6 +455,36 @@ func TestRouter_PerUserRateLimitAppliesAfterAuthentication(t *testing.T) {
 	router.Handler().ServeHTTP(second, wiringAuthenticatedRequest(http.MethodGet, "/api/v1/auth/me", ""))
 	if second.Code != http.StatusTooManyRequests {
 		t.Fatalf("second request: got %d, want %d body=%s", second.Code, http.StatusTooManyRequests, second.Body.String())
+	}
+	var envelope phttp.ErrorEnvelope
+	if err := json.Unmarshal(second.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if envelope.Error.Code != httpconst.ErrorCodeRateLimitExceeded {
+		t.Fatalf("error code: got %q, want %q", envelope.Error.Code, httpconst.ErrorCodeRateLimitExceeded)
+	}
+	if envelope.Error.Message != httpconst.ErrorMessageRateLimitExceeded {
+		t.Fatalf("error message: got %q, want %q", envelope.Error.Message, httpconst.ErrorMessageRateLimitExceeded)
+	}
+}
+
+func TestRouter_PerIPRateLimitAppliesBeforeAuthentication(t *testing.T) {
+	router := NewRouter(MiddlewareSet{
+		Auth:           wiringAuthMiddleware(),
+		RateLimit:      middleware.NewRateLimitMiddleware(1, 0),
+		ProfileHandler: wiringProfileHandler(),
+	})
+
+	first := httptest.NewRecorder()
+	router.Handler().ServeHTTP(first, httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil))
+	if first.Code != http.StatusUnauthorized {
+		t.Fatalf("first request: got %d, want %d (IP budget must not block the first request)", first.Code, http.StatusUnauthorized)
+	}
+
+	second := httptest.NewRecorder()
+	router.Handler().ServeHTTP(second, httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil))
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second request: got %d, want %d (per-IP limiter must fire before authentication)", second.Code, http.StatusTooManyRequests)
 	}
 	var envelope phttp.ErrorEnvelope
 	if err := json.Unmarshal(second.Body.Bytes(), &envelope); err != nil {

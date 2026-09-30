@@ -227,32 +227,21 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                                             userId: currentUserId ?? '',
                                             isTeacher: isTeacher,
                                             now: DateTime.now().toUtc()),
+                                    onTogglePin: state.readOnly
+                                        ? null
+                                        : () => unawaited(
+                                              message.pinnedAt == null
+                                                  ? _discovery.pin(
+                                                      widget.circleId,
+                                                      message.id)
+                                                  : _discovery.unpin(
+                                                      widget.circleId,
+                                                      message.id),
+                                            ),
                                     onDelete: () => unawaited(_deleteMessage(
                                         moderation, message, isTeacher)),
                                   ),
                                 ),
-                                if (!state.readOnly)
-                                  Semantics(
-                                    button: true,
-                                    label: message.pinnedAt == null
-                                        ? labels.pin
-                                        : labels.unpin,
-                                    child: IconButton(
-                                      tooltip: message.pinnedAt == null
-                                          ? labels.pin
-                                          : labels.unpin,
-                                      icon: Icon(message.pinnedAt == null
-                                          ? Icons.push_pin_outlined
-                                          : Icons.push_pin),
-                                      onPressed: () => unawaited(
-                                        message.pinnedAt == null
-                                            ? _discovery.pin(
-                                                widget.circleId, message.id)
-                                            : _discovery.unpin(
-                                                widget.circleId, message.id),
-                                      ),
-                                    ),
-                                  ),
                                 if (terminalError != null)
                                   _TerminalFailureActions(
                                     labels: labels,
@@ -533,6 +522,4 @@ class _ScreenLabels {
   String get search => rtl ? ChatUiLabels.search : ChatUiLabels.searchEn;
   String get memberFallback =>
       rtl ? ChatUiLabels.memberFallback : ChatUiLabels.memberFallbackEn;
-  String get pin => rtl ? 'تثبيت الرسالة' : 'Pin message';
-  String get unpin => rtl ? 'إلغاء تثبيت الرسالة' : 'Unpin message';
 }

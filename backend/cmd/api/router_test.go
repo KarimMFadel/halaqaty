@@ -13,6 +13,8 @@ import (
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
+	phttp "github.com/KarimMFadel/halaqaty/backend/internal/platform/http"
+	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
 	"github.com/KarimMFadel/halaqaty/backend/internal/queue"
 	"github.com/KarimMFadel/halaqaty/backend/internal/sessions"
@@ -79,6 +81,9 @@ func TestRouter_QueueRoutesUseProductionRateLimits(t *testing.T) {
 			if rec.Code != want {
 				t.Fatalf("attempt %d: got %d, want %d", attempt+1, rec.Code, want)
 			}
+			if want == http.StatusTooManyRequests {
+				assertRateLimitEnvelope(t, rec)
+			}
 		}
 	})
 
@@ -92,15 +97,32 @@ func TestRouter_QueueRoutesUseProductionRateLimits(t *testing.T) {
 		})
 		for attempt, want := range []int{http.StatusInternalServerError, http.StatusTooManyRequests} {
 			req := httptest.NewRequest(http.MethodGet, path, nil)
-			req.Header.Set("Authorization", "Bearer valid-token")
-			req.Header.Set("X-Halaqaty-Session-ID", "session-1")
+			req.Header.Set(httpconst.HeaderAuthorization, httpconst.AuthSchemeBearer+" valid-token")
+			req.Header.Set(httpconst.HeaderSessionID, "session-1")
 			rec := httptest.NewRecorder()
 			router.Handler().ServeHTTP(rec, req)
 			if rec.Code != want {
 				t.Fatalf("attempt %d: got %d, want %d", attempt+1, rec.Code, want)
 			}
+			if want == http.StatusTooManyRequests {
+				assertRateLimitEnvelope(t, rec)
+			}
 		}
 	})
+}
+
+func assertRateLimitEnvelope(t *testing.T, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	var envelope phttp.ErrorEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode error envelope: %v body=%s", err, rec.Body.String())
+	}
+	if envelope.Error.Code != httpconst.ErrorCodeRateLimitExceeded {
+		t.Fatalf("error code: got %q, want %q", envelope.Error.Code, httpconst.ErrorCodeRateLimitExceeded)
+	}
+	if envelope.Error.Message != httpconst.ErrorMessageRateLimitExceeded {
+		t.Fatalf("error message: got %q, want %q", envelope.Error.Message, httpconst.ErrorMessageRateLimitExceeded)
+	}
 }
 
 func TestRouter_RegistersVersionedAuthRoutes(t *testing.T) {

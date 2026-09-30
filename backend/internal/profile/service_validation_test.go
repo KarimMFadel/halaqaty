@@ -95,6 +95,24 @@ func TestServiceUpdateMe_EditableFieldValidation(t *testing.T) {
 			wantField: httpconst.FieldPhone,
 			wantMsg:   httpconst.ErrorMessagePhoneTooLong,
 		},
+		{
+			name:      "unknown IANA timezone is rejected",
+			request:   UpdateProfileRequest{Timezone: strPtr("Mars/Olympus")},
+			wantField: httpconst.FieldTimezone,
+			wantMsg:   httpconst.ErrorMessageTimezoneInvalid,
+		},
+		{
+			name:      "empty timezone is rejected",
+			request:   UpdateProfileRequest{Timezone: strPtr("")},
+			wantField: httpconst.FieldTimezone,
+			wantMsg:   httpconst.ErrorMessageTimezoneInvalid,
+		},
+		{
+			name:      "host-local timezone is rejected",
+			request:   UpdateProfileRequest{Timezone: strPtr("Local")},
+			wantField: httpconst.FieldTimezone,
+			wantMsg:   httpconst.ErrorMessageTimezoneInvalid,
+		},
 	}
 
 	for _, tc := range cases {
@@ -140,6 +158,14 @@ func TestServiceUpdateMe_AcceptsEdgeCaseFields(t *testing.T) {
 		{
 			name:    "arabic language preference is accepted",
 			request: UpdateProfileRequest{PreferredLanguage: strPtr("en")},
+		},
+		{
+			name:    "UTC timezone is accepted",
+			request: UpdateProfileRequest{Timezone: strPtr("UTC")},
+		},
+		{
+			name:    "IANA timezone with region is accepted",
+			request: UpdateProfileRequest{Timezone: strPtr("Africa/Cairo")},
 		},
 	}
 

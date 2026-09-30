@@ -88,6 +88,21 @@ void main() {
     expect(find.bySemanticsLabel('تم تثبيت خمس رسائل بالفعل'), findsOneWidget);
     expect(find.byIcon(Icons.info_outline), findsOneWidget);
   });
+
+  testWidgets('chat discovery errors use the shared visual error treatment',
+      (tester) async {
+    await tester.pumpWidget(_host(
+      direction: TextDirection.ltr,
+      child: const ChatDiscoveryErrorView(
+        failure: ChatDiscoveryFailure.unavailable,
+      ),
+    ));
+
+    expect(find.byType(Card), findsOneWidget);
+    expect(find.byIcon(Icons.error_outline), findsOneWidget);
+    expect(
+        find.text('Chat service is temporarily unavailable'), findsOneWidget);
+  });
 }
 
 Widget _host({required TextDirection direction, required Widget child}) =>

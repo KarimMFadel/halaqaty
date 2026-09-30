@@ -9,6 +9,10 @@ modernization roadmap are governed by
 [UI_UX_GOVERNANCE.md](UI_UX_GOVERNANCE.md). This file remains the canonical
 catalogue for visual tokens and component values.
 
+The current page-by-page gaps and future decisions are tracked in
+[FUTURE_UI_FOLLOW_UPS.md](FUTURE_UI_FOLLOW_UPS.md); fresh emulator evidence is
+indexed in [README.md](README.md).
+
 ---
 
 ## 🎨 Brand Identity
@@ -34,8 +38,8 @@ catalogue for visual tokens and component values.
 | Name | Hex | Usage |
 |------|-----|-------|
 | **Primary (Islamic Green)** | `#1B7E3C` | Buttons, accents, CTA, progress indicators |
-| **Primary Light** | `#4CB368` | Hover states, secondary highlights |
-| **Primary Dark** | `#0F5627` | Focus states, dark mode primary |
+| **Primary Light** | `#4CB368` | Light-mode containers, highlights |
+| **Primary Dark** | `#0F5627` | Light-mode focus and container text |
 | **On Primary** | `#FFFFFF` | Text on primary background |
 
 **Rationale:** Green is sacred in Islamic tradition. The shade `#1B7E3C` balances professionalism with cultural significance.
@@ -45,7 +49,7 @@ catalogue for visual tokens and component values.
 |------|-----|-------|
 | **Secondary (Quranic Gold)** | `#D4A574` | Supporting accents, badges, highlights |
 | **Secondary Light** | `#E8C8A0` | Hover states for secondary actions |
-| **Secondary Dark** | `#8B6F47` | Focus states, dark mode secondary |
+| **Secondary Dark** | `#8B6F47` | Original brand-scale dark gold variant |
 | **On Secondary** | `#FFFFFF` | Text on secondary background |
 
 **Rationale:** Gold reflects the value of Quran memorization. Used sparingly for achievements, badges, and celebrations.
@@ -63,23 +67,39 @@ are unchanged; the following role tokens are amended in `halaqaty_theme.dart`:
 | **onSecondaryContainer** | Dark | `#1B7E3C` | `#F0DDBE` | 6.58:1 on `#5D4729` |
 | **onPrimary** | Dark | `#FFFFFF` | `#062B14` | 5.83:1 on `#4CB368` |
 
+**Dark palette amendment 2026-09-30 (Garden dusk, approved by Karim):** dark
+mode now uses softened, green-gray surfaces and sage/gold accents. Keep cards on
+surface colors; reserve primary for actions and small identity cues. Light-mode
+tokens and brand identity colors above remain unchanged.
+
+| Dark role | Hex | Usage |
+|-----------|-----|-------|
+| **Primary / onPrimary** | `#B5C9AE` / `#20291F` | Muted sage action and legible action text |
+| **Primary container / onPrimaryContainer** | `#354638` / `#D9E5D4` | Subtle green emphasis |
+| **Secondary / onSecondary** | `#D6C08A` / `#302A1F` | Warm gold accent |
+| **Secondary container / onSecondaryContainer** | `#493F2C` / `#E8D8B1` | Selected navigation and small highlights |
+| **Surface / onSurface** | `#202722` / `#E6E9E3` | Cards and primary text |
+| **Background** | `#151816` | App canvas |
+| **Surface variant / muted text** | `#28312B` / `#B3BCB2` | Grouped surfaces and secondary text |
+| **Outline / outline variant** | `#7C877D` / `#465047` | Accessible component edges / quiet dividers |
+
 ### Semantic Colors
 | Purpose | Light Mode | Dark Mode | Usage |
 |---------|-----------|----------|-------|
-| **Success** | `#2E7D32` | `#66BB6A` | Completed recitations, passed rounds |
-| **Warning** | `#F57C00` | `#FFB74D` | Attention needed, incomplete tasks |
-| **Error** | `#C62828` | `#EF5350` | Failed attempts, connection issues |
-| **Info** | `#0277BD` | `#29B6F6` | Session info, helpful tooltips |
-| **Neutral** | `#616161` | `#BDBDBD` | Disabled state, secondary text |
+| **Success** | `#2E7D32` | `#A3C58F` | Completed recitations, passed rounds |
+| **Warning** | `#F57C00` | `#D6B27B` | Attention needed, incomplete tasks |
+| **Error** | `#C62828` | `#D97970` | Failed attempts, connection issues |
+| **Info** | `#0277BD` | `#91B9C2` | Session info, helpful tooltips |
+| **Neutral** | `#616161` | `#B3BCB2` | Disabled state, secondary text |
 
 ### Neutral Palette
 | Name | Light | Dark | Usage |
 |------|-------|------|-------|
-| **Surface** | `#FFFFFF` | `#121212` | Card backgrounds, main content |
-| **Surface Variant** | `#F5F5F5` | `#2C2C2C` | Secondary surfaces, sections |
-| **Background** | `#FAFAFA` | `#0A0A0A` | App background |
-| **Outline** | `#79747E` | `#928F96` | Borders, dividers |
-| **Outline Variant** | `#CAC7D0` | `#49454E` | Secondary borders |
+| **Surface** | `#FFFFFF` | `#202722` | Card backgrounds, main content |
+| **Surface Variant** | `#F5F5F5` | `#28312B` | Secondary surfaces, sections |
+| **Background** | `#F8F6F0` | `#151816` | App background (light token approved 2026-09-30; dark token Garden dusk approved 2026-09-30) |
+| **Outline** | `#79747E` | `#7C877D` | Borders, dividers |
+| **Outline Variant** | `#CAC7D0` | `#465047` | Secondary borders |
 
 ---
 
@@ -246,10 +266,13 @@ are unchanged; the following role tokens are amended in `halaqaty_theme.dart`:
 
 ## 🌙 Dark Mode
 
-### Palette Adjustments
-- **Primary** → Lighter shade (`#4CB368`)
-- **Surface** → `#121212` (true black reduces OLED burn-in)
-- **Text** → `#FFFFFF` (white, not gray)
+### Garden Dusk Palette
+
+Use the dark-mode role values in the Garden dusk amendment above. The app uses
+deep green-gray rather than black surfaces, softened off-white text, sage for
+primary actions, and gold for compact selection/highlight states. Keep large
+cards on `surface`; avoid bright brand colors as full-width fills. Run the RTL
+and LTR screenshot matrix whenever these tokens change.
 
 ---
 

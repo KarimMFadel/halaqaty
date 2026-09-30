@@ -22,12 +22,26 @@ type querier interface {
 // PostgreSQL is the sole source of truth; no session state is cached in
 // memory (constitution §III).
 type Repository struct {
-	pool *pgxpool.Pool
+	pool       *pgxpool.Pool
+	attendance AttendanceLifecycle
+}
+
+// AttendanceLifecycle runs F-006 persistence inside existing F-005 transactions.
+type AttendanceLifecycle interface {
+	SnapshotStartRoster(context.Context, pgx.Tx, string) error
+	CheckStudentJoin(context.Context, pgx.Tx, string, string) (bool, error)
+	RecordStudentJoin(context.Context, pgx.Tx, string, string) error
+	FinalizeSession(context.Context, pgx.Tx, string) error
 }
 
 // NewSessionRepository constructs a live-session repository on a pgx pool.
 func NewSessionRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
+}
+
+// SetAttendanceLifecycle configures transactional F-006 attendance hooks.
+func (r *Repository) SetAttendanceLifecycle(lifecycle AttendanceLifecycle) {
+	r.attendance = lifecycle
 }
 
 // withTx runs fn against a transaction and commits on success. Errors
@@ -52,6 +66,14 @@ func lockSessionAdvisory(ctx context.Context, q querier, sessionID string) error
 		return fmt.Errorf("lock session advisory key: %w", err)
 	}
 	return nil
+}
+
+func attendanceTransaction(q querier) (pgx.Tx, error) {
+	tx, ok := q.(pgx.Tx)
+	if !ok {
+		return nil, errors.New("attendance hook requires a PostgreSQL transaction")
+	}
+	return tx, nil
 }
 
 func lockActiveParticipantAccount(ctx context.Context, q querier, userID string) error {
@@ -212,8 +234,7 @@ func (r *Repository) CreateAdHocSession(ctx context.Context, circleID, createdBy
 	return created, nil
 }
 
-// ListCircleSessions returns only discovery-visible scheduled and active
-// sessions; ended history and F-006 scheduling data stay out of this flow.
+// ListCircleSessions returns scheduled, active and ended sessions for current circle history.
 func (r *Repository) ListCircleSessions(ctx context.Context, circleID string) ([]Session, error) {
 	rows, err := r.pool.Query(ctx, listCircleSessionsQuery, circleID)
 	if err != nil {
@@ -267,63 +288,135 @@ func (r *Repository) StartSessionWithConnection(ctx context.Context, sessionID, 
 	var started Session
 	var connection MediaConnection
 	err := r.withTx(ctx, func(q querier) error {
-		if err := lockSessionAdvisory(ctx, q, sessionID); err != nil {
-			return err
-		}
-		sess, err := scanSession(q.QueryRow(ctx, lockSessionByIDQuery, sessionID))
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrSessionNotFound
-		}
-		if err != nil {
-			return fmt.Errorf("start session with connection: lock session: %w", err)
-		}
-		if err := lockActiveParticipantAccount(ctx, q, userID); err != nil {
-			return err
-		}
-		switch sess.Status {
-		case SessionStatusScheduled:
-			if err := ensure(ctx, roomRef, sess.MediaMode); err != nil {
-				return fmt.Errorf("start session with connection: %w", err)
-			}
-			started, err = scanSession(q.QueryRow(ctx, startSessionQuery, sessionID, string(roomRef)))
-			if err != nil {
-				return fmt.Errorf("start session with connection: activate session: %w", err)
-			}
-		case SessionStatusActive:
-			if sess.MediaRoomRef == "" {
-				return fmt.Errorf("start session with connection: active session has no media room reference")
-			}
-			started = sess
-		default:
-			return ErrSessionAlreadyEnded
-		}
-		facts, err := loadPresenceEligibility(ctx, q, sessionID, userID)
-		if err != nil {
-			return fmt.Errorf("start session with connection: load presence: %w", err)
-		}
-		if !facts.currentlyPresent() {
-			if facts.found && !facts.removed {
-				if started.ParticipantCount >= maxParticipants {
-					return ErrSessionFull
-				}
-			} else if err := validateAdmission(started); err != nil {
-				return err
-			}
-		}
-		connection, err = issue(ctx, started.MediaRoomRef, grants)
-		if err != nil {
-			return fmt.Errorf("start session with connection: %w", err)
-		}
-		if facts.currentlyPresent() {
-			return nil
-		}
-		started, err = admitIfCapacity(ctx, q, started, userID, facts)
-		return err
+		var startErr error
+		started, connection, startErr = r.startSessionWithConnectionInTx(ctx, q, sessionID, userID, roomRef, grants, ensure, issue)
+		return startErr
 	})
 	if err != nil {
 		return Session{}, MediaConnection{}, err
 	}
 	return started, connection, nil
+}
+
+// StartSessionWithConnectionInTx runs the F-005 media, activation, credential,
+// and starter-admission flow on a caller-owned transaction. Scheduling uses
+// this seam while it retains its occurrence lock and materializes a planned
+// session in the same transaction.
+func (r *Repository) StartSessionWithConnectionInTx(ctx context.Context, tx pgx.Tx, sessionID, userID string, roomRef MediaRoomRef, grants MediaGrants, ensure func(context.Context, MediaRoomRef, MediaMode) error, issue func(context.Context, MediaRoomRef, MediaGrants) (MediaConnection, error)) (Session, MediaConnection, error) {
+	return r.startSessionWithConnectionInTx(ctx, tx, sessionID, userID, roomRef, grants, ensure, issue)
+}
+
+func (r *Repository) startSessionWithConnectionInTx(ctx context.Context, q querier, sessionID, userID string, roomRef MediaRoomRef, grants MediaGrants, ensure func(context.Context, MediaRoomRef, MediaMode) error, issue func(context.Context, MediaRoomRef, MediaGrants) (MediaConnection, error)) (Session, MediaConnection, error) {
+	if err := lockPlannedStart(ctx, q, sessionID); err != nil {
+		return Session{}, MediaConnection{}, err
+	}
+	if err := lockSessionAdvisory(ctx, q, sessionID); err != nil {
+		return Session{}, MediaConnection{}, err
+	}
+	sess, err := scanSession(q.QueryRow(ctx, lockSessionByIDQuery, sessionID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Session{}, MediaConnection{}, ErrSessionNotFound
+	}
+	if err != nil {
+		return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: lock session: %w", err)
+	}
+	if sess.Status == SessionStatusScheduled && r.attendance != nil {
+		tx, err := attendanceTransaction(q)
+		if err != nil {
+			return Session{}, MediaConnection{}, err
+		}
+		if err := r.attendance.SnapshotStartRoster(ctx, tx, sessionID); err != nil {
+			return Session{}, MediaConnection{}, err
+		}
+	}
+	if err := lockActiveParticipantAccount(ctx, q, userID); err != nil {
+		return Session{}, MediaConnection{}, err
+	}
+	var started Session
+	switch sess.Status {
+	case SessionStatusScheduled:
+		var cancelled bool
+		if err := q.QueryRow(ctx, plannedStartCancelledQuery, sessionID).Scan(&cancelled); err != nil {
+			return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: check planned cancellation: %w", err)
+		}
+		if cancelled {
+			return Session{}, MediaConnection{}, ErrSessionNotStartable
+		}
+		if err := ensure(ctx, roomRef, sess.MediaMode); err != nil {
+			return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: %w", err)
+		}
+		started, err = scanSession(q.QueryRow(ctx, startSessionQuery, sessionID, string(roomRef)))
+		if err != nil {
+			return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: activate session: %w", err)
+		}
+	case SessionStatusActive:
+		if sess.MediaRoomRef == "" {
+			return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: active session has no media room reference")
+		}
+		started = sess
+	default:
+		return Session{}, MediaConnection{}, ErrSessionAlreadyEnded
+	}
+	facts, err := loadPresenceEligibility(ctx, q, sessionID, userID)
+	if err != nil {
+		return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: load presence: %w", err)
+	}
+	if !facts.currentlyPresent() {
+		if facts.found && !facts.removed {
+			if started.ParticipantCount >= maxParticipants {
+				return Session{}, MediaConnection{}, ErrSessionFull
+			}
+		} else if err := validateAdmission(started); err != nil {
+			return Session{}, MediaConnection{}, err
+		}
+		if r.attendance != nil {
+			tx, err := attendanceTransaction(q)
+			if err != nil {
+				return Session{}, MediaConnection{}, err
+			}
+			if _, err := r.attendance.CheckStudentJoin(ctx, tx, sessionID, userID); err != nil {
+				return Session{}, MediaConnection{}, err
+			}
+		}
+	}
+	connection, err := issue(ctx, started.MediaRoomRef, grants)
+	if err != nil {
+		return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: %w", err)
+	}
+	if facts.currentlyPresent() {
+		return started, connection, nil
+	}
+	started, err = admitIfCapacity(ctx, q, started, userID, facts)
+	if err != nil {
+		return Session{}, MediaConnection{}, err
+	}
+	if r.attendance != nil {
+		tx, err := attendanceTransaction(q)
+		if err != nil {
+			return Session{}, MediaConnection{}, err
+		}
+		if err := r.attendance.RecordStudentJoin(ctx, tx, sessionID, userID); err != nil {
+			return Session{}, MediaConnection{}, err
+		}
+	}
+	return started, connection, nil
+}
+
+func lockPlannedStart(ctx context.Context, q querier, sessionID string) error {
+	var scheduleID *string
+	err := q.QueryRow(ctx, plannedStartIdentityQuery, sessionID).Scan(&scheduleID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("start session with connection: load planned identity: %w", err)
+	}
+	if scheduleID != nil {
+		if err := q.QueryRow(ctx, lockPlannedStartScheduleQuery, *scheduleID).Scan(new(string)); err != nil {
+			return fmt.Errorf("start session with connection: lock planned schedule: %w", err)
+		}
+	}
+	return nil
 }
 
 // EndSession applies the active→ended compare-and-set with its durable end
@@ -345,6 +438,15 @@ func (r *Repository) EndSession(ctx context.Context, sessionID string, reason En
 		}
 		if _, err := q.Exec(ctx, clearSessionPresenceQuery, sessionID); err != nil {
 			return fmt.Errorf("end session: clear presence: %w", err)
+		}
+		if r.attendance != nil {
+			tx, err := attendanceTransaction(q)
+			if err != nil {
+				return err
+			}
+			if err := r.attendance.FinalizeSession(ctx, tx, sessionID); err != nil {
+				return fmt.Errorf("end session: finalize attendance: %w", err)
+			}
 		}
 		ended = s
 		return nil
@@ -453,6 +555,15 @@ func (r *Repository) JoinSessionWithConnection(ctx context.Context, sessionID, u
 			} else if err := validateAdmission(sess); err != nil {
 				return err
 			}
+			if r.attendance != nil {
+				tx, err := attendanceTransaction(q)
+				if err != nil {
+					return err
+				}
+				if _, err := r.attendance.CheckStudentJoin(ctx, tx, sessionID, userID); err != nil {
+					return err
+				}
+			}
 		}
 		connection, err = issue(ctx, sess.MediaRoomRef, grants)
 		if err != nil {
@@ -463,7 +574,19 @@ func (r *Repository) JoinSessionWithConnection(ctx context.Context, sessionID, u
 			return nil
 		}
 		joined, err = admitIfCapacity(ctx, q, sess, userID, facts)
-		return err
+		if err != nil {
+			return err
+		}
+		if r.attendance != nil {
+			tx, err := attendanceTransaction(q)
+			if err != nil {
+				return err
+			}
+			if err := r.attendance.RecordStudentJoin(ctx, tx, sessionID, userID); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return Session{}, MediaConnection{}, err

@@ -74,3 +74,42 @@ func TestF004RouteConstantsMatchContract(t *testing.T) {
 		t.Fatalf("contract coverage: got %d F-004 US1/US3 operations, want 6", len(tests))
 	}
 }
+
+// TestF006RouteConstantsMatchContract pins every F-006 route constant to the
+// method and path of its operation in the canonical OpenAPI contract
+// (docs/contracts/openapi.yaml, server base /api/v1 — the feature-local
+// specs/ copy is synchronized at path/method parity by T004). Wiring arrives
+// with T021/T034/T045/T052; Phase 2 registers no F-006 handlers.
+func TestF006RouteConstantsMatchContract(t *testing.T) {
+	tests := []struct {
+		operationID string
+		route       string
+		want        string
+	}{
+		{operationID: "previewCirclePlan", route: routeCirclePlanningPreview, want: "POST /api/v1/circles/{circleId}/planning-preview"},
+		{operationID: "listCircleSchedules", route: routeCircleSchedulesGet, want: "GET /api/v1/circles/{circleId}/schedules"},
+		{operationID: "createCircleSchedule", route: routeCircleSchedulesCreate, want: "POST /api/v1/circles/{circleId}/schedules"},
+		{operationID: "changeCircleSchedule", route: routeCircleScheduleChange, want: "PATCH /api/v1/circles/{circleId}/schedules/{scheduleId}"},
+		{operationID: "changeScheduleOccurrence", route: routeScheduleOccurrenceChange, want: "PATCH /api/v1/circles/{circleId}/schedules/{scheduleId}/occurrences/{localDate}"},
+		{operationID: "startPlannedOccurrence", route: routeScheduleOccurrenceStart, want: "POST /api/v1/circles/{circleId}/schedules/{scheduleId}/occurrences/{localDate}/start"},
+		{operationID: "createOneOffPlannedSession", route: routeCirclePlannedSessionsCreate, want: "POST /api/v1/circles/{circleId}/planned-sessions"},
+		{operationID: "changeOneOffPlannedSession", route: routeSessionPlannedDetailsChange, want: "PATCH /api/v1/sessions/{sessionId}/planned-details"},
+		{operationID: "getMyCalendarMonth", route: routeCalendarMeGet, want: "GET /api/v1/calendar/me"},
+		{operationID: "getSessionAttendance", route: routeSessionAttendanceGet, want: "GET /api/v1/sessions/{sessionId}/attendance"},
+		{operationID: "correctSessionAttendance", route: routeSessionAttendanceCorrect, want: "PATCH /api/v1/sessions/{sessionId}/attendance/{userId}"},
+	}
+
+	seen := make(map[string]string, len(tests))
+	for _, tt := range tests {
+		if tt.route != tt.want {
+			t.Errorf("%s: got %q, want %q", tt.operationID, tt.route, tt.want)
+		}
+		if prev, dup := seen[tt.route]; dup {
+			t.Errorf("duplicate route constant %q used by %s and %s", tt.route, prev, tt.operationID)
+		}
+		seen[tt.route] = tt.operationID
+	}
+	if len(tests) != 11 {
+		t.Fatalf("contract coverage: got %d F-006 operations, want 11", len(tests))
+	}
+}

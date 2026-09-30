@@ -22,7 +22,14 @@ var profileRepoMigrations = []string{
 	"000010_auth_roles_profile.up.sql",
 	"000011_auth_roles_profile_alignment.up.sql",
 	"000012_auth_profiles_display_name.up.sql",
+	"000013_create_circles.up.sql",
+	"000014_circle_members_circle_fk.up.sql",
+	"000015_circle_management.up.sql",
+	"000016_live_sessions.up.sql",
+	"000017_recitation_queue_system.up.sql",
+	"000018_real_time_chat.up.sql",
 	"000019_account_deletion_tombstone.up.sql",
+	"000020_schedule_calendar_attendance.up.sql",
 }
 
 // newProfileRepository opens an isolated schema with the auth/profile migration
@@ -199,5 +206,45 @@ func TestRepository_GetByUserID_HidesTombstonedUser(t *testing.T) {
 	}
 	if _, err := repo.GetByUserID(ctx, userID); !errors.Is(err, auth.ErrUserNotFound) {
 		t.Fatalf("GetByUserID = %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestRepository_TimezoneDefaultsToUTCAndRoundTrips(t *testing.T) {
+	repo := newProfileRepository(t)
+	ctx := context.Background()
+	userID := seedProfileUser(t, repo, "timezone")
+
+	// A pre-profile user reads the migration default.
+	record, err := repo.GetByUserID(ctx, userID)
+	if err != nil {
+		t.Fatalf("GetByUserID: %v", err)
+	}
+	if record.Profile.Timezone != "UTC" {
+		t.Fatalf("default timezone: got %q, want %q", record.Profile.Timezone, "UTC")
+	}
+
+	cairo := "Africa/Cairo"
+	if err := repo.UpdateByUserID(ctx, UpdateInput{UserID: userID, Timezone: &cairo}); err != nil {
+		t.Fatalf("UpdateByUserID timezone: %v", err)
+	}
+	record, err = repo.GetByUserID(ctx, userID)
+	if err != nil {
+		t.Fatalf("GetByUserID after timezone update: %v", err)
+	}
+	if record.Profile.Timezone != cairo {
+		t.Fatalf("timezone after update: got %q, want %q", record.Profile.Timezone, cairo)
+	}
+
+	// An update that omits timezone must preserve the stored value.
+	displayName := "Viewer"
+	if err := repo.UpdateByUserID(ctx, UpdateInput{UserID: userID, DisplayName: &displayName}); err != nil {
+		t.Fatalf("UpdateByUserID without timezone: %v", err)
+	}
+	record, err = repo.GetByUserID(ctx, userID)
+	if err != nil {
+		t.Fatalf("GetByUserID after unrelated update: %v", err)
+	}
+	if record.Profile.Timezone != cairo {
+		t.Fatalf("timezone must survive unrelated updates: got %q, want %q", record.Profile.Timezone, cairo)
 	}
 }

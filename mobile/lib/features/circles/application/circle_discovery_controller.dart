@@ -25,6 +25,8 @@ class CircleDiscoveryState {
     this.isLoading = false,
     this.joiningCircleId,
     this.failure,
+    this.myCirclesFailure,
+    this.publicCirclesFailure,
   });
 
   final List<CircleSummary> myCircles;
@@ -33,6 +35,8 @@ class CircleDiscoveryState {
   final bool isLoading;
   final String? joiningCircleId;
   final CircleJoinFailure? failure;
+  final CircleJoinFailure? myCirclesFailure;
+  final CircleJoinFailure? publicCirclesFailure;
 
   CircleDiscoveryState copyWith({
     List<CircleSummary>? myCircles,
@@ -41,8 +45,12 @@ class CircleDiscoveryState {
     bool? isLoading,
     String? joiningCircleId,
     CircleJoinFailure? failure,
+    CircleJoinFailure? myCirclesFailure,
+    CircleJoinFailure? publicCirclesFailure,
     bool clearJoining = false,
     bool clearFailure = false,
+    bool clearMyCirclesFailure = false,
+    bool clearPublicCirclesFailure = false,
     bool clearNextCursor = false,
   }) {
     return CircleDiscoveryState(
@@ -53,6 +61,12 @@ class CircleDiscoveryState {
       joiningCircleId:
           clearJoining ? null : (joiningCircleId ?? this.joiningCircleId),
       failure: clearFailure ? null : (failure ?? this.failure),
+      myCirclesFailure: clearMyCirclesFailure
+          ? null
+          : (myCirclesFailure ?? this.myCirclesFailure),
+      publicCirclesFailure: clearPublicCirclesFailure
+          ? null
+          : (publicCirclesFailure ?? this.publicCirclesFailure),
     );
   }
 }
@@ -77,12 +91,20 @@ class CircleDiscoveryController extends StateNotifier<CircleDiscoveryState> {
   final Future<void> Function() _logout;
 
   Future<void> loadMyCircles() async {
-    state = state.copyWith(isLoading: true, clearFailure: true);
+    state = state.copyWith(
+      isLoading: true,
+      clearFailure: true,
+      clearMyCirclesFailure: true,
+    );
     try {
-      final credentials = await _credentials();
+      final credentials = await _credentials(
+        onFailure: (failure) => state = state.copyWith(
+          isLoading: false,
+          myCirclesFailure: failure,
+        ),
+      );
       if (credentials == null) {
         debugPrint('loadMyCircles: no credentials (session/token missing)');
-        _fail(CircleJoinFailure.sessionExpired);
         return;
       }
       final circles = await _apiClient.listCircles(
@@ -94,23 +116,39 @@ class CircleDiscoveryController extends StateNotifier<CircleDiscoveryState> {
         myCircles: circles,
         isLoading: false,
         clearFailure: true,
+        clearMyCirclesFailure: true,
       );
     } on FirebaseAuthException catch (error) {
       debugPrint('loadMyCircles: FirebaseAuthException ${error.code}');
-      _fail(CircleJoinFailure.sessionExpired);
+      state = state.copyWith(
+        isLoading: false,
+        myCirclesFailure: CircleJoinFailure.sessionExpired,
+      );
     } on DioException catch (error) {
       debugPrint(
         'loadMyCircles: DioException ${error.type} '
         '${error.response?.statusCode}',
       );
-      _fail(await _failureFrom(error));
+      state = state.copyWith(
+        isLoading: false,
+        myCirclesFailure: await _failureFrom(error),
+      );
     }
   }
 
   Future<void> discover({String? query, String? cursor}) async {
-    state = state.copyWith(isLoading: true, clearFailure: true);
+    state = state.copyWith(
+      isLoading: true,
+      clearFailure: true,
+      clearPublicCirclesFailure: true,
+    );
     try {
-      final credentials = await _credentials();
+      final credentials = await _credentials(
+        onFailure: (failure) => state = state.copyWith(
+          isLoading: false,
+          publicCirclesFailure: failure,
+        ),
+      );
       if (credentials == null) return;
       final page = await _apiClient.discoverCircles(
         firebaseIdToken: credentials.$1,
@@ -124,11 +162,18 @@ class CircleDiscoveryController extends StateNotifier<CircleDiscoveryState> {
         clearNextCursor: page.nextCursor == null,
         isLoading: false,
         clearFailure: true,
+        clearPublicCirclesFailure: true,
       );
     } on FirebaseAuthException {
-      _fail(CircleJoinFailure.sessionExpired);
+      state = state.copyWith(
+        isLoading: false,
+        publicCirclesFailure: CircleJoinFailure.sessionExpired,
+      );
     } on DioException catch (error) {
-      _fail(await _failureFrom(error));
+      state = state.copyWith(
+        isLoading: false,
+        publicCirclesFailure: await _failureFrom(error),
+      );
     }
   }
 
@@ -219,14 +264,16 @@ class CircleDiscoveryController extends StateNotifier<CircleDiscoveryState> {
     return _inviteCode.hasMatch(linkCode) ? linkCode : null;
   }
 
-  Future<(String, String)?> _credentials() async {
+  Future<(String, String)?> _credentials({
+    void Function(CircleJoinFailure failure)? onFailure,
+  }) async {
     final sessionId = _readAuthState().sessionId;
     final token = await _loadFirebaseIdToken();
     if (token == null ||
         token.isEmpty ||
         sessionId == null ||
         sessionId.isEmpty) {
-      _fail(CircleJoinFailure.sessionExpired);
+      (onFailure ?? _fail)(CircleJoinFailure.sessionExpired);
       return null;
     }
     return (token, sessionId);

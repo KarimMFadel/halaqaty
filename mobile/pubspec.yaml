@@ -17,6 +17,7 @@ dependencies:
   riverpod_annotation: ^2.6.0
   go_router: ^14.6.0
   dio: ^5.7.0
+  timezone: ^0.10.1
   flutter_secure_storage: ^9.2.2
   livekit_client: ^2.11.0
   record: ^7.1.1

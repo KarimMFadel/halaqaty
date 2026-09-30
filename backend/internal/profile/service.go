@@ -40,6 +40,7 @@ type UpdateProfileRequest struct {
 	PreferredLanguage *string `json:"preferred_language"`
 	AvatarURL         *string `json:"avatar_url"`
 	Phone             *string `json:"phone"`
+	Timezone          *string `json:"timezone"`
 }
 
 // ValidationError carries field-level profile validation failures.
@@ -153,6 +154,15 @@ func (s *Service) UpdateMe(ctx context.Context, userID string, req UpdateProfile
 			fields[httpconst.FieldPhone] = httpconst.ErrorMessagePhoneTooLong
 		} else {
 			next.Phone = &phone
+		}
+	}
+	if req.Timezone != nil {
+		if *req.Timezone == "" || *req.Timezone == "Local" || strings.TrimSpace(*req.Timezone) != *req.Timezone {
+			fields[httpconst.FieldTimezone] = httpconst.ErrorMessageTimezoneInvalid
+		} else if _, err := time.LoadLocation(*req.Timezone); err != nil {
+			fields[httpconst.FieldTimezone] = httpconst.ErrorMessageTimezoneInvalid
+		} else {
+			next.Timezone = req.Timezone
 		}
 	}
 

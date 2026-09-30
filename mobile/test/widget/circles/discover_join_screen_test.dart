@@ -44,6 +44,8 @@ class _StubCircleApiClient extends CircleApiClient {
   final Completer<CircleDiscoveryPage>? discoveryCompleter;
   List<CircleSummary> discovered = [_publicCircle];
   List<CircleSummary> memberships = const [];
+  DioException? membershipsError;
+  DioException? discoveryError;
   DioException? joinError;
   String? joinedCircleId;
   String? joinedInviteCode;
@@ -52,8 +54,10 @@ class _StubCircleApiClient extends CircleApiClient {
   Future<List<CircleSummary>> listCircles({
     required String firebaseIdToken,
     required String sessionId,
-  }) async =>
-      memberships;
+  }) async {
+    if (membershipsError case final error?) throw error;
+    return memberships;
+  }
 
   @override
   Future<CircleDiscoveryPage> discoverCircles({
@@ -62,6 +66,7 @@ class _StubCircleApiClient extends CircleApiClient {
     String? query,
     String? cursor,
   }) async {
+    if (discoveryError case final error?) throw error;
     if (discoveryCompleter case final completer?) return completer.future;
     return CircleDiscoveryPage(circles: discovered);
   }
@@ -202,6 +207,8 @@ void main() {
       _build(const CircleDiscoveryScreen(), _controller(apiClient)),
     );
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('circleTabDiscover')));
+    await tester.pumpAndSettle();
 
     expect(find.text('حلقة النور'), findsOneWidget);
     expect(find.text('حفظ القرآن'), findsOneWidget);
@@ -226,6 +233,8 @@ void main() {
     expect(find.byType(HalaqatyLoading), findsOneWidget);
     completer.complete(CircleDiscoveryPage(circles: [_publicCircle]));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('circleTabDiscover')));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('joinCircle-circle-public')));
     await tester.pumpAndSettle();
@@ -238,6 +247,89 @@ void main() {
     // (FR-008), not a transient snackbar.
     expect(find.byType(CircleDetailScreen), findsOneWidget);
     expect(find.text('تم الانضمام إلى الحلقة'), findsNothing);
+  });
+
+  testWidgets(
+      'CircleDiscoveryScreen: shows public discovery recovery while keeping joined circles',
+      (tester) async {
+    final apiClient = _StubCircleApiClient()
+      ..memberships = [_memberCircle]
+      ..discoveryError = DioException(
+        requestOptions: RequestOptions(path: '/circles/discover'),
+        type: DioExceptionType.connectionError,
+      );
+
+    await tester.pumpWidget(
+      _build(const CircleDiscoveryScreen(), _controller(apiClient)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('openCircle-circle-member')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('circleTabDiscover')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('circleLoadError')), findsOneWidget);
+    expect(find.byKey(const Key('circleLoadRetry')), findsOneWidget);
+    expect(find.text('No public circles'), findsNothing);
+    await tester.tap(find.byKey(const Key('circleTabMyCircles')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('openCircle-circle-member')), findsOneWidget);
+    expect(find.byKey(const Key('circleLoadError')), findsNothing);
+  });
+
+  testWidgets(
+      'CircleDiscoveryScreen: keeps joined-list failure when public discovery succeeds',
+      (tester) async {
+    final apiClient = _StubCircleApiClient()
+      ..membershipsError = DioException(
+        requestOptions: RequestOptions(path: '/circles'),
+        type: DioExceptionType.connectionError,
+      )
+      ..discovered = [_publicCircle];
+
+    await tester.pumpWidget(
+      _build(const CircleDiscoveryScreen(), _controller(apiClient)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('circleLoadError')), findsOneWidget);
+    expect(find.byKey(const Key('circleLoadRetry')), findsOneWidget);
+    expect(find.byKey(const Key('joinCircle-circle-public')), findsNothing);
+    await tester.tap(find.byKey(const Key('circleTabDiscover')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('joinCircle-circle-public')), findsOneWidget);
+    expect(find.byKey(const Key('circleLoadError')), findsNothing);
+    await tester.tap(find.byKey(const Key('circleTabMyCircles')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('circleLoadError')), findsOneWidget);
+  });
+
+  testWidgets(
+      'CircleDiscoveryScreen: tabs switch between joined and public lists',
+      (tester) async {
+    final apiClient = _StubCircleApiClient()
+      ..memberships = [_memberCircle]
+      ..discovered = [_publicCircle];
+
+    await tester.pumpWidget(
+      _buildThemed(const CircleDiscoveryScreen(), _controller(apiClient)),
+    );
+    await tester.pumpAndSettle();
+
+    final myCirclesTab = find.byKey(const Key('circleTabMyCircles'));
+    final discoverTab = find.byKey(const Key('circleTabDiscover'));
+    expect(tester.getSize(myCirclesTab).height, greaterThanOrEqualTo(48));
+    expect(tester.getSize(discoverTab).height, greaterThanOrEqualTo(48));
+    expect(find.byKey(const Key('openCircle-circle-member')), findsOneWidget);
+    expect(find.byKey(const Key('joinCircle-circle-public')), findsNothing);
+    expect(find.byKey(const Key('openCreateCircleButton')), findsOneWidget);
+    expect(find.byKey(const Key('openInviteJoinButton')), findsOneWidget);
+
+    await tester.tap(discoverTab);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('openCircle-circle-member')), findsNothing);
+    expect(find.byKey(const Key('joinCircle-circle-public')), findsOneWidget);
+    expect(find.byKey(const Key('openCreateCircleButton')), findsOneWidget);
+    expect(find.byKey(const Key('openInviteJoinButton')), findsOneWidget);
   });
 
   testWidgets(
@@ -273,7 +365,10 @@ void main() {
 
     expect(find.byKey(const Key('openCircle-circle-member')), findsOneWidget);
     expect(find.byKey(const Key('joinCircle-circle-member')), findsNothing);
+    await tester.tap(find.byKey(const Key('circleTabDiscover')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const Key('joinCircle-circle-public')), findsOneWidget);
+    expect(find.byIcon(Icons.auto_stories), findsOneWidget);
   });
 
   testWidgets('CircleDiscoveryScreen: opens an authenticated member circle',

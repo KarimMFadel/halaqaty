@@ -6,6 +6,7 @@ import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_ui_labels.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/group_chat_screen.dart';
+import 'package:halaqaty_mobile/features/attendance/presentation/attendance_screen.dart';
 import 'package:halaqaty_mobile/features/sessions/application/queue_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/application/session_room_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/data/queue_api_client.dart';
@@ -17,13 +18,21 @@ import 'package:halaqaty_mobile/features/sessions/presentation/session_ui_labels
 
 class SessionRoomScreen extends ConsumerWidget {
   const SessionRoomScreen(
-      {super.key, required this.sessionId, this.canStart = false});
+      {super.key,
+      required this.sessionId,
+      this.canStart = false,
+      this.canCorrectAttendance = false,
+      this.isEnded = false});
   final String sessionId;
   final bool canStart;
+  final bool canCorrectAttendance;
+  final bool isEnded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(sessionRoomControllerProvider(sessionId));
+    final displayState =
+        isEnded ? state.copyWith(status: SessionRoomStatus.ended) : state;
     final controller =
         ref.read(sessionRoomControllerProvider(sessionId).notifier);
     final queueState = state.queueState;
@@ -46,7 +55,7 @@ class SessionRoomScreen extends ConsumerWidget {
                     style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 8),
                 _RoomStatusSection(
-                  state: state,
+                  state: displayState,
                   rtl: rtl,
                   onRetry: controller.retry,
                   onLeave: controller.leave,
@@ -73,15 +82,16 @@ class SessionRoomScreen extends ConsumerWidget {
                 // Once connected, the status section carries the state and the
                 // Join/Start action would be contradictory — exactly one
                 // truthful dominant action per state.
-                if (state.status != SessionRoomStatus.connected) ...[
+                if (displayState.status != SessionRoomStatus.connected) ...[
                   const SizedBox(height: 8),
                   FilledButton(
                       key: const Key('sessionRoomPrimaryAction'),
                       // No dominant re-entry once the session has ended or the
                       // failure is terminal: the status section owns the safe
                       // exit copy (FR-009).
-                      onPressed: state.status == SessionRoomStatus.loading ||
-                              state.status == SessionRoomStatus.ended ||
+                      onPressed: displayState.status ==
+                                  SessionRoomStatus.loading ||
+                              displayState.status == SessionRoomStatus.ended ||
                               state.recovery == SessionRoomRecovery.terminal
                           ? null
                           : () => canStart
@@ -91,6 +101,23 @@ class SessionRoomScreen extends ConsumerWidget {
                           ? (rtl ? SessionUiLabels.start : 'Start session')
                           : (rtl ? SessionUiLabels.join : 'Join'))),
                 ],
+                if (displayState.status == SessionRoomStatus.ended)
+                  OutlinedButton(
+                    key: const Key('sessionReviewAttendance'),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => AttendanceScreen(
+                          sessionId: sessionId,
+                          canCorrect: canCorrectAttendance,
+                          participantNames: {
+                            for (final participant in state.participants)
+                              participant.userId: participant.displayName,
+                          },
+                        ),
+                      ),
+                    ),
+                    child: Text(rtl ? 'مراجعة الحضور' : 'Review attendance'),
+                  ),
               ],
             ),
           ),

@@ -112,7 +112,10 @@ func setupSessionIntegEnv(t *testing.T) *sessionIntegEnv {
 		"000014_circle_members_circle_fk.up.sql",
 		"000015_circle_management.up.sql",
 		"000016_live_sessions.up.sql",
+		"000017_recitation_queue_system.up.sql",
+		"000018_real_time_chat.up.sql",
 		"000019_account_deletion_tombstone.up.sql",
+		"000020_schedule_calendar_attendance.up.sql",
 	}
 	for _, m := range migrations {
 		runMigrationFile(t, conn, ctx, m)

@@ -51,16 +51,19 @@ class ProfileController extends StateNotifier<ProfileState> {
     required FirebaseAuth firebaseAuth,
     required ReadAuthState readAuthState,
     required Logout logout,
+    void Function(String)? onTimezoneSaved,
   })  : _apiClient = apiClient,
         _firebaseAuth = firebaseAuth,
         _readAuthState = readAuthState,
         _logout = logout,
+        _onTimezoneSaved = onTimezoneSaved,
         super(const ProfileState());
 
   final ProfileApiClient _apiClient;
   final FirebaseAuth _firebaseAuth;
   final ReadAuthState _readAuthState;
   final Logout _logout;
+  final void Function(String)? _onTimezoneSaved;
 
   Future<void> loadProfile() async {
     state = state.copyWith(
@@ -132,6 +135,7 @@ class ProfileController extends StateNotifier<ProfileState> {
         clearErrorMessage: true,
         clearFieldErrors: true,
       );
+      _onTimezoneSaved?.call(profile.timezone);
       return true;
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) {
@@ -268,5 +272,7 @@ final profileControllerProvider =
     firebaseAuth: ref.watch(firebaseAuthProvider),
     readAuthState: () => ref.read(authControllerProvider),
     logout: () => ref.read(authControllerProvider.notifier).logout(),
+    onTimezoneSaved: (timezone) =>
+        ref.read(authControllerProvider.notifier).updateTimezone(timezone),
   );
 });

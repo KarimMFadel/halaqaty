@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/auth/presentation/auth_screens.dart';
@@ -81,6 +82,9 @@ class _StubAuthNotifier extends StateNotifier<AuthState>
   Future<void> logout() async {
     state = const AuthState(status: AuthStatus.unauthenticated);
   }
+
+  @override
+  void updateTimezone(String timezone) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -122,6 +126,29 @@ Widget _buildLoginScreen(
 TextField _field(WidgetTester tester, Key key) => tester.widget<TextField>(
       find.descendant(of: find.byKey(key), matching: find.byType(TextField)),
     );
+
+GoRouter _authFlowRouter(String initialLocation) => GoRouter(
+      initialLocation: initialLocation,
+      routes: [
+        GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+        GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
+      ],
+    );
+
+Widget _buildRoutedAuthScreens(
+  _StubAuthNotifier stub,
+  GoRouter router, {
+  required TextDirection direction,
+}) {
+  return ProviderScope(
+    overrides: [authControllerProvider.overrideWith((_) => stub)],
+    child: MaterialApp.router(
+      routerConfig: router,
+      builder: (context, child) =>
+          Directionality(textDirection: direction, child: child!),
+    ),
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Tests: RegisterScreen form validation
@@ -194,6 +221,28 @@ void main() {
   });
 
   group('RegisterScreen — US5 hierarchy, targets, and direction', () {
+    testWidgets('localized sign-in link opens login',
+        (WidgetTester tester) async {
+      final router = _authFlowRouter('/register');
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        _buildRoutedAuthScreens(
+          _StubAuthNotifier(),
+          router,
+          direction: TextDirection.ltr,
+        ),
+      );
+
+      expect(
+        tester.getSize(find.byKey(const Key('registerToLoginLink'))).height,
+        greaterThanOrEqualTo(48),
+      );
+      await tester.tap(find.text('Already registered? Sign in'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Welcome back to your circles'), findsOneWidget);
+    });
+
     testWidgets('exposes every preserved field and the brand mark',
         (WidgetTester tester) async {
       await tester.pumpWidget(_buildRegisterScreen(_StubAuthNotifier()));
@@ -363,6 +412,29 @@ void main() {
   });
 
   group('LoginScreen — US5 hierarchy, targets, and direction', () {
+    testWidgets('localized create-account link opens registration',
+        (WidgetTester tester) async {
+      final router = _authFlowRouter('/login');
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        _buildRoutedAuthScreens(
+          _StubAuthNotifier(),
+          router,
+          direction: TextDirection.rtl,
+        ),
+      );
+
+      expect(
+        tester.getSize(find.byKey(const Key('loginToRegisterLink'))).height,
+        greaterThanOrEqualTo(48),
+      );
+      await tester.tap(find.text('ليس لديك حساب؟ إنشاء حساب'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('displayNameField')), findsOneWidget);
+      expect(find.text('البريد الإلكتروني'), findsOneWidget);
+    });
+
     testWidgets('exposes every preserved field and the brand mark',
         (WidgetTester tester) async {
       await tester.pumpWidget(_buildLoginScreen(_StubAuthNotifier()));

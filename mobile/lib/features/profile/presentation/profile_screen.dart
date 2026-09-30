@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/app/app_locale_controller.dart';
 import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
+import 'package:halaqaty_mobile/core/validation.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/auth/presentation/auth_screens.dart';
 import 'package:halaqaty_mobile/features/profile/application/profile_controller.dart';
@@ -47,6 +48,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _countryController = TextEditingController();
   final _avatarUrlController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _timezoneController = TextEditingController();
 
   String _selectedLanguage = 'ar';
   bool _didSeedFromProfile = false;
@@ -67,6 +69,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _countryController.dispose();
     _avatarUrlController.dispose();
     _phoneController.dispose();
+    _timezoneController.dispose();
     super.dispose();
   }
 
@@ -74,6 +77,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(profileControllerProvider);
     final isRtl = Directionality.of(context) == TextDirection.rtl;
+    final profile = state.profile;
 
     // A loaded profile replaces the locale with its preferred language
     // (FR-029).
@@ -111,6 +115,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          if (profile != null) ...[
+                            Card(
+                              key: const Key('profileIdentitySummary'),
+                              margin: EdgeInsets.zero,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest,
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .secondaryContainer,
+                                  foregroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .onSecondaryContainer,
+                                  child: const Icon(Icons.person_outline),
+                                ),
+                                title: Text(
+                                  profile.fullName?.trim().isNotEmpty == true
+                                      ? profile.fullName!.trim()
+                                      : profile.displayName,
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium,
+                                ),
+                                subtitle: Text(
+                                  '${profile.displayName} · ${profile.preferredLanguage == 'ar' ? (isRtl ? 'العربية' : 'Arabic') : (isRtl ? 'الإنجليزية' : 'English')}',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                          ],
                           SectionHeader(
                             title: isRtl
                                 ? 'تفاصيل الملف الشخصي'
@@ -244,6 +279,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               }
                             },
                           ),
+                          const SizedBox(height: 16),
+                          // F-006: the stored IANA timezone drives calendar
+                          // display; the server re-validates the name.
+                          TextFormField(
+                            key: const Key('profileTimezoneField'),
+                            controller: _timezoneController,
+                            decoration: InputDecoration(
+                              labelText:
+                                  isRtl ? 'المنطقة الزمنية' : 'Time zone',
+                              hintText: 'Africa/Cairo',
+                              errorText: state.fieldErrors['timezone'],
+                            ),
+                            validator: (value) {
+                              if (!isValidIanaTimezone(value ?? '')) {
+                                return isRtl
+                                    ? 'أدخل منطقة زمنية صالحة، مثل Africa/Cairo'
+                                    : 'Enter a valid time zone, e.g. Africa/Cairo';
+                              }
+                              return null;
+                            },
+                          ),
                           const SizedBox(height: 8),
                           _NoticeTile(
                             icon: Icons.palette_outlined,
@@ -326,6 +382,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _countryController.text = profile.country ?? '';
     _avatarUrlController.text = profile.avatarUrl ?? '';
     _phoneController.text = profile.phone ?? '';
+    _timezoneController.text = profile.timezone;
     _selectedLanguage = profile.preferredLanguage;
     _didSeedFromProfile = true;
   }
@@ -344,6 +401,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 bio: _bioController.text.trim(),
                 country: _countryController.text.trim().toUpperCase(),
                 preferredLanguage: _selectedLanguage,
+                timezone: _timezoneController.text.trim(),
                 avatarUrl: _avatarUrlController.text.trim(),
                 phone: _phoneController.text.trim(),
               ),

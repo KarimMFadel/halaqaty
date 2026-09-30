@@ -1,10 +1,10 @@
-# حِلْقَتي — Halaqaty
+<h1 align="center"><img src="mobile/assets/brand/logo.svg" alt="Halaqaty logo" width="40" /><br />حِلْقَتي — Halaqaty</h1>
 
 > **One platform for every Quran memorization circle.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-blue.svg)](https://flutter.dev)
-[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8.svg)](https://golang.org)
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8.svg)](https://go.dev)
 [![LiveKit](https://img.shields.io/badge/Audio-LiveKit-orange.svg)](https://livekit.io)
 
 ---
@@ -25,7 +25,7 @@ Halaqaty replaces all of that with a single, purpose-built application designed 
 | 🎙️ **Recitation Queue System** | The killer feature — ordered queue for live sessions with per-round tracking |
 | 💬 **Real-time Chat** | Group and private messages with voice notes, files, and pinning |
 | 🎙️ **Live Sessions** | No-time-limit audio-only sessions via LiveKit (WebRTC), optimized for Quran recitation quality (video post-MVP behind feature flag) |
-| 📅 **Schedule & Calendar** | Recurring weekly schedules, reminders, attendance tracking |
+| 📅 **Schedule & Calendar** | Recurring schedules, one-off planned sessions, local-time calendars, and attendance tracking |
 | 📊 **Progress Tracking** | Session-level memorization logs with grades, followed by the approved Phase 3 Quran map and analytics work |
 | 🔔 **Smart Notifications** | FCM push + in-app real-time notifications |
 | 🔒 **Privacy-First Sessions** | Live-session recording is disabled in MVP; any future recording requires explicit consent and strict privacy controls |
@@ -80,7 +80,7 @@ halaqaty/
 │   └── memory/constitution.md       ← Governing document — read before writing any code
 ├── .github/                        ← Copilot agents, skills, prompts, workflows
 ├── .opencode/                      ← OpenCode agent and skill definitions
-├── backend/                        ← Go 1.22 service (module halaqaty/backend) — see backend/ layout
+├── backend/                        ← Go 1.26 service (module halaqaty/backend) — see backend/ layout
 ├── mobile/                         ← Flutter app (package halaqaty_mobile) — see mobile/ layout
 ├── specs/                          ← Spec-Kit per-feature specs (generated, do not edit manually)
 │                                   ← each subdirectory is a feature (e.g., 001-auth-roles-profile)
@@ -112,36 +112,18 @@ halaqaty/
 
 ## 🛠️ Development Workflow
 
-Halaqaty uses **[Spec-Kit](https://github.com/github/spec-kit)** (`v0.8.1`) for spec-driven development with GitHub Copilot. All code is generated from frozen specs — not from ad-hoc prompts.
-
-**Specialized engineering agents collaborate through the project workflow harness:**
-- **Senior Golang Developer** — Backend services, APIs, concurrency, database
-- **Senior Flutter Mobile Engineer** — Mobile UI, state management, RTL/Arabic support
-- **Architect** — System design, service boundaries, technology choices
-- **Tech Lead** — Code quality, security, performance, testing standards (hard gate)
-- **Team Leader** — Coordination, delivery tracking, Spec-Kit enforcement
+Halaqaty uses **[Spec-Kit](https://github.com/github/spec-kit)** (`v0.8.1`) to define feature scope and implementation artifacts. Supported coding agents follow the approved specs, plans, contracts, and quality gates; see the [agent workflow harness](docs/engineering/collaboration/AGENT_WORKFLOW_HARNESS.md).
 
 **Read before writing any code:**
 
 | Document | Purpose |
 |---|---|
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Full developer guide: setup, Spec-Kit commands, workflow steps, quality gates, agent roles |
-| [`.specify/memory/constitution.md`](.specify/memory/constitution.md) | Governing principles — every Copilot agent reads this first |
-| [`docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md`](docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) | How agents collaborate: roles, clarification protocols, escalation paths |
+| [`.specify/memory/constitution.md`](.specify/memory/constitution.md) | Governing principles for feature work |
+| [Agent workflow harness](docs/engineering/collaboration/AGENT_WORKFLOW_HARNESS.md) | How Spec-Kit, implementation discipline, role agents, and quality guards fit together |
 | [`docs/management/product/MVP_DECISION_REGISTER.md`](docs/management/product/MVP_DECISION_REGISTER.md) | All frozen business and technical decisions |
 
-**Spec-Kit workflow (7 phases):**
-```
-1. /speckit.specify      → Create feature spec
-2. /speckit.clarify      → Resolve ambiguities (agents ask you clarifying questions)
-3. /speckit.checklist    → Validate spec quality
-4. /speckit.plan         → Design architecture
-5. /speckit.tasks        → Generate implementation tasks
-6. /speckit.analyze      → Check consistency
-7. /speckit.implement    → Agents execute with tests and reviews
-```
-
-See [DEVELOPMENT.md](DEVELOPMENT.md) for the full command table, step-by-step workflow, and PR requirements.
+Use the seven-phase Spec-Kit workflow: **specify → clarify → checklist → plan → tasks → analyze → implement**. See [DEVELOPMENT.md](DEVELOPMENT.md) for commands and quality gates, and the [agent workflow harness](docs/engineering/collaboration/AGENT_WORKFLOW_HARNESS.md) for collaboration and review rules.
 
 Flutter CI runs functional integration tests on Linux. Screenshot suites run
 locally on the connected Android device/emulator. See [GitHub Actions test workflows](docs/engineering/deployment/GITHUB_ACTIONS.md)
@@ -150,7 +132,7 @@ for commands and the checks each environment covers.
 ---
 
 
-This repository is currently in the **planning phase**. All documents below are comprehensive planning artifacts authored from the perspective of the full leadership team.
+Product and engineering documentation lives below. Current feature status is tracked in [FEATURES.md](docs/management/product/FEATURES.md); these documents remain the source for product scope and technical decisions.
 
 | Document | Language | Description |
 |----------|----------|-------------|
@@ -168,29 +150,15 @@ This repository is currently in the **planning phase**. All documents below are 
 
 ---
 
-## 🚀 Release Roadmap
+## 📍 Project Status
 
-| Phase | Timeline | Milestone |
-|-------|----------|-----------|
-| **Phase 1** | Months 1–3 | Android APK (internal testing) |
-| **Phase 2** | Months 4–6 | Google Play + Apple TestFlight |
-| **Phase 3** | Months 6–8 | Apple App Store public launch |
-| **Phase 4** | Months 8–12 | Flutter Web + institutional features |
+See the [feature tracker](docs/management/product/FEATURES.md) for current delivery status and [DEVELOPMENT.md](DEVELOPMENT.md) for setup, build, and test commands. Feature completion does not by itself indicate a production release; the tracker records any remaining verification separately.
 
 ---
 
 ## 🤝 Contributing
 
-Before writing any code, read [DEVELOPMENT.md](DEVELOPMENT.md) for the full Spec-Kit workflow and agent collaboration model.
-
-1. Read `.specify/memory/constitution.md` — the governing document for all decisions.
-2. Read `docs/engineering/collaboration/AGENT_COLLABORATION_GUIDE.md` — how agents collaborate and when they ask you clarifying questions.
-3. Verify the feature is `🟡 Approved` in `docs/management/product/FEATURES.md`.
-4. Run `/speckit.specify` in VS Code Copilot Chat to start the 7-phase workflow.
-5. Follow the pipeline: **specify → clarify → checklist → plan → tasks → analyze → implement**.
-6. Agents will ask you 5-7 clarifying questions if requirements are ambiguous — **answer clearly**.
-7. All PRs require green quality gates and **Tech Lead approval** (see [DEVELOPMENT.md](DEVELOPMENT.md)).
-8. Arabic documentation mirrors business/product docs only. Technical docs (ARCHITECTURE, ADRs) remain English. See [docs/management/arabic/SYNC_GUIDE.md](docs/management/arabic/SYNC_GUIDE.md).
+Before contributing, read [DEVELOPMENT.md](DEVELOPMENT.md), the [agent workflow harness](docs/engineering/collaboration/AGENT_WORKFLOW_HARNESS.md), and the [constitution](.specify/memory/constitution.md). Start feature work only from approved scope in [FEATURES.md](docs/management/product/FEATURES.md), then follow the Spec-Kit workflow and applicable quality gates. See the [Arabic documentation sync guide](docs/management/arabic/SYNC_GUIDE.md) for language rules.
 
 ---
 

@@ -95,7 +95,7 @@ FOR UPDATE
 // opaque room reference exactly when the transition applies (ADR-015).
 const startSessionQuery = `
 UPDATE sessions
-SET status = 'active', actual_start = NOW(), media_room_ref = $2, updated_at = NOW()
+SET status = 'active', actual_start = clock_timestamp(), media_room_ref = $2, updated_at = clock_timestamp()
 WHERE id = $1::uuid AND status = 'scheduled'
 RETURNING ` + sessionColumns
 
@@ -140,8 +140,9 @@ WHERE session_id = $1::uuid AND user_id = $2::uuid
 
 // insertPresenceQuery records the first join of a participant.
 const insertPresenceQuery = `
+WITH admission AS (SELECT clock_timestamp() AS joined_at)
 INSERT INTO session_participant_presence (session_id, user_id, first_joined_at, last_joined_at, is_currently_present)
-VALUES ($1::uuid, $2::uuid, NOW(), NOW(), TRUE)
+SELECT $1::uuid, $2::uuid, admission.joined_at, admission.joined_at, TRUE FROM admission
 `
 
 // markPresencePresentQuery transitions an eligible absent participant back to

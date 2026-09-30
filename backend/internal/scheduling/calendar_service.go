@@ -71,8 +71,11 @@ func (s *CalendarService) month(ctx context.Context, actorID, month string, q db
 	}
 	monthStart := time.Date(parsed.Year(), parsed.Month(), 1, 0, 0, 0, 0, loc)
 	monthEnd := monthStart.AddDate(0, 1, 0)
-	fromDate := civilOf(monthStart).AddDate(0, 0, -MaxDurationMinutes/minutesPerDay)
-	toDate := civilOf(monthEnd).AddDate(0, 0, -1)
+	// Planning zones can differ from the viewer zone by more than one civil
+	// date near a month edge. Bound in UTC, then allow one date on either side
+	// for any planning zone before checking the exact resolved UTC interval.
+	fromDate := civilOf(monthStart.UTC().Add(-time.Duration(MaxDurationMinutes)*time.Minute)).AddDate(0, 0, -1)
+	toDate := civilOf(monthEnd.UTC()).AddDate(0, 0, 1)
 
 	rows, err := q.Query(ctx, calendarCirclesQuery, actorID)
 	if err != nil {
@@ -131,6 +134,7 @@ func (s *CalendarService) month(ctx context.Context, actorID, month string, q db
 		schedules = append(schedules, entries...)
 	}
 	scheduleIDs := make([]string, 0, len(schedules))
+	stoppedCandidates := map[string]bool{}
 	for _, schedule := range schedules {
 		scheduleIDs = append(scheduleIDs, schedule.ID)
 	}
@@ -145,9 +149,6 @@ func (s *CalendarService) month(ctx context.Context, actorID, month string, q db
 			revisions[i] = records[i].Revision
 		}
 		for _, occurrence := range OccurrenceWindow(revisions, fromDate, toDate) {
-			if schedule.StoppedFromLocalDate != nil && !occurrence.OriginalLocalDate.Before(civilOf(*schedule.StoppedFromLocalDate)) {
-				continue
-			}
 			record, ok := revisionFor(records, occurrence.Version)
 			if !ok {
 				continue
@@ -165,6 +166,9 @@ func (s *CalendarService) month(ctx context.Context, actorID, month string, q db
 			}
 			key := occurrenceKey(occurrence.ScheduleID, occurrence.OriginalLocalDate)
 			items[key] = CalendarItem{OccurrenceKey: key, CircleID: schedule.CircleID, CircleName: circleNames[schedule.CircleID], Title: record.Title, StartsAt: start, EndsAt: end, PlanningTimezone: record.Timezone, State: "scheduled"}
+			if dateIsStopped(occurrence.OriginalLocalDate, schedule.StoppedFromLocalDate) {
+				stoppedCandidates[key] = true
+			}
 		}
 	}
 	if len(scheduleIDs) > 0 {
@@ -185,12 +189,12 @@ func (s *CalendarService) month(ctx context.Context, actorID, month string, q db
 				return CalendarMonth{}, fmt.Errorf("scan calendar exception: %w", err)
 			}
 			key := occurrenceKey(scheduleID, original)
+			schedule, ok := calendarSchedule(schedules, scheduleID)
+			if !ok {
+				continue
+			}
 			item, exists := items[key]
 			if !exists {
-				schedule, ok := calendarSchedule(schedules, scheduleID)
-				if !ok || (schedule.StoppedFromLocalDate != nil && !original.Before(civilOf(*schedule.StoppedFromLocalDate))) {
-					continue
-				}
 				records := revisionsByID[scheduleID]
 				record, ok := occurrenceRevision(records, original)
 				if !ok {
@@ -207,6 +211,20 @@ func (s *CalendarService) month(ctx context.Context, actorID, month string, q db
 					return CalendarMonth{}, err
 				}
 				item = CalendarItem{OccurrenceKey: key, CircleID: schedule.CircleID, CircleName: circleNames[schedule.CircleID], Title: record.Title, StartsAt: start, EndsAt: end, PlanningTimezone: record.Timezone, State: "scheduled"}
+				if dateIsStopped(original, schedule.StoppedFromLocalDate) {
+					stoppedCandidates[key] = true
+				}
+			}
+			effectiveDate := original
+			if moved != nil {
+				effectiveDate = *moved
+			}
+			if dateIsStopped(civilOf(effectiveDate), schedule.StoppedFromLocalDate) {
+				delete(items, key)
+				continue
+			}
+			if moved != nil {
+				delete(stoppedCandidates, key)
 			}
 			if cancelledAt != nil {
 				item.State = "cancelled"
@@ -262,6 +280,9 @@ func (s *CalendarService) month(ctx context.Context, actorID, month string, q db
 			return CalendarMonth{}, fmt.Errorf("query calendar exceptions: %w", err)
 		}
 		rows.Close()
+		for key := range stoppedCandidates {
+			delete(items, key)
+		}
 		rows, err = q.Query(ctx, calendarMaterializedQuery, scheduleIDs, monthStartUTC, monthEndUTC)
 		if err != nil {
 			return CalendarMonth{}, fmt.Errorf("query materialized calendar items: %w", err)

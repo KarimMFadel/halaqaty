@@ -97,6 +97,47 @@ func TestScheduleService_AuthorizationReplayAndSeries(t *testing.T) {
 	}
 }
 
+func TestScheduleService_ListExposesRetainedOccurrenceVersions(t *testing.T) {
+	ctx := context.Background()
+	pool := openRepoTestPool(t, ctx)
+	fx := newOccurrenceStartFixture(t, ctx, pool)
+	original := fx.date.AddDate(0, 0, 1)
+	moved := fx.date.AddDate(0, 0, 3)
+	if _, err := fx.repo.UpsertException(ctx, OccurrenceException{ScheduleID: fx.schedule.ID, OriginalLocalDate: original, ReplacementLocalDate: &moved, UpdatedBy: fx.teacher}); err != nil {
+		t.Fatalf("create exception: %v", err)
+	}
+	if _, err := fx.repo.UpsertException(ctx, OccurrenceException{ScheduleID: fx.schedule.ID, OriginalLocalDate: original, ReplacementLocalDate: &moved, UpdatedBy: fx.teacher}); err != nil {
+		t.Fatalf("update exception: %v", err)
+	}
+	views, err := fx.schedules.List(ctx, fx.circle, fx.teacher)
+	if err != nil || len(views) != 1 {
+		t.Fatalf("list schedule views = %+v, err %v", views, err)
+	}
+	if got := views[0].OccurrenceVersions[original.Format(time.DateOnly)]; got != 2 {
+		t.Fatalf("exception version = %d, want 2", got)
+	}
+	if got := views[0].OccurrenceVersions[fx.date.Format(time.DateOnly)]; got != 0 {
+		t.Fatalf("virtual occurrence version = %d, want 0", got)
+	}
+}
+
+func TestScheduleService_ChangeSelectedDatesPreservesPastHistory(t *testing.T) {
+	ctx := context.Background()
+	pool := openRepoTestPool(t, ctx)
+	fx := newOccurrenceStartFixture(t, ctx, pool)
+	fx.schedules.now = func() time.Time { return civilDate(2030, 1, 4) }
+	plan := selectedDatesRecord(fx.date, fx.date, fx.date.AddDate(0, 0, 3))
+	plan.Title = "Updated future dates"
+	changed, err := fx.schedules.Change(ctx, ChangeScheduleCommand{
+		ActorID: fx.teacher, CircleID: fx.circle, ScheduleID: fx.schedule.ID,
+		IdempotencyKey: "selected-date-edit", ExpectedVersion: 1,
+		EffectiveLocalDate: fx.date.AddDate(0, 0, 3), Plan: plan,
+	})
+	if err != nil || changed.CurrentVersion != 2 {
+		t.Fatalf("selected-date edit = %+v, err %v; want version 2", changed, err)
+	}
+}
+
 func TestScheduleService_RequiresFreshReviewedOverlapWarnings(t *testing.T) {
 	ctx := context.Background()
 	pool := openRepoTestPool(t, ctx)

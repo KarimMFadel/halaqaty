@@ -197,6 +197,166 @@ func TestAttendanceRepository_RevocationBeforeJoinCommitDeniesAndPreservesNoRost
 	}
 }
 
+func TestAttendanceRepository_StartWaitsForMembershipRevocationBeforeSnapshot(t *testing.T) {
+	ctx := context.Background()
+	pool := newAttendancePool(t)
+	teacher := attendanceUser(t, pool, "start-race-teacher")
+	student := attendanceUser(t, pool, "start-race-student")
+	circle := attendanceCircle(t, pool, teacher)
+	addAttendanceMember(t, pool, circle, teacher, "teacher")
+	addAttendanceMember(t, pool, circle, student, "student")
+	attendanceRepo := NewRepository(pool)
+	sessionRepo := sessions.NewSessionRepository(pool)
+	sessionRepo.SetAttendanceLifecycle(attendanceRepo)
+	session, err := sessionRepo.CreateAdHocSession(ctx, circle, teacher)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revocation, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = revocation.Rollback(ctx) }()
+	if _, err := revocation.Exec(ctx, `DELETE FROM circle_members WHERE circle_id=$1::uuid AND user_id=$2::uuid`, circle, student); err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan error, 1)
+	go func() {
+		_, _, err := sessionRepo.StartSessionWithConnection(ctx, session.ID, teacher, sessions.MediaRoomRef("start-race-"+session.ID), sessions.MediaGrants{}, func(context.Context, sessions.MediaRoomRef, sessions.MediaMode) error { return nil }, testIssue)
+		started <- err
+	}()
+	select {
+	case err := <-started:
+		t.Fatalf("start passed an uncommitted membership revocation: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	if err := revocation.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-started; err != nil {
+		t.Fatal(err)
+	}
+	var rosterCount int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM session_attendance WHERE session_id=$1::uuid AND user_id=$2::uuid`, session.ID, student).Scan(&rosterCount); err != nil {
+		t.Fatal(err)
+	}
+	if rosterCount != 0 {
+		t.Fatalf("revoked student retained %d start-roster rows", rosterCount)
+	}
+}
+
+func TestAttendanceRepository_StartWaitsForEnrollmentBeforeSnapshot(t *testing.T) {
+	ctx := context.Background()
+	pool := newAttendancePool(t)
+	teacher := attendanceUser(t, pool, "enroll-race-teacher")
+	student := attendanceUser(t, pool, "enroll-race-student")
+	circle := attendanceCircle(t, pool, teacher)
+	addAttendanceMember(t, pool, circle, teacher, "teacher")
+	attendanceRepo := NewRepository(pool)
+	sessionRepo := sessions.NewSessionRepository(pool)
+	sessionRepo.SetAttendanceLifecycle(attendanceRepo)
+	session, err := sessionRepo.CreateAdHocSession(ctx, circle, teacher)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enrollment, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = enrollment.Rollback(ctx) }()
+	if _, err := enrollment.Exec(ctx, `INSERT INTO circle_members(circle_id,user_id,role) VALUES ($1::uuid,$2::uuid,'student')`, circle, student); err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan error, 1)
+	go func() {
+		_, _, err := sessionRepo.StartSessionWithConnection(ctx, session.ID, teacher, sessions.MediaRoomRef("enroll-race-"+session.ID), sessions.MediaGrants{}, func(context.Context, sessions.MediaRoomRef, sessions.MediaMode) error { return nil }, testIssue)
+		started <- err
+	}()
+	select {
+	case err := <-started:
+		t.Fatalf("start passed an uncommitted enrollment: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	if err := enrollment.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-started; err != nil {
+		t.Fatal(err)
+	}
+	if source := attendanceSource(t, pool, session.ID, student); source != string(RosterSourceStartSnapshot) {
+		t.Fatalf("enrolled student roster source = %q, want start snapshot", source)
+	}
+}
+
+func TestAttendanceRepository_JoinAfterLockWaitUsesAdmissionTimeForLateStatus(t *testing.T) {
+	ctx := context.Background()
+	pool := newAttendancePool(t)
+	teacher := attendanceUser(t, pool, "late-race-teacher")
+	student := attendanceUser(t, pool, "late-race-student")
+	circle := attendanceCircle(t, pool, teacher)
+	addAttendanceMember(t, pool, circle, teacher, "teacher")
+	addAttendanceMember(t, pool, circle, student, "student")
+	attendanceRepo := NewRepository(pool)
+	sessionRepo := sessions.NewSessionRepository(pool)
+	sessionRepo.SetAttendanceLifecycle(attendanceRepo)
+	session, err := sessionRepo.CreateAdHocSession(ctx, circle, teacher)
+	if err != nil {
+		t.Fatal(err)
+	}
+	startAttendanceSession(t, sessionRepo, session.ID, teacher)
+	if _, err := pool.Exec(ctx, `UPDATE sessions SET actual_start=clock_timestamp()-INTERVAL '9 minutes 58 seconds' WHERE id=$1::uuid`, session.ID); err != nil {
+		t.Fatal(err)
+	}
+	blocker, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = blocker.Rollback(ctx) }()
+	if _, err := blocker.Exec(ctx, `UPDATE sessions SET updated_at=updated_at WHERE id=$1::uuid`, session.ID); err != nil {
+		t.Fatal(err)
+	}
+	joined := make(chan error, 1)
+	go func() {
+		_, _, err := sessionRepo.JoinSessionWithConnection(ctx, session.ID, student, sessions.MediaGrants{}, testIssue)
+		joined <- err
+	}()
+	select {
+	case err := <-joined:
+		t.Fatalf("join passed the held session row: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var pastCutoff bool
+		if err := pool.QueryRow(ctx, `SELECT clock_timestamp() >= actual_start + INTERVAL '10 minutes' FROM sessions WHERE id=$1::uuid`, session.ID).Scan(&pastCutoff); err != nil {
+			t.Fatal(err)
+		}
+		if pastCutoff {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("ten-minute cutoff was not reached")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err := blocker.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-joined; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sessionRepo.EndSession(ctx, session.ID, sessions.EndReasonManual); err != nil {
+		t.Fatal(err)
+	}
+	var status string
+	if err := pool.QueryRow(ctx, `SELECT effective_status FROM session_attendance WHERE session_id=$1::uuid AND user_id=$2::uuid`, session.ID, student).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != string(StatusLate) {
+		t.Fatalf("join admitted after ten-minute cutoff classified %q, want late", status)
+	}
+}
+
 func TestAttendanceRepository_ReadScopesAndArchivedHistory(t *testing.T) {
 	ctx := context.Background()
 	pool := newAttendancePool(t)

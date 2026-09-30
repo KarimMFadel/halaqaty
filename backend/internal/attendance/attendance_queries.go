@@ -1,12 +1,28 @@
 package attendance
 
+const lockStartRosterCircleQuery = `
+SELECT c.id::text
+FROM sessions s
+JOIN circles c ON c.id = s.circle_id
+WHERE s.id = $1::uuid AND s.status = 'scheduled'
+FOR UPDATE OF c
+`
+
+const lockStartRosterMembersQuery = `
+SELECT cm.user_id::text
+FROM sessions s
+JOIN circle_members cm ON cm.circle_id = s.circle_id
+WHERE s.id = $1::uuid
+FOR SHARE OF cm
+`
+
 const snapshotStartRosterQuery = `
 INSERT INTO session_attendance (session_id, user_id, roster_source)
 SELECT $1::uuid, cm.user_id, 'start_snapshot'
 FROM sessions s
 JOIN circles c ON c.id = s.circle_id AND NOT c.is_archived
 JOIN circle_members cm ON cm.circle_id = s.circle_id AND cm.role = 'student'
-WHERE s.id = $1::uuid AND s.status = 'active' AND s.actual_start IS NOT NULL
+WHERE s.id = $1::uuid AND s.status = 'scheduled' AND s.actual_start IS NULL
 ON CONFLICT (session_id, user_id) DO NOTHING
 `
 
@@ -102,8 +118,8 @@ FOR UPDATE
 `
 
 const insertAttendanceCorrectionQuery = `
-INSERT INTO attendance_corrections (session_id, user_id, actor_id, reason, previous_status, new_status)
-VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6)
+INSERT INTO attendance_corrections (session_id, user_id, actor_id, at, reason, previous_status, new_status)
+VALUES ($1::uuid, $2::uuid, $3::uuid, clock_timestamp(), $4, $5, $6)
 RETURNING id::text, at
 `
 
@@ -113,7 +129,7 @@ WHERE session_id = $1::uuid AND user_id = $2::uuid AND finalized_at IS NOT NULL
 `
 
 const getAttendanceCorrectionByIDQuery = `
-SELECT a.session_id::text, a.user_id::text, a.effective_status,
+SELECT a.session_id::text, a.user_id::text, c.new_status,
        'manual', a.first_presence_at, c.id::text, c.actor_id::text, c.at,
        c.reason, c.previous_status, c.new_status
 FROM attendance_corrections c

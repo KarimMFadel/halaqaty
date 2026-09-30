@@ -185,7 +185,8 @@ func TestScheduleHandler_ListSchedules(t *testing.T) {
 				t.Fatalf("list scope: got circle=%q actor=%q", circleID, actorID)
 			}
 			return []ScheduleView{{
-				Schedule: Schedule{ID: contractScheduleID, CircleID: contractCircleID, CurrentVersion: 2},
+				Schedule:           Schedule{ID: contractScheduleID, CircleID: contractCircleID, CurrentVersion: 2},
+				OccurrenceVersions: map[string]int{"2030-01-06": 3},
 				Plan: RevisionRecord{
 					Revision:        Revision{Version: 2, Mode: ModeWeekdayPattern, AnchorLocalDate: anchor, WeekCadence: 1, Weekdays: []int{1, 3}},
 					Title:           "Hifz Review",
@@ -213,6 +214,10 @@ func TestScheduleHandler_ListSchedules(t *testing.T) {
 			t.Fatalf("schedule item: %v", data[0])
 		}
 		assertScheduleProjection(t, schedule, contractScheduleID, contractCircleID, 2)
+		versions, ok := schedule["occurrence_versions"].(map[string]any)
+		if !ok || versions["2030-01-06"] != float64(3) {
+			t.Fatalf("retained occurrence versions missing: %v", schedule["occurrence_versions"])
+		}
 		plan := schedule["plan"].(map[string]any)
 		if plan["mode"] != "weekday_pattern" || plan["title"] != "Hifz Review" || plan["timezone"] != "Asia/Riyadh" {
 			t.Fatalf("plan projection: %v", plan)

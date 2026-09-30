@@ -320,11 +320,19 @@ func (r *Repository) startSessionWithConnectionInTx(ctx context.Context, q queri
 	if err != nil {
 		return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: lock session: %w", err)
 	}
+	if sess.Status == SessionStatusScheduled && r.attendance != nil {
+		tx, err := attendanceTransaction(q)
+		if err != nil {
+			return Session{}, MediaConnection{}, err
+		}
+		if err := r.attendance.SnapshotStartRoster(ctx, tx, sessionID); err != nil {
+			return Session{}, MediaConnection{}, err
+		}
+	}
 	if err := lockActiveParticipantAccount(ctx, q, userID); err != nil {
 		return Session{}, MediaConnection{}, err
 	}
 	var started Session
-	var activated bool
 	switch sess.Status {
 	case SessionStatusScheduled:
 		var cancelled bool
@@ -341,7 +349,6 @@ func (r *Repository) startSessionWithConnectionInTx(ctx context.Context, q queri
 		if err != nil {
 			return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: activate session: %w", err)
 		}
-		activated = true
 	case SessionStatusActive:
 		if sess.MediaRoomRef == "" {
 			return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: active session has no media room reference")
@@ -353,15 +360,6 @@ func (r *Repository) startSessionWithConnectionInTx(ctx context.Context, q queri
 	facts, err := loadPresenceEligibility(ctx, q, sessionID, userID)
 	if err != nil {
 		return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: load presence: %w", err)
-	}
-	if activated && r.attendance != nil {
-		tx, err := attendanceTransaction(q)
-		if err != nil {
-			return Session{}, MediaConnection{}, err
-		}
-		if err := r.attendance.SnapshotStartRoster(ctx, tx, sessionID); err != nil {
-			return Session{}, MediaConnection{}, err
-		}
 	}
 	if !facts.currentlyPresent() {
 		if facts.found && !facts.removed {

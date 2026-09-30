@@ -62,7 +62,8 @@ type ChangeOccurrenceCommand struct {
 // ScheduleView combines stable identity and its latest retained plan.
 type ScheduleView struct {
 	Schedule
-	Plan RevisionRecord
+	Plan               RevisionRecord
+	OccurrenceVersions map[string]int
 }
 
 // ScheduleService implements US1 persistence, authorization and US4 overlap confirmation.
@@ -102,7 +103,15 @@ func (s *ScheduleService) List(ctx context.Context, circleID, actorID string) ([
 			if len(records) == 0 {
 				return fmt.Errorf("schedule has no revision: %w", ErrInvalidRevision)
 			}
-			views = append(views, ScheduleView{Schedule: sch, Plan: records[len(records)-1]})
+			exceptions, err := repo.ListExceptions(ctx, sch.ID)
+			if err != nil {
+				return err
+			}
+			versions := make(map[string]int, len(exceptions))
+			for _, exception := range exceptions {
+				versions[civilOf(exception.OriginalLocalDate).Format(time.DateOnly)] = exception.Version
+			}
+			views = append(views, ScheduleView{Schedule: sch, Plan: records[len(records)-1], OccurrenceVersions: versions})
 		}
 		return nil
 	})
@@ -442,6 +451,9 @@ func validateNewPlan(record RevisionRecord, now time.Time) error {
 		return ErrPastPlannedTime
 	}
 	for _, date := range record.SelectedDates {
+		if civilOf(date).Before(civilOf(record.EffectiveLocalDate)) {
+			continue
+		}
 		if ResolveStartUTC(loc, date, record.StartLocalTime).Before(now) {
 			return ErrPastPlannedTime
 		}

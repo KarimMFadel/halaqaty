@@ -102,6 +102,63 @@ func TestOccurrenceStart_SeriesEditWaitsAndRetainsStartedPlan(t *testing.T) {
 	}
 }
 
+func TestOccurrenceStart_RetainsEarlierExceptionAfterLaterSeriesEdit(t *testing.T) {
+	ctx := context.Background()
+	pool := openRepoTestPool(t, ctx)
+	fx := newOccurrenceStartFixture(t, ctx, pool)
+	cancelled := fx.date
+	movedOriginal := fx.date.AddDate(0, 0, 1)
+	movedDate := fx.date.AddDate(0, 0, 2)
+	cancelledAt := time.Now().UTC()
+	if _, err := fx.repo.UpsertException(ctx, OccurrenceException{ScheduleID: fx.schedule.ID, OriginalLocalDate: cancelled, CancelledAt: &cancelledAt, UpdatedBy: fx.teacher}); err != nil {
+		t.Fatalf("cancel earlier occurrence: %v", err)
+	}
+	if _, err := fx.repo.UpsertException(ctx, OccurrenceException{ScheduleID: fx.schedule.ID, OriginalLocalDate: movedOriginal, ReplacementLocalDate: &movedDate, UpdatedBy: fx.teacher}); err != nil {
+		t.Fatalf("move earlier occurrence: %v", err)
+	}
+	newPlan := intervalRecord(fx.date, 1, IntervalUnitDay)
+	newPlan.EffectiveLocalDate = fx.date.AddDate(0, 0, 7)
+	if _, err := fx.repo.AppendRevision(ctx, fx.schedule.ID, 1, newPlan); err != nil {
+		t.Fatalf("edit later series: %v", err)
+	}
+	schedule, err := fx.repo.GetSchedule(ctx, fx.schedule.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := &OccurrenceStartService{}
+	cmd := occurrenceStartCommand(fx, "retained-cancellation")
+	if _, err := start.resolveOccurrenceStartPlan(ctx, pool, cmd, schedule); !errors.Is(err, ErrOccurrenceNotFound) {
+		t.Fatalf("retained cancellation resolves with error %v, want occurrence not found", err)
+	}
+	cmd.OriginalLocalDate = movedOriginal
+	plan, err := start.resolveOccurrenceStartPlan(ctx, pool, cmd, schedule)
+	if err != nil || !plan.effectiveDate.Equal(movedDate) {
+		t.Fatalf("retained move resolves to %v, err %v; want %v", plan.effectiveDate, err, movedDate)
+	}
+}
+
+func TestOccurrenceStart_StopUsesMovedEffectiveDate(t *testing.T) {
+	ctx := context.Background()
+	pool := openRepoTestPool(t, ctx)
+	fx := newOccurrenceStartFixture(t, ctx, pool)
+	original := fx.date.AddDate(0, 0, 5)
+	moved := fx.date.AddDate(0, 0, 1)
+	boundary := fx.date.AddDate(0, 0, 3)
+	if _, err := fx.repo.UpsertException(ctx, OccurrenceException{ScheduleID: fx.schedule.ID, OriginalLocalDate: original, ReplacementLocalDate: &moved, UpdatedBy: fx.teacher}); err != nil {
+		t.Fatalf("move occurrence before stop boundary: %v", err)
+	}
+	schedule, err := fx.repo.StopSchedule(ctx, fx.schedule.ID, 1, boundary)
+	if err != nil {
+		t.Fatalf("stop schedule: %v", err)
+	}
+	cmd := occurrenceStartCommand(fx, "moved-before-stop")
+	cmd.OriginalLocalDate = original
+	plan, err := (&OccurrenceStartService{}).resolveOccurrenceStartPlan(ctx, pool, cmd, schedule)
+	if err != nil || !plan.effectiveDate.Equal(moved) {
+		t.Fatalf("occurrence moved before stop resolves to %v, err %v; want %v", plan.effectiveDate, err, moved)
+	}
+}
+
 func TestOccurrenceStart_OneOffStartWinsConcurrentCancellation(t *testing.T) {
 	ctx := context.Background()
 	pool := openRepoTestPool(t, ctx)

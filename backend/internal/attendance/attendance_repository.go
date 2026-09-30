@@ -21,8 +21,28 @@ type Repository struct {
 // NewRepository constructs an attendance repository on a pgx pool.
 func NewRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
 
-// SnapshotStartRoster records current active students in the session's start transaction.
+// SnapshotStartRoster freezes current student eligibility before activation.
 func (r *Repository) SnapshotStartRoster(ctx context.Context, tx pgx.Tx, sessionID string) error {
+	// The circle lock blocks new members through their foreign key; row locks
+	// hold existing roles and removals steady until the activation commits.
+	if err := tx.QueryRow(ctx, lockStartRosterCircleQuery, sessionID).Scan(new(string)); err != nil {
+		return fmt.Errorf("lock attendance roster circle: %w", err)
+	}
+	rows, err := tx.Query(ctx, lockStartRosterMembersQuery, sessionID)
+	if err != nil {
+		return fmt.Errorf("lock attendance roster members: %w", err)
+	}
+	for rows.Next() {
+		if err := rows.Scan(new(string)); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan attendance roster member: %w", err)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("iterate attendance roster members: %w", err)
+	}
+	rows.Close()
 	if _, err := tx.Exec(ctx, snapshotStartRosterQuery, sessionID); err != nil {
 		return fmt.Errorf("snapshot attendance roster: %w", err)
 	}

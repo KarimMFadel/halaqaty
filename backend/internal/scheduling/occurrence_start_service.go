@@ -121,9 +121,6 @@ func (s *OccurrenceStartService) materializeOccurrence(ctx context.Context, q db
 
 func (s *OccurrenceStartService) resolveOccurrenceStartPlan(ctx context.Context, q dbQuerier, cmd StartOccurrenceCommand, schedule Schedule) (occurrenceStartPlan, error) {
 	date := civilOf(cmd.OriginalLocalDate)
-	if dateIsStopped(date, schedule.StoppedFromLocalDate) {
-		return occurrenceStartPlan{}, ErrOccurrenceNotFound
-	}
 	repo := &Repository{tx: q}
 	revisions, err := repo.LoadRevisions(ctx, []string{cmd.ScheduleID})
 	if err != nil {
@@ -135,7 +132,7 @@ func (s *OccurrenceStartService) resolveOccurrenceStartPlan(ctx context.Context,
 	}
 	plan := occurrenceStartPlan{record: record, effectiveDate: date, title: record.Title,
 		startClock: record.StartLocalTime, endClock: record.EndLocalTime, duration: record.DurationMinutes}
-	if err := applyOccurrenceStartException(ctx, q, cmd.ScheduleID, date, schedule.CurrentVersion, &plan); err != nil {
+	if err := applyOccurrenceStartException(ctx, q, cmd.ScheduleID, date, &plan); err != nil {
 		return occurrenceStartPlan{}, err
 	}
 	if dateIsStopped(plan.effectiveDate, schedule.StoppedFromLocalDate) {
@@ -149,22 +146,18 @@ func (s *OccurrenceStartService) resolveOccurrenceStartPlan(ctx context.Context,
 	return plan, err
 }
 
-func applyOccurrenceStartException(ctx context.Context, q dbQuerier, scheduleID string, date time.Time, currentVersion int, plan *occurrenceStartPlan) error {
-	var seriesVersion int
+func applyOccurrenceStartException(ctx context.Context, q dbQuerier, scheduleID string, date time.Time, plan *occurrenceStartPlan) error {
 	var replacementDate, cancelledAt *time.Time
 	var replacementStart, replacementEnd, replacementTitle *string
 	var replacementDuration *int
 	err := q.QueryRow(ctx, getOccurrenceExceptionForStartQuery, scheduleID, date).Scan(
-		&seriesVersion, &replacementDate, &replacementStart, &replacementEnd,
+		&replacementDate, &replacementStart, &replacementEnd,
 		&replacementDuration, &replacementTitle, &cancelledAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("load occurrence exception: %w", err)
-	}
-	if seriesVersion != currentVersion {
-		return nil
 	}
 	if cancelledAt != nil {
 		return ErrOccurrenceNotFound

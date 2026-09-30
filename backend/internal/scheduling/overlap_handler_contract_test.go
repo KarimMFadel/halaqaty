@@ -90,6 +90,15 @@ func TestWriteConflictReturnsRefreshedWarningIDs(t *testing.T) {
 	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "fresh-1") || !strings.Contains(rec.Body.String(), "overlap_starts_at") || strings.Contains(rec.Body.String(), "user_id") {
 		t.Fatalf("refreshed warning conflict was not safe/actionable: status=%d body=%s", rec.Code, rec.Body.String())
 	}
+	conflict := decodeContractBody(t, rec)["error"].(map[string]any)
+	warningResult, ok := conflict["warnings"].(map[string]any)
+	if !ok {
+		t.Fatalf("error.warnings must be a WarningResult object: %s", rec.Body.String())
+	}
+	warnings, ok := warningResult["warnings"].([]any)
+	if !ok || len(warnings) != 1 {
+		t.Fatalf("error.warnings.warnings must contain the refreshed warning: %s", rec.Body.String())
+	}
 }
 
 func TestOneOffWriteEchoesReviewedWarningIDsAndReturnsRefreshedConflict(t *testing.T) {

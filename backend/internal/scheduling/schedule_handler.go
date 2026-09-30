@@ -76,7 +76,13 @@ func (h *ScheduleHandler) ListSchedules(w http.ResponseWriter, r *http.Request) 
 	}
 	data := make([]map[string]any, 0, len(views))
 	for _, view := range views {
-		data = append(data, scheduleResponse(view.Schedule, view.Plan))
+		item := scheduleResponse(view.Schedule, view.Plan)
+		versions := view.OccurrenceVersions
+		if versions == nil {
+			versions = map[string]int{}
+		}
+		item["occurrence_versions"] = versions
+		data = append(data, item)
 	}
 	phttp.WriteJSON(w, http.StatusOK, map[string]any{"data": data})
 }
@@ -554,13 +560,12 @@ func occurrenceCalendarItem(view OccurrenceView) map[string]any {
 // ---- error mapping -----------------------------------------------------------
 
 // scheduleConflictEnvelope is the standard error envelope extended with the
-// overlap-warning list the F-006 conflict contract reserves. US1 has no
-// overlap detection (US4), so the list is always present and empty.
+// contracted overlap-warning result, including an empty list when no warning applies.
 type scheduleConflictEnvelope struct {
 	Error struct {
-		Code     string           `json:"code"`
-		Message  string           `json:"message"`
-		Warnings []OverlapWarning `json:"warnings"`
+		Code     string        `json:"code"`
+		Message  string        `json:"message"`
+		Warnings WarningResult `json:"warnings"`
 	} `json:"error"`
 }
 
@@ -572,9 +577,9 @@ func writeScheduleConflictWarnings(w http.ResponseWriter, message string, warnin
 	var envelope scheduleConflictEnvelope
 	envelope.Error.Code = httpconst.ErrorCodeConflict
 	envelope.Error.Message = message
-	envelope.Error.Warnings = warnings
-	if envelope.Error.Warnings == nil {
-		envelope.Error.Warnings = []OverlapWarning{}
+	envelope.Error.Warnings = WarningResult{Warnings: warnings}
+	if envelope.Error.Warnings.Warnings == nil {
+		envelope.Error.Warnings.Warnings = []OverlapWarning{}
 	}
 	phttp.WriteJSON(w, http.StatusConflict, envelope)
 }

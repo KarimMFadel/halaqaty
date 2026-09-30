@@ -201,6 +201,101 @@ func TestCalendarService_MonthKeepsMovedIdentityAndPastCancelledOccurrence(t *te
 	}
 }
 
+func TestCalendarService_MonthIncludesPlanningDatesAcrossViewerZoneBoundary(t *testing.T) {
+	ctx := context.Background()
+	pool := openRepoTestPool(t, ctx)
+	actor := "11111111-1111-1111-1111-111111111111"
+	circle := "22222222-2222-2222-2222-222222222222"
+	seedRepoUser(t, ctx, pool, actor)
+	seedRepoCircle(t, ctx, pool, circle, actor, "HLQ-CALZONE")
+	seedCalendarMember(t, ctx, pool, circle, actor)
+	repo := NewScheduleRepository(pool)
+
+	// February 1 in Kiritimati is still January 31 for a Honolulu viewer.
+	february := civilDate(2030, 2, 1)
+	nextDate := selectedDatesRecord(february, february)
+	nextDate.Timezone = "Pacific/Kiritimati"
+	nextDate.StartLocalTime, nextDate.EndLocalTime = LocalClock{Minute: 30}, LocalClock{Hour: 2}
+	nextSchedule, err := repo.CreateSchedule(ctx, circle, actor, nextDate)
+	if err != nil {
+		t.Fatalf("create next-date schedule: %v", err)
+	}
+	seedCalendarTimezone(t, ctx, pool, actor, "Pacific/Honolulu")
+	month, err := NewCalendarService(repo).Month(ctx, actor, "2030-01")
+	if err != nil {
+		t.Fatalf("read Honolulu January: %v", err)
+	}
+	if !calendarHasKey(month.Items, occurrenceKey(nextSchedule.ID, february)) {
+		t.Fatalf("Honolulu January missing February planning occurrence: %+v", month.Items)
+	}
+
+	// A 31-day plan starting November 30 in Honolulu reaches January 1 in
+	// Kiritimati; the original date lies 32 civil dates before January 1.
+	priorDate := civilDate(2029, 11, 30)
+	long := selectedDatesRecord(priorDate, priorDate)
+	long.Timezone = "Pacific/Honolulu"
+	long.StartLocalTime, long.EndLocalTime = LocalClock{Hour: 1}, LocalClock{Hour: 1}
+	long.DurationMinutes = MaxDurationMinutes
+	priorSchedule, err := repo.CreateSchedule(ctx, circle, actor, long)
+	if err != nil {
+		t.Fatalf("create long prior schedule: %v", err)
+	}
+	seedCalendarTimezone(t, ctx, pool, actor, "Pacific/Kiritimati")
+	month, err = NewCalendarService(repo).Month(ctx, actor, "2030-01")
+	if err != nil {
+		t.Fatalf("read Kiritimati January: %v", err)
+	}
+	if !calendarHasKey(month.Items, occurrenceKey(priorSchedule.ID, priorDate)) {
+		t.Fatalf("Kiritimati January missing 31-day prior occurrence: %+v", month.Items)
+	}
+}
+
+func TestCalendarService_MonthRetainsMoveBeforeStopBoundary(t *testing.T) {
+	ctx := context.Background()
+	pool := openRepoTestPool(t, ctx)
+	actor := "11111111-1111-1111-1111-111111111111"
+	circle := "22222222-2222-2222-2222-222222222222"
+	seedRepoUser(t, ctx, pool, actor)
+	seedRepoCircle(t, ctx, pool, circle, actor, "HLQ-CALSTOP")
+	seedCalendarMember(t, ctx, pool, circle, actor)
+	repo := NewScheduleRepository(pool)
+	anchor := civilDate(2030, 1, 1)
+	schedule, err := repo.CreateSchedule(ctx, circle, actor, intervalRecord(anchor, 1, IntervalUnitDay))
+	if err != nil {
+		t.Fatalf("create schedule: %v", err)
+	}
+	original, moved, boundary := civilDate(2030, 1, 8), civilDate(2030, 1, 2), civilDate(2030, 1, 5)
+	if _, err := repo.UpsertException(ctx, OccurrenceException{ScheduleID: schedule.ID, OriginalLocalDate: original, ReplacementLocalDate: &moved, UpdatedBy: actor}); err != nil {
+		t.Fatalf("move occurrence: %v", err)
+	}
+	if _, err := repo.StopSchedule(ctx, schedule.ID, 1, boundary); err != nil {
+		t.Fatalf("stop schedule: %v", err)
+	}
+	month, err := NewCalendarService(repo).Month(ctx, actor, "2030-01")
+	if err != nil {
+		t.Fatalf("read calendar: %v", err)
+	}
+	key := occurrenceKey(schedule.ID, original)
+	for _, item := range month.Items {
+		if item.OccurrenceKey == key {
+			if item.StartsAt.Day() != 2 {
+				t.Fatalf("moved occurrence starts %v, want January 2", item.StartsAt)
+			}
+			return
+		}
+	}
+	t.Fatalf("calendar missing retained occurrence %s moved before stop boundary", key)
+}
+
+func calendarHasKey(items []CalendarItem, key string) bool {
+	for _, item := range items {
+		if item.OccurrenceKey == key {
+			return true
+		}
+	}
+	return false
+}
+
 func seedCalendarMember(t *testing.T, ctx context.Context, pool *pgxpool.Pool, circleID, userID string) {
 	t.Helper()
 	if _, err := pool.Exec(ctx, `INSERT INTO circle_members(circle_id,user_id,role) VALUES($1::uuid,$2::uuid,'student')`, circleID, userID); err != nil {

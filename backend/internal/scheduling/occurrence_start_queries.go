@@ -1,7 +1,7 @@
 package scheduling
 
 const getOccurrenceExceptionForStartQuery = `
-SELECT series_version, replacement_local_date,
+SELECT replacement_local_date,
        to_char(replacement_start_local_time, 'HH24:MI'),
        to_char(replacement_end_local_time, 'HH24:MI'),
        replacement_duration_minutes, replacement_title, cancelled_at

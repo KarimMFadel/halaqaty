@@ -134,7 +134,13 @@ void main() {
 
     expect(authNotifier.signInCalled, isTrue);
     expect(find.byKey(const Key('profileSaveButton')), findsOneWidget);
-    expect(find.text('Ali Mahmoud'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('profileIdentitySummary')),
+        matching: find.text('Ali Mahmoud'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.enterText(
       find.byKey(const Key('profileFullNameField')),

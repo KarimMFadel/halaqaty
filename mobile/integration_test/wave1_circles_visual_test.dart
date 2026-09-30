@@ -154,14 +154,22 @@ void main() {
     Locale locale,
     Brightness brightness,
     List<Override> overrides,
-    Finder sentinel,
-  ) async {
+    Finder sentinel, {
+    Future<void> Function(WidgetTester tester)? beforeSentinel,
+  }) async {
     await pumpScreen(tester, screen, locale, brightness, overrides);
+    if (beforeSentinel != null) await beforeSentinel(tester);
     await pumpUntilStable(tester, sentinel);
     await binding.takeScreenshot(
       'wave1_${state}_${locale.languageCode}_'
       '${brightness == Brightness.dark ? 'dark' : 'light'}',
     );
+  }
+
+  Future<void> openDiscoverTab(WidgetTester tester) async {
+    // Public circles live on the Discover tab; My circles is the default tab.
+    await tester.tap(find.byKey(const Key('circleTabDiscover')));
+    await tester.pumpAndSettle();
   }
 
   for (final locale in const [Locale('ar'), Locale('en')]) {
@@ -185,6 +193,7 @@ void main() {
             ),
           ],
           find.byKey(const Key('joinCircle-circle-public')),
+          beforeSentinel: openDiscoverTab,
         );
 
         await capture(
@@ -204,6 +213,7 @@ void main() {
                 ? 'لا توجد حلقات عامة متاحة'
                 : 'No public circles',
           ),
+          beforeSentinel: openDiscoverTab,
         );
 
         await capture(
@@ -219,6 +229,7 @@ void main() {
             ),
           ],
           find.byKey(const Key('circleLoadError')),
+          beforeSentinel: openDiscoverTab,
         );
 
         for (final variant in [

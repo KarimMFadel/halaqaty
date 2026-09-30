@@ -120,6 +120,9 @@ void main() {
 
     await tester.pumpWidget(_app(controller, const CircleDiscoveryScreen()));
     await tester.pumpAndSettle();
+    // Public circles live on the Discover tab; My circles is the default tab.
+    await tester.tap(find.byKey(const Key('circleTabDiscover')));
+    await tester.pumpAndSettle();
     expect(find.text('حلقة عامة'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('joinCircle-public-circle')));

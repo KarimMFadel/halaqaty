@@ -761,9 +761,12 @@ void main() {
       final baselinePushes = routes.pushes;
 
       final schedule = find.byKey(const Key('openCircleSchedule'));
+      await tester.scrollUntilVisible(
+        schedule,
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(schedule, findsOneWidget);
-
-      await tester.ensureVisible(schedule);
       // Let the scroll finish before hit-testing (matches the management
       // tile pattern in circle_detail_screen_test.dart).
       await tester.pumpAndSettle();
@@ -800,9 +803,12 @@ void main() {
       await tester.pumpAndSettle();
 
       final schedule = find.byKey(const Key('openCircleSchedule'));
+      await tester.scrollUntilVisible(
+        schedule,
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(schedule, findsOneWidget);
-
-      await tester.ensureVisible(schedule);
       await tester.pumpAndSettle();
       await tester.tap(schedule);
       await tester.pumpAndSettle();
@@ -924,7 +930,7 @@ void main() {
     test('button themes expose a visible 2dp focus border in both schemes', () {
       final cases = [
         (halaqatyLightTheme(), HalaqatyColors.primaryDark),
-        (halaqatyDarkTheme(), HalaqatyColors.primaryLight),
+        (halaqatyDarkTheme(), HalaqatyColors.darkPrimary),
       ];
       for (final (theme, color) in cases) {
         for (final style in [

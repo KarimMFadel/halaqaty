@@ -77,6 +77,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(profileControllerProvider);
     final isRtl = Directionality.of(context) == TextDirection.rtl;
+    final profile = state.profile;
 
     // A loaded profile replaces the locale with its preferred language
     // (FR-029).
@@ -114,6 +115,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          if (profile != null) ...[
+                            Card(
+                              key: const Key('profileIdentitySummary'),
+                              margin: EdgeInsets.zero,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest,
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .secondaryContainer,
+                                  foregroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .onSecondaryContainer,
+                                  child: const Icon(Icons.person_outline),
+                                ),
+                                title: Text(
+                                  profile.fullName?.trim().isNotEmpty == true
+                                      ? profile.fullName!.trim()
+                                      : profile.displayName,
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium,
+                                ),
+                                subtitle: Text(
+                                  '${profile.displayName} · ${profile.preferredLanguage == 'ar' ? (isRtl ? 'العربية' : 'Arabic') : (isRtl ? 'الإنجليزية' : 'English')}',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                          ],
                           SectionHeader(
                             title: isRtl
                                 ? 'تفاصيل الملف الشخصي'

@@ -203,6 +203,25 @@ TextField _field(WidgetTester tester, Key key) => tester.widget<TextField>(
 
 void main() {
   group('ProfileScreen form behavior', () {
+    testWidgets('shows a profile summary before editable fields',
+        (tester) async {
+      await tester.pumpWidget(_buildScreen(_StubProfileNotifier()));
+      await tester.pump();
+
+      expect(find.byKey(const Key('profileIdentitySummary')), findsOneWidget);
+      final summaryName = find.descendant(
+        of: find.byKey(const Key('profileIdentitySummary')),
+        matching: find.text('Ali Mahmoud'),
+      );
+      expect(summaryName, findsOneWidget);
+      expect(
+        tester.getTopLeft(summaryName).dy,
+        lessThan(tester
+            .getTopLeft(find.byKey(const Key('profileFullNameField')))
+            .dy),
+      );
+    });
+
     testWidgets('optional profile fields explain that they are optional',
         (tester) async {
       await tester.pumpWidget(_buildScreen(_StubProfileNotifier()));

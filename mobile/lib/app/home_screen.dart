@@ -7,6 +7,8 @@ import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_detail_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_name_text.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_load_error.dart';
+import 'package:halaqaty_mobile/features/scheduling/application/calendar_controller.dart';
+import 'package:halaqaty_mobile/features/scheduling/data/calendar_api_client.dart';
 
 /// Home tab: branded overview of the user's circles and quick actions.
 ///
@@ -28,6 +30,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         await ref
             .read(circleDiscoveryControllerProvider.notifier)
             .loadMyCircles();
+        if (mounted) {
+          await ref.read(calendarControllerProvider.notifier).load();
+        }
       }
     });
   }
@@ -35,6 +40,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(circleDiscoveryControllerProvider);
+    final calendarState = ref.watch(calendarControllerProvider);
+    final calendar = ref.read(calendarControllerProvider.notifier);
+    final nextSession = _nextSession(calendarState.items);
     final isRtl = Directionality.of(context) == TextDirection.rtl;
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
@@ -82,6 +90,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ],
               ),
               const SizedBox(height: 24),
+              if (nextSession != null)
+                _NextSessionCard(
+                  item: nextSession,
+                  timezone: calendar.timezone,
+                ),
+              if (nextSession != null) const SizedBox(height: 24),
               SectionHeader(
                 title: isRtl ? 'حلقاتي' : 'My circles',
               ),
@@ -105,6 +119,124 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 }
+
+CalendarItem? _nextSession(List<CalendarItem> items) {
+  final now = DateTime.now().toUtc();
+  final upcoming = items
+      .where((item) => item.state == 'scheduled' && item.startsAt.isAfter(now))
+      .toList()
+    ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+  return upcoming.isEmpty ? null : upcoming.first;
+}
+
+class _NextSessionCard extends StatelessWidget {
+  const _NextSessionCard({required this.item, required this.timezone});
+
+  final CalendarItem item;
+  final String timezone;
+
+  @override
+  Widget build(BuildContext context) {
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    final scheme = Theme.of(context).colorScheme;
+    final start = calendarTimeInZone(item.startsAt, timezone);
+    final when = rtl
+        ? '${start.day} ${_arabicMonths[start.month - 1]} · ${_clock(start)}'
+        : '${_englishMonths[start.month - 1]} ${start.day} · ${_clock(start)}';
+    return Card(
+      key: const Key('homeNextSession'),
+      margin: EdgeInsets.zero,
+      color: scheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(19),
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              rtl ? 'الجلسة القادمة' : 'Next session',
+              style: Theme.of(context)
+                  .textTheme
+                  .labelLarge
+                  ?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              item.circleName,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(color: scheme.onSurface),
+            ),
+            if (item.title.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                item.title,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            ],
+            const SizedBox(height: 4),
+            Text(
+              when,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: scheme.primary,
+                foregroundColor: scheme.onPrimary,
+              ),
+              onPressed: () => context.push('/calendar'),
+              child: Text(rtl ? 'عرض التقويم' : 'View calendar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _clock(DateTime date) =>
+      '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+}
+
+const _englishMonths = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+const _arabicMonths = [
+  'يناير',
+  'فبراير',
+  'مارس',
+  'أبريل',
+  'مايو',
+  'يونيو',
+  'يوليو',
+  'أغسطس',
+  'سبتمبر',
+  'أكتوبر',
+  'نوفمبر',
+  'ديسمبر',
+];
 
 class _CircleCard extends StatelessWidget {
   const _CircleCard({required this.circle});

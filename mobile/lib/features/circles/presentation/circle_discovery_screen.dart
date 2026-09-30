@@ -145,6 +145,7 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
     return Card(
       child: ListTile(
         key: Key('openCircle-${circle.id}'),
+        leading: _circleMark(context),
         title: CircleNameText(name: circle.name),
         subtitle: circle.description == null
             ? null
@@ -178,10 +179,18 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              CircleNameText(
-                name: circle.name,
-                maxLines: 2,
-                style: Theme.of(context).textTheme.titleLarge,
+              Row(
+                children: [
+                  _circleMark(context),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: CircleNameText(
+                      name: circle.name,
+                      maxLines: 2,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                ],
               ),
               if (circle.description case final description?) ...[
                 const SizedBox(height: 6),
@@ -287,5 +296,14 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
   String _genderText(String gender, bool rtl) {
     final label = circleAudienceLabel(gender, rtl);
     return rtl ? 'الفئة: $label' : 'Audience: $label';
+  }
+
+  CircleAvatar _circleMark(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return CircleAvatar(
+      backgroundColor: scheme.secondaryContainer,
+      foregroundColor: scheme.onSecondaryContainer,
+      child: const Icon(Icons.auto_stories),
+    );
   }
 }

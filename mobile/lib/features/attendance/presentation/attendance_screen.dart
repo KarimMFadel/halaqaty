@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/attendance/application/attendance_controller.dart';
 import 'package:halaqaty_mobile/features/attendance/data/attendance_api_client.dart';
 
@@ -8,10 +9,12 @@ class AttendanceScreen extends ConsumerStatefulWidget {
     super.key,
     required this.sessionId,
     this.canCorrect = false,
+    this.participantNames = const {},
   });
 
   final String sessionId;
   final bool canCorrect;
+  final Map<String, String> participantNames;
 
   @override
   ConsumerState<AttendanceScreen> createState() => _AttendanceScreenState();
@@ -40,7 +43,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       appBar: AppBar(title: Text(rtl ? 'الحضور' : 'Attendance')),
       body: switch (state.status) {
         AttendanceViewStatus.loading when state.records.isEmpty =>
-          const Center(child: CircularProgressIndicator()),
+          const HalaqatyLoading(),
         AttendanceViewStatus.error when state.records.isEmpty => Center(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Text(_errorLabel(state.failure, rtl)),
@@ -52,39 +55,22 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
               ),
             ]),
           ),
-        _ when state.records.isEmpty => Center(
-            child: Text(rtl ? 'لا توجد سجلات حضور' : 'No attendance records'),
+        _ when state.records.isEmpty => EmptyStateCard(
+            title: rtl ? 'لا توجد سجلات حضور' : 'No attendance records',
+            hint: rtl
+                ? 'ستظهر سجلات الحضور بعد انتهاء الجلسة'
+                : 'Attendance records appear after the session ends',
           ),
         _ => ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              for (final record in state.records)
-                Card(
-                  key: Key('attendance-${record.userId}'),
-                  child: ListTile(
-                    title: Text(record.userId),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(_statusLabel(record.status, rtl)),
-                        if (record.correction case final correction?)
-                          Text(rtl
-                              ? 'تم التصحيح: ${correction.reason}'
-                              : 'Corrected: ${correction.reason}'),
-                      ],
-                    ),
-                    trailing: widget.canCorrect
-                        ? IconButton(
-                            key: Key('attendanceCorrect-${record.userId}'),
-                            tooltip:
-                                rtl ? 'تصحيح الحضور' : 'Correct attendance',
-                            onPressed: state.savingUserId == record.userId
-                                ? null
-                                : () => _showCorrection(context, record, rtl),
-                            icon: const Icon(Icons.edit_outlined),
-                          )
-                        : null,
-                  ),
+              for (var index = 0; index < state.records.length; index++)
+                _attendanceCard(
+                  context,
+                  state.records[index],
+                  index,
+                  state,
+                  rtl,
                 ),
               if (state.failure != null)
                 Padding(
@@ -96,6 +82,52 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             ],
           ),
       },
+    );
+  }
+
+  Widget _attendanceCard(
+    BuildContext context,
+    AttendanceRecord record,
+    int index,
+    AttendanceState state,
+    bool rtl,
+  ) {
+    final memberName = widget.participantNames[record.userId];
+    final name = memberName == null || memberName.isEmpty
+        ? (rtl ? 'العضو ${index + 1}' : 'Member ${index + 1}')
+        : memberName;
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      key: Key('attendance-${record.userId}'),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: scheme.secondaryContainer,
+          foregroundColor: scheme.onSecondaryContainer,
+          child: Icon(Icons.person_outline, color: scheme.onSecondaryContainer),
+        ),
+        title: Text(name),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_statusLabel(record.status, rtl)),
+            if (record.correction case final correction?)
+              Text(rtl
+                  ? 'تم التصحيح: ${correction.reason}'
+                  : 'Corrected: ${correction.reason}'),
+          ],
+        ),
+        trailing: widget.canCorrect
+            ? IconButton(
+                key: Key('attendanceCorrect-${record.userId}'),
+                tooltip:
+                    rtl ? 'تصحيح حضور $name' : 'Correct attendance for $name',
+                onPressed: state.savingUserId == record.userId
+                    ? null
+                    : () => _showCorrection(context, record, rtl),
+                icon: const Icon(Icons.edit_outlined),
+              )
+            : null,
+      ),
     );
   }
 

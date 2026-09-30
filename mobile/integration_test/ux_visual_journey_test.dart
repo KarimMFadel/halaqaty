@@ -15,6 +15,8 @@ import 'package:halaqaty_mobile/features/circles/presentation/circle_load_error.
 import 'package:halaqaty_mobile/features/profile/application/profile_controller.dart';
 import 'package:halaqaty_mobile/features/profile/data/profile_api_client.dart';
 import 'package:halaqaty_mobile/features/profile/presentation/profile_screen.dart';
+import 'package:halaqaty_mobile/features/scheduling/application/calendar_controller.dart';
+import 'package:halaqaty_mobile/features/scheduling/data/calendar_api_client.dart';
 import 'package:halaqaty_mobile/main.dart';
 
 /// Wave 5 (T043) on-device UX visual journey: the Screenshot Acceptance
@@ -118,6 +120,35 @@ class _VisualAuthController extends StateNotifier<AuthState>
   }) async {}
 }
 
+class _VisualCalendarController extends CalendarController {
+  _VisualCalendarController()
+      : super(
+          CalendarApiClient(Dio()),
+          () async => (token: 'visual-token', sessionId: 'visual-session'),
+          timezone: 'Africa/Cairo',
+        ) {
+    final startsAt = DateTime.now().toUtc().add(const Duration(days: 1));
+    state = CalendarState(
+      status: CalendarStatus.ready,
+      items: [
+        CalendarItem(
+          occurrenceKey: 'visual-occurrence',
+          circleId: 'visual-circle',
+          circleName: 'حلقة الإتقان',
+          title: 'مراجعة سورة البقرة',
+          startsAt: startsAt,
+          endsAt: startsAt.add(const Duration(hours: 1)),
+          planningTimezone: 'Africa/Cairo',
+          state: 'scheduled',
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<void> load() async {}
+}
+
 CircleDiscoveryController _visualCircleController() =>
     CircleDiscoveryController(
       apiClient: _VisualCircleApi(),
@@ -131,6 +162,8 @@ List<Override> _visualOverrides() => [
       profileControllerProvider.overrideWith((_) => _VisualProfileController()),
       circleDiscoveryControllerProvider
           .overrideWith((_) => _visualCircleController()),
+      calendarControllerProvider
+          .overrideWith((_) => _VisualCalendarController()),
     ];
 
 /// Standalone surface scope. When [brightness] is given the approved theme is
@@ -163,6 +196,8 @@ Widget _shellScope(Locale locale) {
       profileControllerProvider.overrideWith((_) => _VisualProfileController()),
       circleDiscoveryControllerProvider
           .overrideWith((_) => _visualCircleController()),
+      calendarControllerProvider
+          .overrideWith((_) => _VisualCalendarController()),
       createCircleControllerProvider.overrideWith(
         (_) => CreateCircleController(
           apiClient: circleApi,
@@ -206,6 +241,7 @@ void main() {
           _scope(direction, const HomeScreen(), brightness: brightness),
         );
         await tester.pumpAndSettle();
+        expect(find.byKey(const Key('homeNextSession')), findsOneWidget);
         await binding.takeScreenshot('ux_home_$suffix');
 
         await tester.pumpWidget(

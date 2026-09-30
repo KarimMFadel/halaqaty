@@ -39,6 +39,17 @@ The reference sample is [screen-samples-a-v2.html](screen-samples-a-v2.html).
 It is a visual reference, not a production implementation or a source of
 backend data.
 
+**Token amendment — 2026-09-30:** Karim approved the sample's warm ivory
+`#F8F6F0` as the light app background token. Cards continue to use the existing
+Material surface role; primary, secondary, and semantic colors are unchanged.
+
+**Dark-theme amendment — 2026-09-30:** Karim approved the **Garden dusk**
+palette for dark mode: `#151816` canvas, `#202722` cards, soft sage `#B5C9AE`,
+and warm gold `#D6C08A`. Dark cards remain on muted surfaces; reserve the sage
+for primary actions and small identity cues, and gold for selected navigation
+and limited emphasis. Use softened text and semantic colors from `DESIGN.md`.
+This changes dark tokens only; light mode remains unchanged.
+
 ### 2.1 Token rules
 
 - Screens consume Material 3 `ColorScheme` roles and shared spacing/type tokens.

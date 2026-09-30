@@ -274,6 +274,7 @@ void main() {
     expect(find.byKey(const Key('openCircle-circle-member')), findsOneWidget);
     expect(find.byKey(const Key('joinCircle-circle-member')), findsNothing);
     expect(find.byKey(const Key('joinCircle-circle-public')), findsOneWidget);
+    expect(find.byIcon(Icons.auto_stories), findsNWidgets(2));
   });
 
   testWidgets('CircleDiscoveryScreen: opens an authenticated member circle',

@@ -84,10 +84,32 @@ class CircleDetailScreen extends ConsumerWidget {
                   ),
                 ),
               const SizedBox(height: 16),
-              CircleNameText(
-                name: circle.name,
-                maxLines: 2,
-                style: Theme.of(context).textTheme.headlineMedium,
+              Card(
+                key: const Key('circleIdentityHeader'),
+                margin: EdgeInsets.zero,
+                color: scheme.surfaceContainerHighest,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 24,
+                        backgroundColor: scheme.secondaryContainer,
+                        foregroundColor: scheme.onSecondaryContainer,
+                        child: Icon(Icons.auto_stories,
+                            color: scheme.onSecondaryContainer),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: CircleNameText(
+                          name: circle.name,
+                          maxLines: 2,
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               if (circle.description != null) ...[
                 const SizedBox(height: 8),

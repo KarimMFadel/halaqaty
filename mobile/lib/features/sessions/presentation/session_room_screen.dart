@@ -109,6 +109,10 @@ class SessionRoomScreen extends ConsumerWidget {
                         builder: (_) => AttendanceScreen(
                           sessionId: sessionId,
                           canCorrect: canCorrectAttendance,
+                          participantNames: {
+                            for (final participant in state.participants)
+                              participant.userId: participant.displayName,
+                          },
                         ),
                       ),
                     ),

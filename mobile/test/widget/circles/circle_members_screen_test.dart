@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:halaqaty_mobile/features/circles/application/circle_detail_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_members_screen.dart';
+import 'package:halaqaty_mobile/core/theme/halaqaty_theme.dart';
 
 void main() {
   Widget createWidgetUnderTest({
@@ -15,6 +16,7 @@ void main() {
     return ProviderScope(
       overrides: overrides,
       child: MaterialApp(
+        theme: halaqatyLightTheme(),
         home: Directionality(
           textDirection: textDirection,
           child: const CircleMembersScreen(circleId: 'circle-1'),
@@ -89,6 +91,14 @@ void main() {
     expect(find.text('محمد'), findsOneWidget);
     expect(find.text('طالب'), findsOneWidget);
     expect(find.text('معلم'), findsOneWidget);
+    final scheme = halaqatyLightTheme().colorScheme;
+    final roleChipFinder = find.byType(Chip).first;
+    final roleChip = tester.widget<Chip>(roleChipFinder);
+    final roleLabel = tester.widget<Text>(
+      find.descendant(of: roleChipFinder, matching: find.byType(Text)).first,
+    );
+    expect(roleChip.backgroundColor, scheme.surfaceContainerHighest);
+    expect(roleLabel.style?.color, scheme.onSurfaceVariant);
   });
 
   testWidgets('displays archived warning if circle is archived',
@@ -110,6 +120,15 @@ void main() {
     expect(
       find.textContaining('الحلقة مؤرشفة. لا يمكن تعديل الأعضاء.'),
       findsOneWidget,
+    );
+    final scheme = halaqatyLightTheme().colorScheme;
+    final banner = tester.widget<Container>(
+      find.byKey(const Key('circleArchivedReadOnlyBanner')),
+    );
+    expect(banner.color, scheme.secondaryContainer);
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.archive)).color,
+      scheme.onSecondaryContainer,
     );
   });
 

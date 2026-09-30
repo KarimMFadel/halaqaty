@@ -33,6 +33,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Circle details'), findsOneWidget);
+    expect(find.byKey(const Key('circleIdentityHeader')), findsOneWidget);
     expect(find.text('Maximum capacity'), findsOneWidget);
     expect(find.text('Members'), findsOneWidget);
     final membersTile = tester.widget<ListTile>(
@@ -91,7 +92,6 @@ void main() {
 
     expect(find.text('تفاصيل الحلقة'), findsOneWidget);
     expect(find.text('الأعضاء'), findsOneWidget);
-    expect(find.text('المحادثة'), findsOneWidget);
     final banner = tester.widget<Container>(
       find.byKey(const Key('circleArchivedBanner')),
     );
@@ -116,6 +116,12 @@ void main() {
     );
     // Material mirrors this directional icon once for RTL.
     expect((membersTile.trailing! as Icon).icon, Icons.chevron_right);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('openCircleChat')),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('المحادثة'), findsOneWidget);
   });
 
   testWidgets('CircleDetailScreen: keeps provider errors private',
@@ -263,6 +269,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('circleArchivedBanner')), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('openCircleChat')),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.byKey(const Key('openCircleChat')), findsOneWidget);
     expect(find.byKey(const Key('openCircleManagement')), findsNothing);
     expect(find.byKey(const Key('openCircleRetirement')), findsNothing);

@@ -13,7 +13,8 @@ void main() {
     await tester.pumpWidget(_app(controller, canCorrect: false));
     await tester.pumpAndSettle();
 
-    expect(find.text('student-1'), findsOneWidget);
+    expect(find.text('Amina'), findsOneWidget);
+    expect(find.text('student-1'), findsNothing);
     expect(find.text('Present'), findsOneWidget);
     expect(find.byKey(const Key('attendanceCorrect-student-1')), findsNothing);
   });
@@ -85,6 +86,7 @@ Widget _app(AttendanceController controller,
           child: AttendanceScreen(
             sessionId: 'session-1',
             canCorrect: canCorrect,
+            participantNames: const {'student-1': 'Amina'},
           ),
         ),
       ),

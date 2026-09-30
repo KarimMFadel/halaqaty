@@ -210,11 +210,20 @@ class ChatDiscoveryErrorView extends StatelessWidget {
           : 'Chat service is temporarily unavailable',
       _ => rtl ? 'تعذر تنفيذ طلب المحادثة' : 'Chat request failed',
     };
+    final scheme = Theme.of(context).colorScheme;
     return Semantics(
       container: true,
       liveRegion: true,
       label: text,
-      child: ExcludeSemantics(child: Text(text)),
+      child: ExcludeSemantics(
+        child: Card(
+          color: scheme.errorContainer,
+          child: ListTile(
+            leading: Icon(Icons.error_outline, color: scheme.onErrorContainer),
+            title: Text(text, style: TextStyle(color: scheme.onErrorContainer)),
+          ),
+        ),
+      ),
     );
   }
 }

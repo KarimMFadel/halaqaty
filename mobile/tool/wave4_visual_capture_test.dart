@@ -312,6 +312,9 @@ void main() {
 // ---------------------------------------------------------------------------
 
 class _StubAuth extends StateNotifier<AuthState> implements AuthController {
+  @override
+  void updateTimezone(String timezone) {}
+
   _StubAuth({this.submitError, this.hangSubmit = false})
       : super(const AuthState(status: AuthStatus.unauthenticated));
 

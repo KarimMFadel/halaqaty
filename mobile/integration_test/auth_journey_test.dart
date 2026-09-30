@@ -8,6 +8,9 @@ import 'package:halaqaty_mobile/features/auth/presentation/auth_screens.dart';
 
 class _IntegrationAuthNotifier extends StateNotifier<AuthState>
     implements AuthController {
+  @override
+  void updateTimezone(String timezone) {}
+
   _IntegrationAuthNotifier()
       : super(const AuthState(status: AuthStatus.unauthenticated));
 

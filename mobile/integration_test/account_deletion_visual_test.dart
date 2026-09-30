@@ -38,6 +38,9 @@ class _ProfileController extends StateNotifier<ProfileState>
 
 class _AuthController extends StateNotifier<AuthState>
     implements AuthController {
+  @override
+  void updateTimezone(String timezone) {}
+
   _AuthController()
       : super(const AuthState(
           status: AuthStatus.authenticated,

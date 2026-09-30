@@ -32,6 +32,9 @@ class _TestAuthController extends StateNotifier<AuthState>
   _TestAuthController(super.initialState);
 
   @override
+  void updateTimezone(String timezone) {}
+
+  @override
   Future<void> logout() async {
     state = const AuthState(status: AuthStatus.unauthenticated);
   }

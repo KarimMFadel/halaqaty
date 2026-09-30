@@ -99,6 +99,9 @@ ChatMessage _message(String id, String content) => ChatMessage(
     );
 
 class _Auth extends StateNotifier<AuthState> implements AuthController {
+  @override
+  void updateTimezone(String timezone) {}
+
   _Auth()
       : super(AuthState(
             status: AuthStatus.authenticated,

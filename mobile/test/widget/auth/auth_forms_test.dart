@@ -81,6 +81,9 @@ class _StubAuthNotifier extends StateNotifier<AuthState>
   Future<void> logout() async {
     state = const AuthState(status: AuthStatus.unauthenticated);
   }
+
+  @override
+  void updateTimezone(String timezone) {}
 }
 
 // ---------------------------------------------------------------------------

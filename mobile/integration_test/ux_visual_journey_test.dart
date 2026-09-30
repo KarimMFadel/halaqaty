@@ -91,6 +91,9 @@ class _VisualProfileController extends StateNotifier<ProfileState>
 
 class _VisualAuthController extends StateNotifier<AuthState>
     implements AuthController {
+  @override
+  void updateTimezone(String timezone) {}
+
   _VisualAuthController()
       : super(const AuthState(
           status: AuthStatus.authenticated,

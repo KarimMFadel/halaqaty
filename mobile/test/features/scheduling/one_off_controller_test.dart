@@ -24,15 +24,17 @@ void main() {
                 'error': {
                   'code': 'ERR_CONFLICT',
                   'message': 'Review updated warnings.',
-                  'warnings': [
-                    {
-                      'warning_id': 'fresh-one-off',
-                      'first_circle_name': 'Hifz',
-                      'second_circle_name': 'Tajweed',
-                      'overlap_starts_at': '2026-10-06T15:30:00Z',
-                      'overlap_ends_at': '2026-10-06T16:00:00Z',
-                    }
-                  ],
+                  'warnings': {
+                    'warnings': [
+                      {
+                        'warning_id': 'fresh-one-off',
+                        'first_circle_name': 'Hifz',
+                        'second_circle_name': 'Tajweed',
+                        'overlap_starts_at': '2026-10-06T15:30:00Z',
+                        'overlap_ends_at': '2026-10-06T16:00:00Z',
+                      }
+                    ]
+                  },
                 }
               },
             ),

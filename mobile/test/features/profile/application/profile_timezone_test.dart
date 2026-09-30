@@ -102,6 +102,7 @@ void main() {
   group('ProfileController timezone', () {
     test('updateProfile passes the requested timezone to the API', () async {
       final api = _RecordingProfileApi();
+      String? updatedTimezone;
       final controller = ProfileController(
         apiClient: api,
         firebaseAuth: _FakeFirebaseAuth(_FakeFirebaseUser()),
@@ -110,6 +111,7 @@ void main() {
           sessionId: 'session-1',
         ),
         logout: () async {},
+        onTimezoneSaved: (timezone) => updatedTimezone = timezone,
       );
       addTearDown(controller.dispose);
 
@@ -120,6 +122,7 @@ void main() {
       expect(saved, isTrue);
       expect(api.lastRequest?.timezone, 'Africa/Cairo');
       expect(controller.state.profile?.timezone, 'Africa/Cairo');
+      expect(updatedTimezone, 'Africa/Cairo');
     });
   });
 }

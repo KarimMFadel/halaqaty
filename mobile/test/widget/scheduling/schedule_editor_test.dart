@@ -154,6 +154,7 @@ CircleScheduleEntry _entry({
   int version = 3,
   String? title,
   String? stoppedFrom,
+  String anchorLocalDate = '2026-10-06',
 }) =>
     CircleScheduleEntry.fromJson({
       'id': id,
@@ -163,7 +164,7 @@ CircleScheduleEntry _entry({
       'plan': {
         'mode': 'weekday_pattern',
         'title': title,
-        'anchor_local_date': '2026-10-06',
+        'anchor_local_date': anchorLocalDate,
         'local_start_time': '18:00',
         'local_end_time': '19:30',
         'duration_minutes': 90,
@@ -573,6 +574,36 @@ void main() {
   });
 
   group('ScheduleEditorScreen edit, stop and occurrence flows', () {
+    testWidgets('title edit preserves a past selected-weekday anchor',
+        (tester) async {
+      final stub = _StubScheduleController(
+          initialState: _readyWith([_entry(anchorLocalDate: '2025-10-06')]));
+      await tester.pumpWidget(_buildScreen(stub));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('scheduleEdit-sched-1')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.byKey(const Key('scheduleTitleField')), 'New title');
+      await tester.ensureVisible(find.byKey(const Key('scheduleSubmitButton')));
+      await tester.tap(find.byKey(const Key('scheduleSubmitButton')));
+      await tester.pumpAndSettle();
+      expect(stub.changedPlan?.anchorLocalDate, '2025-10-06');
+    });
+
+    testWidgets('date picker allows planning after year 2100', (tester) async {
+      final stub = _StubScheduleController(initialState: _readyWith(const []));
+      await tester.pumpWidget(_buildScreen(stub));
+      await tester.pump();
+      await _openCreateForm(tester);
+      await tester
+          .ensureVisible(find.byKey(const Key('scheduleAnchorDateButton')));
+      await tester.tap(find.byKey(const Key('scheduleAnchorDateButton')));
+      await tester.pumpAndSettle();
+      final picker =
+          tester.widget<CalendarDatePicker>(find.byType(CalendarDatePicker));
+      expect(picker.lastDate.year, 9999);
+    });
+
     testWidgets('title-only edit preserves an interval anchor', (tester) async {
       final entry = CircleScheduleEntry.fromJson({
         'id': 'sched-1',

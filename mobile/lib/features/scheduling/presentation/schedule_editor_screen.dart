@@ -524,7 +524,8 @@ class _SchedulePlanFormState extends ConsumerState<_SchedulePlanForm> {
       '${time.hour.toString().padLeft(2, '0')}:'
       '${time.minute.toString().padLeft(2, '0')}';
 
-  void _syncAnchorToWeekdays() {
+  void _syncAnchorToWeekdays({bool selectionChanged = false}) {
+    if (_isEdit && !selectionChanged) return;
     if (_mode != ScheduleModes.weekdayPattern || _weekdays.isEmpty) return;
     var candidate = _tomorrow();
     while (!_weekdays.contains(candidate.weekday % DateTime.daysPerWeek)) {
@@ -588,7 +589,7 @@ class _SchedulePlanFormState extends ConsumerState<_SchedulePlanForm> {
             selected: {_mode},
             onSelectionChanged: (selection) => setState(() {
               _mode = selection.first;
-              _syncAnchorToWeekdays();
+              _syncAnchorToWeekdays(selectionChanged: true);
             }),
           ),
           const SizedBox(height: 16),
@@ -722,7 +723,7 @@ class _SchedulePlanFormState extends ConsumerState<_SchedulePlanForm> {
                   } else {
                     _weekdays.remove(dow);
                   }
-                  _syncAnchorToWeekdays();
+                  _syncAnchorToWeekdays(selectionChanged: true);
                 }),
               ),
           ],
@@ -844,7 +845,7 @@ class _SchedulePlanFormState extends ConsumerState<_SchedulePlanForm> {
       context: context,
       // Past planned dates are rejected; the picker never offers them.
       firstDate: DateTime(today.year, today.month, today.day),
-      lastDate: DateTime(2100, 12, 31),
+      lastDate: DateTime(9999, 12, 31),
       initialDate:
           initial.isBefore(DateTime(today.year, today.month, today.day))
               ? DateTime(today.year, today.month, today.day)
@@ -1144,7 +1145,7 @@ class _OccurrenceEditSheetState extends ConsumerState<_OccurrenceEditSheet> {
     return showDatePicker(
       context: context,
       firstDate: firstDate,
-      lastDate: DateTime(2100, 12, 31),
+      lastDate: DateTime(9999, 12, 31),
       initialDate: initial.isBefore(firstDate) ? firstDate : initial,
     );
   }

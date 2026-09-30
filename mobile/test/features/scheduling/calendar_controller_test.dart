@@ -4,6 +4,24 @@ import 'package:halaqaty_mobile/features/scheduling/application/calendar_control
 import 'package:halaqaty_mobile/features/scheduling/data/calendar_api_client.dart';
 
 void main() {
+  test('409 warning result is read from its response object', () {
+    final warnings = calendarWarningsFromConflict({
+      'error': {
+        'warnings': {
+          'warnings': [
+            {
+              'warning_id': 'w-1',
+              'first_circle_name': 'Hifz',
+              'second_circle_name': 'Tajweed',
+              'overlap_starts_at': '2026-10-06T15:00:00Z',
+              'overlap_ends_at': '2026-10-06T16:00:00Z',
+            }
+          ]
+        }
+      }
+    });
+    expect(warnings.single.warningId, 'w-1');
+  });
   group('CalendarApiClient', () {
     test('requests the selected month with the authenticated session',
         () async {

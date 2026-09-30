@@ -144,8 +144,12 @@ class ScheduleController extends StateNotifier<ScheduleEditorState> {
     // The pending idempotency key is scoped to the exact payload: a retry of
     // the same write replays the key, but a changed payload is a new write
     // and must never reuse it.
-    return _mutate('create:${jsonEncode(plan.toJson())}',
-        (credentials, key) async {
+    return _mutate(
+        'create:${jsonEncode([
+              plan.toJson(),
+              confirmOverlaps,
+              confirmedWarningIDs
+            ])}', (credentials, key) async {
       await _api.createSchedule(
         token: credentials.token,
         sessionId: credentials.sessionId,
@@ -165,15 +169,21 @@ class ScheduleController extends StateNotifier<ScheduleEditorState> {
     bool confirmOverlaps = false,
     List<String> confirmedWarningIDs = const [],
   }) async {
-    if (_hasPastPlannedDate(plan)) return _rejectPastDate();
-    return _mutate('series:${schedule.id}', (credentials, key) async {
+    final effectiveLocalDate = _todayLocalDate();
+    return _mutate(
+        'series:${schedule.id}:${schedule.version}:${jsonEncode([
+              plan.toJson(),
+              effectiveLocalDate,
+              confirmOverlaps,
+              confirmedWarningIDs
+            ])}', (credentials, key) async {
       await _api.changeSchedule(
         token: credentials.token,
         sessionId: credentials.sessionId,
         circleId: circleId,
         scheduleId: schedule.id,
         expectedVersion: schedule.version,
-        effectiveLocalDate: _todayLocalDate(),
+        effectiveLocalDate: effectiveLocalDate,
         plan: plan,
         idempotencyKey: key,
         confirmOverlaps: confirmOverlaps,
@@ -185,14 +195,17 @@ class ScheduleController extends StateNotifier<ScheduleEditorState> {
   /// Stops future occurrences from today; started/completed history and the
   /// stored plan are retained.
   Future<bool> stopSeries({required CircleScheduleEntry schedule}) {
-    return _mutate('stop:${schedule.id}', (credentials, key) async {
+    final effectiveLocalDate = _todayLocalDate();
+    return _mutate(
+        'stop:${schedule.id}:${schedule.version}:$effectiveLocalDate',
+        (credentials, key) async {
       await _api.changeSchedule(
         token: credentials.token,
         sessionId: credentials.sessionId,
         circleId: circleId,
         scheduleId: schedule.id,
         expectedVersion: schedule.version,
-        effectiveLocalDate: _todayLocalDate(),
+        effectiveLocalDate: effectiveLocalDate,
         plan: schedule.plan,
         stop: true,
         idempotencyKey: key,
@@ -216,7 +229,15 @@ class ScheduleController extends StateNotifier<ScheduleEditorState> {
   }) async {
     if (localDate.compareTo(_todayLocalDate()) < 0) return _rejectPastDate();
     return _mutate(
-      'occurrence:${schedule.id}:$localDate',
+      'occurrence:${schedule.id}:$localDate:${schedule.version}:${schedule.occurrenceVersions[localDate] ?? 0}:${jsonEncode([
+            replacementLocalDate,
+            replacementLocalTime,
+            replacementEndLocalTime,
+            durationMinutes,
+            cancel,
+            confirmOverlaps,
+            confirmedWarningIDs
+          ])}',
       (credentials, key) async {
         await _api.changeOccurrence(
           token: credentials.token,
@@ -225,6 +246,8 @@ class ScheduleController extends StateNotifier<ScheduleEditorState> {
           scheduleId: schedule.id,
           localDate: localDate,
           expectedSeriesVersion: schedule.version,
+          expectedOccurrenceVersion:
+              schedule.occurrenceVersions[localDate] ?? 0,
           replacementLocalDate: replacementLocalDate,
           replacementLocalTime: replacementLocalTime,
           replacementEndLocalTime: replacementEndLocalTime,
@@ -311,7 +334,9 @@ class ScheduleController extends StateNotifier<ScheduleEditorState> {
 
   bool _hasPastPlannedDate(SchedulePlanInput plan) {
     final today = _todayLocalDate();
-    if (plan.anchorLocalDate.compareTo(today) < 0) return true;
+    if (plan.anchorLocalDate.compareTo(today) < 0) {
+      return true;
+    }
     final selectedDates = plan.selectedDates;
     if (selectedDates != null) {
       for (final date in selectedDates) {

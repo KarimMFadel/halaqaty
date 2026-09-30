@@ -36,6 +36,7 @@ void main() {
       expect(schedules.single.plan.weekCadence, 2);
       expect(schedules.single.plan.weekdays, [1, 3]);
       expect(schedules.single.plan.timezone, 'Africa/Cairo');
+      expect(schedules.single.occurrenceVersions['2026-10-06'], 2);
     });
 
     test(
@@ -602,6 +603,73 @@ void main() {
       expect(api.lastOccurrenceDate, '2026-10-06');
       expect(api.lastOccurrenceCancel, isTrue);
       expect(api.lastOccurrenceSeriesVersion, 3);
+      expect(api.lastOccurrenceVersion, 2);
+    });
+
+    test('series edit keeps the original weekday anchor after it passes',
+        () async {
+      final api = _FakeScheduleApi()..changeResult = _entry(version: 4);
+      final controller = _controller(api, now: DateTime(2026, 10, 9));
+      addTearDown(controller.dispose);
+      final plan = _weekdayPlan(anchorLocalDate: '2026-10-06');
+
+      expect(await controller.changeSeries(schedule: _entry(), plan: plan),
+          isTrue);
+      expect(api.lastChangePlan?.anchorLocalDate, '2026-10-06');
+    });
+
+    test('series edit retains past selected dates', () async {
+      final api = _FakeScheduleApi()..changeResult = _entry(version: 4);
+      final controller = _controller(api, now: DateTime(2026, 10, 9));
+      addTearDown(controller.dispose);
+      const plan = SchedulePlanInput(
+        mode: ScheduleModes.selectedDates,
+        anchorLocalDate: '2026-10-06',
+        localStartTime: '18:00',
+        localEndTime: '19:00',
+        durationMinutes: 60,
+        timezone: 'UTC',
+        selectedDates: ['2026-10-06', '2026-10-20'],
+      );
+
+      expect(await controller.changeSeries(schedule: _entry(), plan: plan),
+          isTrue);
+      expect(api.lastChangePlan?.selectedDates, ['2026-10-06', '2026-10-20']);
+    });
+
+    test('changed series payload after failed request uses a new key',
+        () async {
+      var counter = 0;
+      final api = _FakeScheduleApi()..changeError = _dioError(statusCode: 503);
+      final controller = _controller(api,
+          now: DateTime(2026, 10, 6), nextKey: () => 'key-${++counter}');
+      addTearDown(controller.dispose);
+      await controller.changeSeries(schedule: _entry(), plan: _weekdayPlan());
+      await controller.changeSeries(
+          schedule: _entry(), plan: _weekdayPlan(weekCadence: 1));
+      await controller.changeSeries(
+          schedule: _entry(), plan: _weekdayPlan(weekCadence: 1));
+      expect(api.changeKeys, ['key-1', 'key-2', 'key-2']);
+    });
+
+    test('changed occurrence payload after failed request uses a new key',
+        () async {
+      var counter = 0;
+      final api = _FakeScheduleApi()
+        ..occurrenceError = _dioError(statusCode: 503);
+      final controller = _controller(api, nextKey: () => 'key-${++counter}');
+      addTearDown(controller.dispose);
+      await controller.changeOccurrence(
+          schedule: _entry(), localDate: '2026-10-06', cancel: true);
+      await controller.changeOccurrence(
+          schedule: _entry(),
+          localDate: '2026-10-06',
+          replacementLocalDate: '2026-10-08');
+      await controller.changeOccurrence(
+          schedule: _entry(),
+          localDate: '2026-10-06',
+          replacementLocalDate: '2026-10-08');
+      expect(api.occurrenceKeys, ['key-1', 'key-2', 'key-2']);
     });
 
     test('a past occurrence date is rejected without an API call', () async {
@@ -650,15 +718,17 @@ void main() {
             statusCode: 409,
             data: {
               'error': {
-                'warnings': [
-                  {
-                    'warning_id': 'new-warning',
-                    'first_circle_name': 'Hifz',
-                    'second_circle_name': 'Review',
-                    'overlap_starts_at': '2026-10-06T15:30:00Z',
-                    'overlap_ends_at': '2026-10-06T16:00:00Z',
-                  }
-                ],
+                'warnings': {
+                  'warnings': [
+                    {
+                      'warning_id': 'new-warning',
+                      'first_circle_name': 'Hifz',
+                      'second_circle_name': 'Review',
+                      'overlap_starts_at': '2026-10-06T15:30:00Z',
+                      'overlap_ends_at': '2026-10-06T16:00:00Z',
+                    }
+                  ]
+                },
               }
             },
           ),
@@ -734,6 +804,7 @@ Map<String, dynamic> _scheduleJson({
       'circle_id': 'circle-1',
       'version': version,
       'stopped_from_local_date': stoppedFrom,
+      'occurrence_versions': {'2026-10-06': 2},
       'plan': {
         'mode': 'weekday_pattern',
         'anchor_local_date': '2026-10-06',
@@ -804,7 +875,10 @@ class _FakeScheduleApi extends ScheduleApiClient {
   String? lastOccurrenceDate;
   bool? lastOccurrenceCancel;
   int? lastOccurrenceSeriesVersion;
+  int? lastOccurrenceVersion;
   final List<String> createKeys = [];
+  final List<String> changeKeys = [];
+  final List<String> occurrenceKeys = [];
 
   @override
   Future<List<CircleScheduleEntry>> listSchedules({
@@ -855,6 +929,7 @@ class _FakeScheduleApi extends ScheduleApiClient {
     List<String> confirmedWarningIDs = const [],
   }) async {
     changeCalls++;
+    changeKeys.add(idempotencyKey);
     lastChangeStop = stop;
     lastChangeVersion = expectedVersion;
     lastChangeEffectiveDate = effectiveLocalDate;
@@ -884,9 +959,11 @@ class _FakeScheduleApi extends ScheduleApiClient {
     List<String> confirmedWarningIDs = const [],
   }) async {
     occurrenceCalls++;
+    occurrenceKeys.add(idempotencyKey);
     lastOccurrenceDate = localDate;
     lastOccurrenceCancel = cancel;
     lastOccurrenceSeriesVersion = expectedSeriesVersion;
+    lastOccurrenceVersion = expectedOccurrenceVersion;
     final error = occurrenceError;
     if (error != null) throw error;
   }

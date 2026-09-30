@@ -77,8 +77,10 @@ List<CalendarWarning> calendarWarningsFromConflict(Object? response) {
   final error = response['error'];
   if (error is! Map<String, dynamic>) return const [];
   final warnings = error['warnings'];
-  if (warnings is! List<dynamic>) return const [];
-  return warnings
+  if (warnings is! Map<String, dynamic>) return const [];
+  final items = warnings['warnings'];
+  if (items is! List<dynamic>) return const [];
+  return items
       .whereType<Map<String, dynamic>>()
       .map(CalendarWarning.fromJson)
       .toList(growable: false);

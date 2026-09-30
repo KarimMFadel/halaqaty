@@ -91,6 +91,7 @@ class CircleScheduleEntry {
     required this.id,
     required this.circleId,
     required this.version,
+    this.occurrenceVersions = const {},
     this.stoppedFromLocalDate,
     required this.plan,
   });
@@ -98,6 +99,10 @@ class CircleScheduleEntry {
   final String id;
   final String circleId;
   final int version;
+
+  /// Current exception versions by original local date. An absent date is a
+  /// virtual occurrence and starts at version zero.
+  final Map<String, int> occurrenceVersions;
   final String? stoppedFromLocalDate;
   final SchedulePlanInput plan;
 
@@ -106,6 +111,10 @@ class CircleScheduleEntry {
         id: json['id'] as String,
         circleId: json['circle_id'] as String,
         version: json['version'] as int,
+        occurrenceVersions:
+            (json['occurrence_versions'] as Map<String, dynamic>? ??
+                    const <String, dynamic>{})
+                .map((date, version) => MapEntry(date, version as int)),
         stoppedFromLocalDate: json['stopped_from_local_date'] as String?,
         plan: SchedulePlanInput.fromJson(json['plan'] as Map<String, dynamic>),
       );

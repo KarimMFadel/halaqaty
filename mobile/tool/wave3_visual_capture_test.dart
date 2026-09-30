@@ -520,6 +520,9 @@ ChatMessage _message(
 
 class _VisualAuthController extends StateNotifier<AuthState>
     implements AuthController {
+  @override
+  void updateTimezone(String timezone) {}
+
   _VisualAuthController()
       : super(
           AuthState(

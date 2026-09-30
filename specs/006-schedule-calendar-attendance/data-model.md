@@ -1,6 +1,6 @@
 # F-006 Data Model
 
-**Status:** Approved by ADR-026 and reflected in architecture; migration pending. All instants are UTC `TIMESTAMPTZ`; all recurring civil dates/times use the stored IANA zone. Existing F-005 tables are extended by relationship, not redefined.
+**Status:** Approved by ADR-026 and reflected in architecture; paired migration `000020_schedule_calendar_attendance` is implemented. All instants are UTC `TIMESTAMPTZ`; all recurring civil dates/times use the stored IANA zone. Existing F-005 tables are extended by relationship, not redefined.
 
 | Entity | Fields and invariants | Relationships/indexes |
 |---|---|---|
@@ -26,7 +26,7 @@
 ## Migration sequence and rollback
 
 1. ADR-026 is accepted; `ARCHITECTURE.md` and canonical REST contract are synchronized to this model.
-2. Create one paired migration following the current migration tip. Add the profile timezone column and new tables/constraints/indexes without altering F-005 enums or dropping existing columns. Backfill existing profile rows to `UTC`; test fresh up/down and upgrade from current schema, including a pre-existing profile; no old schedule rows exist to backfill. Production rollback retains additive data until deliberate migration, especially attendance history.
+2. Paired migration `backend/migrations/000020_schedule_calendar_attendance.{up,down}.sql` adds the profile timezone column and new tables/constraints/indexes without altering F-005 enums or dropping existing columns. It backfills existing profile rows to `UTC`. Fresh up/down and upgrade from an existing profile were verified in the recorded Phase 7 gates in [quickstart.md](quickstart.md); no old schedule rows existed to backfill. Production rollback retains additive data until deliberate migration, especially attendance history.
 3. Deploy compatible readers before exposing F-006 writes. Down migration is safe only while no F-006 data must be retained; for production rollback, disable F-006 routes and roll back code while leaving additive tables, then migrate data deliberately. Never drop attendance history as an automatic incident response.
 
 ## Query boundaries

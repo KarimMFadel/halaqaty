@@ -1509,8 +1509,8 @@ idx_<table>_<col>_partial_<condition>   -- partial (e.g., idx_messages_circle_id
 
 **Current coverage:**
 - ✅ users, circles, circle_members, circle_invites, sessions, messages, memorization_progress
-- 🔲 schedules and related F-006 tables (ADR-026 approved; migration pending)
-- ⚠️ **Audit required:** recitation_queue, recitation_queue_entries, session_attendance, device_tokens, message_reads
+- ✅ schedules, schedule_occurrence_exceptions, session_attendance (migration 000020)
+- ⚠️ **Audit required:** recitation_queue, recitation_queue_entries, planned_session_details, device_tokens, message_reads
 
 **Tables that should NOT have `updated_at`:**
 - Reference data (quran_surahs, quran_divisions) — immutable

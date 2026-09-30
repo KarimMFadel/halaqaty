@@ -955,7 +955,7 @@ All open questions from feature discussions, consolidated:
 | OQ-015 | Student video permission model? | F-005 | Decided | MVP is audio-only; no video permission in MVP |
 | OQ-016 | Max session duration for server sizing? | F-005 | Decided | Max 4 hours per session. Idle room timeout: 30 minutes after last participant leaves. |
 | OQ-017 | Recording visibility (teacher-only vs all)? | F-005 | Deferred | Recording disabled until privacy framework approval; finalize model before activation |
-| OQ-018 | Non-recurring (one-off) sessions? | F-006 | Decided | Yes — teacher can create one-off sessions not linked to a recurring schedule. |
+| OQ-018 | Non-recurring (one-off) sessions? | F-006 | Decided | Yes — active teachers and supervisors can create one-off sessions not linked to a recurring schedule. |
 | OQ-019 | Timezone storage strategy? | F-006 | Decided | UTC stored in DB. IANA timezone string stored per user profile. All display in user's local timezone. |
 | OQ-020 | Student self-logging (outside sessions)? | F-007 | Decided | No in MVP. Progress records are generated from session-based recitations only. |
 | OQ-021 | Multiple passes on same section? | F-007 | Decided | Yes — each queue entry creates a new progress record. Full history of all passes is retained. |

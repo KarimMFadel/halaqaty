@@ -46,7 +46,7 @@ tags:
   - name: Chat
     description: Circle and direct messages
   - name: Schedules
-    description: F-006 circle plans, personal calendar, and attendance (approved contract; handlers pending)
+    description: F-006 circle plans, personal calendar, and attendance
   - name: Progress
     description: Student progress tracking — attendance history, Quran map, recitation stats (F-007)
   - name: Config
@@ -1769,7 +1769,7 @@ paths:
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/InternalServerError' }
 
-  # ── Schedules (F-006 approved contract; handlers pending) ──
+  # ── Schedules (F-006) ──
   /circles/{circleId}/planning-preview:
     post:
       operationId: previewCirclePlan
@@ -3793,6 +3793,10 @@ components:
         version: { type: integer, minimum: 1 }
         stopped_from_local_date: { type: string, format: date, nullable: true }
         plan: { $ref: '#/components/schemas/PlanInput' }
+        occurrence_versions:
+          type: object
+          description: 'On schedule-list reads, retained exception versions keyed by original local date (YYYY-MM-DD), including moved occurrences; an absent key means version 0.'
+          additionalProperties: { type: integer, minimum: 1 }
     CalendarItem:
       type: object
       required: [occurrence_key, circle_id, circle_name, title, starts_at, ends_at, planning_timezone, state]

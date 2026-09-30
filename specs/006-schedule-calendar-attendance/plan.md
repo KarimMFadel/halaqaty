@@ -4,7 +4,7 @@
 
 ## Summary
 
-Add circle-scoped recurring and one-off planning, a member calendar, and attendance derived from F-005 presence. Generate open-ended recurrence only for requested date ranges; retain durable exceptions and started history. Extend the existing `sessions` lifecycle without adding a fourth status. This approved design is ready for the Spec-Kit implementation phase after analysis; no migration or feature handler has been applied. F-008 remains the owner of push delivery.
+Add circle-scoped recurring and one-off planning, a member calendar, and attendance derived from F-005 presence. Generate open-ended recurrence only for requested date ranges; retain durable exceptions and started history. Extend the existing `sessions` lifecycle without adding a fourth status. The F-006 migration and feature handlers are implemented; current fix-wave verification and the F-008 push dependency remain open.
 
 ## Technical Context
 
@@ -12,7 +12,7 @@ Add circle-scoped recurring and one-off planning, a member calendar, and attenda
 - **Source of truth**: PostgreSQL for plans, exceptions, materialized planned sessions, attendance, correction audit and idempotency. F-005 presence remains read-only input.
 - **Scale**: MVP pilot at most 50 concurrent users and 10 live sessions (existing architecture); calendar reads are bounded by requested month, while creation has no future-date cap.
 - **Tests**: Go unit/contract/integration; PostgreSQL migration up/down on disposable DB; Flutter widget/integration in Arabic RTL and LTR; timezone fixtures and concurrency/retry tests.
-- **Contract**: `docs/contracts/openapi.yaml` contains the approved F-006 REST surface, synchronized from [contracts/schedule-calendar.openapi.yaml](contracts/schedule-calendar.openapi.yaml) and [contracts/profile-timezone.md](contracts/profile-timezone.md). The prior weekly-only schedule body was an unimplemented draft. Existing schedule path/method/operation IDs and the GET `data` wrapper remain; approved create semantics replace the draft request. Existing implemented F-005 and profile fields remain compatible. F-006 handlers and migration are still pending.
+- **Contract**: `docs/contracts/openapi.yaml` contains the approved F-006 REST surface, synchronized with [contracts/schedule-calendar.openapi.yaml](contracts/schedule-calendar.openapi.yaml) and [contracts/profile-timezone.md](contracts/profile-timezone.md). The prior weekly-only schedule body was an unimplemented draft. Existing schedule path/method/operation IDs and the GET `data` wrapper remain; approved create semantics replace the draft request. Existing implemented F-005 and profile fields remain compatible. F-006 handlers and migration are implemented.
 
 ## Constitution Check
 
@@ -22,7 +22,7 @@ Add circle-scoped recurring and one-off planning, a member calendar, and attenda
 | Stack and ownership | Pass: reuse existing Go/Flutter/PostgreSQL/Firebase and F-005 media/presence; no new infrastructure. |
 | Auth/privacy | Design: enforce both Firebase/backend session and current `circle_members` role for every read/write; no former-member history access or cross-member calendar inspection. |
 | Contract-first | Approved feature contract is synchronized into canonical OpenAPI and API lint passes; implementation must still meet contract tests. |
-| Schema governance | [ADR-026](../../docs/engineering/architecture/adr/ADR-026-schedule-occurrence-and-attendance-persistence.md) is accepted and architecture reflects it; the paired migration and up/down tests remain implementation gates. |
+| Schema governance | [ADR-026](../../docs/engineering/architecture/adr/ADR-026-schedule-occurrence-and-attendance-persistence.md) is accepted and architecture reflects it; the paired migration and up/down tests are recorded in [quickstart.md](quickstart.md). |
 | F-008 push | Partial pilot only; full SC-009 remains pending F-008 approval and real delivery evidence. |
 
 ## Design and sequencing
@@ -47,14 +47,14 @@ Add circle-scoped recurring and one-off planning, a member calendar, and attenda
 
 ```text
 specs/006-schedule-calendar-attendance/{plan.md,research.md,data-model.md,quickstart.md,contracts/}
-backend/migrations/                         # future paired F-006 migration
-backend/internal/scheduling/                # future recurrence, calendar and warnings
-backend/internal/attendance/                # future classification/correction
-backend/internal/sessions/                  # narrow planned-start guard and snapshot integration
-backend/cmd/api/routes.go                   # future centralized route patterns
-mobile/lib/features/scheduling/            # future Riverpod data/application/presentation
-mobile/lib/features/attendance/            # future review/correction UI
-docs/contracts/openapi.yaml                # canonical REST source of truth before implementation
+backend/migrations/                         # paired F-006 migration
+backend/internal/scheduling/                # recurrence, calendar and warnings
+backend/internal/attendance/                # classification/correction
+backend/internal/sessions/                  # planned-start guard and snapshot integration
+backend/cmd/api/routes.go                   # centralized route patterns
+mobile/lib/features/scheduling/            # Riverpod data/application/presentation
+mobile/lib/features/attendance/            # review/correction UI
+docs/contracts/openapi.yaml                # canonical REST source of truth
 docs/engineering/architecture/ARCHITECTURE.md
 ```
 
@@ -67,6 +67,6 @@ docs/engineering/architecture/ARCHITECTURE.md
 
 ## Open items
 
-- ADR-026 and the spec were approved by Karim on 2026-09-27. The corresponding migration and feature handlers have not been implemented.
-- Canonical and feature-local REST shapes are synchronized; implementation contract tests and the analysis gate remain. No new WebSocket event is proposed.
+- ADR-026 and the spec were approved by Karim on 2026-09-27. The corresponding migration and feature handlers are implemented; current fix-wave gates remain to be recorded in [quickstart.md](quickstart.md).
+- Canonical and feature-local REST shapes are synchronized; repeat contract verification after the current fixes. No new WebSocket event is proposed.
 - F-008 is Proposed; SC-009 blocks full F-006 completion, but not a clearly labelled partial pilot.

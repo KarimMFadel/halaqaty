@@ -1,6 +1,6 @@
 # ADR-026: Schedule Occurrence and Attendance Persistence
 
-**Status:** Accepted — approved by Karim on 2026-09-27; migration and implementation remain gated by Spec-Kit task verification
+**Status:** Accepted — approved by Karim on 2026-09-27; implemented as a partial F-006 pilot
 **Date:** 2026-09-27
 **Decider:** Karim (product owner)
 
@@ -27,7 +27,7 @@ ADR-025 approves broad recurrence, advisory overlap warnings, teacher/supervisor
 
 ## Consequences and implementation gates
 
-Karim approved this technical design, including the 31-day planned-duration limit, on 2026-09-27. It is not an applied migration. Canonical architecture and contract reconciliation, a paired migration, and migration/contract/security tests remain prerequisites for implementation. The decision satisfies constitution §III (PostgreSQL source of truth, existing stack), §IV (circle-role authorization) and §VI (test-first changes); it does not amend the constitution. F-008 retains push delivery ownership.
+Karim approved this technical design, including the 31-day planned-duration limit, on 2026-09-27. Paired migration 000020 and the F-006 code are present in this branch; full pilot acceptance still depends on current verification and F-008 reminder delivery. The decision satisfies constitution §III (PostgreSQL source of truth, existing stack), §IV (circle-role authorization) and §VI (test-first changes); it does not amend the constitution. F-008 retains push delivery ownership.
 
 ## References
 

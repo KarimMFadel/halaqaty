@@ -6,8 +6,8 @@
 
 **Scope:** MVP partial pilot includes US1–US4 and every F-006 security/accessibility requirement. Full SC-009 push completion remains dependent on F-008 approval and real delivery evidence.
 
-**Labels:** `[US0]` means governance, shared foundation or final gate; `[US1]`–`[US4]` match the spec stories. No task is marked `[P]` while the migration and shared route dependencies remain incomplete; reassess disjoint work after those gates pass.
-**Evidence rule:** Leave a box open until its named deliverable exists and current verification supports it. Tests are written to fail first where behavior is new. T001–T004 are complete after Karim's approval, architecture/contract synchronization, parity check, API lint and manual docs-guard pass; implementation tasks remain open.
+**Labels:** `[US0]` means governance, shared foundation or final gate; `[US1]`–`[US4]` match the spec stories. No task is marked `[P]`; the original dependency boundaries are explicit below.
+**Evidence rule:** Leave a box open until its named deliverable exists and current verification supports it. Tests are written to fail first where behavior is new. T001–T004 are complete after Karim's approval, architecture/contract synchronization, parity check, API lint and manual docs-guard pass; T063, T066 and T067 remain open for their named gates.
 
 ## Phase 1 — Governance and contract setup (US0)
 
@@ -111,14 +111,15 @@
 - [X] T060 [US0] Run focused and unfiltered API security, response-safety, idempotency and existing F-005 compatibility tests; record command/result and any remaining risk in `specs/006-schedule-calendar-attendance/quickstart.md`.
 - [X] T061 [US0] Recheck REST parity, OpenAPI lint, architecture/ADR alignment and whether any actual new WebSocket event needs cataloging; apply `$docs-guard` to `docs/contracts/openapi.yaml` and update `docs/contracts/ws_events.md` only if an approved event exists.
 - [X] T062 [US0] Run unfiltered Go unit, contract, integration, combined ≥80% coverage, lint, gofmt, migration up/down, API lint and secret scan; record exact results/unavailable prerequisites in `specs/006-schedule-calendar-attendance/quickstart.md`.
-- [X] T063 [US0] Run fresh Flutter `flutter test test`, device-backed `flutter test integration_test/`, `flutter analyze` and `dart format --set-exit-if-changed .`; record exact results and block Flutter commits if unavailable in `specs/006-schedule-calendar-attendance/quickstart.md`.
+- [ ] T063 [US0] Run fresh Flutter `flutter test test`, device-backed `flutter test integration_test/`, `flutter analyze` and `dart format --set-exit-if-changed .`; record exact results and block Flutter commits if unavailable in `specs/006-schedule-calendar-attendance/quickstart.md`.
 - [X] T064 [US0] Close administratively at Karim's explicit direction; record that timed teacher/supervisor schedule and one-off creation (SC-001), multi-circle calendar, attendance and accessibility/RTL/LTR real-stack journeys remain unverified in `specs/006-schedule-calendar-attendance/quickstart.md`.
 - [X] T065 [US0] Apply `$clean-code-guard`, `$test-guard`, Ponytail restraint, Tech Lead review and Karim's applicable manual security review; record findings/closure in `specs/006-schedule-calendar-attendance/quickstart.md`.
-- [X] T066 [US0] Label a partial F-006 pilot accurately, leave full SC-009 open while F-008 is Proposed, and only after F-008 approval verify actual 1hr/30min/15min/5min foreground/background/closed-app delivery and stale-reminder suppression in `specs/006-schedule-calendar-attendance/quickstart.md`.
+- [ ] T066 [US0] Label a partial F-006 pilot accurately, leave full SC-009 open while F-008 is Proposed, and only after F-008 approval verify actual 1hr/30min/15min/5min foreground/background/closed-app delivery and stale-reminder suppression in `specs/006-schedule-calendar-attendance/quickstart.md`.
+- [ ] T067 [US0] Run teacher and supervisor recurring-schedule and one-off creation journeys against a real backend on a device, timing each valid flow to verify SC-001's two-minute limit; verify eligible sessions across two circles, attendance review/correction without changing presence, non-color circle identification and accessible Arabic RTL/English LTR states using `mobile/integration_test/schedule_management_flow_test.dart`, `mobile/integration_test/schedule_calendar_flow_test.dart` and `mobile/integration_test/attendance_flow_test.dart`; record fixtures, commands, timings, results and any skips in `specs/006-schedule-calendar-attendance/quickstart.md`.
 
 ## Dependencies and critical path
 
-`T001 ADR approval → T002 architecture → T003–T004 canonical contract → T005–T011 migration/security → T012–T024 US1 → T025–T037 US2 → T038–T048 US3 → T049–T057 US4 → T058–T065 validation → T066 full-completion dependency.`
+`T001 ADR approval → T002 architecture → T003–T004 canonical contract → T005–T011 migration/security → T012–T024 US1 → T025–T037 US2 → T038–T048 US3 → T049–T057 US4 → T058–T065 validation → T067 real-stack acceptance; T066 full completion awaits T067 and F-008 delivery.`
 
 US1, US2 and US3 are all P1, but US2 uses US1's recurrence identity and US3 uses US2's planned-start path; implement them in that order while preserving each story's independent acceptance test. US4 is P2 and is required for a complete F-006 pilot. After T011, disjoint recurrence tests and attendance classifier tests can be developed in separate files, but no `[P]` marker is pre-assigned while their prerequisites and shared integration boundaries remain open. F-008 implementation stays in its own approved feature lifecycle.
 
@@ -126,17 +127,17 @@ US1, US2 and US3 are all P1, but US2 uses US1's recurrence identity and US3 uses
 
 | Acceptance | Implementation tasks | Test/evidence tasks |
 |---|---|---|
-| Product: recurrence modes, multiple entries, local zone/end date; US1 scenarios 1–5; FR-001/002/006/013; SC-002/006 | T013, T015, T017, T019, T021, T023 | T012, T014, T016, T018, T020, T022, T024 |
-| Product: unified calendar and accessible circle identity; US2 scenarios 1–2; FR-003–006/014; SC-001/003 | T027, T033–T034, T036 | T025–T026, T032, T035, T037, T064 |
+| Product: recurrence modes, multiple entries, local zone/end date; US1 scenarios 1–5; FR-001/002/006/013; SC-002/006 | T013, T015, T017, T019, T021, T023 | T012, T014, T016, T018, T020, T022, T024, T067 |
+| Product: unified calendar and accessible circle identity; US2 scenarios 1–2; FR-003–006/014; SC-001/003 | T027, T033–T034, T036 | T025–T026, T032, T035, T037, T067 |
 | Product: planned lifecycle/cancellation and retained history; US2 scenarios 3–4; FR-007/013; SC-006 | T029, T031, T033–T034 | T028, T030, T032, T037 |
-| Product: presence-derived attendance; US3 scenario 1; FR-009/010; SC-004/007 | T039, T041, T045, T047 | T038, T040, T044, T046, T048 |
-| Product: manual override; US3 scenarios 2–3; FR-011/012; SC-004/005/007 | T043, T045, T047 | T042, T044, T046, T048, T060 |
+| Product: presence-derived attendance; US3 scenario 1; FR-009/010; SC-004/007 | T039, T041, T045, T047 | T038, T040, T044, T046, T048, T067 |
+| Product: manual override; US3 scenarios 2–3; FR-011/012; SC-004/005/007 | T043, T045, T047 | T042, T044, T046, T048, T060, T067 |
 | Product: advisory overlaps; US4 scenarios 1–2; FR-008; SC-008 | T050, T052, T054, T056 | T049, T051, T053, T055, T057 |
 | Product: configurable push reminder intervals; FR-015; SC-009 | T059 plus F-008-owned delivery after its separate approval | T058, T066; full acceptance stays open until real delivery evidence exists |
-| Cross-story: current-role denial, archive, retry/concurrency, response safety, rate limits; FR-012–014; SC-005/006/007 | T005, T009–T010, T017, T019, T029, T031, T041 | T007–T008, T011, T016, T018, T020, T028, T030, T040, T044, T060–T065 |
+| Cross-story: current-role denial, archive, retry/concurrency, response safety, rate limits; FR-012–014; SC-005/006/007 | T005, T009–T010, T017, T019, T029, T031, T041 | T007–T008, T011, T016, T018, T020, T028, T030, T040, T044, T060–T063, T065, T067 |
 
 ## MVP delivery order
 
 1. Complete governance/contract and foundation gates. They are required, not optional polish.
 2. Deliver US1 → US2 → US3 → US4 and validate each independent journey. The F-006 partial pilot includes all four stories, security, accessibility, and warning behavior.
-3. Keep T066 open for full completion until F-008 is approved and verified. No placeholder or unrun test satisfies push acceptance.
+3. Complete T067's real-stack acceptance journeys before claiming the F-006 partial pilot is verified. Keep T066 open for full completion until F-008 is approved and verified. No placeholder or unrun test satisfies push acceptance.

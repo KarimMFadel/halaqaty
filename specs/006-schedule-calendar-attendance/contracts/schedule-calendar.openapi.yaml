@@ -2,14 +2,14 @@ openapi: 3.0.3
 info:
   title: F-006 schedule, calendar and attendance REST contract
   version: 0.1.0
-  description: Approved F-006 contract synchronized into docs/contracts/openapi.yaml. F-006 handlers are not yet implemented.
+  description: Approved F-006 contract synchronized into docs/contracts/openapi.yaml and implemented by the F-006 handlers.
   contact:
     name: Halaqaty
 servers:
   - url: /api/v1
 tags:
   - name: Schedules
-    description: Proposed F-006 planning, calendar and attendance surfaces
+    description: F-006 planning, calendar and attendance surfaces
 security:
   - BearerAuth: []
     SessionId: []
@@ -419,6 +419,10 @@ components:
         version: { type: integer, minimum: 1 }
         stopped_from_local_date: { type: string, format: date, nullable: true }
         plan: { $ref: '#/components/schemas/PlanInput' }
+        occurrence_versions:
+          type: object
+          description: 'On schedule-list reads, retained exception versions keyed by original local date (YYYY-MM-DD), including moved occurrences; an absent key means version 0.'
+          additionalProperties: { type: integer, minimum: 1 }
     CalendarItem:
       type: object
       required: [occurrence_key, circle_id, circle_name, title, starts_at, ends_at, planning_timezone, state]

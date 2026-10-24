@@ -6,12 +6,14 @@ const (
 )
 
 const (
-	routeAuthRegister = "POST /api/v1/auth/register"
-	routeAuthSessions = "POST /api/v1/auth/sessions"
-	routeAuthLogout   = "POST /api/v1/auth/logout"
-	routeAuthMeGet    = "GET /api/v1/auth/me"
-	routeAuthMePut    = "PUT /api/v1/auth/me"
-	routeAuthMeDelete = "DELETE /api/v1/auth/me"
+	routeAuthRegister       = "POST /api/v1/auth/register"
+	routeAuthSessions       = "POST /api/v1/auth/sessions"
+	routeAuthLogout         = "POST /api/v1/auth/logout"
+	routeAuthMeGet          = "GET /api/v1/auth/me"
+	routeAuthMePut          = "PUT /api/v1/auth/me"
+	routeAuthMeDelete       = "DELETE /api/v1/auth/me"
+	routeAuthFcmTokenPost   = "POST /api/v1/auth/fcm-token"
+	routeAuthFcmTokenDelete = "DELETE /api/v1/auth/fcm-token"
 )
 
 const (
@@ -78,6 +80,15 @@ const (
 	routeSessionQueuePolicy         = "PATCH /api/v1/sessions/{sessionId}/queue/policy"
 	routeSessionQueueOptOut         = "POST /api/v1/sessions/{sessionId}/queue/opt-out"
 	routeSessionQueueOptOutDecision = "POST /api/v1/sessions/{sessionId}/queue/opt-out-requests/{requestId}/decision"
+)
+
+// F-008 notification history/read-state route patterns. The read-all literal
+// segment is more specific than {notificationId}/read, so the Go mux
+// registers both without conflict.
+const (
+	routeNotificationsGet     = "GET /api/v1/notifications"
+	routeNotificationRead     = "PUT /api/v1/notifications/{notificationId}/read"
+	routeNotificationsReadAll = "PUT /api/v1/notifications/read-all"
 )
 
 // F-004 chat route patterns (US1 group list/send). The remaining F-004

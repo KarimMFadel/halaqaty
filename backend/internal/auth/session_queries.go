@@ -155,6 +155,34 @@ INSERT INTO user_sessions (
 ) VALUES ($1, $2, $3, $4, $5, NULL, NOW())
 `
 
+const upsertDeviceTokenQuery = `
+WITH registered AS (
+INSERT INTO device_tokens (user_id, token, platform, device_label)
+SELECT $1::uuid, $2, $3, $4
+FROM users
+WHERE id = $1::uuid AND deleted_at IS NULL
+ON CONFLICT (user_id, token) DO UPDATE SET
+    platform = EXCLUDED.platform,
+    device_label = EXCLUDED.device_label,
+    last_seen_at = NOW()
+RETURNING user_id
+), woken AS (
+    UPDATE notifications n
+    SET delivery_state = 'pending_attempt', next_attempt_at = NOW()
+    FROM registered r
+    WHERE n.user_id = r.user_id
+      AND n.delivery_state = 'pending_no_device'
+      AND n.push_expires_at > NOW()
+    RETURNING n.id
+)
+SELECT user_id FROM registered
+`
+
+const deleteDeviceTokenQuery = `
+DELETE FROM device_tokens
+WHERE user_id = $1::uuid AND token = $2
+`
+
 const getSessionByIDQuery = `
 SELECT
     session_id,

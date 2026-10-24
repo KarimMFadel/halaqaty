@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/KarimMFadel/halaqaty/backend/internal/notifications"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -132,6 +133,64 @@ func TestRepository_RoleInCircle_ReturnsRoleForMembersOnly(t *testing.T) {
 	role, err = repo.RoleInCircle(ctx, circle, outsider)
 	if err != nil || role != "" {
 		t.Fatalf("non-member role: got (%q, %v) want (\"\", nil)", role, err)
+	}
+}
+
+func TestCircleJoinAndArchiveNotificationsUseCommittedEligibleRecipients(t *testing.T) {
+	repo := newIntegrationRepository(t)
+	ctx := context.Background()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locate integration test")
+	}
+	migration, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "migrations", "000021_notification_system.up.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.pool.Exec(ctx, string(migration)); err != nil {
+		t.Fatalf("apply F-008 migration: %v", err)
+	}
+	notificationRepo := notifications.NewRepository(repo.pool)
+	repo.SetNotificationRepository(notificationRepo)
+	teacher := seedIntegrationUser(t, repo, "notification-teacher")
+	student := seedIntegrationUser(t, repo, "notification-student")
+	outsider := seedIntegrationUser(t, repo, "notification-outsider")
+	circle := seedIntegrationCircle(t, repo, "Notification Circle", teacher, "HLQ-NOTI1")
+	seedIntegrationMember(t, repo, circle, teacher, RoleTeacher)
+	service := NewService(repo, nil)
+	if _, err := service.JoinPublicCircle(ctx, student, circle); err != nil {
+		t.Fatalf("join public circle: %v", err)
+	}
+	page, err := notificationRepo.List(ctx, teacher, nil, 10)
+	if err != nil || len(page.Items) != 1 || page.Items[0].Type != notifications.EventStudentJoinedCircle {
+		t.Fatalf("teacher join notifications = %+v, error=%v", page, err)
+	}
+	if err := service.ArchiveCircle(ctx, teacher, circle); err != nil {
+		t.Fatalf("archive circle: %v", err)
+	}
+	for _, userID := range []string{teacher, student} {
+		page, err := notificationRepo.List(ctx, userID, nil, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := map[notifications.EventType]bool{notifications.EventCircleArchived: false}
+		if userID == teacher {
+			want[notifications.EventStudentJoinedCircle] = false
+		}
+		for _, item := range page.Items {
+			if _, exists := want[item.Type]; exists {
+				want[item.Type] = item.SourceRef.ID.String() == circle
+			}
+		}
+		for eventType, found := range want {
+			if !found {
+				t.Errorf("user %s missing %s notification: %+v", userID, eventType, page.Items)
+			}
+		}
+	}
+	page, err = notificationRepo.List(ctx, outsider, nil, 10)
+	if err != nil || len(page.Items) != 0 {
+		t.Fatalf("outsider received circle notices: %+v, error=%v", page, err)
 	}
 }
 

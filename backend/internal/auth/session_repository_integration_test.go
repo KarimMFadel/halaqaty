@@ -31,6 +31,7 @@ var authRepoMigrations = []string{
 	"000018_real_time_chat.up.sql",
 	"000019_account_deletion_tombstone.up.sql",
 	"000020_schedule_calendar_attendance.up.sql",
+	"000021_notification_system.up.sql",
 }
 
 func TestSessionRepository_CloseStudentAccountPreservesHistoryAndErasesPrivateData(t *testing.T) {
@@ -358,6 +359,52 @@ func TestSessionRepository_UpsertUserByFirebaseUID(t *testing.T) {
 	_, _, err = repo.UpsertUserByFirebaseUID(ctx, "uid-upsert-2", "renamed@example.com")
 	if !errors.Is(err, ErrDuplicateEmail) {
 		t.Fatalf("duplicate email: got %v want %v", err, ErrDuplicateEmail)
+	}
+}
+
+func TestSessionRepository_DeviceTokenUpsertAndOwnerScopedRemoval(t *testing.T) {
+	repo := newSessionRepo(t)
+	ctx := context.Background()
+	owner := seedAuthUser(t, repo, "fcm-owner")
+	other := seedAuthUser(t, repo, "fcm-other")
+	var sourceID = uuid.NewString()
+	if _, err := repo.pool.Exec(ctx, `
+		INSERT INTO notifications (
+		    user_id, type, source_event_id, source_ref_type, source_ref_id,
+		    title, body, push_expires_at
+		) VALUES ($1::uuid, 'session_started', 'pending-source', 'session', $2::uuid,
+		          'Session started', 'A session started', NOW() + INTERVAL '1 hour')
+	`, owner, sourceID); err != nil {
+		t.Fatalf("seed pending intent: %v", err)
+	}
+	label := "Browser"
+	if err := repo.UpsertDeviceToken(ctx, owner, "opaque-token", "web", &label); err != nil {
+		t.Fatalf("register token: %v", err)
+	}
+	updatedLabel := "Updated Browser"
+	if err := repo.UpsertDeviceToken(ctx, owner, "opaque-token", "web", &updatedLabel); err != nil {
+		t.Fatalf("refresh token: %v", err)
+	}
+	if err := repo.DeleteDeviceToken(ctx, other, "opaque-token"); err != nil {
+		t.Fatalf("other user removal: %v", err)
+	}
+	var gotLabel string
+	var count int
+	if err := repo.pool.QueryRow(ctx, `SELECT device_label FROM device_tokens WHERE user_id = $1::uuid AND token = $2`, owner, "opaque-token").Scan(&gotLabel); err != nil {
+		t.Fatalf("read retained token: %v", err)
+	}
+	if gotLabel != updatedLabel {
+		t.Fatalf("refreshed label: got %q want %q", gotLabel, updatedLabel)
+	}
+	var deliveryState string
+	if err := repo.pool.QueryRow(ctx, `SELECT delivery_state FROM notifications WHERE user_id = $1::uuid AND source_event_id = 'pending-source'`, owner).Scan(&deliveryState); err != nil || deliveryState != "pending_attempt" {
+		t.Fatalf("pending delivery state: got %q err=%v", deliveryState, err)
+	}
+	if err := repo.DeleteDeviceToken(ctx, owner, "opaque-token"); err != nil {
+		t.Fatalf("owner removal: %v", err)
+	}
+	if err := repo.pool.QueryRow(ctx, `SELECT COUNT(*) FROM device_tokens WHERE token = $1`, "opaque-token").Scan(&count); err != nil || count != 0 {
+		t.Fatalf("remaining token rows: got %d, err=%v", count, err)
 	}
 }
 

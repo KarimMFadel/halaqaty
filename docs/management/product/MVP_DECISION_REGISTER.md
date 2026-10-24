@@ -2,7 +2,7 @@
 
 > All frozen decisions for the Halaqaty MVP. Binding on all implementation. To change a decision, create an ADR in [`../../engineering/architecture/adr/`](../../engineering/architecture/adr/) and update this file with an entry in the Amendment Log.
 
-**Last updated:** 2026-09-27
+**Last updated:** 2026-10-17
 
 ---
 
@@ -17,7 +17,7 @@
 | OQ-036 | Initial circle roles, invitations, and supervisor management? | Roles are per-circle only. At creation, the creator may assign existing registered users as one or more teachers and one optional backup supervisor; if no teacher is selected, the creator becomes teacher, otherwise the creator is supervisor. For an active circle, a teacher or supervisor may issue a role-bound invitation for a teacher or student, while a student may issue a student-only invitation. Acceptance creates the bound circle membership and cannot change the assigned role. Any teacher or supervisor may change another member's teacher/supervisor/student role, but cannot change their own role or leave the circle with no teacher. | Supports shared teaching and member referrals while preventing invitation-based role escalation, global roles, self-lockout, and teacherless circles. |
 | OQ-056 | Which identity remains on retained history after account deletion? | **Display name only.** Erase email, full name, phone, avatar reference, and other non-retained profile data while preserving teaching, chat, and recitation history. | Preserves readable educational provenance without retaining unrelated identity fields. Approved by Karim 2026-09-26. |
 | OQ-057 | How recent must reauthentication be for account deletion? | A verified Firebase `auth_time` no more than five minutes before confirmation; token issue time is not a substitute. | Requires a fresh identity check for irreversible closure. Approved by Karim 2026-09-26. |
-| OQ-058 | Which accounts may use the current deletion batch? | Student-only. Block active teacher/supervisor memberships and owned active circles until the F-008 notification path is delivered. | Avoids orphaning managed circles. Approved by Karim 2026-09-26. |
+| OQ-058 | Which accounts may use the current deletion batch? | Student-only. Block active teacher/supervisor memberships and owned active circles until the F-008 durable notification path is deployed and operational; do not require handset receipt. | Avoids orphaning managed circles. Approved by Karim 2026-09-26 and refined by ADR-027. |
 | OQ-059 | Which unchecked F-001 controls are included in this batch? | Account deletion and directly related privacy controls only. Avatar upload, email verification, Google/Apple sign-in, and password reset remain out of scope. | Keeps the approved batch limited to the requested gaps. Approved by Karim 2026-09-26. |
 | PRD-4 | Co-teacher model (distinct role vs supervisor)? | **Deferred post-pilot.** MVP: teacher + supervisor only. No co-teacher role. | Adds role complexity without proven need; supervisor covers 95% of pilot use cases. |
 
@@ -28,7 +28,7 @@
 | ID | Question | Decision | Rationale |
 |---|---|---|---|
 | OQ-005 | Cross-circle role combinations? | **Yes.** Roles are fully independent per circle. A user can be teacher in one circle and student in another. | This is real-world reality for a sheikh who teaches and also studies. |
-| OQ-006 | Circle ownership on account deletion? | When the manager-deletion path is enabled, archive the circle and notify members; the teacher must designate a supervisor first, with no automatic transfer. **Until F-008 notification delivery exists, manager-account deletion is blocked without mutation.** | Prevents silent data loss and requires a conscious handoff; the current F-001 batch remains student-only. |
+| OQ-006 | Circle ownership on account deletion? | When enabled, require a designated supervisor, archive each owned active circle, and atomically create durable member history/notification intents with account closure; no automatic transfer. Required notices bypass ordinary circle-archive preferences but follow quiet hours. A post-commit FCM outage is retried and does not undo closure. **Manager deletion stays blocked until F-008 is deployed and operational.** | Prevents silent data loss and requires a conscious handoff; the current F-001 batch remains student-only. See ADR-024/027. |
 | PRD-3 | Institution onboarding model? | **Self-serve in MVP.** Admin receives invite code, manages own school. Assisted onboarding deferred. | Reduces operational overhead; pilot scale doesn't need white-glove onboarding. |
 
 ---
@@ -164,12 +164,24 @@ retaining each wave as a coherent implementation and review batch.
 | F-019-NUMBERING | **F-019 is the sole umbrella feature for Waves 0–5.** | Keeps the complete design modernization traceable through one Spec-Kit lifecycle while preserving wave-level implementation and review batches. Explicitly approved by Karim on 2026-09-22. |
 | F-019-UNIMPLEMENTED-ACTIONS | **An intentionally planned design action with no implemented behavior remains visible and shows one shared localized under-implementation notice; it performs no navigation, controller/API call, or state mutation. Unsupported data and unplanned actions remain omitted.** | Preserves the approved design direction without faking capability or expanding F-019 backend scope. Explicitly approved by Karim on 2026-09-22. |
 
+## 13. Notifications
+
+| ID | Question | Decision | Rationale |
+|---|---|---|---|
+| OQ-061 | How do notification controls affect delivery? | Configurable event types are global per-user settings defaulting ON. OFF mutes F-008 push and foreground alert presentation but keeps history/unread; always-on types cannot be disabled. Current preference is checked before first push dispatch; a suppressed occurrence is not replayed after re-enable. | Gives users control over alerting without losing history or suppressing source content. |
+| OQ-062 | What are quiet-hours and unread rules? | Default 22:00–07:00 in the stored profile IANA timezone across devices. Quiet hours suppress/drop push, including always-on types, while history/unread remains. Opening one notice marks it read; opening the list does not; explicit read-all is supported. In-app unread count is exact; native badge sync applies where platform support/settings permit it. | Makes cross-device behavior predictable and preserves a server-authoritative unread state. |
+| OQ-063 | How long is notification history retained? | Display the last 30 days. Pending required manager-deletion dispatch intents remain durable until terminal handling; they are not evidence of handset receipt. | Keeps user-facing history bounded without losing required durable work. |
+| OQ-064 | Do manager-deletion notices follow ordinary preferences? | No. Required member notices bypass the ordinary circle-archive preference, remain subject to quiet hours, and are inserted atomically with archive/closure. Database failure aborts the mutation; transient post-commit FCM failure does not. | Ensures required member notice intent cannot be silently opted out of or falsely treated as delivered. |
+| OQ-065 | What if no device token exists at push dispatch? | Hold the intent until a token registers. Ordinary events expire within 24 hours of the source event; required manager-deletion pushes expire within 30 days, shortened by an earlier source cutoff. Recheck current preference, quiet hours, and eligibility before dispatch. F-006 reminders expire at the next closer configured offset, with the last expiring at occurrence start. | Allows a newly registered device to receive still-relevant events without indefinite or stale replay. Approved by Karim 2026-10-17. |
+| OQ-066 | When does a circle-invitation notification fire? | When an authorized inviter sends a role-bound invitation to its named recipient. F-008 owns history and delivery; use the committed invitation transition under the existing F-002 authorization and role rules. Do not infer the trigger from reusable invite-code sharing or circle joining. | Gives the intended invitee notice while an action is pending and avoids treating a reusable link as an addressed invitation. Approved by Karim 2026-10-17. |
+
 ---
 
 ## Amendment Log
 
 | Date | Decision ID | Old Value | New Value | Rationale | ADR |
 |---|---|---|---|---|---|
+| 2026-10-17 | OQ-006, OQ-061–OQ-066 / F-008 | F-008 delivery, preference/unread behavior, quiet-hours clock, native badge scope, manager-deletion notice policy, and invitation trigger unresolved | Approved F-008 lifecycle decisions: profile IANA timezone; OFF mutes both F-008 alert surfaces while history/unread remain; current preference checked at first dispatch; 30-day history; exact in-app count and best-effort native badge where supported; mandatory deletion notices bypass ordinary archive preference and are transactionally durable; tokenless intents wait under 24-hour/30-day bounds with earlier source cutoffs; circle-invitation notification fires when the role-bound invitation is sent to its named recipient | Karim's clarifications and accepted agent recommendations. F-008 owns the notification projection; source integration follows F-002 authorization and role rules. | ADR-027 |
 | 2026-09-27 | OQ-060 / F-006 planned duration | No explicit planned-duration bound | 1–44,640 minutes (31 days), without a start-date or time-of-day scheduling cap | Karim approved the bounded planning interval with the F-006 persistence design; F-005 live limits remain unchanged. | ADR-026 |
 | 2026-09-27 | OQ-060 / F-006 | Weekly, teacher-only planning and a misleading Completed → Cancelled sequence | Expanded recurrence; teacher/supervisor scheduling; advisory overlaps; cancellation separate from F-005 lifecycle; F-008 push dependency retained | Reconciles Karim's approved F-006 clarification with canonical product and architecture boundaries without inventing the future schema/API. | ADR-025 |
 | 2026-09-26 | OQ-006, OQ-056–OQ-059 | Deletion retention, reauthentication, eligible account types, and batch scope unspecified | Display name only remains; verified `auth_time` must be within five minutes; current path blocks managers; other unchecked F-001 flows stay out of scope | Implements the approved student-only account deletion amendment without bypassing F-008 notification delivery. | ADR-024 |

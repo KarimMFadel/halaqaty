@@ -73,6 +73,12 @@ const (
 	CommandChatTyping       = "cmd.chat.typing"
 )
 
+// EventNotificationUpdated is the user-targeted unread-count hint. Its
+// payload carries only an optional notification id and the authoritative
+// unread count — never titles, bodies, or deep links — and REST history
+// stays authoritative when a hint is duplicated or missed.
+const EventNotificationUpdated = "notification.updated"
+
 // SessionEventProvider supplies one already-authorized event after a session
 // topic subscription succeeds. A nil event means the provider has no state for
 // that subscription.

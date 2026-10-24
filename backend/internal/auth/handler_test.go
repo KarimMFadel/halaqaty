@@ -25,6 +25,23 @@ type stubAuthStore struct {
 	revokedIDs []string
 }
 
+type stubDeviceTokenStore struct {
+	userID, token, platform     string
+	label                       *string
+	deletedUserID, deletedToken string
+	upsertErr, deleteErr        error
+}
+
+func (s *stubDeviceTokenStore) UpsertDeviceToken(_ context.Context, userID, token, platform string, label *string) error {
+	s.userID, s.token, s.platform, s.label = userID, token, platform, label
+	return s.upsertErr
+}
+
+func (s *stubDeviceTokenStore) DeleteDeviceToken(_ context.Context, userID, token string) error {
+	s.deletedUserID, s.deletedToken = userID, token
+	return s.deleteErr
+}
+
 func (s *stubAuthStore) UpsertUserByFirebaseUID(context.Context, string, string) (User, bool, error) {
 	return User{}, false, s.upsertErr
 }
@@ -381,5 +398,33 @@ func TestLogoutHandler_ValidSession_RevokesExactlyThatSession(t *testing.T) {
 	}
 	if len(store.revokedIDs) != 1 || store.revokedIDs[0] != sessionID {
 		t.Fatalf("revoked sessions: got %v want exactly [%s]", store.revokedIDs, sessionID)
+	}
+}
+
+func TestFcmTokenHandlersScopeAndValidateToken(t *testing.T) {
+	store := &stubDeviceTokenStore{}
+	handler := NewHandler(nil)
+	handler.SetDeviceTokenStore(store)
+	userID := "11111111-1111-1111-1111-111111111111"
+
+	register := withLocalUser(newAuthHandlerRequest(http.MethodPost, "/auth/fcm-token", `{"token":" token-value ","platform":"web","device_name":" Browser "}`), userID)
+	registerRec := httptest.NewRecorder()
+	handler.RegisterFcmToken(registerRec, register)
+	if registerRec.Code != http.StatusOK || store.userID != userID || store.token != "token-value" || store.platform != "web" || store.label == nil || *store.label != "Browser" {
+		t.Fatalf("register: status=%d user=%q platform=%q label=%v", registerRec.Code, store.userID, store.platform, store.label)
+	}
+
+	unregister := withLocalUser(newAuthHandlerRequest(http.MethodDelete, "/auth/fcm-token", `{"token":"token-value"}`), userID)
+	unregisterRec := httptest.NewRecorder()
+	handler.UnregisterFcmToken(unregisterRec, unregister)
+	if unregisterRec.Code != http.StatusNoContent || store.deletedUserID != userID || store.deletedToken != "token-value" {
+		t.Fatalf("unregister: status=%d user=%q", unregisterRec.Code, store.deletedUserID)
+	}
+
+	invalid := withLocalUser(newAuthHandlerRequest(http.MethodPost, "/auth/fcm-token", `{"token":" ","platform":"android"}`), userID)
+	invalidRec := httptest.NewRecorder()
+	handler.RegisterFcmToken(invalidRec, invalid)
+	if invalidRec.Code != http.StatusBadRequest {
+		t.Fatalf("empty token status: got %d want 400", invalidRec.Code)
 	}
 }

@@ -21,4 +21,4 @@
 - The canonical OpenAPI now contains the approved F-006 schedule contract, but no schedule handler exists. Contract tests must verify implementation parity.
 - `circle_members` is the role source; historical records may remain after revocation, but reads must reauthorize current membership. Archived circles are read-only.
 - ADR-026 was accepted by Karim on 2026-09-27; architecture and canonical REST contract are synchronized. Executable migration and API code remain to be implemented and tested.
-- F-008 is Proposed. SC-009 cannot be marked complete during an F-006-only pilot.
+- F-008 is approved, but reminder delivery is not yet implemented or verified. SC-009 cannot be marked complete during an F-006-only pilot.

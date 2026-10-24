@@ -44,7 +44,7 @@ graph LR
     subgraph SC["Server → Client (push)"]
     direction TB
         BCAST["📢 Broadcast\nto authorized topic subscribers\n─────────────────\nqueue.* (F-003)\nsession.started · session.snapshot · session.ended\nsession.participant_joined · session.participant_left\nsession.hand_raised · session.hand_lowered\nsession.lock_changed · session.participant_muted\nsession.participant_removed\nchat.* (F-004)\nerror"]
-        TARGET["🎯 Targeted\nto one client only\n─────────────────\nqueue.your_turn\nqueue.next_soon\nchat.message_read"]
+        TARGET["🎯 Targeted\nto one client only\n─────────────────\nqueue.your_turn\nqueue.next_soon\nchat.message_read\nnotification.updated (F-008)"]
     end
 
     subgraph CS["Client → Server (commands)"]
@@ -647,6 +647,36 @@ Sent when the server cannot process a client command.
 
 ---
 
+## Notification Events
+
+### `notification.updated` (Server → authenticated user)
+
+Sent only to the authenticated recipient after a notification or read-state
+transition commits. It is a state-change hint; the REST API remains authoritative
+for the recipient's history and unread count. Preference-muted notifications
+still update passive history and unread state, but do not produce a foreground
+alert.
+
+```json
+{
+  "type": "notification.updated",
+  "payload": {
+    "notification_id": "optional UUID",
+    "unread_count": 3
+  },
+  "timestamp": "UTC ISO 8601"
+}
+```
+
+- Include `notification_id` for a single notification creation or read update;
+  omit it for a bulk read-all/count invalidation.
+- `unread_count` is the server-authoritative count after the committed change.
+- The event contains no title/body, private source content, media data, token, or
+  deep-link URL. Clients fetch the item from `GET /notifications`.
+- Delivery may be duplicated or missed. Clients replace the displayed count and
+  reconcile through REST after reconnect, app resume, or account switch; push
+  receipt never increments the count.
+
 ## Event Delivery Guarantees
 
 | Event | Delivery | Deduplication |
@@ -654,6 +684,7 @@ Sent when the server cannot process a client command.
 | `queue.*` | At-least-once (authorized broadcast or targeted delivery) | Client deduplicates by `event_id`, ignores stale versions, and re-fetches on gaps |
 | `session.*` | At-least-once | Client deduplicates by event ID when supplied, otherwise by `session_id`, type, affected user, and monotonic state version |
 | `chat.message`, `chat.message_deleted`, `chat.message_read` | At-least-once via transactional chat outbox; per-client session/authorization recheck immediately before write | Client deduplicates by `event_id` and re-fetches REST state on gaps |
+| `notification.updated` | User-targeted state hint; may be duplicated or missed | Replace unread count and reconcile history through REST |
 | `chat.typing` | Best effort; expires after 5 seconds | Latest state per user and chat context wins |
 | `queue.your_turn` | At-least-once; F-008 may add FCM projection | Client shows once per `event_id` and re-fetches authoritative state |
 

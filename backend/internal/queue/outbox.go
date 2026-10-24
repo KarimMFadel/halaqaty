@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/KarimMFadel/halaqaty/backend/internal/notifications"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
 	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
 )
@@ -146,13 +147,29 @@ func (d *OutboxDispatcher) Dispatch(ctx context.Context, event OutboxEvent) erro
 // RealtimeOutboxProjector reconstructs redacted client events from committed
 // queue state before delivering them through the authenticated session hub.
 type RealtimeOutboxProjector struct {
-	repo *Repository
-	hub  *realtime.Hub
+	repo          *Repository
+	hub           *realtime.Hub
+	notifications notificationCreator
+}
+
+type notificationCreator interface {
+	Create(context.Context, notifications.CreateInput) (uuid.UUID, bool, error)
 }
 
 // NewRealtimeOutboxProjector constructs the US1 queue-to-hub projector.
-func NewRealtimeOutboxProjector(repo *Repository, hub *realtime.Hub) *RealtimeOutboxProjector {
-	return &RealtimeOutboxProjector{repo: repo, hub: hub}
+func NewRealtimeOutboxProjector(repo *Repository, hub *realtime.Hub, creators ...notificationCreator) *RealtimeOutboxProjector {
+	projector := &RealtimeOutboxProjector{repo: repo, hub: hub}
+	if len(creators) != 0 {
+		projector.notifications = creators[0]
+	}
+	return projector
+}
+
+// SetNotificationCreator enables queue source notification projections.
+func (p *RealtimeOutboxProjector) SetNotificationCreator(creator interface {
+	Create(context.Context, notifications.CreateInput) (uuid.UUID, bool, error)
+}) {
+	p.notifications = creator
 }
 
 // QueueState supplies the visibility-filtered snapshot sent after an authorized
@@ -209,6 +226,9 @@ func (p *RealtimeOutboxProjector) ProjectAndDeliver(ctx context.Context, event O
 	}
 	metadata, err := queueEventMetadata(event.EventMetadata)
 	if err != nil {
+		return err
+	}
+	if err := p.projectGradeNotification(ctx, event, metadata); err != nil {
 		return err
 	}
 	payload, err := p.eventPayload(ctx, event, state, metadata)
@@ -373,7 +393,7 @@ func (p *RealtimeOutboxProjector) deliverTurnPrompts(ctx context.Context, topic 
 	if event.EventType == realtime.EventQueueAdvanced || event.EventType == realtime.EventQueueReordered {
 		entry, ok := nextSoonEntry(state)
 		if ok {
-			return p.sendNextSoon(topic, event, entry)
+			return p.sendNextSoon(ctx, topic, event, entry)
 		}
 		return nil
 	}
@@ -391,11 +411,14 @@ func (p *RealtimeOutboxProjector) deliverTurnPrompts(ctx context.Context, topic 
 	yourTurn := map[string]any{"session_id": event.SessionID, "round_id": event.RoundID, "queue_entry_id": entry.ID,
 		"round_type": state.Round.Type, "surah_id": state.Round.SurahID, "surah_name": name,
 		"from_ayah": state.Round.FromAyah, "to_ayah": state.Round.ToAyah, "version": event.RoundVersion}
+	if err := p.createQueueTurnNotification(ctx, event, realtime.EventQueueYourTurn, entry.StudentID); err != nil {
+		return err
+	}
 	if err := p.hub.SendToUser(topic, entry.StudentID, projectedEventID(event.EventID, realtime.EventQueueYourTurn, entry.StudentID), realtimeEnvelope(realtime.EventQueueYourTurn, projectedEventID(event.EventID, realtime.EventQueueYourTurn, entry.StudentID), yourTurn)); err != nil {
 		return err
 	}
 	if candidate, ok := nextSoonEntry(state); ok {
-		return p.sendNextSoon(topic, event, candidate)
+		return p.sendNextSoon(ctx, topic, event, candidate)
 	}
 	return nil
 }
@@ -413,10 +436,70 @@ func nextSoonEntry(state QueueState) (QueueEntry, bool) {
 	return QueueEntry{}, false
 }
 
-func (p *RealtimeOutboxProjector) sendNextSoon(topic realtime.Topic, event OutboxEvent, entry QueueEntry) error {
+func (p *RealtimeOutboxProjector) sendNextSoon(ctx context.Context, topic realtime.Topic, event OutboxEvent, entry QueueEntry) error {
 	payload := map[string]any{"session_id": event.SessionID, "round_id": event.RoundID, "queue_entry_id": entry.ID, "position": entry.Position, "version": event.RoundVersion}
 	eventID := projectedEventID(event.EventID, realtime.EventQueueNextSoon, entry.StudentID)
+	if err := p.createQueueTurnNotification(ctx, event, realtime.EventQueueNextSoon, entry.StudentID); err != nil {
+		return err
+	}
 	return p.hub.SendToUser(topic, entry.StudentID, eventID, realtimeEnvelope(realtime.EventQueueNextSoon, eventID, payload))
+}
+
+func (p *RealtimeOutboxProjector) createQueueTurnNotification(ctx context.Context, event OutboxEvent, eventType, recipient string) error {
+	if p.notifications == nil {
+		return nil
+	}
+	recipientID, err := uuid.Parse(recipient)
+	if err != nil {
+		return fmt.Errorf("parse queue notification recipient: %w", err)
+	}
+	sessionID, err := uuid.Parse(event.SessionID)
+	if err != nil {
+		return fmt.Errorf("parse queue notification session: %w", err)
+	}
+	input := queueTurnNoticeInput(projectedEventID(event.EventID, eventType, recipient), eventType, recipientID, sessionID, time.Now().UTC())
+	if _, _, err := p.notifications.Create(ctx, input); err != nil {
+		return fmt.Errorf("create queue turn notification: %w", err)
+	}
+	return nil
+}
+
+func (p *RealtimeOutboxProjector) projectGradeNotification(ctx context.Context, event OutboxEvent, metadata map[string]any) error {
+	if p.notifications == nil || event.EventType != realtime.EventQueueGradeSubmitted || metadataString(metadata, "graded") != "true" {
+		return nil
+	}
+	studentID, err := uuid.Parse(metadataString(metadata, "student_id"))
+	if err != nil {
+		return fmt.Errorf("parse grade notification recipient: %w", err)
+	}
+	if event.ResourceID == nil {
+		return errors.New("grade notification is missing its queue entry reference")
+	}
+	progressID, err := p.repo.ProgressIDForEntry(ctx, *event.ResourceID)
+	if err != nil {
+		return fmt.Errorf("load grade notification source reference: %w", err)
+	}
+	input := gradePostedNoticeInput(event.EventID, studentID, progressID, time.Now().UTC())
+	if _, _, err := p.notifications.Create(ctx, input); err != nil {
+		return fmt.Errorf("create grade notification: %w", err)
+	}
+	return nil
+}
+
+func queueTurnNoticeInput(sourceEventID, eventType string, recipientID, sessionID uuid.UUID, now time.Time) notifications.CreateInput {
+	typeID, title, body := notifications.EventQueueNextSoon, "You're next", "Your recitation turn is coming up."
+	if eventType == realtime.EventQueueYourTurn {
+		typeID, title, body = notifications.EventQueueYourTurn, "Your turn", "It's your turn to recite."
+	}
+	expires := now.Add(24 * time.Hour)
+	return notifications.CreateInput{RecipientID: recipientID, Type: typeID, SourceEventID: sourceEventID,
+		SourceRef: notifications.SourceRef{Type: notifications.SourceSession, ID: sessionID}, Title: title, Body: body, CreatedAt: &now, PushExpiresAt: expires}
+}
+
+func gradePostedNoticeInput(sourceEventID string, studentID, progressID uuid.UUID, now time.Time) notifications.CreateInput {
+	expires := now.Add(24 * time.Hour)
+	return notifications.CreateInput{RecipientID: studentID, Type: notifications.EventGradePosted, SourceEventID: sourceEventID,
+		SourceRef: notifications.SourceRef{Type: notifications.SourceRecitation, ID: progressID}, Title: "New grade", Body: "A recitation grade is ready to view.", CreatedAt: &now, PushExpiresAt: expires}
 }
 
 func isQueueEvent(eventType string) bool {

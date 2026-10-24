@@ -56,6 +56,28 @@ func (r *Repository) FindMediaReconciliationMessageIDs(ctx context.Context, limi
 // NewRepository constructs a chat repository from a PostgreSQL pool.
 func NewRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
 
+// ListNotificationRecipients returns current, non-deleted circle members who
+// belonged to the circle when the message was sent, excluding its author.
+func (r *Repository) ListNotificationRecipients(ctx context.Context, circleID, senderID uuid.UUID, sentAt time.Time) ([]uuid.UUID, error) {
+	rows, err := r.pool.Query(ctx, listGroupNotificationRecipientsQuery, circleID, senderID, sentAt.UTC())
+	if err != nil {
+		return nil, fmt.Errorf("list eligible group notification recipients: %w", err)
+	}
+	defer rows.Close()
+	var recipients []uuid.UUID
+	for rows.Next() {
+		var recipient uuid.UUID
+		if err := rows.Scan(&recipient); err != nil {
+			return nil, fmt.Errorf("scan group notification recipient: %w", err)
+		}
+		recipients = append(recipients, recipient)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate group notification recipients: %w", err)
+	}
+	return recipients, nil
+}
+
 // WithTx runs fn atomically: fn's mutations commit together or not at all.
 // Domain errors returned by fn are propagated unwrapped.
 func (r *Repository) WithTx(ctx context.Context, fn func(*Tx) error) error {

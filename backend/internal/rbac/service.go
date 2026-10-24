@@ -86,6 +86,11 @@ type Store interface {
 	SearchUsers(ctx context.Context, query string, limit int) ([]UserSearchResult, error)
 }
 
+type circleNotificationProjector interface {
+	ProjectStudentJoinedCircle(context.Context, string, string) error
+	ProjectCircleArchived(context.Context, string) error
+}
+
 // ListCircles returns the authenticated user's active circle memberships.
 func (s *Service) ListCircles(ctx context.Context, userID, role string) ([]PublicCircleSummary, error) {
 	if role != "" && role != RoleStudent && role != RoleTeacher && role != RoleSupervisor {
@@ -166,6 +171,11 @@ func (s *Service) joinCircle(ctx context.Context, userID string, find func(Store
 		}
 		if err := tx.InsertMember(ctx, found.ID, userID, RoleStudent); err != nil {
 			return err
+		}
+		if projector, ok := tx.(circleNotificationProjector); ok {
+			if err := projector.ProjectStudentJoinedCircle(ctx, found.ID, userID); err != nil {
+				return fmt.Errorf("project student circle-join notification: %w", err)
+			}
 		}
 		circle = found
 		return nil
@@ -672,6 +682,11 @@ func (s *Service) ArchiveCircle(ctx context.Context, actorID, circleID string) e
 		}
 		if err := tx.ArchiveCircle(ctx, circleID); err != nil {
 			return err
+		}
+		if projector, ok := tx.(circleNotificationProjector); ok {
+			if err := projector.ProjectCircleArchived(ctx, circleID); err != nil {
+				return fmt.Errorf("project circle archive notifications: %w", err)
+			}
 		}
 		archived = true
 		return nil

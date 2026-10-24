@@ -305,6 +305,13 @@ const insertChatOutboxEventQuery = `
 INSERT INTO chat_event_outbox (message_id, event_type, recipient_id)
 VALUES ($1::uuid, $2, $3::uuid)`
 
+const listGroupNotificationRecipientsQuery = `
+SELECT cm.user_id
+FROM circle_members cm
+JOIN users u ON u.id = cm.user_id AND u.deleted_at IS NULL
+WHERE cm.circle_id = $1::uuid AND cm.user_id <> $2::uuid AND cm.joined_at <= $3
+ORDER BY cm.user_id`
+
 // claimOutboxEventsQuery atomically leases due, undelivered, unparked events:
 // FOR UPDATE SKIP LOCKED keeps concurrent dispatchers disjoint, attempt_count
 // increments per lease, and the 30-second available_at lease window blocks an

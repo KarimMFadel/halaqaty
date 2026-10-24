@@ -21,6 +21,7 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/chat"
 	chatminio "github.com/KarimMFadel/halaqaty/backend/internal/chat/minio"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
+	"github.com/KarimMFadel/halaqaty/backend/internal/notifications"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/config"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/logging"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
@@ -59,6 +60,9 @@ func (a slogOutboxParkedAlerter) AlertOutboxParked(_ context.Context, event queu
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	// Route package-level structured logs (dispatcher, retention cleaner)
+	// through the same JSON logger.
+	slog.SetDefault(logger)
 
 	cfg, err := config.LoadAuthConfig()
 	if err != nil {
@@ -103,6 +107,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	// FCM delivery reuses the same Firebase Admin app; a broken messaging
+	// client is fatal exactly like the auth client, since notification
+	// dispatch is a core durable-delivery dependency (ADR-027).
+	firebaseMessagingClient, err := firebaseApp.Messaging(context.Background())
+	if err != nil {
+		logger.Error("failed to init Firebase messaging client", "error", err)
+		os.Exit(1)
+	}
+
 	// ── Dependencies ──────────────────────────────────────────────────────────
 	sessionRepo := auth.NewSessionRepository(pool)
 	sessionService := auth.NewSessionService(cfg.SessionInactivityTTL)
@@ -112,6 +125,7 @@ func main() {
 
 	authService := auth.NewService(sessionRepo, auditLogger, cfg.SessionAbsoluteTTL)
 	authHandler := auth.NewHandler(authService)
+	authHandler.SetDeviceTokenStore(sessionRepo)
 	authHandler.SetLogger(logger)
 	accountDeletion := auth.NewAccountDeletionService(sessionRepo, firebaseAuthClient)
 	accountDeletion.SetLogger(logger)
@@ -136,6 +150,7 @@ func main() {
 
 	var sessionHandler *sessions.Handler
 	var liveSessionService *sessions.Service
+	var liveSessionRepo *sessions.Repository
 	var sessionReconciler *sessions.Reconciler
 	ticketService := realtime.NewTicketService(rbacRepo)
 	realtimeHandler := realtime.NewHandler(ticketService)
@@ -158,7 +173,7 @@ func main() {
 		}
 		media := livekit.NewConfiguredAdapter(mediaCfg, policy)
 		liveVerifier := livekit.NewHandlerVerifier(mediaCfg.APIKey, mediaCfg.APISecret)
-		liveSessionRepo := sessions.NewSessionRepository(pool)
+		liveSessionRepo = sessions.NewSessionRepository(pool)
 		liveSessionRepo.SetAttendanceLifecycle(attendanceRepo)
 		liveSessionService, err = sessions.NewServiceWithRoomKey(liveSessionRepo, media, rbacRepo, roomKey)
 		if err != nil {
@@ -287,6 +302,34 @@ func main() {
 	}
 	chatModerationHandler := chat.NewModerationHandler(chat.NewModerationService(chatRepo, chatMediaStore))
 
+	// ── Notifications (F-008) ─────────────────────────────────────────────────
+	// The dispatcher projects durable intents to FCM with bounded retry and
+	// invalid-token deletion through the F-001 seam; the retention cleaner
+	// enforces the 30-day history window while preserving pending required
+	// deletion intents (ADR-027 §6). Intervals/bounds follow the same constant
+	// pattern as the queue/chat outbox dispatchers above.
+	notificationRepo := notifications.NewRepository(pool)
+	rbacRepo.SetNotificationRepository(notificationRepo)
+	queueProjector.SetNotificationCreator(notificationRepo)
+	chatProjector.SetNotificationProjection(notificationRepo, chatRepo.ListNotificationRecipients)
+	if liveSessionRepo != nil {
+		liveSessionRepo.SetNotificationRepository(notificationRepo)
+	}
+	notificationMetrics := new(notifications.NotificationMetrics)
+	notificationDispatcher := notifications.NewDispatcher(
+		notificationRepo,
+		newFCMPushSender(firebaseMessagingClient),
+		sessionRepo,
+		notificationMetrics,
+		nil,
+		nil,
+	)
+	notificationCleaner := notifications.NewCleaner(notificationRepo, notificationMetrics)
+	// The REST handler serves history/read-state; the notifier publishes
+	// best-effort unread-count hints over the user-targeted hub seam while
+	// REST stays authoritative (contracts/realtime.md).
+	notificationHandler := notifications.NewHandler(notificationRepo, notifications.NewNotifier(realtimeHub))
+
 	mwSet := apirouter.MiddlewareSet{
 		Auth:                  authMW,
 		Role:                  roleMW,
@@ -305,18 +348,20 @@ func main() {
 		ChatSendLimiter:       chat.NewChatSendLimiter(chat.MaxSendsPerMinute),
 		// Nil when chat media is unconfigured; the router leaves the
 		// upload/renewal routes unregistered in that case.
-		ChatUploadHandler: chatUploadHandler,
-		ChatMediaHandler:  chatMediaHandler,
-		ScheduleHandler:   scheduleHandler,
-		OverlapHandler:    overlapHandler,
-		CalendarHandler:   calendarHandler,
-		AttendanceHandler: attendanceHandler,
-		Timeout:           cfg.RequestTimeout,
-		Logger:            logger,
-		Metrics:           authMetrics,
-		QueueMetrics:      queueMetrics,
-		ChatMetrics:       chatMetrics,
-		MetricsToken:      cfg.MetricsToken,
+		ChatUploadHandler:   chatUploadHandler,
+		ChatMediaHandler:    chatMediaHandler,
+		ScheduleHandler:     scheduleHandler,
+		OverlapHandler:      overlapHandler,
+		CalendarHandler:     calendarHandler,
+		AttendanceHandler:   attendanceHandler,
+		NotificationHandler: notificationHandler,
+		Timeout:             cfg.RequestTimeout,
+		Logger:              logger,
+		Metrics:             authMetrics,
+		QueueMetrics:        queueMetrics,
+		ChatMetrics:         chatMetrics,
+		NotificationMetrics: notificationMetrics,
+		MetricsToken:        cfg.MetricsToken,
 	}
 
 	// ── Router ────────────────────────────────────────────────────────────────
@@ -393,6 +438,20 @@ func main() {
 	go func() {
 		if err := chatDispatcher.Run(reconcilerCtx, chatOutboxBatchSize, chatOutboxDispatchInterval); err != nil && !errors.Is(err, context.Canceled) {
 			logger.Error("chat outbox dispatch stopped", "error", err)
+		}
+	}()
+	// Notification lifecycle mirrors the account-deletion sweep and outbox
+	// dispatchers: both runners share reconcilerCtx, so the shutdown signal
+	// stops them cleanly alongside the HTTP server. Cleanup runs on its own
+	// goroutine and never blocks dispatch.
+	go func() {
+		if err := notificationDispatcher.Run(reconcilerCtx, notifications.DefaultDispatchLimit, notifications.DefaultDispatchInterval); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Error("notification dispatch stopped", "error", err)
+		}
+	}()
+	go func() {
+		if err := notificationCleaner.Run(reconcilerCtx, notifications.DefaultCleanupLimit, notifications.DefaultCleanupInterval); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Error("notification retention cleanup stopped", "error", err)
 		}
 	}()
 	if chatCleaner != nil {

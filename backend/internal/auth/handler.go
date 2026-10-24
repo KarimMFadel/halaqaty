@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -25,7 +26,14 @@ var supportedPreferredLanguages = map[string]struct{}{"ar": {}, "en": {}}
 type Handler struct {
 	service  *Service
 	deletion *AccountDeletionService
+	tokens   DeviceTokenStore
 	logger   *slog.Logger
+}
+
+// DeviceTokenStore persists FCM token registration for an authenticated user.
+type DeviceTokenStore interface {
+	UpsertDeviceToken(context.Context, string, string, string, *string) error
+	DeleteDeviceToken(context.Context, string, string) error
 }
 
 // NewHandler constructs an auth handler bound to the application service.
@@ -37,6 +45,9 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) SetAccountDeletionService(service *AccountDeletionService) {
 	h.deletion = service
 }
+
+// SetDeviceTokenStore wires authenticated FCM token persistence.
+func (h *Handler) SetDeviceTokenStore(store DeviceTokenStore) { h.tokens = store }
 
 // SetLogger uses the API's structured logger for deletion stage events.
 func (h *Handler) SetLogger(logger *slog.Logger) { h.logger = logger }
@@ -225,6 +236,71 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.service.Logout(r.Context(), principal.UserID, sessionID); err != nil {
 		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// RegisterFcmToken handles POST /auth/fcm-token.
+func (h *Handler) RegisterFcmToken(w http.ResponseWriter, r *http.Request) {
+	h.mutateFcmToken(w, r, true)
+}
+
+// UnregisterFcmToken handles DELETE /auth/fcm-token.
+func (h *Handler) UnregisterFcmToken(w http.ResponseWriter, r *http.Request) {
+	h.mutateFcmToken(w, r, false)
+}
+
+func (h *Handler) mutateFcmToken(w http.ResponseWriter, r *http.Request, register bool) {
+	if h == nil || h.tokens == nil {
+		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
+		return
+	}
+	principal, ok := CurrentPrincipal(r.Context())
+	if !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	var req struct {
+		Token      string `json:"token"`
+		Platform   string `json:"platform"`
+		DeviceName string `json:"device_name"`
+	}
+	if !phttp.DecodeJSONBody(w, r, &req) {
+		return
+	}
+	req.Token = strings.TrimSpace(req.Token)
+	if req.Token == "" {
+		phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{"token": "must not be empty"})
+		return
+	}
+	if register {
+		if req.Platform != "android" && req.Platform != "ios" && req.Platform != "web" {
+			phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{"platform": "must be android, ios, or web"})
+			return
+		}
+		var label *string
+		if name := strings.TrimSpace(req.DeviceName); name != "" {
+			if utf8.RuneCountInString(name) > deviceNameMaxLen {
+				phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{httpconst.FieldDeviceName: httpconst.ErrorMessageDeviceNameTooLong})
+				return
+			}
+			label = &name
+		}
+		if err := h.tokens.UpsertDeviceToken(r.Context(), principal.UserID, req.Token, req.Platform, label); err != nil {
+			if errors.Is(err, ErrAccountDeleted) {
+				phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+				return
+			}
+			phttp.WriteError(w, httpconst.ErrorCodeServiceUnavailable, httpconst.ErrorMessageServiceUnavailable, http.StatusServiceUnavailable)
+			return
+		}
+	} else if err := h.tokens.DeleteDeviceToken(r.Context(), principal.UserID, req.Token); err != nil {
+		phttp.WriteError(w, httpconst.ErrorCodeServiceUnavailable, httpconst.ErrorMessageServiceUnavailable, http.StatusServiceUnavailable)
+		return
+	}
+	if register {
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

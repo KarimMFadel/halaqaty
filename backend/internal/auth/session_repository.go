@@ -184,6 +184,26 @@ func (r *SessionRepository) CreateSession(ctx context.Context, session Session) 
 	return nil
 }
 
+// UpsertDeviceToken registers a token only for an active local account.
+func (r *SessionRepository) UpsertDeviceToken(ctx context.Context, userID, token, platform string, deviceLabel *string) error {
+	var registeredUserID string
+	if err := r.pool.QueryRow(ctx, upsertDeviceTokenQuery, userID, token, platform, deviceLabel).Scan(&registeredUserID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrAccountDeleted
+		}
+		return fmt.Errorf("upsert device token: %w", err)
+	}
+	return nil
+}
+
+// DeleteDeviceToken detaches one token from the authenticated account.
+func (r *SessionRepository) DeleteDeviceToken(ctx context.Context, userID, token string) error {
+	if _, err := r.pool.Exec(ctx, deleteDeviceTokenQuery, userID, token); err != nil {
+		return fmt.Errorf("delete device token: %w", err)
+	}
+	return nil
+}
+
 // CloseStudentAccount irreversibly tombstones an eligible student, erases
 // non-retained account data, and revokes every backend session atomically.
 // It returns the Firebase UID for post-commit identity cleanup.

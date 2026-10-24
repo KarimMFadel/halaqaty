@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -53,17 +57,24 @@ class AuthController extends StateNotifier<AuthState> {
   AuthController({
     required AuthApiClient apiClient,
     required FirebaseAuth firebaseAuth,
+    required FirebaseMessaging firebaseMessaging,
     required FlutterSecureStorage secureStorage,
   })  : _apiClient = apiClient,
         _firebaseAuth = firebaseAuth,
+        _firebaseMessaging = firebaseMessaging,
         _secureStorage = secureStorage,
         super(const AuthState()) {
+    _tokenRefreshSubscription = _firebaseMessaging.onTokenRefresh.listen(
+      (_) => unawaited(_registerCurrentFcmToken()),
+    );
     _init();
   }
 
   final AuthApiClient _apiClient;
   final FirebaseAuth _firebaseAuth;
+  final FirebaseMessaging _firebaseMessaging;
   final FlutterSecureStorage _secureStorage;
+  late final StreamSubscription<String> _tokenRefreshSubscription;
 
   Future<void> _init() async {
     final storedSessionId = await _secureStorage.read(key: _sessionIdKey);
@@ -88,6 +99,7 @@ class AuthController extends StateNotifier<AuthState> {
         sessionId: storedSessionId,
         user: user,
       );
+      await _registerCurrentFcmToken();
       return;
     }
     state = state.copyWith(status: AuthStatus.unauthenticated);
@@ -131,6 +143,7 @@ class AuthController extends StateNotifier<AuthState> {
         user: session.user,
         isLoading: false,
       );
+      await _registerCurrentFcmToken(token);
     } on FirebaseAuthException catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -149,6 +162,7 @@ class AuthController extends StateNotifier<AuthState> {
           user: replaySession.user,
           isLoading: false,
         );
+        await _registerCurrentFcmToken();
         return;
       }
       await _handleDioError(e);
@@ -187,6 +201,7 @@ class AuthController extends StateNotifier<AuthState> {
         user: session.user,
         isLoading: false,
       );
+      await _registerCurrentFcmToken(token);
     } on FirebaseAuthException catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -205,6 +220,14 @@ class AuthController extends StateNotifier<AuthState> {
       final currentSessionID = state.sessionId;
       final token = await _requireFirebaseIDToken();
       if (token != null && currentSessionID != null) {
+        final fcmToken = await _firebaseMessaging.getToken();
+        if (fcmToken != null && fcmToken.isNotEmpty) {
+          await _apiClient.unregisterFcmToken(
+            firebaseIdToken: token,
+            token: fcmToken,
+          );
+          await _firebaseMessaging.deleteToken();
+        }
         await _apiClient.logout(
           firebaseIdToken: token,
           sessionId: currentSessionID,
@@ -246,6 +269,25 @@ class AuthController extends StateNotifier<AuthState> {
     return firebaseUser.getIdToken();
   }
 
+  Future<void> _registerCurrentFcmToken([String? firebaseIdToken]) async {
+    if (!state.isAuthenticated || state.isLoading) return;
+    try {
+      final idToken = firebaseIdToken ?? await _requireFirebaseIDToken();
+      if (idToken == null || idToken.isEmpty) return;
+      final fcmToken = await _firebaseMessaging.getToken();
+      if (fcmToken == null || fcmToken.isEmpty) return;
+      await _apiClient.registerFcmToken(
+        firebaseIdToken: idToken,
+        token: fcmToken,
+        platform: Platform.isIOS ? 'ios' : 'android',
+      );
+    } on DioException {
+      // Restoration retries on the next launch; refresh retries with a new token.
+    } on FirebaseException {
+      // FCM can be unavailable while Firebase Auth remains usable.
+    }
+  }
+
   Future<void> _clearLocalSession() async {
     await _secureStorage.delete(key: _sessionIdKey);
     await _firebaseAuth.signOut();
@@ -276,6 +318,12 @@ class AuthController extends StateNotifier<AuthState> {
     );
   }
 
+  @override
+  void dispose() {
+    unawaited(_tokenRefreshSubscription.cancel());
+    super.dispose();
+  }
+
   BackendSessionResponse? _sessionFromConflictReplay(DioException e) {
     if (e.response?.statusCode != 409) {
       return null;
@@ -301,6 +349,10 @@ final firebaseAuthProvider = Provider<FirebaseAuth>((ref) {
   return FirebaseAuth.instance;
 });
 
+final firebaseMessagingProvider = Provider<FirebaseMessaging>((ref) {
+  return FirebaseMessaging.instance;
+});
+
 final flutterSecureStorageProvider = Provider<FlutterSecureStorage>((ref) {
   return const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
@@ -312,6 +364,7 @@ final authControllerProvider =
   return AuthController(
     apiClient: ref.watch(authApiClientProvider),
     firebaseAuth: ref.watch(firebaseAuthProvider),
+    firebaseMessaging: ref.watch(firebaseMessagingProvider),
     secureStorage: ref.watch(flutterSecureStorageProvider),
   );
 });

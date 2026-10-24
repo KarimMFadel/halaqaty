@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/KarimMFadel/halaqaty/backend/internal/notifications"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -221,13 +222,19 @@ func (r *Repository) ListMembers(ctx context.Context, circleID string) ([]Circle
 
 // Repository is the PostgreSQL persistence boundary for circle RBAC data.
 type Repository struct {
-	pool *pgxpool.Pool
-	q    querier
+	pool          *pgxpool.Pool
+	q             querier
+	notifications *notifications.Repository
 }
 
 // NewRepository constructs a circle RBAC repository.
 func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool, q: pool}
+}
+
+// SetNotificationRepository enables atomic circle lifecycle notice projections.
+func (r *Repository) SetNotificationRepository(repository *notifications.Repository) {
+	r.notifications = repository
 }
 
 // WithinTransaction runs fn against a transaction-scoped store and commits on
@@ -239,7 +246,7 @@ func (r *Repository) WithinTransaction(ctx context.Context, fn func(Store) error
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := fn(&Repository{q: tx}); err != nil {
+	if err := fn(&Repository{q: tx, notifications: r.notifications}); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

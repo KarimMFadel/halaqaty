@@ -11,6 +11,7 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/chat"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
+	"github.com/KarimMFadel/halaqaty/backend/internal/notifications"
 	phttp "github.com/KarimMFadel/halaqaty/backend/internal/platform/http"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
@@ -59,6 +60,7 @@ type MiddlewareSet struct {
 	OverlapHandler        *scheduling.OverlapHandler
 	CalendarHandler       *scheduling.CalendarHandler
 	AttendanceHandler     *attendance.Handler
+	NotificationHandler   *notifications.Handler
 	Timeout               time.Duration
 	// ChatUploadTimeout overrides Timeout on the upload routes; zero selects
 	// DefaultChatUploadTimeout.
@@ -67,7 +69,10 @@ type MiddlewareSet struct {
 	Metrics           *metrics.AuthMetrics
 	QueueMetrics      *metrics.QueueMetrics
 	ChatMetrics       *metrics.ChatMetrics
-	MetricsToken      string
+	// NotificationMetrics exposes dispatcher/retention counters (including
+	// parked device attempts) on the metrics route; nil-safe like the others.
+	NotificationMetrics *notifications.NotificationMetrics
+	MetricsToken        string
 }
 
 // Router wires API routes and middleware in one place.
@@ -211,6 +216,20 @@ func (r *Router) registerRoutes() {
 			logoutHandler = http.HandlerFunc(authH.Logout)
 		}
 		r.mux.Handle(routeAuthLogout, r.requireWithUserLimit(logoutHandler))
+		var fcmTokenHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageAuthHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		if authH != nil {
+			fcmTokenHandler = http.HandlerFunc(authH.RegisterFcmToken)
+		}
+		r.mux.Handle(routeAuthFcmTokenPost, r.requireWithUserLimit(fcmTokenHandler))
+		var fcmTokenDeleteHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageAuthHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		if authH != nil {
+			fcmTokenDeleteHandler = http.HandlerFunc(authH.UnregisterFcmToken)
+		}
+		r.mux.Handle(routeAuthFcmTokenDelete, r.requireWithUserLimit(fcmTokenDeleteHandler))
 		var profileGetHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageProfileHandlerNotConfigured, http.StatusInternalServerError)
 		})
@@ -297,6 +316,22 @@ func (r *Router) registerRoutes() {
 			searchUsersHandler = http.HandlerFunc(rbacH.SearchUsers)
 		}
 		r.mux.Handle(routeUsersSearch, r.requireWithUserLimit(searchUsersHandler))
+
+		// F-008 notification history/read-state routes share one
+		// not-configured fallback, mirroring the profile pair above.
+		var listNotificationsHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageNotificationHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		markNotificationReadHandler := listNotificationsHandler
+		markAllNotificationsReadHandler := listNotificationsHandler
+		if r.mw.NotificationHandler != nil {
+			listNotificationsHandler = http.HandlerFunc(r.mw.NotificationHandler.List)
+			markNotificationReadHandler = http.HandlerFunc(r.mw.NotificationHandler.MarkRead)
+			markAllNotificationsReadHandler = http.HandlerFunc(r.mw.NotificationHandler.MarkAllRead)
+		}
+		r.mux.Handle(routeNotificationsGet, r.requireWithUserLimit(listNotificationsHandler))
+		r.mux.Handle(routeNotificationRead, r.requireWithUserLimit(markNotificationReadHandler))
+		r.mux.Handle(routeNotificationsReadAll, r.requireWithUserLimit(markAllNotificationsReadHandler))
 	}
 	if r.mw.Auth != nil && r.mw.Role != nil {
 		rbacH := r.mw.RBACHandler
@@ -460,14 +495,16 @@ func (r *Router) metricsHandler() http.Handler {
 			MetricsSummary: r.mw.Metrics.Summary(),
 			Queue:          r.mw.QueueMetrics.Summary(),
 			Chat:           r.mw.ChatMetrics.Summary(),
+			Notifications:  r.mw.NotificationMetrics.Summary(),
 		})
 	})
 }
 
 type metricsResponse struct {
 	metrics.MetricsSummary
-	Queue metrics.QueueMetricsSummary `json:"queue"`
-	Chat  metrics.ChatMetricsSummary  `json:"chat"`
+	Queue         metrics.QueueMetricsSummary              `json:"queue"`
+	Chat          metrics.ChatMetricsSummary               `json:"chat"`
+	Notifications notifications.NotificationMetricsSummary `json:"notifications"`
 }
 
 func validationMiddleware(next http.Handler) http.Handler {

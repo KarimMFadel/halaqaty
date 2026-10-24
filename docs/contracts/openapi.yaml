@@ -12,7 +12,7 @@ info:
 
     **Base URL:** `https://api.halaqaty.app/api/v1`
 
-    **WebSocket:** Real-time events (queue, session, chat) are delivered over WebSocket. See [ws_events.md](ws_events.md) for the full event catalogue.
+    **WebSocket:** Real-time events (queue, session, chat, notifications) are delivered over WebSocket. See [ws_events.md](ws_events.md) for the full event catalogue.
   version: 1.0.0
   contact:
     name: Halaqaty
@@ -49,6 +49,8 @@ tags:
     description: F-006 circle plans, personal calendar, and attendance
   - name: Progress
     description: Student progress tracking — attendance history, Quran map, recitation stats (F-007)
+  - name: Notifications
+    description: Recipient-scoped notification history, read state, and delivery preferences (F-008)
   - name: Config
     description: Feature flags and application configuration
   - name: Uploads
@@ -133,8 +135,9 @@ paths:
       description: |
         Invalidates only the backend session identified by `X-Halaqaty-Session-ID`.
         Other device sessions remain valid. The Flutter client must also call
-        Firebase sign-out locally; Firebase refresh-token rotation and reuse
-        detection remain Firebase-managed.
+        `DELETE /auth/fcm-token` for its current device token before local
+        Firebase sign-out; Firebase refresh-token rotation and reuse detection
+        remain Firebase-managed.
       responses:
         '204':
           description: Logged out
@@ -149,6 +152,8 @@ paths:
       description: |
         Registers a new device FCM token for push notifications. Uses upsert
         semantics — if the token already exists for this user, updates `last_seen_at`.
+        The raw token is accepted only in the authenticated request body and is
+        never returned or logged.
       requestBody:
         required: true
         content:
@@ -174,6 +179,37 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      operationId: unregisterFcmToken
+      tags: [Auth]
+      summary: Detach one FCM token from the authenticated account
+      description: |
+        Removes only the supplied token belonging to the authenticated user.
+        Clients call this before local logout/account switch when they require
+        immediate server detachment. The token is accepted only in the request
+        body and is never returned or logged. Other device tokens remain active.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: FCM device registration token to detach
+      responses:
+        '204':
+          description: Token detached, or no matching token existed
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
   /auth/me:
     get:
@@ -2658,6 +2694,138 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  # ── Notifications ─────────────────────────────────────────
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [Notifications]
+      summary: List the authenticated user's recent notifications
+      description: Returns newest-first notification history for the last 30 days and the authoritative unread count. Notification details remain generic until the client opens the authorized source.
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Recipient-scoped notification history and unread count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /notifications/{notificationId}/read:
+    put:
+      operationId: markNotificationRead
+      tags: [Notifications]
+      summary: Mark one notification as read
+      description: Marks only the authenticated recipient's notification as read. Repeating the action is safe; another user's ID is indistinguishable from an unknown ID.
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Updated authoritative unread count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationUnreadCount'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /notifications/read-all:
+    put:
+      operationId: markAllNotificationsRead
+      tags: [Notifications]
+      summary: Mark all current notifications as read
+      description: Atomically marks all retained unread notifications for the authenticated recipient as read. Repeating the action is safe.
+      responses:
+        '200':
+          description: Updated authoritative unread count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationUnreadCount'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /notifications/preferences:
+    get:
+      operationId: getNotificationPreferences
+      tags: [Notifications]
+      summary: Get notification type and quiet-hours preferences
+      description: Returns effective per-type preferences, defaults, and quiet-hours values for the authenticated user.
+      responses:
+        '200':
+          description: Effective user preferences, including defaults
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferences'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      operationId: updateNotificationPreferences
+      tags: [Notifications]
+      summary: Update configurable notification preferences
+      description: Only configurable types may be disabled. Quiet-hours timezone is taken from the authenticated user's profile and cannot be overridden here.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNotificationPreferencesRequest'
+      responses:
+        '200':
+          description: Effective preferences after update
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferences'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
 # ─────────────────────────────────────────────────────────────
 # Components
 # ─────────────────────────────────────────────────────────────
@@ -2800,6 +2968,138 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
 
   schemas:
+
+    # ── Notifications ──────────────────────────────────────
+    NotificationPage:
+      type: object
+      required: [items, next_cursor, unread_count]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationItem'
+        next_cursor:
+          type: string
+          nullable: true
+        unread_count:
+          type: integer
+          minimum: 0
+
+    NotificationItem:
+      type: object
+      required: [id, type, title, body, source_ref, created_at, is_read]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [session_reminder, group_message, private_message, grade_posted, circle_invitation, queue_next_soon, queue_your_turn, student_joined_session, student_joined_circle, circle_archived, session_started, session_ended]
+        title:
+          type: string
+          description: Generic, lock-screen-safe display title.
+        body:
+          type: string
+          description: Generic, lock-screen-safe display body; source private content is fetched only after authorization.
+        source_ref:
+          $ref: '#/components/schemas/NotificationSourceRef'
+        created_at:
+          type: string
+          format: date-time
+        is_read:
+          type: boolean
+
+    NotificationSourceRef:
+      type: object
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          enum: [session, message, recitation_log, circle, invitation, queue]
+        id:
+          type: string
+          format: uuid
+      additionalProperties: false
+
+    NotificationUnreadCount:
+      type: object
+      required: [unread_count]
+      properties:
+        unread_count:
+          type: integer
+          minimum: 0
+
+    NotificationPreferences:
+      type: object
+      required: [types, quiet_hours]
+      properties:
+        types:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationTypePreference'
+        quiet_hours:
+          $ref: '#/components/schemas/NotificationQuietHours'
+
+    NotificationTypePreference:
+      type: object
+      required: [type, enabled, configurable, default_enabled]
+      properties:
+        type:
+          type: string
+          enum: [session_reminder, group_message, private_message, grade_posted, circle_invitation, queue_next_soon, queue_your_turn, student_joined_session, student_joined_circle, circle_archived, session_started, session_ended]
+        enabled:
+          type: boolean
+        configurable:
+          type: boolean
+        default_enabled:
+          type: boolean
+
+    NotificationQuietHours:
+      type: object
+      required: [enabled, start_local, end_local, timezone]
+      properties:
+        enabled:
+          type: boolean
+        start_local:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+          example: '22:00'
+        end_local:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+          example: '07:00'
+        timezone:
+          type: string
+          description: Current IANA timezone from the user's profile; read-only in this API.
+          readOnly: true
+
+    UpdateNotificationPreferencesRequest:
+      type: object
+      properties:
+        types:
+          type: array
+          items:
+            type: object
+            required: [type, enabled]
+            properties:
+              type:
+                type: string
+                enum: [session_reminder, group_message, private_message, grade_posted, circle_invitation, queue_next_soon, queue_your_turn, student_joined_session, student_joined_circle, circle_archived, session_started, session_ended]
+              enabled:
+                type: boolean
+        quiet_hours:
+          type: object
+          required: [enabled, start_local, end_local]
+          properties:
+            enabled:
+              type: boolean
+            start_local:
+              type: string
+              pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+            end_local:
+              type: string
+              pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+      additionalProperties: false
 
     # ── Users ──────────────────────────────────────────────
     RegisterRequest:

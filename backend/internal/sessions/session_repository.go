@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/KarimMFadel/halaqaty/backend/internal/notifications"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,8 +23,9 @@ type querier interface {
 // PostgreSQL is the sole source of truth; no session state is cached in
 // memory (constitution §III).
 type Repository struct {
-	pool       *pgxpool.Pool
-	attendance AttendanceLifecycle
+	pool          *pgxpool.Pool
+	attendance    AttendanceLifecycle
+	notifications *notifications.Repository
 }
 
 // AttendanceLifecycle runs F-006 persistence inside existing F-005 transactions.
@@ -42,6 +44,11 @@ func NewSessionRepository(pool *pgxpool.Pool) *Repository {
 // SetAttendanceLifecycle configures transactional F-006 attendance hooks.
 func (r *Repository) SetAttendanceLifecycle(lifecycle AttendanceLifecycle) {
 	r.attendance = lifecycle
+}
+
+// SetNotificationRepository enables transactional lifecycle notification projections.
+func (r *Repository) SetNotificationRepository(repository *notifications.Repository) {
+	r.notifications = repository
 }
 
 // withTx runs fn against a transaction and commits on success. Errors
@@ -272,7 +279,7 @@ func (r *Repository) StartSession(ctx context.Context, sessionID string, roomRef
 		if err != nil {
 			return fmt.Errorf("start session: %w", err)
 		}
-		return nil
+		return r.projectSessionStarted(ctx, q, started)
 	})
 	if err != nil {
 		return Session{}, err
@@ -333,6 +340,7 @@ func (r *Repository) startSessionWithConnectionInTx(ctx context.Context, q queri
 		return Session{}, MediaConnection{}, err
 	}
 	var started Session
+	activated := false
 	switch sess.Status {
 	case SessionStatusScheduled:
 		var cancelled bool
@@ -349,6 +357,7 @@ func (r *Repository) startSessionWithConnectionInTx(ctx context.Context, q queri
 		if err != nil {
 			return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: activate session: %w", err)
 		}
+		activated = true
 	case SessionStatusActive:
 		if sess.MediaRoomRef == "" {
 			return Session{}, MediaConnection{}, fmt.Errorf("start session with connection: active session has no media room reference")
@@ -356,6 +365,11 @@ func (r *Repository) startSessionWithConnectionInTx(ctx context.Context, q queri
 		started = sess
 	default:
 		return Session{}, MediaConnection{}, ErrSessionAlreadyEnded
+	}
+	if activated {
+		if err := r.projectSessionStarted(ctx, q, started); err != nil {
+			return Session{}, MediaConnection{}, err
+		}
 	}
 	facts, err := loadPresenceEligibility(ctx, q, sessionID, userID)
 	if err != nil {
@@ -435,6 +449,9 @@ func (r *Repository) EndSession(ctx context.Context, sessionID string, reason En
 		}
 		if err != nil {
 			return fmt.Errorf("end session: %w", err)
+		}
+		if err := r.projectSessionEnded(ctx, q, s); err != nil {
+			return err
 		}
 		if _, err := q.Exec(ctx, clearSessionPresenceQuery, sessionID); err != nil {
 			return fmt.Errorf("end session: clear presence: %w", err)

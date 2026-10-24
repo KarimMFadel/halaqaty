@@ -897,17 +897,19 @@ erDiagram
 
 `profiles` (created by F-001 migrations) is the 1:1 extension keyed by `user_id` with `display_name`, `full_name`, `country`, `phone`, `bio`, `avatar_url`, `preferred_language`, and completion/audit timestamps. F-006 adds a stored IANA `timezone` there, with `UTC` backfill for existing profiles and additive `/auth/me` read/update; the viewer's stored zone determines the calendar month and local display. Account deletion retains `display_name` for authorized history attribution, clears all non-retained profile fields, resets the language preference, and resets timezone to `UTC`. `users.id` remains for historical foreign keys. The deletion migration/worker protocol is defined by [ADR-024](adr/ADR-024-account-deletion-tombstone-and-firebase-cleanup.md); `DELETE /auth/me` is implemented for eligible student accounts.
 
-#### `device_tokens`
+#### `device_tokens` (F-008 / ADR-027; schema in migration 000021)
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| id | UUID | PK, DEFAULT gen_random_uuid() | |
-| user_id | UUID | FK → users.id NOT NULL ON DELETE CASCADE | Token owner |
-| token | TEXT | NOT NULL | FCM device token |
-| platform | VARCHAR(10) | CHECK IN ('ios','android','web') NOT NULL | Device platform |
-| device_name | VARCHAR(100) | | Optional human-readable label |
+| id | UUID | PK, DEFAULT gen_random_uuid() | Device-token row ID |
+| user_id | UUID | FK → users.id NOT NULL | Authenticated token owner |
+| token | TEXT | NOT NULL | FCM registration token; write-only and redacted from logs |
+| platform | VARCHAR(10) | CHECK IN ('ios','android') NOT NULL | Supported mobile target |
+| device_name | VARCHAR(100) | | Optional non-sensitive label |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
-| last_seen_at | TIMESTAMPTZ | DEFAULT NOW() | Updated on each successful FCM delivery |
-| UNIQUE | (user_id, token) | | One entry per device per user |
+| last_seen_at | TIMESTAMPTZ | DEFAULT NOW() | Refreshed on registration/token refresh |
+| UNIQUE | (user_id, token) | | Idempotent registration |
+
+Invalid/unregistered tokens are removed through the authenticated device-token owner boundary. The migration removes all rows transactionally when a user's account is tombstoned. The authenticated `/auth/fcm-token` handler is pending; see [ADR-027](adr/ADR-027-notification-history-and-fcm-delivery.md).
 
 #### `user_sessions`
 | Column | Type | Constraints | Description |
@@ -1166,17 +1168,14 @@ ended session.
 
 > **Usage:** Pre-populated with all 240 Medina Mushaf Rub' boundaries. Never modified by the application. Enables teacher grading UI to offer a Rub'/Hizb/Juz picker and powers Surah coverage segment bars for long Surahs (e.g., Al-Baqarah spans 3 Juz and 6 Hizb).
 
-#### `notifications`
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| user_id | UUID | FK → users.id NOT NULL | Recipient |
-| type | VARCHAR(50) | NOT NULL | e.g., 'session_reminder', 'queue_turn' |
-| title | VARCHAR(200) | NOT NULL | Notification title |
-| body | TEXT | NOT NULL | Notification body |
-| data_json | JSONB | | Extra data (session_id, etc.) |
-| is_read | BOOLEAN | DEFAULT FALSE | |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+#### `notifications` (F-008 / ADR-027; schema in migration 000021)
+One row is the recipient-scoped history item and durable push intent for one approved source event. It has a UUID, recipient FK, allowlisted event type, stable source-event ID and typed source reference, generic lock-screen-safe display projection, created/read timestamps, preference-override marker, and bounded dispatch state. Unique `(user_id, type, source_event_id)` prevents duplicate history on replay. Source content is loaded only after normal source authorization; FCM acceptance is not delivery/read proof. A rolling 30-day history view is enforced independently from pending required dispatch retention.
+
+#### `notification_device_attempts` (F-008 / ADR-027; schema in migration 000021)
+Per-device dispatch status references a notification and device-token row, not a copied raw token. It records bounded attempt count, next attempt, provider acceptance/suppression/exhaustion state, and a safe error class for partial multi-device outcomes. No provider payload or token is logged.
+
+#### `notification_preferences` (F-008 / ADR-027; schema in migration 000021)
+Stores only explicit user overrides for configurable notification types, unique by user and type, defaulting to enabled when absent. Quiet-hours start/end use local wall-clock times and the profile's existing IANA timezone at evaluation. Always-on types are not mutable to false. See [F-008 data model](../../../specs/008-notification-system/data-model.md).
 
 #### `schedules`
 

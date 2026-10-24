@@ -41,6 +41,12 @@ The `adr/` subdirectory records the key architectural decisions made for Halaqat
 | [ADR-019](adr/ADR-019-no-cascade-student-history.md) | No Cascading Deletes on Student History Tables | Accepted | 2026-08-23 |
 | [ADR-020](adr/ADR-020-voluntary-recitation-queue.md) | Voluntary Recitation Queue and Open Student Audio | Accepted | 2026-08-28 |
 | [ADR-021](adr/ADR-021-chat-persistence-media-and-delivery.md) | Chat Persistence, Media Revocation, and Delivery Boundaries | Accepted | 2026-09-06 |
+| [ADR-022](adr/ADR-022-chat-media-validation-tools.md) | Parse Chat Attachments Before Staging | Accepted | 2026-09-11 |
+| [ADR-023](adr/ADR-023-provider-adapter-boundaries.md) | Complete Feature-local Provider Adapter Boundaries | Accepted and implemented | 2026-09-16 |
+| [ADR-024](adr/ADR-024-account-deletion-tombstone-and-firebase-cleanup.md) | Account Closure Tombstone and Firebase Cleanup | Accepted for F-001 design | 2026-09-26 |
+| [ADR-025](adr/ADR-025-schedule-policy-and-session-lifecycle-boundary.md) | F-006 Schedule Policy and Session Lifecycle Boundary | Accepted | 2026-09-27 |
+| [ADR-026](adr/ADR-026-schedule-occurrence-and-attendance-persistence.md) | Schedule Occurrence and Attendance Persistence | Accepted | 2026-09-27 |
+| [ADR-027](adr/ADR-027-notification-history-and-fcm-delivery.md) | F-008 Notification History and FCM Delivery | Accepted | 2026-10-17 |
 
 ---
 

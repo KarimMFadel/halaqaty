@@ -34,6 +34,14 @@ const (
 	ErrorMessageAuthHandlerNotConfigured    = "auth handler not configured"
 	ErrorMessageProfileHandlerNotConfigured = "profile handler not configured"
 
+	// Notification messages (F-008). User-safe: unknown, foreign, and invalid
+	// notification identifiers share one message so recipients cannot probe
+	// other users' history (no disclosure).
+	ErrorMessageNotificationHandlerNotConfigured = "notification handler not configured"
+	ErrorMessageNotificationNotFound             = "notification not found"
+	ErrorMessageNotificationCursorInvalid        = "cursor is not a valid notification cursor"
+	ErrorMessageNotificationLimitInvalid         = "limit must be between 1 and 50"
+
 	ErrorMessageCircleNameInvalid        = "name must be between 2 and 100 characters"
 	ErrorMessageInviteCodeInvalid        = "invite_code must be a valid invite code"
 	ErrorMessageCircleAlreadyMember      = "user is already a circle member"

@@ -713,6 +713,16 @@ func (r *Repository) EntrySessionID(ctx context.Context, entryID string) (string
 	return sessionID, nil
 }
 
+// ProgressIDForEntry resolves the authorized recitation-log reference created
+// for a completed queue entry.
+func (r *Repository) ProgressIDForEntry(ctx context.Context, entryID string) (uuid.UUID, error) {
+	var progressID uuid.UUID
+	if err := r.pool.QueryRow(ctx, findProgressIDByQueueEntryQuery, entryID).Scan(&progressID); err != nil {
+		return uuid.Nil, fmt.Errorf("load progress id for queue entry: %w", err)
+	}
+	return progressID, nil
+}
+
 // RoundSessionID resolves a round's session before a mutation that must lock
 // the sessions row before the round row (e.g. advance).
 func (r *Repository) RoundSessionID(ctx context.Context, roundID string) (string, error) {

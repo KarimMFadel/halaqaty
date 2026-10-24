@@ -42,6 +42,7 @@ Apply these rules on every feature task:
 4. **Ponytail owns restraint** — prefer the smallest correct implementation inside approved Spec-Kit scope; never use Ponytail to skip required validation, security, accessibility, contracts, tests, or acceptance criteria.
 5. **Project guards remain quality gates** — `$clean-code-guard`, `$test-guard`, and `$docs-guard` audit their respective changed artifacts without duplicating the Tech Lead review.
 6. **Minimize context** — pass task IDs and file paths instead of pasting documents; keep one implementer and one reviewer per coherent batch by default.
+7. **Resolve ambiguity with relevant agent advice** — for material unclear or conflicting points, consult only the relevant roles, present aligned evidence-backed recommendations together for Karim to accept or change, and ask Karim only about unresolved disagreement, missing evidence, product choices, or conflicts with governing decisions. Agent consensus is advisory, never approval; follow the detailed process in the harness.
 
 If instructions conflict, follow the precedence and escalation rules in the harness. Never silently choose between contradictory approved artifacts.
 

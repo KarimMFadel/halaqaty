@@ -101,3 +101,7 @@ temp/
 
 # Superpowers SDD workspace (git-ignored scratch)
 .superpowers/
+
+# Archify skill (locally installed agent skill)
+.agents/skills/archify/
+skills-lock.json

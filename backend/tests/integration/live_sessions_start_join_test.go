@@ -56,7 +56,16 @@ func (g *integGateway) RemoveParticipant(_ context.Context, _ sessions.MediaRoom
 	return nil
 }
 
-// integRoles reads circle membership roles from the real circle_members table.
+// issuedCount reports how many connections the gateway has issued.
+func (g *integGateway) issuedCount() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.issued
+}
+
+// integRoles reads circle membership roles from the real circle_members and
+// circles tables. ActiveRoleInCircle mirrors the production archived
+// predicate so archived circles deny new-activity authorization.
 type integRoles struct {
 	pool *pgxpool.Pool
 }
@@ -68,6 +77,19 @@ func (r *integRoles) RoleInCircle(ctx context.Context, circleID, userID string) 
 		circleID, userID).Scan(&role)
 	if err != nil {
 		return "", nil // "" = not a member
+	}
+	return role, nil
+}
+
+func (r *integRoles) ActiveRoleInCircle(ctx context.Context, circleID, userID string) (string, error) {
+	var role string
+	err := r.pool.QueryRow(ctx,
+		`SELECT cm.role FROM circle_members cm
+		 JOIN circles c ON c.id = cm.circle_id
+		 WHERE cm.circle_id = $1::uuid AND cm.user_id = $2::uuid AND c.is_archived = FALSE`,
+		circleID, userID).Scan(&role)
+	if err != nil {
+		return "", nil // "" = not a member or archived circle
 	}
 	return role, nil
 }
@@ -485,5 +507,48 @@ func TestStartJoinIntegration_RemovedParticipantDenied(t *testing.T) {
 	_, _, err = env.svc.JoinSession(ctx, env.userIDs["student"], created.ID)
 	if !errors.Is(err, sessions.ErrParticipantRemoved) {
 		t.Fatalf("removed participant join: got %v, want ErrParticipantRemoved", err)
+	}
+}
+
+// TestStartJoinIntegration_ArchivedCircle pins the archived predicate against
+// real PostgreSQL: after archiving, new session activity (create/start/join)
+// is denied and no media connection is issued, while moderation of the
+// lingering active session keeps working (ADR-011).
+func TestStartJoinIntegration_ArchivedCircle(t *testing.T) {
+	env := setupSessionIntegEnv(t)
+	ctx := context.Background()
+
+	// Create and start before archiving so the lingering session exists.
+	created, err := env.svc.CreateAdHocSession(ctx, env.userIDs["teacher"], env.circleID)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, _, err := env.svc.StartSession(ctx, env.userIDs["teacher"], created.ID); err != nil {
+		t.Fatalf("start before archive: %v", err)
+	}
+	if _, err := env.pool.Exec(ctx, `UPDATE circles SET is_archived = TRUE WHERE id = $1::uuid`, env.circleID); err != nil {
+		t.Fatalf("archive circle: %v", err)
+	}
+
+	if _, _, err := env.svc.JoinSession(ctx, env.userIDs["student"], created.ID); !errors.Is(err, sessions.ErrCircleArchived) {
+		t.Fatalf("archived join: got %v, want ErrCircleArchived", err)
+	}
+	if _, err := env.svc.CreateAdHocSession(ctx, env.userIDs["teacher"], env.circleID); !errors.Is(err, sessions.ErrCircleArchived) {
+		t.Fatalf("archived create: got %v, want ErrCircleArchived", err)
+	}
+	if err := env.svc.AuthorizeSessionTopic(ctx, env.userIDs["teacher"], created.ID); !errors.Is(err, sessions.ErrCircleArchived) {
+		t.Fatalf("archived topic subscription: got %v, want ErrCircleArchived", err)
+	}
+	if got := env.gw.issuedCount(); got != 1 { // starter connection only
+		t.Fatalf("archived circle issued %d connections, want 1", got)
+	}
+
+	// Moderation of the lingering active session remains authorized.
+	ended, err := env.svc.EndSession(ctx, env.userIDs["teacher"], created.ID, sessions.EndReasonManual)
+	if err != nil {
+		t.Fatalf("archived circle EndSession: %v", err)
+	}
+	if ended.Status != sessions.SessionStatusEnded {
+		t.Fatalf("archived circle EndSession status = %q, want ended", ended.Status)
 	}
 }

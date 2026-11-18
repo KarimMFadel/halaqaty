@@ -136,6 +136,37 @@ func TestRepository_RoleInCircle_ReturnsRoleForMembersOnly(t *testing.T) {
 	}
 }
 
+// TestRepository_ActiveRoleInCircle_ArchivedCircle pins the archived predicate
+// against real PostgreSQL: RoleInCircle keeps answering for a retained member
+// of an archived circle (membership-only reads and moderation), while
+// ActiveRoleInCircle answers "" so new-activity authorization fails closed
+// (ADR-011).
+func TestRepository_ActiveRoleInCircle_ArchivedCircle(t *testing.T) {
+	repo := newIntegrationRepository(t)
+	ctx := context.Background()
+	teacher := seedIntegrationUser(t, repo, "active-role-teacher")
+	outsider := seedIntegrationUser(t, repo, "active-role-outsider")
+	circle := seedIntegrationCircle(t, repo, "Active Role Circle", teacher, "HLQ-ACTR1")
+	seedIntegrationMember(t, repo, circle, teacher, RoleTeacher)
+
+	if _, err := repo.pool.Exec(ctx, `UPDATE circles SET is_archived = TRUE WHERE id = $1::uuid`, circle); err != nil {
+		t.Fatalf("archive circle: %v", err)
+	}
+
+	role, err := repo.RoleInCircle(ctx, circle, teacher)
+	if err != nil || role != RoleTeacher {
+		t.Fatalf("archived member RoleInCircle: got (%q, %v) want (%q, nil)", role, err, RoleTeacher)
+	}
+	role, err = repo.ActiveRoleInCircle(ctx, circle, teacher)
+	if err != nil || role != "" {
+		t.Fatalf("archived member ActiveRoleInCircle: got (%q, %v) want (\"\", nil)", role, err)
+	}
+	role, err = repo.ActiveRoleInCircle(ctx, circle, outsider)
+	if err != nil || role != "" {
+		t.Fatalf("non-member ActiveRoleInCircle: got (%q, %v) want (\"\", nil)", role, err)
+	}
+}
+
 func TestCircleJoinAndArchiveNotificationsUseCommittedEligibleRecipients(t *testing.T) {
 	repo := newIntegrationRepository(t)
 	ctx := context.Background()

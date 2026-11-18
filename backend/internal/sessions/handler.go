@@ -351,7 +351,7 @@ func sessionHTTPError(err error) (string, int) {
 		return httpconst.ErrorCodeNotFound, http.StatusNotFound
 	case errors.Is(err, ErrSessionNotStartable), errors.Is(err, ErrSessionAlreadyActive), errors.Is(err, ErrSessionAlreadyEnded), errors.Is(err, ErrSessionFull), errors.Is(err, ErrSessionLocked):
 		return httpconst.ErrorCodeConflict, http.StatusConflict
-	case errors.Is(err, ErrNotCircleMember), errors.Is(err, ErrModeratorRoleRequired), errors.Is(err, ErrParticipantRemoved):
+	case errors.Is(err, ErrNotCircleMember), errors.Is(err, ErrModeratorRoleRequired), errors.Is(err, ErrParticipantRemoved), errors.Is(err, ErrCircleArchived):
 		return httpconst.ErrorCodeForbidden, http.StatusForbidden
 	case errors.Is(err, ErrMediaUnavailable):
 		return httpconst.ErrorCodeMediaUnavailable, http.StatusServiceUnavailable

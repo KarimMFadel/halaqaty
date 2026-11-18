@@ -44,10 +44,14 @@ type transactionalConnectionStartStore interface {
 	StartSessionWithConnectionInTx(context.Context, pgx.Tx, string, string, MediaRoomRef, MediaGrants, func(context.Context, MediaRoomRef, MediaMode) error, func(context.Context, MediaRoomRef, MediaGrants) (MediaConnection, error)) (Session, MediaConnection, error)
 }
 
-// CircleRoleReader is the F-002 authorization port: it returns the caller's
-// role in the circle, or "" when the caller is not an active member.
+// CircleRoleReader is the F-002 authorization port. RoleInCircle returns the
+// caller's current membership role including archived circles (membership-only
+// reads and moderation); ActiveRoleInCircle returns the role only while the
+// circle is still active, so new-activity authorization fails closed for
+// archived circles (ADR-011, F-005 edge cases).
 type CircleRoleReader interface {
 	RoleInCircle(ctx context.Context, circleID, userID string) (string, error)
+	ActiveRoleInCircle(ctx context.Context, circleID, userID string) (string, error)
 }
 
 // Service owns the provider-neutral start/join policy: role authorization,
@@ -107,6 +111,9 @@ func moderatorRole(role string) bool {
 
 // authorize loads the caller's role in the session's circle and enforces the
 // minimum membership requirement. It returns the role for grant decisions.
+// Archived circles still authorize here: moderation and reads must keep
+// working for a session that was active when its circle was retired, and only
+// authorizeActive blocks new circle activity.
 func (s *Service) authorize(ctx context.Context, circleID, actorID string, moderatorOnly bool) (string, error) {
 	role, err := s.roles.RoleInCircle(ctx, circleID, actorID)
 	if err != nil {
@@ -121,10 +128,39 @@ func (s *Service) authorize(ctx context.Context, circleID, actorID string, moder
 	return role, nil
 }
 
+// authorizeActive enforces the new-activity policy on top of authorize's
+// membership requirement: session creation, start, join, and realtime
+// session-topic subscription require an active (non-archived) circle
+// (ADR-011, F-005 edge cases). The active-circle query runs first so the
+// hot path (an active member) costs one point query; only denials pay the
+// follow-up membership read that distinguishes a retained member of an
+// archived circle (ErrCircleArchived) from a non-member (ErrNotCircleMember).
+func (s *Service) authorizeActive(ctx context.Context, circleID, actorID string, moderatorOnly bool) (string, error) {
+	role, err := s.roles.ActiveRoleInCircle(ctx, circleID, actorID)
+	if err != nil {
+		return "", fmt.Errorf("authorize active session access: %w", err)
+	}
+	if role == "" {
+		memberRole, memberErr := s.roles.RoleInCircle(ctx, circleID, actorID)
+		if memberErr != nil {
+			return "", fmt.Errorf("authorize session access: %w", memberErr)
+		}
+		if memberRole != "" {
+			return "", ErrCircleArchived
+		}
+		return "", ErrNotCircleMember
+	}
+	if moderatorOnly && !moderatorRole(role) {
+		return "", ErrModeratorRoleRequired
+	}
+	return role, nil
+}
+
 // CreateAdHocSession creates a scheduled audio-only session in the caller's
-// circle. Only teachers and supervisors may create sessions (US1).
+// circle. Only teachers and supervisors may create sessions, and archived
+// circles deny all new session activity (US1).
 func (s *Service) CreateAdHocSession(ctx context.Context, actorID, circleID string) (Session, error) {
-	if _, err := s.authorize(ctx, circleID, actorID, true); err != nil {
+	if _, err := s.authorizeActive(ctx, circleID, actorID, true); err != nil {
 		return Session{}, err
 	}
 	created, err := s.store.CreateAdHocSession(ctx, circleID, actorID)
@@ -162,7 +198,7 @@ func (s *Service) StartSession(ctx context.Context, actorID, sessionID string) (
 	if err != nil {
 		return Session{}, MediaConnection{}, err
 	}
-	if _, err := s.authorize(ctx, sess.CircleID, actorID, true); err != nil {
+	if _, err := s.authorizeActive(ctx, sess.CircleID, actorID, true); err != nil {
 		return Session{}, MediaConnection{}, err
 	}
 
@@ -215,7 +251,7 @@ func (s *Service) StartSessionWithConnectionInTx(ctx context.Context, tx pgx.Tx,
 	if err != nil {
 		return Session{}, MediaConnection{}, fmt.Errorf("start session in transaction: load session: %w", err)
 	}
-	if _, err := s.authorize(ctx, circleID, actorID, true); err != nil {
+	if _, err := s.authorizeActive(ctx, circleID, actorID, true); err != nil {
 		return Session{}, MediaConnection{}, err
 	}
 	if status == SessionStatusScheduled {
@@ -252,12 +288,13 @@ func (s *Service) StartSessionWithConnectionInTx(ctx context.Context, tx pgx.Tx,
 // JoinSession admits any active circle member to an active session and issues
 // their least-privilege connection: authorized participants may publish audio,
 // while F-003 queue state remains independent of media permission (ADR-020).
+// Archived circles deny new joins and reconnects (ADR-011).
 func (s *Service) JoinSession(ctx context.Context, actorID, sessionID string) (Session, MediaConnection, error) {
 	sess, err := s.store.GetSession(ctx, sessionID)
 	if err != nil {
 		return Session{}, MediaConnection{}, err
 	}
-	_, err = s.authorize(ctx, sess.CircleID, actorID, false)
+	_, err = s.authorizeActive(ctx, sess.CircleID, actorID, false)
 	if err != nil {
 		return Session{}, MediaConnection{}, err
 	}
@@ -554,8 +591,11 @@ func realtimeParticipant(p ParticipantPresence) map[string]any {
 	}
 }
 
-// AuthorizeSessionTopic revalidates membership and current presence before a
-// WebSocket session-topic subscription is accepted.
+// AuthorizeSessionTopic revalidates active-circle membership and current
+// presence before a WebSocket session-topic subscription is accepted. An
+// archived circle denies subscription so its members stop acquiring session
+// topics (ADR-011); already-subscribed clients and the media room are closed
+// down by the moderators' still-authorized EndSession.
 func (s *Service) AuthorizeSessionTopic(ctx context.Context, actorID, sessionID string) error {
 	sess, err := s.store.GetSession(ctx, sessionID)
 	if err != nil {
@@ -564,7 +604,7 @@ func (s *Service) AuthorizeSessionTopic(ctx context.Context, actorID, sessionID 
 	if sess.Status != SessionStatusActive {
 		return ErrSessionAlreadyEnded
 	}
-	if _, err := s.authorize(ctx, sess.CircleID, actorID, false); err != nil {
+	if _, err := s.authorizeActive(ctx, sess.CircleID, actorID, false); err != nil {
 		return err
 	}
 	store, err := s.moderationStore()

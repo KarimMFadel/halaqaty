@@ -19,8 +19,10 @@ type querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-// RoleInCircle returns the active membership role, or an empty string when
-// the user is not a member. It implements the sessions authorization port.
+// RoleInCircle returns the current membership role, or an empty string when
+// the user is not a member. Archived circles still answer for retained
+// members; this backs membership-only authorization (reads and moderation of
+// a lingering active session). It implements the sessions authorization port.
 func (r *Repository) RoleInCircle(ctx context.Context, circleID, userID string) (string, error) {
 	var role string
 	err := r.q.QueryRow(ctx, circleMemberRoleQuery, circleID, userID).Scan(&role)
@@ -29,6 +31,22 @@ func (r *Repository) RoleInCircle(ctx context.Context, circleID, userID string) 
 	}
 	if err != nil {
 		return "", fmt.Errorf("read circle role: %w", err)
+	}
+	return role, nil
+}
+
+// ActiveRoleInCircle returns the membership role only when the circle has not
+// been archived, or an empty string when the user is not a member or the
+// circle is archived. It backs new-activity authorization: session
+// create/start/join and realtime session-topic subscription (ADR-011).
+func (r *Repository) ActiveRoleInCircle(ctx context.Context, circleID, userID string) (string, error) {
+	var role string
+	err := r.q.QueryRow(ctx, activeCircleMemberRoleQuery, circleID, userID).Scan(&role)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read active circle role: %w", err)
 	}
 	return role, nil
 }

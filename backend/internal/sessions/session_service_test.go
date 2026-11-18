@@ -266,15 +266,30 @@ func (f *fakeGateway) RemoveParticipant(_ context.Context, _ MediaRoomRef, userI
 	return nil
 }
 
-// fakeRoles maps circle memberships; "" means not a member.
+// fakeRoles maps circle memberships; "" means not a member. Archived circles
+// are tracked separately so ActiveRoleInCircle denies them while RoleInCircle
+// keeps answering for membership-only reads and moderation.
 type fakeRoles struct {
-	roles map[string]map[string]string // circleID -> userID -> role
-	err   error
+	roles    map[string]map[string]string // circleID -> userID -> role
+	archived map[string]bool
+	err      error
 }
 
 func (f *fakeRoles) RoleInCircle(_ context.Context, circleID, userID string) (string, error) {
 	if f.err != nil {
 		return "", f.err
+	}
+	return f.roles[circleID][userID], nil
+}
+
+// ActiveRoleInCircle mirrors the rbac.Repository contract: archived circles
+// answer with "" even for retained members.
+func (f *fakeRoles) ActiveRoleInCircle(_ context.Context, circleID, userID string) (string, error) {
+	if f.err != nil {
+		return "", f.err
+	}
+	if f.archived[circleID] {
+		return "", nil
 	}
 	return f.roles[circleID][userID], nil
 }
@@ -805,5 +820,127 @@ func TestJoinSessionRemovedParticipantDenied(t *testing.T) {
 	gw.mu.Unlock()
 	if issued != 2 { // starter + first student join only
 		t.Fatalf("removed participant must not receive a connection, %d issued", issued)
+	}
+}
+
+// ---- archived-circle authorization -------------------------------------------
+
+// archiveUS1Circle marks the shared circle archived in the roles fake. The
+// fake keeps membership answers on RoleInCircle while ActiveRoleInCircle
+// mirrors the archived predicate of the production query.
+func archiveUS1Circle(roles *fakeRoles) {
+	roles.archived = map[string]bool{us1CircleID: true}
+}
+
+func issuedConnectionCount(gw *fakeGateway) int {
+	gw.mu.Lock()
+	defer gw.mu.Unlock()
+	return len(gw.issued)
+}
+
+// TestArchivedCircleSessionAuthorization pins the new-activity policy: an
+// archived circle (ADR-011) never authorizes session creation, start, join,
+// or a realtime session-topic subscription, and never issues a media
+// connection (F-005 edge cases). The rejection distinguishes a retained
+// member (ErrCircleArchived) from a non-member (ErrNotCircleMember).
+func TestArchivedCircleSessionAuthorization(t *testing.T) {
+	t.Run("create denied", func(t *testing.T) {
+		svc, _, _, roles := newUS1Service()
+		seedUS1Roles(roles)
+		archiveUS1Circle(roles)
+		if _, err := svc.CreateAdHocSession(context.Background(), us1Teacher, us1CircleID); !errors.Is(err, ErrCircleArchived) {
+			t.Fatalf("CreateAdHocSession archived circle error = %v, want ErrCircleArchived", err)
+		}
+	})
+
+	t.Run("start denied without media grant", func(t *testing.T) {
+		svc, store, gw, roles := newUS1Service()
+		seedUS1Roles(roles)
+		archiveUS1Circle(roles)
+		store.seedActive(Session{ID: "archived-start", CircleID: us1CircleID, Status: SessionStatusScheduled, MediaMode: MediaModeAudioOnly})
+		if _, _, err := svc.StartSession(context.Background(), us1Teacher, "archived-start"); !errors.Is(err, ErrCircleArchived) {
+			t.Fatalf("StartSession archived circle error = %v, want ErrCircleArchived", err)
+		}
+		if got := issuedConnectionCount(gw); got != 0 {
+			t.Fatalf("archived circle start issued %d connections, want 0", got)
+		}
+		if gw.ensureCount != 0 {
+			t.Fatalf("archived circle start ensured %d rooms, want 0", gw.ensureCount)
+		}
+	})
+
+	t.Run("join denied without media grant", func(t *testing.T) {
+		svc, store, gw, roles := newUS1Service()
+		seedUS1Roles(roles)
+		archiveUS1Circle(roles)
+		store.seedActive(Session{ID: "archived-join", CircleID: us1CircleID, Status: SessionStatusActive, MediaMode: MediaModeAudioOnly, MediaRoomRef: "room-ref"})
+		if _, _, err := svc.JoinSession(context.Background(), us1Student, "archived-join"); !errors.Is(err, ErrCircleArchived) {
+			t.Fatalf("JoinSession archived circle error = %v, want ErrCircleArchived", err)
+		}
+		if got := issuedConnectionCount(gw); got != 0 {
+			t.Fatalf("archived circle join issued %d connections, want 0", got)
+		}
+	})
+
+	t.Run("realtime topic subscription denied", func(t *testing.T) {
+		svc, store, _, roles := newUS1Service()
+		seedUS1Roles(roles)
+		archiveUS1Circle(roles)
+		store.seedActive(Session{ID: "archived-topic", CircleID: us1CircleID, Status: SessionStatusActive, MediaMode: MediaModeAudioOnly, MediaRoomRef: "room-ref"})
+		if err := svc.AuthorizeSessionTopic(context.Background(), us1Student, "archived-topic"); !errors.Is(err, ErrCircleArchived) {
+			t.Fatalf("AuthorizeSessionTopic archived circle error = %v, want ErrCircleArchived", err)
+		}
+	})
+
+	t.Run("non-member of archived circle keeps membership denial", func(t *testing.T) {
+		svc, _, _, roles := newUS1Service()
+		seedUS1Roles(roles)
+		archiveUS1Circle(roles)
+		if _, err := svc.CreateAdHocSession(context.Background(), us1Outsider, us1CircleID); !errors.Is(err, ErrNotCircleMember) {
+			t.Fatalf("outsider archived circle error = %v, want ErrNotCircleMember", err)
+		}
+	})
+
+	t.Run("active circle still authorizes start and join", func(t *testing.T) {
+		svc, _, _, roles := newUS1Service()
+		seedUS1Roles(roles)
+		created, err := svc.CreateAdHocSession(context.Background(), us1Teacher, us1CircleID)
+		if err != nil {
+			t.Fatalf("open circle create: %v", err)
+		}
+		if _, _, err := svc.StartSession(context.Background(), us1Teacher, created.ID); err != nil {
+			t.Fatalf("open circle start: %v", err)
+		}
+		if _, _, err := svc.JoinSession(context.Background(), us1Student, created.ID); err != nil {
+			t.Fatalf("open circle join: %v", err)
+		}
+		if err := svc.AuthorizeSessionTopic(context.Background(), us1Student, created.ID); err != nil {
+			t.Fatalf("open circle topic subscription: %v", err)
+		}
+	})
+}
+
+// TestArchivedCircleModerationAndReadsRemainAuthorized pins the complementary
+// policy: archiving a circle must not strand a session that was already
+// active — moderators keep lock/end control and members keep read access,
+// because only new circle activity is blocked (ADR-011, FR-012).
+func TestArchivedCircleModerationAndReadsRemainAuthorized(t *testing.T) {
+	svc, store, _, roles := newUS1Service()
+	seedUS1Roles(roles)
+	archiveUS1Circle(roles)
+	store.seedActive(Session{ID: "archived-moderation", CircleID: us1CircleID, Status: SessionStatusActive, MediaMode: MediaModeAudioOnly, MediaRoomRef: "room-ref"})
+
+	if _, err := svc.SetLock(context.Background(), us1Teacher, "archived-moderation", true); err != nil {
+		t.Fatalf("archived circle SetLock: %v", err)
+	}
+	ended, err := svc.EndSession(context.Background(), us1Teacher, "archived-moderation", EndReasonManual)
+	if err != nil {
+		t.Fatalf("archived circle EndSession: %v", err)
+	}
+	if ended.Status != SessionStatusEnded {
+		t.Fatalf("archived circle EndSession status = %q, want ended", ended.Status)
+	}
+	if _, err := svc.ListCircleSessions(context.Background(), us1Student, us1CircleID); err != nil {
+		t.Fatalf("archived circle ListCircleSessions: %v", err)
 	}
 }

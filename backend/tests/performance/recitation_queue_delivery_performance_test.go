@@ -237,6 +237,18 @@ func (r sc008RoleReader) RoleInCircle(ctx context.Context, circleID, userID stri
 	return role, err
 }
 
+func (r sc008RoleReader) ActiveRoleInCircle(ctx context.Context, circleID, userID string) (string, error) {
+	var role string
+	err := r.pool.QueryRow(ctx, `
+		SELECT cm.role FROM circle_members cm
+		JOIN circles c ON c.id = cm.circle_id
+		WHERE cm.circle_id = $1::uuid AND cm.user_id = $2::uuid AND c.is_archived = FALSE`, circleID, userID).Scan(&role)
+	if err == pgx.ErrNoRows {
+		return "", nil
+	}
+	return role, err
+}
+
 type sc008NoopMediaGateway struct{}
 
 func (sc008NoopMediaGateway) EnsureRoom(context.Context, sessions.MediaRoomRef, sessions.MediaMode) error {

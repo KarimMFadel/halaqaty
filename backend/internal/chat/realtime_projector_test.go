@@ -218,6 +218,40 @@ func TestRealtimeProjector_DuplicateEventIDDeliveredOnce(t *testing.T) {
 	assertNoProjectorEvent(t, conn)
 }
 
+// TestRealtimeProjector_ArchivedCircleDeliveryStaysReadable pins the chat
+// read-intent decision: delivery of an already committed chat.message to a
+// retained member of an archived circle remains authorized (FR-032 retained
+// history reads), while interactive activity such as typing is separately
+// denied after archival (TestTypingCommandHandler_...). The archived flag on
+// the circle lookup must not suppress committed-content delivery.
+func TestRealtimeProjector_ArchivedCircleDeliveryStaysReadable(t *testing.T) {
+	tickets := realtime.NewTicketService(fixedCircleReader{"member-user": {projectorCircleID}})
+	hub := realtime.NewHub(tickets, nil)
+	server := httptest.NewServer(hub)
+	defer server.Close()
+
+	ticket, err := tickets.IssueForSession(context.Background(), "member-user", "session-1")
+	if err != nil {
+		t.Fatalf("issue ticket: %v", err)
+	}
+	conn := dialProjectorClient(t, server, ticket.Token)
+	defer func() { _ = conn.Close() }()
+	subscribeProjectorCircle(t, conn, projectorCircleID)
+
+	projector := NewRealtimeProjector(fakeMembershipReader{
+		members: map[string]bool{projectorMember(projectorCircleID, "member-user"): true},
+		circles: map[string]rbac.Circle{projectorCircleID: {ID: projectorCircleID, IsArchived: true}},
+	}, hub, tickets, validProjectorSession)
+	msg, event := projectorTestMessage(t)
+	if err := projector.ProjectMessage(context.Background(), event, msg); err != nil {
+		t.Fatalf("archived circle projection: %v", err)
+	}
+	if got := readProjectorJSON(t, conn); got["type"] != realtime.EventChatMessage {
+		t.Fatalf("archived circle member event = %v, want chat.message", got)
+	}
+	assertNoProjectorEvent(t, conn)
+}
+
 // TestRealtimeProjector_OnlyCurrentlyAuthorizedSubscribersReceive proves the
 // audience rebuild plus per-write reauthorization: a removed member's
 // connection is suppressed before the write, and a member who never subscribed

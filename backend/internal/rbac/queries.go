@@ -1,10 +1,23 @@
 package rbac
 
-// circleMemberRoleQuery returns one active membership role.
+// circleMemberRoleQuery returns one active membership role, including
+// membership in an archived circle. It backs membership-only authorization
+// such as moderation and reads of a lingering active session.
 const circleMemberRoleQuery = `
 SELECT role
 FROM circle_members
 WHERE circle_id = $1::uuid AND user_id = $2::uuid
+LIMIT 1`
+
+// activeCircleMemberRoleQuery returns the membership role only while the
+// circle has not been archived; archived circles answer with no row so
+// new-activity authorization fails closed (ADR-011, F-005 edge cases).
+const activeCircleMemberRoleQuery = `
+SELECT cm.role
+FROM circle_members cm
+JOIN circles c ON c.id = cm.circle_id
+WHERE cm.circle_id = $1::uuid AND cm.user_id = $2::uuid
+  AND c.is_archived = FALSE
 LIMIT 1`
 
 const circleIDsForUserQuery = `

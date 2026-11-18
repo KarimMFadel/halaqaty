@@ -66,7 +66,7 @@ class _CircleJoinScreenState extends ConsumerState<CircleJoinScreen> {
         autocorrect: false,
         decoration: InputDecoration(
           labelText: rtl ? 'رابط الدعوة' : 'Invite link',
-          hintText: 'HLQ-7X2K',
+          hintText: 'HLQ-7X2KABCDEFGH',
         ),
         validator: (value) => ref
                     .read(circleDiscoveryControllerProvider.notifier)

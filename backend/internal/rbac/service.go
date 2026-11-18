@@ -24,8 +24,14 @@ const (
 	publicCirclePageSize = 20
 	// inviteCodeAlphabet excludes visually ambiguous characters; 32 symbols
 	// divide 256 exactly, so byte-to-symbol mapping stays uniform.
+	//
+	// inviteCodeLength sets the keyspace for newly generated codes:
+	// 32^12 ≈ 2^60, which defeats brute-force invite guessing even with
+	// rate limiting as a backstop. Circles created before this change keep
+	// their stored 4-symbol codes; isInviteCode still accepts that legacy
+	// length so existing invite links keep working.
 	inviteCodeAlphabet       = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-	inviteCodeLength         = 4
+	inviteCodeLength         = 12
 	inviteCodePrefix         = "HLQ-"
 	inviteGenerationAttempts = 3
 	// inviteLinkBase is the public join-link origin shared by all invite responses.
@@ -827,8 +833,16 @@ func generateInviteCode() (string, error) {
 	return code.String(), nil
 }
 
+// legacyInviteCodeLength is the symbol count of codes generated before the
+// 12-symbol format; existing circles keep these codes until refreshed.
+const legacyInviteCodeLength = 4
+
 func isInviteCode(value string) bool {
-	if len(value) != len(inviteCodePrefix)+inviteCodeLength || !strings.HasPrefix(value, inviteCodePrefix) {
+	symbolCount := len(value) - len(inviteCodePrefix)
+	if symbolCount != inviteCodeLength && symbolCount != legacyInviteCodeLength {
+		return false
+	}
+	if !strings.HasPrefix(value, inviteCodePrefix) {
 		return false
 	}
 	for _, char := range value[len(inviteCodePrefix):] {

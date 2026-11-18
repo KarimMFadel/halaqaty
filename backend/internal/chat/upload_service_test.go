@@ -323,6 +323,31 @@ func TestUploadService_StageValidatesMediaBeforePersistence(t *testing.T) {
 	}
 }
 
+// TestUploadService_StageRejectsOverBudgetImageBeforeDecode pins the
+// order-of-operations inside Stage: the encoded byte budget rejects an
+// over-budget image before the media parser runs at all, so a budget
+// violation never triggers a decode allocation (FR-021/FR-022).
+func TestUploadService_StageRejectsOverBudgetImageBeforeDecode(t *testing.T) {
+	uploader := uuid.New()
+	circle := uuid.New()
+	svc := newTestUploadService(&fakeUploadStore{}, memberMembership(t, circle), &fakeObjectClient{}, nil, time.Now())
+	validations := 0
+	inner := svc.validate
+	svc.validate = func(ctx context.Context, kind MessageType, mime string, data []byte) (int, error) {
+		validations++
+		return inner(ctx, kind, mime, data)
+	}
+
+	_, err := svc.Stage(context.Background(), groupStageInput(uploader, circle, MessageTypeImage, mediaWithPrefix(pngMagic, MaxImageSizeBytes+1), 0))
+
+	if !errors.Is(err, ErrUploadTooLarge) {
+		t.Fatalf("Stage() error = %v, want ErrUploadTooLarge", err)
+	}
+	if validations != 0 {
+		t.Fatalf("media validation ran %d times after the byte budget rejected", validations)
+	}
+}
+
 // --- Stage: authorization ----------------------------------------------------------
 
 func memberMembership(t *testing.T, circleID uuid.UUID) *stubMembershipReader {

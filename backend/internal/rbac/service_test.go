@@ -681,6 +681,25 @@ func TestJoinCircle_ValidInvite_AddsStudentMembership(t *testing.T) {
 	}
 }
 
+func TestJoinCircle_LegacyFourSymbolInviteStillResolves(t *testing.T) {
+	t.Parallel()
+
+	store := newStubStore()
+	store.circles[unitCircleID] = Circle{
+		ID:         unitCircleID,
+		Name:       "Legacy Circle",
+		InviteCode: "HLQ-7X2K",
+	}
+
+	joined, err := NewService(store, nil).JoinCircle(context.Background(), unitStudentID, "HLQ-7X2K")
+	if err != nil {
+		t.Fatalf("JoinCircle: %v", err)
+	}
+	if joined.ID != unitCircleID {
+		t.Fatalf("circle ID: got %q, want %q", joined.ID, unitCircleID)
+	}
+}
+
 func TestInviteCode_IsExactlyEightCharacters(t *testing.T) {
 	if !isInviteCode("HLQ-7X2K") {
 		t.Fatal("expected the approved eight-character invite code to be valid")

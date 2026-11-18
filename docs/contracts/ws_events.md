@@ -683,7 +683,7 @@ alert.
 |-------|----------|---------------|
 | `queue.*` | At-least-once (authorized broadcast or targeted delivery) | Client deduplicates by `event_id`, ignores stale versions, and re-fetches on gaps |
 | `session.*` | At-least-once | Client deduplicates by event ID when supplied, otherwise by `session_id`, type, affected user, and monotonic state version |
-| `chat.message`, `chat.message_deleted`, `chat.message_read` | At-least-once via transactional chat outbox; per-client session/authorization recheck immediately before write | Client deduplicates by `event_id` and re-fetches REST state on gaps |
+| `chat.message`, `chat.message_deleted`, `chat.message_read` | At-least-once via transactional chat outbox; per-client session/authorization recheck immediately before delivery (recheck failure aborts delivery and retries through the outbox) | Client deduplicates by `event_id` and re-fetches REST state on gaps |
 | `notification.updated` | User-targeted state hint; may be duplicated or missed | Replace unread count and reconcile history through REST |
 | `chat.typing` | Best effort; expires after 5 seconds | Latest state per user and chat context wins |
 | `queue.your_turn` | At-least-once; F-008 may add FCM projection | Client shows once per `event_id` and re-fetches authoritative state |

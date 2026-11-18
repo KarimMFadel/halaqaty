@@ -205,6 +205,7 @@ func main() {
 	authMW.SetMetrics(authMetrics)
 	roleMW := middleware.NewRoleMiddleware(sessionRepo)
 	rateLimitMW := middleware.NewRateLimitMiddleware(cfg.RateLimitPerIPPerMin, cfg.RateLimitPerUserPerMin)
+	rateLimitMW.SetTrustedProxyCount(cfg.TrustedProxyCount)
 
 	realtimeHub := realtime.NewHub(ticketService, sessionTopicAuthorizer)
 	queueProjector := queue.NewRealtimeOutboxProjector(queueRepo, realtimeHub)

@@ -40,6 +40,7 @@ type AuthConfig struct {
 	RateLimitPerUserPerMin int
 	WSMaxConnectionsPerUsr int
 	WSMaxMessagesPerMin    int
+	TrustedProxyCount      int
 	MetricsToken           string
 }
 
@@ -94,6 +95,17 @@ func loadAuthConfig(getenv func(string) string) (AuthConfig, error) {
 	cfg.WSMaxMessagesPerMin, err = envInt(getenv, "AUTH_WS_MAX_MESSAGES_PER_MIN", cfg.WSMaxMessagesPerMin)
 	if err != nil {
 		return AuthConfig{}, err
+	}
+	// envInt rejects 0, but zero trusted proxies is the safe default here.
+	if raw := getenv("AUTH_TRUSTED_PROXY_COUNT"); raw != "" {
+		count, err := strconv.Atoi(raw)
+		if err != nil {
+			return AuthConfig{}, fmt.Errorf("AUTH_TRUSTED_PROXY_COUNT invalid integer %q: %w", raw, err)
+		}
+		if count < 0 {
+			return AuthConfig{}, fmt.Errorf("AUTH_TRUSTED_PROXY_COUNT must be >= 0")
+		}
+		cfg.TrustedProxyCount = count
 	}
 
 	return cfg, nil

@@ -293,6 +293,26 @@ func TestRegisterRoutes_AttendanceUsesAuthenticatedPerUserLimit(t *testing.T) {
 	}
 }
 
+// TestRegisterRoutes_CircleInviteJoinUsesAuthenticatedPerUserLimit pins the
+// invite-guessing defence: POST /api/v1/circles/join must sit behind the same
+// authenticated per-user budget as user search, so a principal cannot hammer
+// invite codes beyond one-minute-window budget. The not-configured RBAC
+// fallback returns 500 for the first (within-budget) request; the second
+// request must be the limiter's 429.
+func TestRegisterRoutes_CircleInviteJoinUsesAuthenticatedPerUserLimit(t *testing.T) {
+	mw := fullWiringMiddlewareSet(wiringAuthMiddleware(), func(mw *MiddlewareSet) {
+		mw.RateLimit = middleware.NewRateLimitMiddleware(100, 1)
+	})
+	router := NewRouter(mw)
+	for i, want := range []int{http.StatusInternalServerError, http.StatusTooManyRequests} {
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, wiringAuthenticatedRequest(http.MethodPost, "/api/v1/circles/join", `{"invite_code":"HLQ-7X2K"}`))
+		if rec.Code != want {
+			t.Fatalf("request %d status = %d, want %d body=%s", i+1, rec.Code, want, rec.Body.String())
+		}
+	}
+}
+
 func TestRegisterRoutes_WiresAuthenticatedGroupMessageDelete(t *testing.T) {
 	service := &wiringModerationService{}
 	router := NewRouter(fullWiringMiddlewareSet(wiringAuthMiddleware(), func(mw *MiddlewareSet) {

@@ -109,6 +109,58 @@ func TestLoadAuthConfig_UsesDefaultsForMissingEnv(t *testing.T) {
 	}
 }
 
+func TestLoadAuthConfig_TrustedProxyCount(t *testing.T) {
+	t.Run("defaults to zero trusted proxies", func(t *testing.T) {
+		cfg, err := loadAuthConfig(func(string) string { return "" })
+		if err != nil {
+			t.Fatalf("loadAuthConfig: %v", err)
+		}
+		if cfg.TrustedProxyCount != 0 {
+			t.Fatalf("TrustedProxyCount: got %d, want 0", cfg.TrustedProxyCount)
+		}
+	})
+
+	t.Run("applies env override", func(t *testing.T) {
+		getenv := func(key string) string {
+			if key == "AUTH_TRUSTED_PROXY_COUNT" {
+				return "2"
+			}
+			return ""
+		}
+		cfg, err := loadAuthConfig(getenv)
+		if err != nil {
+			t.Fatalf("loadAuthConfig: %v", err)
+		}
+		if cfg.TrustedProxyCount != 2 {
+			t.Fatalf("TrustedProxyCount: got %d, want 2", cfg.TrustedProxyCount)
+		}
+	})
+
+	t.Run("rejects negative counts", func(t *testing.T) {
+		getenv := func(key string) string {
+			if key == "AUTH_TRUSTED_PROXY_COUNT" {
+				return "-1"
+			}
+			return ""
+		}
+		if _, err := loadAuthConfig(getenv); err == nil {
+			t.Fatal("expected error for negative trusted proxy count")
+		}
+	})
+
+	t.Run("rejects non-integer values", func(t *testing.T) {
+		getenv := func(key string) string {
+			if key == "AUTH_TRUSTED_PROXY_COUNT" {
+				return "many"
+			}
+			return ""
+		}
+		if _, err := loadAuthConfig(getenv); err == nil {
+			t.Fatal("expected error for non-integer trusted proxy count")
+		}
+	})
+}
+
 func TestLoadAuthConfig_RejectsInvalidDurations(t *testing.T) {
 	cases := []struct {
 		key string

@@ -9,10 +9,14 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // readTestdata loads one committed binary fixture (see testdata/).
@@ -123,6 +127,159 @@ func TestValidateImageRejectsOversizedDimensionsBeforeDecode(t *testing.T) {
 	header := craftedPNGHeader(100_001, 100_001)
 	if _, err := validateImage(header); !errors.Is(err, ErrMalformedMedia) {
 		t.Fatal("image exceeding the pixel ceiling accepted")
+	}
+}
+
+// stubDecodeFullImage replaces the full-pixel decode seam for the duration of
+// one test so decode counts and concurrency stay observable and cheap.
+func stubDecodeFullImage(t *testing.T, fake func(io.Reader) (image.Image, string, error)) {
+	t.Helper()
+	original := decodeFullImage
+	decodeFullImage = fake
+	t.Cleanup(func() { decodeFullImage = original })
+}
+
+// requireCraftedHeaderParses proves the header-only fixture actually parses at
+// the DecodeConfig stage with the intended dimensions; without this guard a
+// malformed fixture would make the ordering tests pass vacuously.
+func requireCraftedHeaderParses(t *testing.T, header []byte, width, height uint32) {
+	t.Helper()
+	config, _, err := image.DecodeConfig(bytes.NewReader(header))
+	if err != nil || config.Width != int(width) || config.Height != int(height) {
+		t.Fatalf("crafted header does not parse to %dx%d: got %dx%d err=%v", width, height, config.Width, config.Height, err)
+	}
+}
+
+// TestValidateImageRejectsOverCeilingDimensionsWithoutFullDecode proves an
+// image whose header dimensions exceed the pixel ceiling is rejected at the
+// DecodeConfig stage without ever running the full-pixel decode, so a
+// hostile header can never trigger a decoded allocation (ADR-022).
+func TestValidateImageRejectsOverCeilingDimensionsWithoutFullDecode(t *testing.T) {
+	decodes := 0
+	stubDecodeFullImage(t, func(io.Reader) (image.Image, string, error) {
+		decodes++
+		return nil, "", errors.New("full decode must not run for an over-ceiling image")
+	})
+	// 4001×5001 = 20,005,001 px: one pixel row over the ceiling.
+	header := craftedPNGHeader(4001, 5001)
+	requireCraftedHeaderParses(t, header, 4001, 5001)
+	if _, err := validateImage(header); !errors.Is(err, ErrMalformedMedia) {
+		t.Fatalf("validateImage() error = %v, want ErrMalformedMedia", err)
+	}
+	if decodes != 0 {
+		t.Fatalf("full decode ran %d times for an over-ceiling image", decodes)
+	}
+}
+
+// TestValidateImageDecodesAtCeilingDimensions pins the ceiling boundary:
+// exactly-ceiling dimensions still reach the full decode, and a single pixel
+// row beyond it is rejected by the header check alone.
+func TestValidateImageDecodesAtCeilingDimensions(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		width       uint32
+		height      uint32
+		wantErr     error
+		wantDecodes int
+	}{
+		{name: "exactly at ceiling decodes", width: 4000, height: 5000, wantDecodes: 1},
+		{name: "one pixel over ceiling rejects", width: 4000, height: 5001, wantErr: ErrMalformedMedia, wantDecodes: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			header := craftedPNGHeader(tc.width, tc.height)
+			requireCraftedHeaderParses(t, header, tc.width, tc.height)
+			decodes := 0
+			stubDecodeFullImage(t, func(io.Reader) (image.Image, string, error) {
+				decodes++
+				return nil, "png", nil
+			})
+			_, err := validateImage(header)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("validateImage() error = %v, want %v", err, tc.wantErr)
+			}
+			if decodes != tc.wantDecodes {
+				t.Fatalf("full decode count = %d, want %d", decodes, tc.wantDecodes)
+			}
+		})
+	}
+}
+
+// TestValidateImageBoundsConcurrentDecodes proves the package-level decode
+// semaphore caps simultaneous full decodes even when many uploads race: with
+// 3×limit concurrent validate calls, no more than limit may be inside the
+// decode at once, every waiter eventually decodes after slots free, and no
+// slot is leaked.
+func TestValidateImageBoundsConcurrentDecodes(t *testing.T) {
+	const limit = maxConcurrentImageDecodes
+	var inFlight, peak int32
+	release := make(chan struct{})
+	var once sync.Once
+	free := func() { once.Do(func() { close(release) }) }
+	defer free()
+	stubDecodeFullImage(t, func(io.Reader) (image.Image, string, error) {
+		current := atomic.AddInt32(&inFlight, 1)
+		for {
+			p := atomic.LoadInt32(&peak)
+			if current <= p || atomic.CompareAndSwapInt32(&peak, p, current) {
+				break
+			}
+		}
+		defer atomic.AddInt32(&inFlight, -1)
+		<-release
+		return nil, "png", nil
+	})
+
+	img := image.NewRGBA(image.Rect(0, 0, 4, 3))
+	var payload bytes.Buffer
+	if err := png.Encode(&payload, img); err != nil {
+		t.Fatal(err)
+	}
+
+	const callers = 3 * limit
+	var wg sync.WaitGroup
+	errs := make(chan error, callers)
+	for i := 0; i < callers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := validateImage(payload.Bytes())
+			errs <- err
+		}()
+	}
+
+	// Wait until exactly limit decoders are inside and the peak has stayed at
+	// limit for a settle window: with the semaphore this is reached and held;
+	// without it the unbounded ramp pushes the peak past limit and the loop
+	// times out instead.
+	const settleChecks = 10
+	stable := 0
+	for deadline := time.Now().Add(2 * time.Second); ; {
+		if time.Now().After(deadline) {
+			t.Fatalf("peak concurrent decodes never settled at %d (peak=%d, inFlight=%d)", limit, atomic.LoadInt32(&peak), atomic.LoadInt32(&inFlight))
+		}
+		if atomic.LoadInt32(&peak) == limit {
+			stable++
+		} else {
+			stable = 0
+		}
+		if stable >= settleChecks {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if got := atomic.LoadInt32(&peak); got != limit {
+		t.Fatalf("peak concurrent decodes = %d, want exactly %d", got, limit)
+	}
+
+	free()
+	wg.Wait()
+	for i := 0; i < callers; i++ {
+		if err := <-errs; err != nil {
+			t.Fatalf("blocked waiter failed after slots freed: %v", err)
+		}
+	}
+	if got := len(decodeSlots); got != 0 {
+		t.Fatalf("decode slots leaked: %d held after all decodes returned", got)
 	}
 }
 

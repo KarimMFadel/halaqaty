@@ -622,8 +622,10 @@ paths:
               properties:
                 invite_code:
                   type: string
-                  pattern: '^HLQ-[A-HJ-NP-Z2-9]{4}$'
-                  example: HLQ-7X2K
+                  # 12-symbol codes are generated since the invite-entropy fix;
+                  # legacy 4-symbol codes remain valid until a manager refreshes.
+                  pattern: '^HLQ-[A-HJ-NP-Z2-9]{4}([A-HJ-NP-Z2-9]{8})?$'
+                  example: HLQ-7X2KABCDEFGH
       responses:
         '200':
           description: Joined the circle
@@ -3406,7 +3408,9 @@ components:
       properties:
         invite_code:
           type: string
-          pattern: '^HLQ-[A-HJ-NP-Z2-9]{4}$'
+          # Current generation is 12 symbols (32^12 ≈ 2^60); legacy circles may
+          # still return 4-symbol codes until a manager refreshes the invite.
+          pattern: '^HLQ-[A-HJ-NP-Z2-9]{4}([A-HJ-NP-Z2-9]{8})?$'
         invite_link:
           type: string
           format: uri

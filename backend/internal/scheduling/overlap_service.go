@@ -188,7 +188,8 @@ func previewWindow(record RevisionRecord) ([]OverlapInterval, error) {
 	dates := record.OccurrenceDates(from, to)
 	if record.Mode == ModeSelectedDates {
 		// Selected-dates occurrences are exactly the stored dates, so the
-		// expansion window ends at the latest selected date instead of year 9999.
+		// expansion window ends at the latest selected date instead of year the
+		// former year-9999 horizon; validateSelectedDates caps count and span.
 		latest := from
 		for _, d := range record.SelectedDates {
 			if day := civilOf(d); day.After(latest) {

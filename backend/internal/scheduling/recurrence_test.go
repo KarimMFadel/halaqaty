@@ -246,6 +246,49 @@ func TestValidatePattern_SelectedDatesFirstDateIsAnchor(t *testing.T) {
 	}
 }
 
+func TestValidatePattern_SelectedDatesLimits(t *testing.T) {
+	t.Parallel()
+	anchor := civilDate(2027, 1, 1)
+	base := Revision{
+		ScheduleID:         "sched-selected",
+		Version:            1,
+		EffectiveLocalDate: anchor,
+		Mode:               ModeSelectedDates,
+		AnchorLocalDate:    anchor,
+	}
+	daily := func(n int) []time.Time {
+		dates := make([]time.Time, n)
+		for i := range dates {
+			dates[i] = anchor.AddDate(0, 0, i)
+		}
+		return dates
+	}
+
+	overCount := base
+	overCount.SelectedDates = daily(367)
+	if err := overCount.ValidatePattern(); !errors.Is(err, ErrInvalidSelectedDates) {
+		t.Fatalf("367 selected dates: got %v, want ErrInvalidSelectedDates", err)
+	}
+
+	atCount := base
+	atCount.SelectedDates = daily(366) // one occurrence per day for a leap year
+	if err := atCount.ValidatePattern(); err != nil {
+		t.Fatalf("exactly 366 selected dates: got %v, want nil", err)
+	}
+
+	overSpan := base
+	overSpan.SelectedDates = []time.Time{anchor, anchor.AddDate(0, 0, 367)}
+	if err := overSpan.ValidatePattern(); !errors.Is(err, ErrInvalidSelectedDates) {
+		t.Fatalf("367-day span: got %v, want ErrInvalidSelectedDates", err)
+	}
+
+	atSpan := base
+	atSpan.SelectedDates = []time.Time{anchor, anchor.AddDate(0, 0, 366)}
+	if err := atSpan.ValidatePattern(); err != nil {
+		t.Fatalf("exactly 366-day span: got %v, want nil", err)
+	}
+}
+
 func TestOccurrenceDates_InclusiveEndLocalDate(t *testing.T) {
 	t.Parallel()
 	// An occurrence starting ON the end date is included; the end date applies

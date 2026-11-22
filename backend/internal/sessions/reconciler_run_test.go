@@ -1,8 +1,11 @@
 package sessions
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +16,7 @@ import (
 type runStoreStub struct {
 	mu         sync.Mutex
 	candidates map[SessionStatus][]Session
+	listErr    map[SessionStatus]error
 	attempts   int
 	locked     bool
 }
@@ -20,6 +24,9 @@ type runStoreStub struct {
 func (s *runStoreStub) ListRecoveryCandidates(_ context.Context, status SessionStatus, limit int) ([]Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.listErr[status]; err != nil {
+		return nil, err
+	}
 	items := s.candidates[status]
 	if len(items) > limit {
 		items = items[:limit]
@@ -149,5 +156,51 @@ func TestReconciler_Sweep_CandidateError_ContinuesRemainingCandidates(t *testing
 	store.mu.Unlock()
 	if attempts != 3 {
 		t.Fatalf("attempted candidates = %d, want all 3", attempts)
+	}
+}
+
+func TestReconciler_Run_LogsSweepErrorsAndContinuesRemainingPhases(t *testing.T) {
+	store := &runStoreStub{
+		locked:  true,
+		listErr: map[SessionStatus]error{SessionStatusScheduled: errors.New("boom")},
+		candidates: map[SessionStatus][]Session{
+			SessionStatusEnded: {{ID: "ended-run", Status: SessionStatusEnded, MediaRoomRef: "room-run"}},
+		},
+	}
+	var logs bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	defer slog.SetDefault(previous)
+
+	reconciler, err := NewReconciler(store, &recoveryGatewayStub{}, []byte("server-only-key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() { errCh <- reconciler.Run(ctx) }()
+
+	// The failing phase must not stop the later phases: wait for the ended
+	// candidate to be reconciled.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		store.mu.Lock()
+		attempts := store.attempts
+		store.mu.Unlock()
+		if attempts >= 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			cancel()
+			t.Fatal("a failing phase aborted the remaining sweep phases")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	if err := <-errCh; !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run error = %v, want context.Canceled", err)
+	}
+	if !strings.Contains(logs.String(), "boom") {
+		t.Fatalf("sweep error must be logged, got %q", logs.String())
 	}
 }

@@ -3,6 +3,7 @@ package sessions
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -30,11 +31,38 @@ type recoveryGatewayStub struct {
 	closed  []MediaRoomRef
 }
 
-type recoveryAttendanceStub struct{ finalized []string }
+type recoveryAttendanceStub struct {
+	finalized []string
+	fail      map[string]bool
+}
 
 func (s *recoveryAttendanceStub) Finalize(_ context.Context, sessionID string) error {
 	s.finalized = append(s.finalized, sessionID)
+	if s.fail[sessionID] {
+		return errors.New("finalize failed")
+	}
 	return nil
+}
+
+// pagedRecoveryStoreStub adds keyset pagination to the base store double so a
+// sweep can walk past a first page whose candidates never complete.
+type pagedRecoveryStoreStub struct {
+	recoveryStoreStub
+	all []Session
+}
+
+func (s *pagedRecoveryStoreStub) ListRecoveryCandidatesAfterID(_ context.Context, status SessionStatus, afterID string, limit int) ([]Session, error) {
+	items := make([]Session, 0, limit)
+	for _, sess := range s.all {
+		if sess.Status != status || sess.ID <= afterID {
+			continue
+		}
+		items = append(items, sess)
+		if len(items) == limit {
+			break
+		}
+	}
+	return items, nil
 }
 
 func (g *recoveryGatewayStub) EnsureRoom(_ context.Context, ref MediaRoomRef, _ MediaMode) error {
@@ -117,5 +145,45 @@ func TestReconcilerSweepRetriesEndedAttendanceFinalization(t *testing.T) {
 	}
 	if len(attendance.finalized) != 1 || attendance.finalized[0] != "ended-recovery" {
 		t.Fatalf("finalized sessions = %v, want [ended-recovery]", attendance.finalized)
+	}
+}
+
+func TestReconcilerSweepPaginatesPastUnfinishedFirstPage(t *testing.T) {
+	const total = RecoveryCandidateLimit + 5
+	all := make([]Session, 0, total)
+	fail := make(map[string]bool, RecoveryCandidateLimit)
+	for i := 0; i < total; i++ {
+		id := fmt.Sprintf("ended-%03d", i)
+		all = append(all, Session{ID: id, Status: SessionStatusEnded})
+		if i < RecoveryCandidateLimit {
+			// The first page never reaches its completion condition.
+			fail[id] = true
+		}
+	}
+	store := &pagedRecoveryStoreStub{
+		recoveryStoreStub: recoveryStoreStub{candidates: map[SessionStatus][]Session{SessionStatusEnded: all}},
+		all:               all,
+	}
+	attendance := &recoveryAttendanceStub{fail: fail}
+	reconciler, err := NewReconciler(store, &recoveryGatewayStub{}, []byte("server-only-key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reconciler.SetAttendanceFinalizer(attendance)
+
+	if err := reconciler.Sweep(context.Background()); err == nil {
+		t.Fatal("a first page that never completes must surface the failures")
+	}
+	if len(attendance.finalized) != total {
+		t.Fatalf("finalized %d candidates, want all %d: later pages must be reached", len(attendance.finalized), total)
+	}
+	finalized := make(map[string]bool, total)
+	for _, id := range attendance.finalized {
+		finalized[id] = true
+	}
+	for i := RecoveryCandidateLimit; i < total; i++ {
+		if id := fmt.Sprintf("ended-%03d", i); !finalized[id] {
+			t.Fatalf("candidate %s beyond the first page was never processed: %v", id, attendance.finalized)
+		}
 	}
 }

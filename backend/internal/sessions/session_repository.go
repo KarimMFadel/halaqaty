@@ -815,6 +815,24 @@ func (r *Repository) ListRecoveryCandidates(ctx context.Context, status SessionS
 	if err != nil {
 		return nil, fmt.Errorf("list recovery candidates: %w", err)
 	}
+	return collectRecoveryCandidates(rows, limit)
+}
+
+// ListRecoveryCandidatesAfterID returns the next keyset page of sessions in one
+// lifecycle state ordered by immutable id. It lets the recovery sweep advance
+// past candidates that never reach their completion condition.
+func (r *Repository) ListRecoveryCandidatesAfterID(ctx context.Context, status SessionStatus, afterID string, limit int) ([]Session, error) {
+	if limit <= 0 {
+		return []Session{}, nil
+	}
+	rows, err := r.pool.Query(ctx, listRecoveryCandidatesAfterIDQuery, string(status), afterID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list recovery candidates after %q: %w", afterID, err)
+	}
+	return collectRecoveryCandidates(rows, limit)
+}
+
+func collectRecoveryCandidates(rows pgx.Rows, limit int) ([]Session, error) {
 	defer rows.Close()
 	candidates := make([]Session, 0, limit)
 	for rows.Next() {

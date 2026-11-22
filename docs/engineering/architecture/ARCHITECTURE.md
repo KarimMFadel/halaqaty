@@ -397,7 +397,6 @@ func generateLiveKitToken(
         CanPublish:     canPublishAudio, // microphone publish only in MVP turns
         CanPublishVideo: false,          // MVP hard-stop; enable post-MVP via feature flag
         CanSubscribe:   true,
-        CanPublishData: isTeacher, // only teachers send data messages
     }
     
     // Teachers get additional permissions

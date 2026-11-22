@@ -134,6 +134,9 @@ func TestIssueConnectionStudentPublishesAudioOnly(t *testing.T) {
 	if canPublish, ok := grant["canPublish"].(bool); !ok || !canPublish {
 		t.Fatalf("student canPublish = %v, want true", grant["canPublish"])
 	}
+	if canPublishData, _ := grant["canPublishData"].(bool); canPublishData {
+		t.Fatalf("student canPublishData = %v, want disabled", grant["canPublishData"])
+	}
 	if claims["sub"] != "student-1" && claims["identity"] != "student-1" {
 		t.Fatalf("token identity = %v, want student-1", claims["sub"])
 	}

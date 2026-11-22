@@ -58,6 +58,10 @@ graph LR
     CMD --> HUB
 ```
 
+> **Emission status:** of the `session.*` events above, only `session.snapshot`,
+> `session.hand_raised`, and `session.hand_lowered` are emitted in the current
+> build. The rest are contract-only — see [Session Events](#session-events).
+
 ---
 
 ### Queue Event Envelope and Recovery
@@ -349,6 +353,15 @@ pending. Payload: `session_id`, `round_id`, `request_id`, `queue_entry_id`,
 ---
 
 ## Session Events
+
+**Emission status:** `session.snapshot`, `session.hand_raised`, and
+`session.hand_lowered` are implemented and live. `session.started`,
+`session.ended`, `session.participant_joined`, `session.participant_left`,
+`session.lock_changed`, `session.participant_muted`, and
+`session.participant_removed` are documented contract surface that the current
+build does not emit; lifecycle changes surface through REST session endpoints
+and, for notifications, through `notification.updated` (F-008). Do not rely on
+an event that has no "implemented" status here.
 
 ### `session.started` (Server → Client)
 

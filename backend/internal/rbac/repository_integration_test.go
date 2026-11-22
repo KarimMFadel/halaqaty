@@ -186,8 +186,13 @@ func TestCircleJoinAndArchiveNotificationsUseCommittedEligibleRecipients(t *test
 	teacher := seedIntegrationUser(t, repo, "notification-teacher")
 	student := seedIntegrationUser(t, repo, "notification-student")
 	outsider := seedIntegrationUser(t, repo, "notification-outsider")
+	formerMember := seedIntegrationUser(t, repo, "notification-former")
 	circle := seedIntegrationCircle(t, repo, "Notification Circle", teacher, "HLQ-NOTI1")
 	seedIntegrationMember(t, repo, circle, teacher, RoleTeacher)
+	seedIntegrationMember(t, repo, circle, formerMember, RoleStudent)
+	if _, err := repo.pool.Exec(ctx, `UPDATE users SET deleted_at = NOW() WHERE id = $1::uuid`, formerMember); err != nil {
+		t.Fatalf("soft-delete former member: %v", err)
+	}
 	service := NewService(repo, nil)
 	if _, err := service.JoinPublicCircle(ctx, student, circle); err != nil {
 		t.Fatalf("join public circle: %v", err)
@@ -195,6 +200,15 @@ func TestCircleJoinAndArchiveNotificationsUseCommittedEligibleRecipients(t *test
 	page, err := notificationRepo.List(ctx, teacher, nil, 10)
 	if err != nil || len(page.Items) != 1 || page.Items[0].Type != notifications.EventStudentJoinedCircle {
 		t.Fatalf("teacher join notifications = %+v, error=%v", page, err)
+	}
+	if page.UnreadCount != 1 {
+		t.Fatalf("teacher join unread=%d, want 1", page.UnreadCount)
+	}
+	// The soft-deleted former member is not an eligible recipient at commit
+	// time: the projection must exclude them from the join AND archive sets.
+	formerPage, err := notificationRepo.List(ctx, formerMember, nil, 10)
+	if err != nil || len(formerPage.Items) != 0 {
+		t.Fatalf("former member notices after join = %+v, error=%v; want none", formerPage.Items, err)
 	}
 	if err := service.ArchiveCircle(ctx, teacher, circle); err != nil {
 		t.Fatalf("archive circle: %v", err)
@@ -218,6 +232,23 @@ func TestCircleJoinAndArchiveNotificationsUseCommittedEligibleRecipients(t *test
 				t.Errorf("user %s missing %s notification: %+v", userID, eventType, page.Items)
 			}
 		}
+	}
+	// The soft-deleted former member is ineligible for the archive projection
+	// as well: zero notices across both lifecycle events.
+	formerPage, err = notificationRepo.List(ctx, formerMember, nil, 10)
+	if err != nil || len(formerPage.Items) != 0 {
+		t.Fatalf("former member notices after archive = %+v, error=%v; want none", formerPage.Items, err)
+	}
+	// Push-intent channel fact: history rows for push-enabled matrix rows
+	// start as live dispatch intents awaiting a device.
+	var pushState string
+	if err := repo.pool.QueryRow(ctx, `
+SELECT delivery_state FROM notifications
+WHERE user_id = $1::uuid AND type = 'circle_archived'`, student).Scan(&pushState); err != nil {
+		t.Fatal(err)
+	}
+	if pushState != "pending_no_device" {
+		t.Fatalf("archived push intent state=%q, want pending_no_device", pushState)
 	}
 	page, err = notificationRepo.List(ctx, outsider, nil, 10)
 	if err != nil || len(page.Items) != 0 {

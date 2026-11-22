@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/auth/data/auth_api_client.dart';
+import 'package:halaqaty_mobile/features/chat/data/pending_message_store.dart';
 
 class _FakeUser implements User {
   _FakeUser(this.log, {required this.idToken});
@@ -93,6 +94,7 @@ class _FakeSecureStorage implements FlutterSecureStorage {
 
   final List<String> log;
   final Map<String, String> values = {};
+  bool failDraftDelete = false;
 
   @override
   Future<String?> read({
@@ -134,6 +136,9 @@ class _FakeSecureStorage implements FlutterSecureStorage {
     MacOsOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
+    if (failDraftDelete && key.contains('chat.pending')) {
+      throw StateError('draft storage unavailable');
+    }
     log.add('storageDelete:$key');
     values.remove(key);
   }
@@ -193,11 +198,13 @@ class _FakeAuthApiClient implements AuthApiClient {
     required String platform,
   }) async {
     log.add('registerFcmToken:$firebaseIdToken|$token');
-    registrations.add(_RegisteredFcmToken(
-      firebaseIdToken: firebaseIdToken,
-      token: token,
-      platform: platform,
-    ));
+    registrations.add(
+      _RegisteredFcmToken(
+        firebaseIdToken: firebaseIdToken,
+        token: token,
+        platform: platform,
+      ),
+    );
     if (registerError case final error?) {
       throw error;
     }
@@ -323,48 +330,77 @@ void main() {
   );
 
   test(
-    'logout unregisters the current FCM token before deleteToken and local '
-    'sign-out',
-    () async {
-      final harness = _Harness(fcmToken: 'fcm-token-logout');
-      addTearDown(harness.dispose);
-      await harness.settle();
-      await harness.signIn();
-      harness.log.clear();
+      'logout unregisters the current FCM token before deleteToken and local '
+      'sign-out', () async {
+    final harness = _Harness(fcmToken: 'fcm-token-logout');
+    addTearDown(harness.dispose);
+    await harness.settle();
+    await harness.signIn();
+    harness.log.clear();
 
-      await harness.controller.logout();
+    await harness.controller.logout();
 
-      final unregisterIndex = harness.log.indexOf(
-        'unregisterFcmToken:id-token-1|fcm-token-logout',
-      );
-      final deleteTokenIndex = harness.log.indexOf('deleteToken');
-      final signOutIndex = harness.log.indexOf('signOut');
-      expect(unregisterIndex, isNonNegative);
-      expect(deleteTokenIndex, greaterThan(unregisterIndex));
-      expect(signOutIndex, greaterThan(deleteTokenIndex));
-      expect(harness.controller.state.status, AuthStatus.unauthenticated);
-      expect(harness.controller.state.sessionId, isNull);
-      expect(harness.storage.values, isNot(contains('halaqaty_session_id')));
-    },
-  );
+    final unregisterIndex = harness.log.indexOf(
+      'unregisterFcmToken:id-token-1|fcm-token-logout',
+    );
+    final deleteTokenIndex = harness.log.indexOf('deleteToken');
+    final signOutIndex = harness.log.indexOf('signOut');
+    expect(unregisterIndex, isNonNegative);
+    expect(deleteTokenIndex, greaterThan(unregisterIndex));
+    expect(signOutIndex, greaterThan(deleteTokenIndex));
+    expect(harness.controller.state.status, AuthStatus.unauthenticated);
+    expect(harness.controller.state.sessionId, isNull);
+    expect(harness.storage.values, isNot(contains('halaqaty_session_id')));
+  });
+
+  test('draft cleanup failure still clears the local session', () async {
+    final harness = _Harness();
+    addTearDown(harness.dispose);
+    await harness.settle();
+    await harness.signIn();
+    harness.storage.failDraftDelete = true;
+    await expectLater(harness.controller.logout(), throwsStateError);
+    expect(harness.controller.state.status, AuthStatus.unauthenticated);
+    expect(harness.storage.values, isNot(contains('halaqaty_session_id')));
+    expect(harness.log, contains('signOut'));
+  });
 
   test(
-    'logout backend failure still clears the local session',
+    'logout clears the pending chat drafts of the signed-in account',
     () async {
-      final harness = _Harness(fcmToken: 'fcm-token-logout');
+      final harness = _Harness();
       addTearDown(harness.dispose);
       await harness.settle();
       await harness.signIn();
-      harness.api.unregisterError = _backendError(statusCode: 500);
+      final drafts = PendingMessageStore(harness.storage, userId: 'user-1');
+      await drafts.save(
+        const PendingMessageEnvelope(
+          idempotencyKey: 'draft',
+          circleId: 'circle',
+          content: 'draft',
+        ),
+      );
 
       await harness.controller.logout();
 
-      expect(harness.controller.state.status, AuthStatus.unauthenticated);
-      expect(harness.controller.state.sessionId, isNull);
-      expect(harness.log, contains('signOut'));
-      expect(harness.storage.values, isNot(contains('halaqaty_session_id')));
+      expect(await drafts.loadAll(), isEmpty);
     },
   );
+
+  test('logout backend failure still clears the local session', () async {
+    final harness = _Harness(fcmToken: 'fcm-token-logout');
+    addTearDown(harness.dispose);
+    await harness.settle();
+    await harness.signIn();
+    harness.api.unregisterError = _backendError(statusCode: 500);
+
+    await harness.controller.logout();
+
+    expect(harness.controller.state.status, AuthStatus.unauthenticated);
+    expect(harness.controller.state.sessionId, isNull);
+    expect(harness.log, contains('signOut'));
+    expect(harness.storage.values, isNot(contains('halaqaty_session_id')));
+  });
 
   test(
     'account switch re-registers the device under the new identity token',

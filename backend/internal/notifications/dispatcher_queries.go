@@ -35,10 +35,10 @@ WITH due AS (
     SET next_attempt_at = $3
     FROM due
     WHERE n.id = due.id
-    RETURNING n.id, n.user_id, n.type, n.source_ref_type, n.source_ref_id,
-              n.title, n.body, n.push_expires_at, n.preference_override
+    RETURNING n.id, n.user_id, n.type, n.source_event_id, n.source_ref_type,
+              n.source_ref_id, n.title, n.body, n.push_expires_at, n.preference_override
 )
-SELECT id, user_id, type, source_ref_type, source_ref_id, title, body,
+SELECT id, user_id, type, source_event_id, source_ref_type, source_ref_id, title, body,
        push_expires_at, preference_override
 FROM leased
 ORDER BY id

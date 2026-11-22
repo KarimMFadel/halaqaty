@@ -217,6 +217,75 @@ func TestCreateIsIdempotentAndJoinsSourceTransaction(t *testing.T) {
 	}
 }
 
+func TestCreateHoldsOnlyWhenNoDeviceTokenExists(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withTokenUser := createNotificationTestUser(t, ctx, pool)
+	withoutTokenUser := createNotificationTestUser(t, ctx, pool)
+	t.Cleanup(func() {
+		if _, err := pool.Exec(context.Background(), "DELETE FROM users WHERE id = $1", withTokenUser); err != nil {
+			t.Errorf("delete creation-gate integration user: %v", err)
+		}
+		if _, err := pool.Exec(context.Background(), "DELETE FROM users WHERE id = $1", withoutTokenUser); err != nil {
+			t.Errorf("delete creation-gate integration user: %v", err)
+		}
+		pool.Close()
+	})
+	if _, err := pool.Exec(ctx, `
+INSERT INTO device_tokens (user_id, token, platform) VALUES ($1, 'f008-existing-registration', 'android')`,
+		withTokenUser); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := notifications.NewRepository(pool)
+	newIntent := func(recipient uuid.UUID, sourceEventID string) notifications.CreateInput {
+		return notifications.CreateInput{
+			RecipientID:   recipient,
+			Type:          notifications.EventGroupMessage,
+			SourceEventID: sourceEventID,
+			SourceRef: notifications.SourceRef{
+				Type: notifications.SourceMessage,
+				ID:   uuid.New(),
+			},
+			Title:         "New message",
+			Body:          "Open the app to view it",
+			PushExpiresAt: time.Now().Add(24 * time.Hour),
+		}
+	}
+	if _, inserted, err := repo.Create(ctx, newIntent(withTokenUser, "existing-token-intent")); err != nil || !inserted {
+		t.Fatalf("create with registered token = %t, err %v", inserted, err)
+	}
+	if _, inserted, err := repo.Create(ctx, newIntent(withoutTokenUser, "no-token-intent")); err != nil || !inserted {
+		t.Fatalf("create without registered token = %t, err %v", inserted, err)
+	}
+
+	var withTokenState string
+	if err := pool.QueryRow(ctx, `
+SELECT delivery_state FROM notifications WHERE user_id = $1 AND source_event_id = 'existing-token-intent'`,
+		withTokenUser).Scan(&withTokenState); err != nil {
+		t.Fatal(err)
+	}
+	if withTokenState != "pending_attempt" {
+		t.Fatalf("state with registered token = %q, want pending_attempt (only the no-token case holds for registration)", withTokenState)
+	}
+	var withoutTokenState string
+	if err := pool.QueryRow(ctx, `
+SELECT delivery_state FROM notifications WHERE user_id = $1 AND source_event_id = 'no-token-intent'`,
+		withoutTokenUser).Scan(&withoutTokenState); err != nil {
+		t.Fatal(err)
+	}
+	if withoutTokenState != "pending_no_device" {
+		t.Fatalf("state without registered token = %q, want pending_no_device", withoutTokenState)
+	}
+}
+
 func createNotificationTestUser(t *testing.T, ctx context.Context, pool *pgxpool.Pool) uuid.UUID {
 	t.Helper()
 	userID := uuid.New()

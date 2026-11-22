@@ -9,6 +9,7 @@ import 'package:halaqaty_mobile/features/circles/presentation/circle_detail_scre
 import 'package:halaqaty_mobile/features/circles/presentation/circle_join_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_name_text.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_load_error.dart';
+import 'package:halaqaty_mobile/features/notifications/presentation/notification_bell.dart';
 import 'package:halaqaty_mobile/features/scheduling/application/calendar_controller.dart';
 import 'package:halaqaty_mobile/features/scheduling/data/calendar_api_client.dart';
 
@@ -75,10 +76,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            Text(isRtl ? 'حِلْقَتي' : 'Halaqaty'),
+            // Tight app bars (320dp + 200% text scale, three actions) can
+            // shrink the middle slot below the text's natural width; scale
+            // the wordmark down instead of overflowing.
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(isRtl ? 'حِلْقَتي' : 'Halaqaty'),
+              ),
+            ),
           ],
         ),
         actions: [
+          const NotificationBell(),
           IconButton(
             tooltip: isRtl ? 'التقويم' : 'Calendar',
             onPressed: () => context.push('/calendar'),

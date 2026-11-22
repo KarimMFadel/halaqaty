@@ -535,6 +535,185 @@ func TestDispatchSendTimeoutSchedulesTransientRetry(t *testing.T) {
 	}
 }
 
+// recheckSeam records every invocation and can fail on demand, so tests can
+// exercise the F-006 dispatch-time eligibility recheck wiring.
+type recheckSeam struct {
+	calls     []notifications.DispatchIntent
+	resultErr error
+	eligible  bool
+}
+
+func (s *recheckSeam) recheck(_ context.Context, intent notifications.DispatchIntent) (bool, error) {
+	s.calls = append(s.calls, intent)
+	if s.resultErr != nil {
+		return false, s.resultErr
+	}
+	return s.eligible, nil
+}
+
+// The F-006 eligibility recheck runs immediately before the first-attempt
+// gates: an ineligible stale reminder is suppressed terminally with the
+// expired state, no push is sent, and history/unread stay untouched.
+func TestDispatchReminderRecheckSuppressesIneligibleSource(t *testing.T) {
+	intent := testIntent()
+	intent.Type = notifications.EventSessionReminder
+	intent.SourceEventID = "session.reminder:1b290a97-8f20-4376-a0e2-d7ca4f05b29a:2026-10-24:1:60"
+	store := &fakeDispatchStore{
+		intents:   []notifications.DispatchIntent{intent},
+		claimable: true,
+		gatesErr:  errors.New("gates must not load after a recheck suppression"),
+	}
+	sender := &fakePushSender{}
+	seam := &recheckSeam{eligible: false}
+	metrics := &notifications.NotificationMetrics{}
+	d := newTestDispatcher(store, sender, &fakeTokenRemover{}, metrics, time.Now())
+	d.EligibilityRecheck = seam.recheck
+
+	if err := d.DispatchDue(context.Background(), 10); err != nil {
+		t.Fatal(err)
+	}
+	if len(seam.calls) != 1 || seam.calls[0].SourceEventID != intent.SourceEventID {
+		t.Fatalf("recheck calls=%v, want exactly the reminder intent", seam.calls)
+	}
+	if len(store.suppressed) != 1 || store.suppressed[0] != notifications.DeliveryExpired {
+		t.Fatalf("suppressed=%v, want one terminal DeliveryExpired suppression", store.suppressed)
+	}
+	if len(sender.sent) != 0 {
+		t.Fatalf("sender called %d times for an ineligible stale reminder", len(sender.sent))
+	}
+	if got := metrics.Summary().Outcomes[notifications.DispatchExpired]; got != 1 {
+		t.Fatalf("expired metric=%d, want 1", got)
+	}
+}
+
+// The recheck seam applies on every claimed reminder lease, not just the
+// first attempt: a cancellation between two bounded backoff attempts still
+// suppresses the occurrence before its next stale send.
+func TestDispatchReminderRecheckRunsOnRetryClaims(t *testing.T) {
+	intent := testIntent()
+	intent.Type = notifications.EventSessionReminder
+	intent.SourceEventID = "session.reminder:1b290a97-8f20-4376-a0e2-d7ca4f05b29a:2026-10-24:1:60"
+	store := &fakeDispatchStore{
+		intents:   []notifications.DispatchIntent{intent},
+		claimable: true,
+		gates: notifications.DispatchGates{
+			PreferenceEnabled: true,
+			QuietHours:        notifications.QuietHours{Enabled: false, StartLocal: "22:00", EndLocal: "07:00", Timezone: "UTC"},
+		},
+	}
+	sender := &fakePushSender{}
+	store.targets = []notifications.DeviceTarget{{DeviceTokenID: uuid.New(), Token: "raw-token"}}
+	store.settleState = notifications.DeliveryPendingNoDevice
+	// Already one pending attempt: the claim must still recheck eligibility.
+	store.hasAttempts = true
+	seam := &recheckSeam{eligible: false}
+	d := newTestDispatcher(store, sender, &fakeTokenRemover{}, &notifications.NotificationMetrics{}, time.Now())
+	d.EligibilityRecheck = seam.recheck
+
+	if err := d.DispatchDue(context.Background(), 10); err != nil {
+		t.Fatal(err)
+	}
+	if len(seam.calls) != 1 {
+		t.Fatalf("recheck calls=%d, want 1 on a retry claim", len(seam.calls))
+	}
+	if len(sender.sent) != 0 || len(store.suppressed) != 1 || store.suppressed[0] != notifications.DeliveryExpired {
+		t.Fatalf("sent=%d suppressed=%v, want a terminal expiry suppression on the retry claim", len(sender.sent), store.suppressed)
+	}
+}
+
+// A recheck seam failure is transient: the next cycle retries and the intent
+// must not be terminally suppressed.
+func TestDispatchReminderRecheckErrorRetriesNextCycle(t *testing.T) {
+	intent := testIntent()
+	intent.Type = notifications.EventSessionReminder
+	store := &fakeDispatchStore{
+		intents:   []notifications.DispatchIntent{intent},
+		claimable: true,
+		gates: notifications.DispatchGates{
+			PreferenceEnabled: true,
+			QuietHours:        notifications.QuietHours{Enabled: false, StartLocal: "22:00", EndLocal: "07:00", Timezone: "UTC"},
+		},
+	}
+	sender := &fakePushSender{}
+	tokenID := uuid.New()
+	store.targets = []notifications.DeviceTarget{{DeviceTokenID: tokenID, Token: "raw-token"}}
+	store.settleState = notifications.DeliveryAccepted
+	seam := &recheckSeam{resultErr: errors.New("scheduling load failed")}
+	d := newTestDispatcher(store, sender, &fakeTokenRemover{}, &notifications.NotificationMetrics{}, time.Now())
+	d.EligibilityRecheck = seam.recheck
+
+	if err := d.DispatchDue(context.Background(), 10); err == nil {
+		t.Fatal("recheck error must be returned")
+	}
+	if len(store.suppressed) != 0 || len(sender.sent) != 0 {
+		t.Fatalf("suppressed=%v sent=%v, want a transient rejection with no side effects", store.suppressed, sender.sent)
+	}
+	// Next cycle: the seam recovers and the occurrence dispatches.
+	seam.resultErr = nil
+	seam.eligible = true
+	if err := d.DispatchDue(context.Background(), 10); err != nil {
+		t.Fatal(err)
+	}
+	if len(sender.sent) != 1 {
+		t.Fatalf("sent=%d, want the retry cycle to deliver", len(sender.sent))
+	}
+	if len(store.suppressed) != 0 {
+		t.Fatalf("suppressed=%v, want no terminal suppression after recovery", store.suppressed)
+	}
+}
+
+// The recheck seam applies to session reminders only (and not at all while
+// unset), so every other type keeps its previous dispatch behavior.
+func TestDispatchRecheckAppliesOnlyToSessionReminders(t *testing.T) {
+	intent := testIntent() // group message
+	store := &fakeDispatchStore{
+		intents:   []notifications.DispatchIntent{intent},
+		claimable: true,
+		gates: notifications.DispatchGates{
+			PreferenceEnabled: true,
+			QuietHours:        notifications.QuietHours{Enabled: false, StartLocal: "22:00", EndLocal: "07:00", Timezone: "UTC"},
+		},
+	}
+	sender := &fakePushSender{}
+	tokenID := uuid.New()
+	store.targets = []notifications.DeviceTarget{{DeviceTokenID: tokenID, Token: "raw-token"}}
+	store.settleState = notifications.DeliveryAccepted
+	seam := &recheckSeam{eligible: false}
+	d := newTestDispatcher(store, sender, &fakeTokenRemover{}, &notifications.NotificationMetrics{}, time.Now())
+	d.EligibilityRecheck = seam.recheck
+
+	if err := d.DispatchDue(context.Background(), 10); err != nil {
+		t.Fatal(err)
+	}
+	if len(seam.calls) != 0 {
+		t.Fatalf("non-reminder intents must not reach the recheck seam: %v", seam.calls)
+	}
+	if len(sender.sent) != 1 {
+		t.Fatalf("sent=%d, want the group message dispatched unchanged", len(sender.sent))
+	}
+
+	// Nil seam: a session reminder still dispatches through the plain gates.
+	reminderIntent := testIntent()
+	reminderIntent.Type = notifications.EventSessionReminder
+	store2 := &fakeDispatchStore{
+		intents:   []notifications.DispatchIntent{reminderIntent},
+		claimable: true,
+		gates: notifications.DispatchGates{
+			PreferenceEnabled: true,
+			QuietHours:        notifications.QuietHours{Enabled: false, StartLocal: "22:00", EndLocal: "07:00", Timezone: "UTC"},
+		},
+		targets:     []notifications.DeviceTarget{{DeviceTokenID: uuid.New(), Token: "raw-token"}},
+		settleState: notifications.DeliveryAccepted,
+	}
+	d2 := newTestDispatcher(store2, sender, &fakeTokenRemover{}, &notifications.NotificationMetrics{}, time.Now())
+	if err := d2.DispatchDue(context.Background(), 10); err != nil {
+		t.Fatal(err)
+	}
+	if len(sender.sent) != 2 {
+		t.Fatalf("sent=%d, want the nil-seam reminder delivered", len(sender.sent))
+	}
+}
+
 func TestDispatchDueContinuesAfterOneIntentFails(t *testing.T) {
 	first := testIntent()
 	second := testIntent()

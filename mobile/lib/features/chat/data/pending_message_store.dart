@@ -41,18 +41,29 @@ class PendingMessageEnvelope {
       );
 }
 
-/// Encrypted-at-rest pending message storage. The index makes restart reload
-/// bounded and avoids relying on platform key enumeration.
+/// Encrypted-at-rest pending message storage, namespaced per account so a
+/// draft written by one user is never restored or sent under another user
+/// sharing the device. The index makes restart reload bounded and avoids
+/// relying on platform key enumeration.
 class PendingMessageStore {
-  PendingMessageStore(this._storage);
+  PendingMessageStore(this._storage, {required String userId})
+      : _indexKey = 'halaqaty.chat.pending.$userId.index',
+        _prefix = 'halaqaty.chat.pending.$userId.' {
+    _queue = (_queues[_storage] ??= {}).putIfAbsent(_indexKey, _DraftQueue.new);
+    _generation = _queue.generation;
+  }
 
-  static const _indexKey = 'halaqaty.chat.pending.index';
-  static const _prefix = 'halaqaty.chat.pending.';
+  static final _queues = Expando<Map<String, _DraftQueue>>();
+  final String _indexKey;
+  final String _prefix;
   final FlutterSecureStorage _storage;
-  Future<void> _mutation = Future<void>.value();
+  late final _DraftQueue _queue;
+  late final int _generation;
 
   Future<List<PendingMessageEnvelope>> loadAll() async {
-    final keys = (await _storage.read(key: _indexKey))
+    final keys = (await _storage.read(
+          key: _indexKey,
+        ))
             ?.split('\n')
             .where((key) => key.isNotEmpty)
             .toList() ??
@@ -62,8 +73,11 @@ class PendingMessageStore {
       final raw = await _storage.read(key: '$_prefix$id');
       if (raw == null) continue;
       try {
-        result.add(PendingMessageEnvelope.fromJson(
-            jsonDecode(raw) as Map<String, dynamic>));
+        result.add(
+          PendingMessageEnvelope.fromJson(
+            jsonDecode(raw) as Map<String, dynamic>,
+          ),
+        );
       } on Object {
         // Corrupt local entries are discarded during reconciliation.
         await _storage.delete(key: '$_prefix$id');
@@ -94,14 +108,30 @@ class PendingMessageStore {
     final raw = await _storage.read(key: '$_prefix$idempotencyKey');
     if (raw == null) return;
     final current = PendingMessageEnvelope.fromJson(
-        jsonDecode(raw) as Map<String, dynamic>);
-    await _save(PendingMessageEnvelope(
-      idempotencyKey: current.idempotencyKey,
-      circleId: current.circleId,
-      content: content,
-      attachmentPaths: current.attachmentPaths,
-      updatedAt: DateTime.now().toUtc(),
-    ));
+      jsonDecode(raw) as Map<String, dynamic>,
+    );
+    await _save(
+      PendingMessageEnvelope(
+        idempotencyKey: current.idempotencyKey,
+        circleId: current.circleId,
+        content: content,
+        attachmentPaths: current.attachmentPaths,
+        updatedAt: DateTime.now().toUtc(),
+      ),
+    );
+  }
+
+  /// Removes every durable draft owned by this account, e.g. on logout.
+  Future<void> clear() {
+    _queue.generation++;
+    return _serialize(_clear, allowStale: true);
+  }
+
+  Future<void> _clear() async {
+    for (final id in await _ids()) {
+      await _storage.delete(key: '$_prefix$id');
+    }
+    await _storage.delete(key: _indexKey);
   }
 
   Future<void> discard(String idempotencyKey) =>
@@ -115,7 +145,9 @@ class PendingMessageStore {
   }
 
   Future<List<String>> _ids() async =>
-      (await _storage.read(key: _indexKey))
+      (await _storage.read(
+        key: _indexKey,
+      ))
           ?.split('\n')
           .where((key) => key.isNotEmpty)
           .toList() ??
@@ -124,9 +156,19 @@ class PendingMessageStore {
   Future<void> _writeIds(List<String> ids) =>
       _storage.write(key: _indexKey, value: ids.join('\n'));
 
-  Future<void> _serialize(Future<void> Function() operation) {
-    final result = _mutation.then((_) => operation());
-    _mutation = result.catchError((Object _) {});
+  Future<void> _serialize(
+    Future<void> Function() operation, {
+    bool allowStale = false,
+  }) {
+    final result = _queue.mutation.then((_) async {
+      if (allowStale || _generation == _queue.generation) await operation();
+    });
+    _queue.mutation = result.catchError((Object _) {});
     return result;
   }
+}
+
+class _DraftQueue {
+  Future<void> mutation = Future<void>.value();
+  int generation = 0;
 }

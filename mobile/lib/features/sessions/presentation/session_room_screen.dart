@@ -7,6 +7,7 @@ import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/chat_ui_labels.dart';
 import 'package:halaqaty_mobile/features/chat/presentation/group_chat_screen.dart';
 import 'package:halaqaty_mobile/features/attendance/presentation/attendance_screen.dart';
+import 'package:halaqaty_mobile/features/notifications/application/notification_permission_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/application/queue_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/application/session_room_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/data/queue_api_client.dart';
@@ -31,6 +32,20 @@ class SessionRoomScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(sessionRoomControllerProvider(sessionId));
+    // F-008 T026: an ended room (teacher end or `session.ended` event) feeds
+    // the gentle denied-permission prompt path (FR-017). The permission
+    // controller deduplicates: it prompts on denial only, once per install.
+    ref.listen<bool>(
+      sessionRoomControllerProvider(sessionId)
+          .select((roomState) => roomState.status == SessionRoomStatus.ended),
+      (_, ended) {
+        if (ended) {
+          ref
+              .read(notificationPermissionControllerProvider.notifier)
+              .onFirstSessionEnded();
+        }
+      },
+    );
     final displayState =
         isEnded ? state.copyWith(status: SessionRoomStatus.ended) : state;
     final controller =

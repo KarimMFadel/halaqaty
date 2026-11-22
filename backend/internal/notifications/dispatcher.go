@@ -76,6 +76,7 @@ type DispatchIntent struct {
 	ID                 uuid.UUID
 	UserID             uuid.UUID
 	Type               EventType
+	SourceEventID      string
 	SourceRef          SourceRef
 	Title              string
 	Body               string
@@ -161,6 +162,16 @@ type Dispatcher struct {
 	metrics *NotificationMetrics
 	now     func() time.Time
 	jitter  func(time.Duration) time.Duration
+
+	// EligibilityRecheck is an optional volatile-source gate: when claimed,
+	// session reminders are rechecked against their source feature on every
+	// attempt before the gates are evaluated (ADR-027 §3), so a cancellation
+	// or supersession arriving between backoff attempts still suppresses the
+	// occurrence. Returning false suppresses the intent terminally with
+	// DeliveryExpired; an error leaves the intent for a later retry while
+	// remaining intents continue. All other types dispatch unchanged while the
+	// seam is nil or set.
+	EligibilityRecheck func(ctx context.Context, intent DispatchIntent) (bool, error)
 }
 
 // NewDispatcher constructs a dispatcher. now and jitter are injected to keep
@@ -229,16 +240,31 @@ func (d *Dispatcher) Run(ctx context.Context, limit int, interval time.Duration)
 	}
 }
 
-// dispatchIntent applies the first-attempt gates, sends to due devices, and
-// settles the aggregate state from per-device outcomes.
+// dispatchIntent applies the source-eligibility and first-attempt gates,
+// sends to due devices, and settles the aggregate state from per-device
+// outcomes.
 func (d *Dispatcher) dispatchIntent(ctx context.Context, intent DispatchIntent) error {
 	hasAttempts, err := d.store.HasDeviceAttempts(ctx, intent.ID)
 	if err != nil {
 		return fmt.Errorf("check notification device attempts: %w", err)
 	}
+	// Volatile source eligibility (F-006 reminder staleness) is rechecked on
+	// every claimed attempt before gates are evaluated, so a cancellation or
+	// supersession arriving between backoff attempts still suppresses the
+	// occurrence before its next stale send. Suppression is terminal and is
+	// never replayed by later changes.
+	if d.EligibilityRecheck != nil && intent.Type == EventSessionReminder {
+		eligible, err := d.EligibilityRecheck(ctx, intent)
+		if err != nil {
+			return fmt.Errorf("recheck reminder source eligibility: %w", err)
+		}
+		if !eligible {
+			return d.suppress(ctx, intent, DeliveryExpired)
+		}
+	}
 	if !hasAttempts {
-		// First push attempt for this occurrence: evaluate the current gates.
-		// Suppression is terminal and is never replayed by later changes.
+		// First push attempt for this occurrence: current gates are evaluated
+		// here; retries consumed their preference and quiet-hours verdicts.
 		gates, err := d.store.LoadDispatchGates(ctx, intent.UserID, intent.Type)
 		if err != nil {
 			return fmt.Errorf("load dispatch gates: %w", err)
@@ -280,10 +306,14 @@ func (d *Dispatcher) suppress(ctx context.Context, intent DispatchIntent, state 
 	if !suppressed {
 		return nil
 	}
-	if state == DeliverySuppressedPreference {
+	switch state {
+	case DeliverySuppressedPreference:
 		d.metrics.RecordDispatch(DispatchSuppressedPreference)
-	} else {
+	case DeliverySuppressedQuietHours:
 		d.metrics.RecordDispatch(DispatchSuppressedQuietHours)
+	default:
+		// DeliveryExpired from the source-eligibility recheck.
+		d.metrics.RecordDispatch(DispatchExpired)
 	}
 	return nil
 }

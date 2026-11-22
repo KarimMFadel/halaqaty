@@ -325,6 +325,11 @@ func main() {
 		nil,
 		nil,
 	)
+	// F-006 reminder staleness gate (ADR-027 §3): session reminders recheck
+	// their source eligibility immediately before the first send attempt; a
+	// stale reminder is suppressed with DeliveryExpired while its history row
+	// stays retained and unread.
+	notificationDispatcher.EligibilityRecheck = scheduling.ReminderEligibilityRecheck(scheduleRepo)
 	notificationCleaner := notifications.NewCleaner(notificationRepo, notificationMetrics)
 	// The REST handler serves history/read-state; the notifier publishes
 	// best-effort unread-count hints over the user-targeted hub seam while
@@ -449,6 +454,13 @@ func main() {
 		if err := notificationDispatcher.Run(reconcilerCtx, notifications.DefaultDispatchLimit, notifications.DefaultDispatchInterval); err != nil && !errors.Is(err, context.Canceled) {
 			logger.Error("notification dispatch stopped", "error", err)
 		}
+	}()
+	// Reminder scanner lifecycle: enqueues F-006 session reminders into the
+	// notification store every scan interval so the dispatcher above delivers
+	// them; shares reconcilerCtx for clean shutdown.
+	go func() {
+		reminderScanner := scheduling.NewReminderScanner(scheduleRepo, nil)
+		reminderScanner.Run(reconcilerCtx, scheduling.DefaultReminderScanInterval)
 	}()
 	go func() {
 		if err := notificationCleaner.Run(reconcilerCtx, notifications.DefaultCleanupLimit, notifications.DefaultCleanupInterval); err != nil && !errors.Is(err, context.Canceled) {

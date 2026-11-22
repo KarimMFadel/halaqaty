@@ -39,7 +39,7 @@ void main() {
 
     test('initial access denial does not restore a durable pending draft',
         () async {
-      final store = PendingMessageStore(_MemoryStorage());
+      final store = PendingMessageStore(_MemoryStorage(), userId: _memberId);
       await store.save(const PendingMessageEnvelope(
         idempotencyKey: 'retained-draft',
         circleId: _circleId,

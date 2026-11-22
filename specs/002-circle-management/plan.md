@@ -101,3 +101,41 @@ Extend the existing Feature 001 circle foundation into a complete Circle Managem
 ## Post-design constitution check
 
 **CONDITIONAL PASS.** The technical design follows the constitution and harness. Implementation is gated on canonical product/ADR/OpenAPI alignment for retirement, public discovery, and invite refresh.
+
+## 2026-11-22 security remediation — teacher consent
+
+This additive section supersedes only earlier statements permitting direct teacher
+assignment or immediate promotion without acceptance. Historical delivery phases
+and completed tasks remain evidence of the original implementation.
+
+The creator initially accepts teacher responsibility through circle creation.
+An active teacher or supervisor may invite a named registered recipient as teacher
+or student; an active student may invite a student only. Acceptance creates the
+membership or promotes the recipient to teacher. Pending invitations never grant
+teacher access, and a recipient who is already a member keeps the existing role.
+Once another teacher accepts, an authorized other manager may make the creator a
+supervisor; self-role changes and removal of the final teacher remain prohibited.
+
+Named invitations have no expiry. A new pending invitation replaces the prior
+pending invitation for the same circle and recipient; an active teacher or
+supervisor may revoke it. A recipient can accept only their own pending invitation,
+once. Create/replace, revoke and accept must serialize on the relevant circle and
+invitation; acceptance rechecks circle archive state, inviter's present authority
+for the bound role, recipient membership and capacity limits, and final-teacher
+invariants in the same transaction. Role is immutable per invitation. Failure or
+replay must not create partial membership or notifications.
+
+Before implementation, amend ADR-010 and architecture for durable invitation
+persistence and a paired migration, including pending uniqueness and concurrency
+constraints; define request/response and error shapes in canonical and feature
+OpenAPI via this Spec-Kit workflow. Design the minimal authenticated send, list,
+accept and revoke operations and corresponding mobile flows with accessible RTL
+states. Connect the already-approved F-008 invitation notification handoff to the
+committed send transition without claiming notification delivery. Preserve
+historical completed tasks; remediation has distinct new tasks below in `tasks.md`.
+
+Required verification: fresh and upgrade/rollback migration, authorization,
+recipient isolation, replacement/revocation/acceptance races, idempotency or
+contract-defined replay errors, no teacherless active circle, creator handoff,
+contract and Flutter journey tests. Run full applicable repository gates and
+Karim's manual RBAC/security review before merge.

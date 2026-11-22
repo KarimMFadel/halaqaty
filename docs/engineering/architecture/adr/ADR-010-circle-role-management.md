@@ -18,11 +18,12 @@ implemented and must be designed in the reopened F-002 plan.
 
 1. Roles remain scoped exclusively to `circle_members`; no self-registration action
    creates a circle role.
-2. The creator defaults to `teacher` when no other person has accepted teacher
-   responsibility. The creator may instead be a supervisor (organizer) when another
-   named person has accepted it. Every active circle must retain at least one accepted
-   teacher; a pending invitation does not satisfy this requirement. Additional teachers
-   are optional and have the ordinary `teacher` role.
+2. The creator initially accepts `teacher` responsibility by creating the circle.
+   After another named person accepts a teacher invitation, an authorized other
+   manager may change the creator to supervisor (organizer); self-role changes remain
+   prohibited. Every active circle must retain at least one accepted teacher; a pending
+   invitation does not satisfy this requirement. Additional teachers are optional and
+   have the ordinary `teacher` role.
 3. Supervisors and backups are optional and use ordinary `supervisor` or `teacher`
    roles; no separate primary or backup permission role is introduced.
 4. Assigning another person as `teacher`, including promoting an existing member,
@@ -40,11 +41,36 @@ implemented and must be designed in the reopened F-002 plan.
    `supervisor`. Assigning `teacher` requires invitation acceptance. A manager cannot
    change their own role, and a change that would leave the circle without a teacher is
    rejected.
+7. Named invitations have no expiry. An active teacher or supervisor may revoke a
+   pending invitation; a new invitation to the same recipient in the same circle
+   replaces the prior pending invitation. Each invitation has an immutable role and
+   is accepted at most once by its named recipient. Acceptance atomically rechecks
+   archive state, current authority, capacity and membership eligibility.
+
+### Invitation persistence
+
+Add `circle_invitations` in a new paired migration. Each row has UUID `id`,
+`circle_id`, `inviter_user_id`, `recipient_user_id`, immutable `role` (`teacher`
+or `student`), `state` (`pending`, `accepted`, `revoked`, or `superseded`),
+`created_at`, and nullable `resolved_at`. Foreign keys reference existing circles
+and users; a partial unique index on `(circle_id, recipient_user_id)` where state
+is `pending` enforces at most one outstanding invitation. State and resolved time
+must agree. No expiration column or new global role is introduced.
+
+All send/replace, revoke, and acceptance operations serialize with circle
+membership mutations. Replacement changes the prior pending row to superseded
+before inserting the new row in the same transaction; notification intent creation
+shares that transaction. Acceptance locks the invitation, verifies the named
+recipient and pending state, rechecks the inviter's current authority, circle and
+membership eligibility, and writes the membership or promotion and accepted state
+atomically. A stale, revoked, superseded or already accepted invitation grants no
+new access. Archives and removals cannot race past these checks.
 
 ## Consequences
 
-- The creator defaults to teacher unless another named person accepts responsibility;
-  every active circle must retain at least one accepted teacher.
+- The creator is initially teacher and can become supervisor after another named
+  teacher accepts responsibility and an authorized other manager changes that role.
+  Every active circle must retain at least one accepted teacher.
 - Additional teachers are optional and accept before the role takes effect. Managers
   can add or replace teachers later, but cannot demote/remove the final teacher.
 - Teachers and supervisors can invite teachers or students; students can extend a
@@ -75,6 +101,7 @@ implemented and must be designed in the reopened F-002 plan.
 |---|---|---|---|
 | 2026-09-03 | F-004 Real-time Chat specification kickoff | Retained invite-code/link generation and sharing, and extended acceptance with circle-scoped, role-bound invitations: teachers and supervisors may invite teachers or students, while students may invite students only. | Karim |
 | 2026-11-22 | F-002 teacher-consent clarification | Creator defaults to teacher absent another accepted teacher; the creator may instead be supervisor (organizer) when a named person accepts responsibility. Every active circle retains an accepted teacher. Assignment and promotion require acceptance; additional teachers and supervisors are optional ordinary roles. | Karim |
+| 2026-11-22 | Named invitation lifecycle | No expiry; active teachers or supervisors may revoke pending invitations, and a new invitation to the same circle and recipient replaces the previous pending invitation. Acceptance is single-use and rechecks eligibility. | Karim |
 
 ## References
 

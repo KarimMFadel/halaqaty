@@ -1,5 +1,20 @@
 # Tasks: Circle Management
 
+## 2026-11-22 Teacher-consent security remediation
+
+These new tasks are separate from the completed historical F-002 tasks below.
+The current implementation still permits direct teacher assignment; none of
+these remediation tasks is complete until its deliverables and verification exist.
+
+- [ ] T079 [US0] Amend ADR-010 and `docs/engineering/architecture/ARCHITECTURE.md` with the durable named-invitation schema, lifecycle and transaction constraints; align feature and canonical OpenAPI through the Spec-Kit workflow.
+- [ ] T080 [US0] Add paired migration and integration tests for pending uniqueness, replacement, rollback and existing-data preservation.
+- [ ] T081 [US1] Remove direct teacher assignment at creation; create the creator as teacher and test compatibility/error behavior.
+- [ ] T082 [US4] Implement recipient-bound send, pending list, replacement, manager revocation and single-use acceptance with atomic authority, archive, capacity and membership rechecks; cover authorization and concurrency races.
+- [ ] T083 [US4] Require accepted invitation for promotion to teacher; preserve self-change and final-teacher safeguards and test creator handoff by another manager.
+- [ ] T084 [US4] Connect the approved F-008 invitation notification handoff at the committed send transition, preserving rollback and replacement semantics.
+- [ ] T085 [US1] Implement accessible Arabic-first and RTL-aware invitation, acceptance, revocation, role and creation flows with Flutter unit, widget and integration tests.
+- [ ] T086 [US0] Complete contract, fresh/upgrade/rollback migration, Go and Flutter gates, project guards, Spec-Kit cross-artifact analysis and Karim's manual RBAC/security review.
+
 **Input**: Design documents from `/specs/002-circle-management/`  
 **Prerequisites**: `spec.md`, `checklists/requirements.md`, `plan.md`, `research.md`, `data-model.md`, `contracts/circle-management.openapi.yaml`, `quickstart.md`  
 **Branch**: `002-circle-management`

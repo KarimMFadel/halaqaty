@@ -10,7 +10,7 @@
 ### Session 2026-08-07
 
 - Q: What is the circle-name limit? → A: 100 characters.
-- Q: Who may create circles and how are initial roles assigned? → A: The creator defaults to teacher when no other named person has accepted responsibility; otherwise the creator may be a supervisor (organizer). Every active circle retains at least one accepted teacher. Other users become teachers only after accepting a named, role-bound invitation; role management is per-circle and managers cannot change their own role or leave the circle without a teacher.
+- Q: Who may create circles and how are initial roles assigned? → A: The creator initially accepts teacher responsibility by creating the circle. After another named person accepts teacher responsibility, an authorized other manager may change the creator to supervisor (organizer). Every active circle retains at least one accepted teacher. Other users become teachers only after accepting a named, role-bound invitation; role management is per-circle and managers cannot change their own role or leave the circle without a teacher.
 - Q: Should public circles also support invite links? → A: Yes. Public circles are discoverable and joinable through the public flow, and every circle also has an invite link. Private circles are invite-only.
 - Q: Which circle-name and capacity baseline applies? → A: Use the F-002 and architecture baseline: name max 100 characters, default capacity 50, maximum capacity 200.
 - Q: Should circles support permanent hard deletion? → A: No. Circles are retired by archiving them. Hard deletion is prohibited; circle data and history must remain available for reports and future needs.
@@ -22,7 +22,8 @@
 
 ### Session 2026-11-22
 
-- Q: How is another user assigned the teacher role, and is a backup teacher required? → A: The creator defaults to teacher if no other named person has accepted responsibility; otherwise the creator may be a supervisor (organizer). Every active circle retains at least one accepted teacher. Additional teachers are optional and require a named, role-bound invitation accepted by the recipient; acceptance may create a teacher membership or promote that recipient's existing membership. Pending invitations create no new membership or teacher permissions; existing members retain their prior roles until acceptance. There is no separate backup-teacher role. Managers may add or replace teachers later, but the final-teacher safeguard always applies. The optional backup supervisor remains a distinct role.
+- Q: How is another user assigned the teacher role, and is a backup teacher required? → A: The creator initially accepts the teacher role by creating the circle. A named recipient may accept a teacher invitation and become an additional teacher; an authorized other manager can then change the creator to supervisor. Self-role changes remain prohibited. Every active circle retains at least one accepted teacher. Additional teachers are optional; acceptance may create a teacher membership or promote an existing member. Pending invitations create no new membership or teacher permissions; existing members retain their prior roles until acceptance. There is no separate backup-teacher role.
+- Q: When do named invitations expire, and how can they be revoked or replaced? → A: They do not expire. An active teacher or supervisor may revoke a pending invitation. A new invitation for the same circle and recipient replaces the prior pending invitation. Each invitation has an immutable role and may be accepted only once by its named recipient; acceptance atomically rechecks archive state, current authority, capacity, and membership eligibility.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -38,7 +39,7 @@ As an authenticated user, I can create a Quran memorization circle with an accep
 
 1. **Given** an authenticated user and valid circle data, **When** the user creates a circle, **Then** the system creates the circle with at least one accepted teacher, generates a unique `HLQ-` invite code with 12 random symbols, and returns a shareable `halaqaty.app/join/{code}` link.
 2. **Given** no other person has accepted a teacher invitation, **When** the circle is created, **Then** the creator defaults to `teacher`.
-3. **Given** another named person has accepted teacher responsibility, **When** the circle is created, **Then** the creator may be a supervisor (organizer) and the accepted person holds the ordinary `teacher` role.
+3. **Given** another named person has accepted teacher responsibility, **When** an authorized other manager changes the creator to supervisor, **Then** the creator becomes supervisor and the accepted person remains a teacher.
 4. **Given** invalid, missing, or over-limit input, **When** the user submits creation, **Then** the request is rejected with standard field validation errors and no partial circle is created.
 5. **Given** an authenticated creator enters at least two search characters, **When** they search for initial role candidates, **Then** the system returns at most 20 matching registered users with only `id` and `display_name`.
 
@@ -133,7 +134,7 @@ As a circle teacher, I can retire a circle by archiving it so its history is pre
 
 - **FR-001**: System MUST allow an authenticated user to create a circle with a required name (maximum 100 characters), optional description (maximum 500 characters), optional rules (maximum 1000 characters), capacity, privacy, language, and a circle gender value of `male`, `female`, `mixed`, or `unspecified`, defaulting to `unspecified` when omitted.
 - **FR-002**: System MUST enforce the architecture capacity limits, including default capacity 50 and maximum capacity 200.
-- **FR-003**: System MUST create the circle and its initial role memberships atomically, defaulting the creator to `teacher` unless another named person has accepted that responsibility; in that case the creator may be a supervisor (organizer). Every active circle MUST retain at least one accepted teacher.
+- **FR-003**: System MUST create the circle and its initial role memberships atomically, with the creator initially accepting the `teacher` role. After another named person accepts teacher responsibility, an authorized other manager MAY change the creator to supervisor. Every active circle MUST retain at least one accepted teacher.
 - **FR-004**: System MUST generate a unique `HLQ-` invite code with 12 random symbols and corresponding `halaqaty.app/join/{code}` link for every circle.
 - Legacy `HLQ-` codes with four symbols remain valid until regenerated.
 - **FR-005**: System MUST allow an authorized teacher to regenerate an invite code and MUST invalidate the previous code immediately.
@@ -151,6 +152,7 @@ As a circle teacher, I can retire a circle by archiving it so its history is pre
 - **FR-017**: System MUST allow only a teacher to remove another active circle member, MUST reject self-removal and removal of the final teacher, and MUST preserve the removed member's historical circle records for reporting and audit purposes.
 - **FR-018**: System MUST provide an authenticated, rate-limited registered-user search for initial role selection, validate a trimmed 2–100-character query, limit results to 20, and return only user ID and display name.
 - **FR-019**: System MUST allow an authorized teacher or supervisor to invite a named recipient as a teacher or student, and an active student to invite a recipient only as a student. The invitation role MUST be immutable to both parties; only recipient acceptance may create the bound membership or promote an existing member to teacher. Reusable circle invite codes MUST remain student-only.
+- **FR-020**: Named invitations MUST have no expiry. An active teacher or supervisor MUST be able to revoke a pending invitation; a new invitation for the same circle and recipient MUST replace the previous pending invitation. Acceptance MUST be single-use, restricted to the named recipient, and atomically recheck archive state, current authority, capacity, and membership eligibility.
 
 ### Key Entities
 
@@ -174,7 +176,7 @@ As a circle teacher, I can retire a circle by archiving it so its history is pre
 
 - Feature 001 authentication, profile, backend sessions, and existing RBAC middleware are available and reused; this feature does not change their lifecycle.
 - Circle roles are stored only per circle in `circle_members`; no Firebase custom claims or new global roles are introduced.
-- The creator defaults to teacher unless another named person accepts responsibility. Additional teachers and supervisors are optional ordinary roles; no distinct primary or backup permission role is introduced.
+- The creator initially accepts teacher responsibility; after another named teacher accepts, an authorized other manager may change the creator to supervisor. Additional teachers and supervisors are optional ordinary roles; no distinct primary or backup permission role is introduced.
 - Public discovery and joining expose only the minimum public circle information; member details remain protected by membership authorization.
 - Circle retirement is implemented as archive/soft state only. Hard deletion is prohibited; foreign-key behavior, retention, auditability, and reporting access must preserve circle history.
 - REST is the source of truth for circle CRUD, discovery, membership, role management, invite management, and archive/retirement; hard deletion is not supported, and realtime queue/session work is deferred to later features.

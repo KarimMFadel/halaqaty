@@ -1,5 +1,19 @@
 # Research: Circle Management
 
+## 2026-11-22 remediation decisions
+
+ADR-010 supersedes Decision 2's historical direct-assignment behavior. The creator
+initially accepts teacher responsibility; another person becomes teacher only on
+accepting a named role-bound invitation, after which another authorized manager may
+make the creator a supervisor. No new organizer or backup permission role exists.
+Named invitations do not expire; pending invitations may be revoked by an active
+teacher or supervisor and are replaced by a new invitation to the same recipient
+and circle. Acceptance is recipient-only, single-use and transactionally rechecks
+authorization, archive, capacity and membership. The reusable join code remains
+student-only. Decision 4's historical 8-character code is superseded by the
+current `HLQ-` plus 12-symbol generation and legacy four-symbol acceptance until
+rotation; see the security audit and current implementation.
+
 ## Decision 1: Reuse the existing circle foundation
 
 - **Decision**: Extend the existing `circles` and `circle_members` tables and Feature 001 auth/RBAC patterns. Do not replace the existing circle foreign-key migrations or create parallel authorization tables.

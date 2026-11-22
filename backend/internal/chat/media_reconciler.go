@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,6 +24,8 @@ const (
 type MediaReconciler struct {
 	repo  *Repository
 	store *MediaStore
+	mu    sync.Mutex
+	after *uuid.UUID
 }
 
 // NewMediaReconciler constructs a media reconciliation worker.
@@ -47,10 +50,8 @@ func (r *MediaReconciler) Reconcile(ctx context.Context, messageID uuid.UUID) er
 	return r.store.RemoveLatestDeleteMarker(ctx, upload.ObjectKey)
 }
 
-// Sweep reconciles every attached message media in bounded keyset pages after
-// startup or during the periodic recovery loop. Paginating past each page keeps
-// rows whose reconciliation keeps failing from starving later rows; the
-// iteration bound guarantees termination.
+// Sweep reconciles attached message media in bounded keyset pages. Progress
+// resumes across sweeps and wraps at the end so all rows are revisited.
 func (r *MediaReconciler) Sweep(ctx context.Context, limit int) error {
 	if r == nil || r.repo == nil || r.store == nil {
 		return errors.New("reconcile chat media: dependencies are not configured")
@@ -58,23 +59,33 @@ func (r *MediaReconciler) Sweep(ctx context.Context, limit int) error {
 	if limit <= 0 {
 		return nil
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	var firstErr error
-	var after *uuid.UUID
+	after := r.after
 	for page := 0; page < maxMediaReconciliationSweepPages; page++ {
+		if err := ctx.Err(); err != nil {
+			return errors.Join(firstErr, err)
+		}
 		ids, err := r.repo.FindMediaReconciliationMessageIDs(ctx, after, limit)
 		if err != nil {
-			return err
+			return errors.Join(firstErr, err)
 		}
 		for _, id := range ids {
+			if err := ctx.Err(); err != nil {
+				return errors.Join(firstErr, err)
+			}
 			if err := r.Reconcile(ctx, id); err != nil && firstErr == nil {
 				firstErr = fmt.Errorf("reconcile chat media message %s: %w", id, err)
 			}
 		}
 		if len(ids) < limit {
+			r.after = nil
 			return firstErr
 		}
 		last := ids[len(ids)-1]
 		after = &last
+		r.after = after
 	}
-	return fmt.Errorf("reconcile chat media: sweep exceeded %d pages", maxMediaReconciliationSweepPages)
+	return errors.Join(firstErr, fmt.Errorf("reconcile chat media: sweep exceeded %d pages", maxMediaReconciliationSweepPages))
 }

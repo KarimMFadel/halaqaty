@@ -101,3 +101,37 @@ func TestMediaReconciler_SweepPaginatesPastStuckFirstPage(t *testing.T) {
 		t.Fatalf("sweep processed %d keys, want all %d (later pages must not be starved)", len(fake.applied), len(keys))
 	}
 }
+
+func TestMediaReconciler_SweepContinuesBeyondCapAndWraps(t *testing.T) {
+	repo := newChatRepo(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	sender := seedUser(t, repo, "sweep-cap")
+	circle := seedCircle(t, repo, "Sweep Cap", sender)
+	seedMember(t, repo, circle, sender, "teacher", time.Now().UTC().Add(-time.Hour))
+	for i := 1; i <= maxMediaReconciliationSweepPages+1; i++ {
+		messageID := uuid.MustParse(fmt.Sprintf("00000000-0000-0000-0000-%012d", i))
+		uploadID := uuid.MustParse(fmt.Sprintf("10000000-0000-0000-0000-%012d", i))
+		seedReconcilableMedia(t, repo, circle, sender, messageID, uploadID)
+	}
+	if _, err := repo.pool.Exec(ctx, `UPDATE messages SET deleted_at = NOW() WHERE circle_id = $1`, circle); err != nil {
+		t.Fatal(err)
+	}
+	fake := &perKeyFailStore{}
+	r := NewMediaReconciler(repo, NewMediaStore(fake, 5*time.Second))
+	if err := r.Sweep(ctx, 1); err == nil {
+		t.Fatal("expected bounded sweep")
+	}
+	if err := r.Sweep(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.applied) != maxMediaReconciliationSweepPages+1 {
+		t.Fatalf("processed %d objects after two sweeps", len(fake.applied))
+	}
+	if err := r.Sweep(ctx, 1); err == nil {
+		t.Fatal("expected bounded sweep after wrap")
+	}
+	if fake.applied[maxMediaReconciliationSweepPages+1] != fake.applied[0] {
+		t.Fatal("sweep did not wrap")
+	}
+}

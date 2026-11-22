@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 )
 
@@ -55,6 +56,8 @@ type Reconciler struct {
 	roomKey    []byte
 	clock      func() time.Time
 	attendance attendanceRecovery
+	mu         sync.Mutex
+	cursors    map[SessionStatus]string
 }
 
 // SetAttendanceFinalizer enables recovery of ended sessions whose attendance was not finalized.
@@ -71,7 +74,7 @@ func NewReconciler(store RecoveryStore, gateway SessionMediaGateway, roomKey []b
 	if len(roomKey) == 0 {
 		return nil, errors.New("reconciler room key is required")
 	}
-	return &Reconciler{store: store, gateway: gateway, roomKey: append([]byte(nil), roomKey...), clock: time.Now}, nil
+	return &Reconciler{store: store, gateway: gateway, roomKey: append([]byte(nil), roomKey...), clock: time.Now, cursors: make(map[SessionStatus]string)}, nil
 }
 
 // StableMediaRoomRef derives the stable opaque provider room reference for a
@@ -92,6 +95,8 @@ func StableMediaRoomRef(sessionID string, roomKey []byte) (MediaRoomRef, error) 
 // failures are aggregated and returned while every remaining phase and
 // candidate is still processed.
 func (r *Reconciler) Sweep(ctx context.Context) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	var errs []error
 	for _, status := range []SessionStatus{SessionStatusScheduled, SessionStatusActive, SessionStatusEnded} {
 		if err := r.sweepStatus(ctx, status); err != nil {
@@ -102,13 +107,16 @@ func (r *Reconciler) Sweep(ctx context.Context) error {
 }
 
 // sweepStatus reconciles one lifecycle state. When the store supports keyset
-// pagination it walks every page, so a first page that never reaches its
-// completion condition cannot starve later candidates.
+// pagination it resumes after the last completed page across bounded sweeps,
+// then wraps after exhaustion so all candidates are revisited.
 func (r *Reconciler) sweepStatus(ctx context.Context, status SessionStatus) error {
 	pager, paginated := r.store.(recoveryCandidatePager)
 	var errs []error
-	afterID := ""
+	afterID := r.cursors[status]
 	for page := 0; page < maxRecoveryPages; page++ {
+		if err := ctx.Err(); err != nil {
+			return errors.Join(append(errs, err)...)
+		}
 		var candidates []Session
 		var err error
 		if paginated {
@@ -121,14 +129,19 @@ func (r *Reconciler) sweepStatus(ctx context.Context, status SessionStatus) erro
 			break
 		}
 		for _, sess := range candidates {
+			if err := ctx.Err(); err != nil {
+				return errors.Join(append(errs, err)...)
+			}
 			if err := r.reconcileCandidate(ctx, sess); err != nil {
 				errs = append(errs, fmt.Errorf("reconcile session %s: %w", sess.ID, err))
 			}
 		}
 		if !paginated || len(candidates) < RecoveryCandidateLimit {
+			r.cursors[status] = ""
 			break
 		}
 		afterID = candidates[len(candidates)-1].ID
+		r.cursors[status] = afterID
 	}
 	return errors.Join(errs...)
 }

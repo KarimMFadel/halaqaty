@@ -187,3 +187,79 @@ func TestReconcilerSweepPaginatesPastUnfinishedFirstPage(t *testing.T) {
 		}
 	}
 }
+
+func TestReconcilerSweepContinuesBeyondPageCapAndWraps(t *testing.T) {
+	const total = maxRecoveryPages*RecoveryCandidateLimit + 1
+	store := &pagedRecoveryStoreStub{}
+	for i := 0; i < total; i++ {
+		store.all = append(store.all, Session{ID: fmt.Sprintf("ended-%05d", i), Status: SessionStatusEnded})
+	}
+	reconciler, err := NewReconciler(store, &recoveryGatewayStub{}, []byte("key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reconciler.Sweep(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := reconciler.Sweep(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.attempts) != total {
+		t.Fatalf("processed %d candidates after two sweeps, want %d", len(store.attempts), total)
+	}
+	if err := reconciler.Sweep(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if store.attempts[total] != "ended-00000" {
+		t.Fatalf("did not wrap: %s", store.attempts[total])
+	}
+}
+
+type failingPageStore struct {
+	pagedRecoveryStoreStub
+	fail bool
+}
+
+func (s *failingPageStore) ListRecoveryCandidatesAfterID(ctx context.Context, status SessionStatus, afterID string, limit int) ([]Session, error) {
+	if s.fail && status == SessionStatusEnded && afterID != "" {
+		s.fail = false
+		return nil, errors.New("page unavailable")
+	}
+	return s.pagedRecoveryStoreStub.ListRecoveryCandidatesAfterID(ctx, status, afterID, limit)
+}
+
+func TestReconcilerSweepRetriesPageAfterQueryError(t *testing.T) {
+	store := &failingPageStore{fail: true}
+	for i := 0; i <= RecoveryCandidateLimit; i++ {
+		store.all = append(store.all, Session{ID: fmt.Sprintf("ended-%03d", i), Status: SessionStatusEnded})
+	}
+	r, err := NewReconciler(store, &recoveryGatewayStub{}, []byte("key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Sweep(context.Background()); err == nil {
+		t.Fatal("expected page error")
+	}
+	if err := r.Sweep(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.attempts) != RecoveryCandidateLimit+1 {
+		t.Fatalf("processed %d candidates, want %d", len(store.attempts), RecoveryCandidateLimit+1)
+	}
+}
+
+func TestReconcilerSweepCanceledContextDoesNoWork(t *testing.T) {
+	store := &pagedRecoveryStoreStub{all: []Session{{ID: "ended-001", Status: SessionStatusEnded}}}
+	r, err := NewReconciler(store, &recoveryGatewayStub{}, []byte("key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if !errors.Is(r.Sweep(ctx), context.Canceled) {
+		t.Fatal("expected cancellation")
+	}
+	if len(store.attempts) != 0 {
+		t.Fatalf("processed canceled sweep: %v", store.attempts)
+	}
+}

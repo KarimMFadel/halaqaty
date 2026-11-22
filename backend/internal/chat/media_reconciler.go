@@ -12,6 +12,11 @@ import (
 const (
 	DefaultMediaReconciliationInterval = 30 * time.Second
 	DefaultMediaReconciliationLimit    = 100
+
+	// maxMediaReconciliationSweepPages bounds one sweep so a broken page query
+	// can never spin forever. Keyset pagination already advances strictly, so
+	// this is a defensive ceiling rather than the normal termination path.
+	maxMediaReconciliationSweepPages = 1000
 )
 
 // MediaReconciler repairs the object-store/database boundary after a crash.
@@ -42,21 +47,34 @@ func (r *MediaReconciler) Reconcile(ctx context.Context, messageID uuid.UUID) er
 	return r.store.RemoveLatestDeleteMarker(ctx, upload.ObjectKey)
 }
 
-// Sweep reconciles a bounded batch of attached message media after startup or
-// during the periodic recovery loop.
+// Sweep reconciles every attached message media in bounded keyset pages after
+// startup or during the periodic recovery loop. Paginating past each page keeps
+// rows whose reconciliation keeps failing from starving later rows; the
+// iteration bound guarantees termination.
 func (r *MediaReconciler) Sweep(ctx context.Context, limit int) error {
 	if r == nil || r.repo == nil || r.store == nil {
 		return errors.New("reconcile chat media: dependencies are not configured")
 	}
-	ids, err := r.repo.FindMediaReconciliationMessageIDs(ctx, limit)
-	if err != nil {
-		return err
+	if limit <= 0 {
+		return nil
 	}
 	var firstErr error
-	for _, id := range ids {
-		if err := r.Reconcile(ctx, id); err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("reconcile chat media message %s: %w", id, err)
+	var after *uuid.UUID
+	for page := 0; page < maxMediaReconciliationSweepPages; page++ {
+		ids, err := r.repo.FindMediaReconciliationMessageIDs(ctx, after, limit)
+		if err != nil {
+			return err
 		}
+		for _, id := range ids {
+			if err := r.Reconcile(ctx, id); err != nil && firstErr == nil {
+				firstErr = fmt.Errorf("reconcile chat media message %s: %w", id, err)
+			}
+		}
+		if len(ids) < limit {
+			return firstErr
+		}
+		last := ids[len(ids)-1]
+		after = &last
 	}
-	return firstErr
+	return fmt.Errorf("reconcile chat media: sweep exceeded %d pages", maxMediaReconciliationSweepPages)
 }

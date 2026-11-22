@@ -440,6 +440,53 @@ func TestRepository_HistoryPages_UnknownCursor(t *testing.T) {
 	}
 }
 
+// TestRepository_HistoryPages_ForeignCursorRejected pins the conversation
+// binding of pagination cursors: a cursor from another conversation the caller
+// can legitimately see must be rejected as invalid instead of silently
+// shifting the page, while a same-conversation cursor still pages correctly.
+func TestRepository_HistoryPages_ForeignCursorRejected(t *testing.T) {
+	repo := newChatRepo(t)
+	ctx := context.Background()
+	teacher := seedUser(t, repo, "foreign-teacher")
+	peer := seedUser(t, repo, "foreign-peer")
+	otherPeer := seedUser(t, repo, "foreign-other-peer")
+	circle := seedCircle(t, repo, "Foreign Circle", teacher)
+	otherCircle := seedCircle(t, repo, "Foreign Other Circle", teacher)
+	seedMember(t, repo, circle, teacher, "teacher", time.Now().UTC().Add(-time.Hour))
+	seedMember(t, repo, otherCircle, teacher, "teacher", time.Now().UTC().Add(-time.Hour))
+
+	base := time.Now().UTC().Add(-time.Hour).Truncate(time.Microsecond)
+	seedMessage(t, repo, teacher, &circle, nil, base, "group-first")
+	second := seedMessage(t, repo, teacher, &circle, nil, base.Add(time.Minute), "group-second")
+	foreign := seedMessage(t, repo, teacher, &otherCircle, nil, base.Add(2*time.Minute), "group-foreign")
+
+	page, err := repo.GroupHistoryPage(ctx, circle, teacher, &second, 10)
+	if err != nil {
+		t.Fatalf("same-conversation group cursor: %v", err)
+	}
+	if got := messageContents(page); fmt.Sprint(got) != fmt.Sprint([]string{"group-first"}) {
+		t.Fatalf("same-conversation group page: got %v want [group-first]", got)
+	}
+	if _, err := repo.GroupHistoryPage(ctx, circle, teacher, &foreign, 10); !errors.Is(err, ErrInvalidCursor) {
+		t.Fatalf("foreign group cursor: got %v want ErrInvalidCursor", err)
+	}
+
+	seedMessage(t, repo, teacher, nil, &peer, base, "dm-first")
+	dmSecond := seedMessage(t, repo, peer, nil, &teacher, base.Add(time.Minute), "dm-second")
+	dmForeign := seedMessage(t, repo, teacher, nil, &otherPeer, base.Add(2*time.Minute), "dm-foreign")
+
+	dmPage, err := repo.DMHistoryPage(ctx, teacher, peer, &dmSecond, 10)
+	if err != nil {
+		t.Fatalf("same-pair cursor: %v", err)
+	}
+	if got := messageContents(dmPage); fmt.Sprint(got) != fmt.Sprint([]string{"dm-first"}) {
+		t.Fatalf("same-pair page: got %v want [dm-first]", got)
+	}
+	if _, err := repo.DMHistoryPage(ctx, teacher, peer, &dmForeign, 10); !errors.Is(err, ErrInvalidCursor) {
+		t.Fatalf("foreign dm cursor: got %v want ErrInvalidCursor", err)
+	}
+}
+
 func TestRepository_DMHistoryPage_UnorderedPairBothDirections(t *testing.T) {
 	repo := newChatRepo(t)
 	ctx := context.Background()

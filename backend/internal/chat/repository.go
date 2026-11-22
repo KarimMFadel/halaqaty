@@ -28,13 +28,15 @@ type Repository struct{ pool *pgxpool.Pool }
 // Tx is one chat mutation transaction.
 type Tx struct{ tx pgx.Tx }
 
-// FindMediaReconciliationMessageIDs returns attached-message IDs whose media
-// state must be checked after an interrupted marker/database transition.
-func (r *Repository) FindMediaReconciliationMessageIDs(ctx context.Context, limit int) ([]uuid.UUID, error) {
+// FindMediaReconciliationMessageIDs returns one keyset page of attached-message
+// IDs whose media state must be checked after an interrupted marker/database
+// transition. after is the previous page's last id (nil starts at the first
+// page), so the caller can make progress past rows that keep failing.
+func (r *Repository) FindMediaReconciliationMessageIDs(ctx context.Context, after *uuid.UUID, limit int) ([]uuid.UUID, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
-	rows, err := r.pool.Query(ctx, findMediaReconciliationMessageIDsQuery, limit)
+	rows, err := r.pool.Query(ctx, findMediaReconciliationMessageIDsQuery, limit, after)
 	if err != nil {
 		return nil, fmt.Errorf("list chat media reconciliation targets: %w", err)
 	}
@@ -649,7 +651,7 @@ func (t *Tx) moderationDeleteWindow(ctx context.Context, messageID, actorID uuid
 // before the member's joined_at and soft-deleted messages are excluded. The
 // before anchor paginates at the referenced message; nil starts at newest.
 func (r *Repository) GroupHistoryPage(ctx context.Context, circleID, viewerID uuid.UUID, before *uuid.UUID, limit int) ([]Message, error) {
-	anchorSentAt, anchorID, err := r.messageCursor(ctx, before)
+	anchorSentAt, anchorID, err := r.messageCursor(ctx, before, findGroupMessageCursorQuery, circleID)
 	if err != nil {
 		return nil, err
 	}
@@ -658,7 +660,7 @@ func (r *Repository) GroupHistoryPage(ctx context.Context, circleID, viewerID uu
 
 // GroupSearchPage returns one retained, non-deleted group-message search page.
 func (r *Repository) GroupSearchPage(ctx context.Context, circleID, viewerID uuid.UUID, query string, before *uuid.UUID, limit int) ([]Message, error) {
-	_, anchorID, err := r.messageCursor(ctx, before)
+	_, anchorID, err := r.messageCursor(ctx, before, findGroupMessageCursorQuery, circleID)
 	if err != nil {
 		return nil, err
 	}
@@ -706,22 +708,24 @@ func (r *Repository) ListPinnedMessages(ctx context.Context, circleID, viewerID 
 // DESC order, excluding deleted messages. before anchors pagination at the
 // referenced message; nil starts at newest.
 func (r *Repository) DMHistoryPage(ctx context.Context, userA, userB uuid.UUID, before *uuid.UUID, limit int) ([]Message, error) {
-	anchorSentAt, anchorID, err := r.messageCursor(ctx, before)
+	anchorSentAt, anchorID, err := r.messageCursor(ctx, before, findDirectMessageCursorQuery, userA, userB)
 	if err != nil {
 		return nil, err
 	}
 	return r.queryMessagePage(ctx, dmHistoryPageQuery, userA, userB, anchorSentAt, anchorID, limit)
 }
 
-// messageCursor resolves the anchor message's (sent_at, id) pair. Soft-deleted
-// anchors remain valid; unknown ids return ErrInvalidCursor.
-func (r *Repository) messageCursor(ctx context.Context, before *uuid.UUID) (*time.Time, *uuid.UUID, error) {
+// messageCursor resolves the anchor message's (sent_at, id) pair scoped to the
+// caller's conversation by query and its scope arguments. Soft-deleted anchors
+// remain valid; unknown or foreign ids return ErrInvalidCursor.
+func (r *Repository) messageCursor(ctx context.Context, before *uuid.UUID, query string, scope ...any) (*time.Time, *uuid.UUID, error) {
 	if before == nil {
 		return nil, nil, nil
 	}
 	var sentAt time.Time
 	var id uuid.UUID
-	if err := r.pool.QueryRow(ctx, findMessageCursorQuery, before).Scan(&sentAt, &id); err != nil {
+	args := append([]any{before}, scope...)
+	if err := r.pool.QueryRow(ctx, query, args...).Scan(&sentAt, &id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil, ErrInvalidCursor
 		}

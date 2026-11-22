@@ -54,11 +54,23 @@ FOR UPDATE OF c, cm`
 
 // --- History pages -----------------------------------------------------------
 
-// findMessageCursorQuery resolves an anchor cursor to its (sent_at, id) pair.
-// Soft-deleted anchors stay valid so pagination over a just-deleted message
-// does not break; unknown ids are rejected by the repository.
-const findMessageCursorQuery = `
-SELECT sent_at, id FROM messages WHERE id = $1::uuid`
+// findGroupMessageCursorQuery resolves a group-history anchor to its
+// (sent_at, id) pair scoped to the same circle as the page query, so a cursor
+// from another conversation can never shift the page. Soft-deleted anchors
+// stay valid so pagination over a just-deleted message does not break; unknown
+// or foreign ids return no row and are rejected by the repository.
+const findGroupMessageCursorQuery = `
+SELECT sent_at, id FROM messages
+WHERE id = $1::uuid AND circle_id = $2::uuid`
+
+// findDirectMessageCursorQuery resolves a DM-history anchor to its
+// (sent_at, id) pair scoped to the same unordered participant pair as the page
+// query.
+const findDirectMessageCursorQuery = `
+SELECT sent_at, id FROM messages
+WHERE id = $1::uuid AND circle_id IS NULL
+  AND ((sender_id = $2::uuid AND dm_recipient_id = $3::uuid)
+    OR (sender_id = $3::uuid AND dm_recipient_id = $2::uuid))`
 
 // groupHistoryPageQuery returns one circle history page for a current member.
 // The circle_members join is the authorization boundary: non-members match no
@@ -476,10 +488,15 @@ FROM messages m
 JOIN chat_uploads u ON u.id = m.upload_id
 WHERE m.id = $1::uuid`
 
+// findMediaReconciliationMessageIDsQuery returns one keyset page of
+// attached-message IDs ordered by id. Passing the previous page's last id as
+// $2 lets the sweep advance past rows whose reconciliation keeps failing
+// instead of re-reading the same fixed first page forever.
 const findMediaReconciliationMessageIDsQuery = `
 SELECT m.id
 FROM messages m
 JOIN chat_uploads u ON u.id = m.upload_id
+WHERE ($2::uuid IS NULL OR m.id > $2::uuid)
 ORDER BY m.id
 LIMIT $1`
 

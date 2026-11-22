@@ -187,7 +187,9 @@ void main() {
     expect(find.text('This name is unavailable'), findsOneWidget);
   });
 
-  testWidgets('adds a searched teacher to the create request', (tester) async {
+  testWidgets(
+      'keeps teacher assignment optional and permits supervisor selection',
+      (tester) async {
     final apiClient = _StubCircleApiClient(
       searchResults: const [CircleUser(id: 'teacher-1', displayName: 'Aisha')],
     );
@@ -197,7 +199,8 @@ void main() {
     await tester.enterText(
         find.byKey(const Key('createCircleUserSearchField')), 'Ai');
     await tester.pump();
-    await tester.tap(find.text('معلّم'));
+    expect(find.text('معلّم'), findsNothing);
+    await tester.tap(find.text('مشرف'));
     await tester.enterText(
         find.byKey(const Key('createCircleNameField')), 'Circle');
     await _tapVisible(
@@ -205,7 +208,7 @@ void main() {
       find.byKey(const Key('createCircleSubmitButton')),
     );
 
-    expect(apiClient.submittedRequest?.teacherUserIds, ['teacher-1']);
+    expect(apiClient.submittedRequest?.backupSupervisorUserId, 'teacher-1');
   });
 
   testWidgets('shows the invite link after creation', (tester) async {

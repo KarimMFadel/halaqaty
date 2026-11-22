@@ -86,6 +86,8 @@ func setupCircleRoleEnv(t *testing.T) *circleRoleEnv {
 		"000018_real_time_chat.up.sql",
 		"000019_account_deletion_tombstone.up.sql",
 		"000020_schedule_calendar_attendance.up.sql",
+		"000021_notification_system.up.sql",
+		"000022_circle_invitations.up.sql",
 	} {
 		runMigrationFile(t, conn, ctx, file)
 	}
@@ -137,6 +139,11 @@ func setupCircleRoleEnv(t *testing.T) *circleRoleEnv {
 		"PUT /circles/{circleId}/members/{userId}/role",
 		authMW.Require(roleMW.RequireAny("supervisor", "teacher")(http.HandlerFunc(rbacHandler.AssignRole))),
 	)
+	mux.Handle("GET /circles/{circleId}/invitations", authMW.Require(roleMW.RequireAny("student", "supervisor", "teacher")(http.HandlerFunc(rbacHandler.ListCircleInvitations))))
+	mux.Handle("POST /circles/{circleId}/invitations", authMW.Require(roleMW.RequireAny("student", "supervisor", "teacher")(http.HandlerFunc(rbacHandler.CreateCircleInvitation))))
+	mux.Handle("DELETE /circles/{circleId}/invitations/{invitationId}", authMW.Require(roleMW.RequireAny("supervisor", "teacher")(http.HandlerFunc(rbacHandler.RevokeCircleInvitation))))
+	mux.Handle("POST /circle-invitations/{invitationId}/accept", authMW.Require(http.HandlerFunc(rbacHandler.AcceptCircleInvitation)))
+	mux.Handle("GET /users/me/circle-invitations", authMW.Require(http.HandlerFunc(rbacHandler.ListMyCircleInvitations)))
 
 	env := &circleRoleEnv{
 		mux:      mux,
@@ -189,6 +196,19 @@ func (e *circleRoleEnv) createCircle(t *testing.T, creator, body string) rbac.Ci
 	return circle
 }
 
+func acceptCircleTeacher(t *testing.T, env *circleRoleEnv, circleID, inviterKey, recipientKey string) {
+	t.Helper()
+	invitation, err := env.svc.CreateCircleInvitation(context.Background(), env.userIDs[inviterKey], circleID, rbac.CreateCircleInvitationRequest{
+		RecipientUserID: env.userIDs[recipientKey], Role: rbac.RoleTeacher,
+	})
+	if err != nil {
+		t.Fatalf("create teacher invitation: %v", err)
+	}
+	if _, err := env.svc.AcceptCircleInvitation(context.Background(), env.userIDs[recipientKey], invitation.ID); err != nil {
+		t.Fatalf("accept teacher invitation: %v", err)
+	}
+}
+
 func (e *circleRoleEnv) putRole(t *testing.T, actor, circleID, targetUserID, role string) *httptest.ResponseRecorder {
 	t.Helper()
 	return doJSONRequest(t, e.mux, http.MethodPut,
@@ -206,9 +226,10 @@ func TestCircleRoleAccess(t *testing.T) {
 	ctx := context.Background()
 
 	circle := env.createCircle(t, "creator", fmt.Sprintf(
-		`{"name":"Access Circle","teacher_user_ids":[%q,%q],"backup_supervisor_user_id":%q}`,
-		env.userIDs["teacher_a"], env.userIDs["teacher_b"], env.userIDs["backup_sup"],
+		`{"name":"Access Circle","backup_supervisor_user_id":%q}`,
+		env.userIDs["backup_sup"],
 	))
+	acceptCircleTeacher(t, env, circle.ID, "creator", "teacher_a")
 	if circle.ID == "" || circle.InviteCode == "" {
 		t.Fatalf("incomplete circle response: %+v", circle)
 	}
@@ -231,11 +252,11 @@ func TestCircleRoleAccess(t *testing.T) {
 		role       string
 		wantStatus int
 	}{
-		{"teacher changes another member", "teacher_a", studentID, rbac.RoleTeacher, http.StatusOK},
-		{"supervisor changes another member", "backup_sup", studentID, rbac.RoleStudent, http.StatusOK},
+		{"teacher promotion requires acceptance", "teacher_a", studentID, rbac.RoleTeacher, http.StatusConflict},
 		{"student actor rejected", "student", teacherAID, rbac.RoleStudent, http.StatusForbidden},
 		{"non-member actor rejected", "outsider", teacherAID, rbac.RoleStudent, http.StatusForbidden},
 		{"self change rejected", "teacher_a", teacherAID, rbac.RoleStudent, http.StatusForbidden},
+		{"supervisor changes another member", "backup_sup", studentID, rbac.RoleSupervisor, http.StatusOK},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -260,10 +281,22 @@ func TestCircleRoleAccess(t *testing.T) {
 func TestCircleRoleAccess_ConcurrentFinalTeacherProtection(t *testing.T) {
 	env := setupCircleRoleEnv(t)
 
-	circle := env.createCircle(t, "creator", fmt.Sprintf(
-		`{"name":"Race Circle","teacher_user_ids":[%q,%q]}`,
-		env.userIDs["teacher_a"], env.userIDs["teacher_b"],
-	))
+	circle := env.createCircle(t, "creator", `{"name":"Race Circle"}`)
+	acceptCircleTeacher(t, env, circle.ID, "creator", "teacher_a")
+	acceptCircleTeacher(t, env, circle.ID, "creator", "teacher_b")
+	if _, err := env.svc.AssignRole(context.Background(), env.userIDs["teacher_a"], circle.ID, env.userIDs["creator"], rbac.RoleSupervisor); err != nil {
+		t.Fatalf("handoff creator to supervisor: %v", err)
+	}
+	var primaryTeacherID string
+	if err := env.pool.QueryRow(context.Background(), `SELECT teacher_id::text FROM circles WHERE id = $1::uuid`, circle.ID).Scan(&primaryTeacherID); err != nil {
+		t.Fatalf("read primary teacher after handoff: %v", err)
+	}
+	if primaryTeacherID == env.userIDs["creator"] {
+		t.Fatalf("primary teacher still points to demoted creator %s", primaryTeacherID)
+	}
+	if role, err := env.repo.RoleInCircle(context.Background(), circle.ID, primaryTeacherID); err != nil || role != rbac.RoleTeacher {
+		t.Fatalf("primary teacher reference: role=%q err=%v want teacher", role, err)
+	}
 
 	// Two concurrent demotions of the last two teachers: exactly one succeeds.
 	statuses := make(chan int, 2)

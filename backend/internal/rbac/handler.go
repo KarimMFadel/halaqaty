@@ -200,6 +200,84 @@ func (h *Handler) AssignRole(w http.ResponseWriter, r *http.Request) {
 	phttp.WriteJSON(w, http.StatusOK, assignment)
 }
 
+// CreateCircleInvitation handles POST /circles/{circleId}/invitations.
+func (h *Handler) CreateCircleInvitation(w http.ResponseWriter, r *http.Request) {
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if h == nil || h.service == nil || !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	var request CreateCircleInvitationRequest
+	if !phttp.DecodeJSONBody(w, r, &request) {
+		return
+	}
+	invitation, err := h.service.CreateCircleInvitation(r.Context(), principal.UserID, r.PathValue("circleId"), request)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusCreated, invitation)
+}
+
+// ListCircleInvitations handles GET /circles/{circleId}/invitations.
+func (h *Handler) ListCircleInvitations(w http.ResponseWriter, r *http.Request) {
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if h == nil || h.service == nil || !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	invitations, err := h.service.ListCircleInvitations(r.Context(), principal.UserID, r.PathValue("circleId"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusOK, invitations)
+}
+
+// ListMyCircleInvitations handles GET /users/me/circle-invitations.
+func (h *Handler) ListMyCircleInvitations(w http.ResponseWriter, r *http.Request) {
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if h == nil || h.service == nil || !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	invitations, err := h.service.ListMyCircleInvitations(r.Context(), principal.UserID)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusOK, invitations)
+}
+
+// AcceptCircleInvitation handles POST /circle-invitations/{invitationId}/accept.
+func (h *Handler) AcceptCircleInvitation(w http.ResponseWriter, r *http.Request) {
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if h == nil || h.service == nil || !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	invitation, err := h.service.AcceptCircleInvitation(r.Context(), principal.UserID, r.PathValue("invitationId"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusOK, invitation)
+}
+
+// RevokeCircleInvitation handles DELETE /circles/{circleId}/invitations/{invitationId}.
+func (h *Handler) RevokeCircleInvitation(w http.ResponseWriter, r *http.Request) {
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if h == nil || h.service == nil || !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	if err := h.service.RevokeCircleInvitation(r.Context(), principal.UserID, r.PathValue("circleId"), r.PathValue("invitationId")); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // RefreshInviteCode handles POST /circles/{circleId}/invite-code/refresh.
 func (h *Handler) RefreshInviteCode(w http.ResponseWriter, r *http.Request) {
 	principal, ok := auth.CurrentPrincipal(r.Context())
@@ -308,6 +386,12 @@ func writeServiceError(w http.ResponseWriter, err error) {
 		phttp.WriteError(w, httpconst.ErrorCodeForbidden, httpconst.ErrorMessageSelfRoleChangeForbidden, http.StatusForbidden)
 	case errors.Is(err, ErrFinalTeacher):
 		phttp.WriteError(w, httpconst.ErrorCodeForbidden, httpconst.ErrorMessageFinalTeacherRequired, http.StatusForbidden)
+	case errors.Is(err, ErrInvitationNotFound):
+		phttp.WriteError(w, httpconst.ErrorCodeNotFound, httpconst.ErrorMessageCircleInvitationNotFound, http.StatusNotFound)
+	case errors.Is(err, ErrTeacherInvitationRequired):
+		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageTeacherConsentRequired, http.StatusConflict)
+	case errors.Is(err, ErrInvitationConflict):
+		phttp.WriteError(w, httpconst.ErrorCodeConflict, httpconst.ErrorMessageCircleInvitationConflict, http.StatusConflict)
 	case errors.Is(err, ErrForbidden):
 		phttp.WriteError(w, httpconst.ErrorCodeForbidden, httpconst.ErrorMessageForbidden, http.StatusForbidden)
 	default:

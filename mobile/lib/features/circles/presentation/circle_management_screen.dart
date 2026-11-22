@@ -53,8 +53,9 @@ class CircleManagementScreen extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('تأكيد تغيير الدور'),
-        content:
-            Text('تغيير دور ${member.displayName} إلى ${_roleLabel(role)}؟'),
+        content: Text(role == CircleRole.teacher
+            ? 'سيتم إرسال دعوة إلى ${member.displayName}. لن يصبح معلماً حتى يقبلها.'
+            : 'تغيير دور ${member.displayName} إلى ${_roleLabel(role)}؟'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
@@ -62,9 +63,11 @@ class CircleManagementScreen extends ConsumerWidget {
           FilledButton(
             key: const Key('confirmCircleRoleChange'),
             onPressed: () async {
-              final succeeded = await ref
-                  .read(circleManagementControllerProvider)
-                  .assignRole(circleId, member.userId, role);
+              final controller = ref.read(circleManagementControllerProvider);
+              final succeeded = role == CircleRole.teacher
+                  ? await controller.inviteMember(
+                      circleId, member.userId, CircleRole.teacher)
+                  : await controller.assignRole(circleId, member.userId, role);
               if (!context.mounted) return;
               if (succeeded) {
                 Navigator.pop(context);

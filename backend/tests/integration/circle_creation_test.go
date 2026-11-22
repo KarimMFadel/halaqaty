@@ -11,9 +11,9 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
 )
 
-func TestCircleCreation_AtomicInitialMembershipPersistence(t *testing.T) {
+func TestCircleCreation_CreatorAndOptionalSupervisorMembershipPersistence(t *testing.T) {
 	env := setupCircleRoleEnv(t)
-	circle := env.createCircle(t, "creator", `{"name":"Atomic Circle","teacher_user_ids":["`+env.userIDs["teacher_a"]+`","`+env.userIDs["teacher_b"]+`"],"backup_supervisor_user_id":"`+env.userIDs["backup_sup"]+`"}`)
+	circle := env.createCircle(t, "creator", `{"name":"Atomic Circle","backup_supervisor_user_id":"`+env.userIDs["backup_sup"]+`"}`)
 
 	members, err := env.repo.ListMembers(context.Background(), circle.ID)
 	if err != nil {
@@ -24,9 +24,7 @@ func TestCircleCreation_AtomicInitialMembershipPersistence(t *testing.T) {
 		roles[member.UserID] = member.Role
 	}
 	want := map[string]string{
-		env.userIDs["creator"]:    rbac.RoleSupervisor,
-		env.userIDs["teacher_a"]:  rbac.RoleTeacher,
-		env.userIDs["teacher_b"]:  rbac.RoleTeacher,
+		env.userIDs["creator"]:    rbac.RoleTeacher,
 		env.userIDs["backup_sup"]: rbac.RoleSupervisor,
 	}
 	if len(roles) != len(want) {
@@ -57,7 +55,7 @@ FOR EACH ROW EXECUTE FUNCTION fail_circle_teacher_insert();`)
 	}
 
 	resp := doJSONRequest(t, env.mux, http.MethodPost, "/circles",
-		`{"name":"Rollback Circle","teacher_user_ids":["`+env.userIDs["teacher_a"]+`"]}`,
+		`{"name":"Rollback Circle"}`,
 		map[string]string{
 			httpconst.HeaderAuthorization: env.tokens["creator"],
 			httpconst.HeaderSessionID:     env.sessions["creator"],

@@ -13,6 +13,9 @@ const _studentID = 'student-1';
 class _StubCircleApiClient extends CircleApiClient {
   _StubCircleApiClient() : super(Dio());
 
+  CircleRole? invitedRole;
+  String? invitedUserId;
+
   Never _fail() => throw DioException(
         requestOptions: RequestOptions(path: '/circle-mutation'),
       );
@@ -26,6 +29,27 @@ class _StubCircleApiClient extends CircleApiClient {
     required AssignCircleRoleRequest request,
   }) async =>
       _fail();
+
+  @override
+  Future<CircleInvitation> createCircleInvitation({
+    required String firebaseIdToken,
+    required String sessionId,
+    required String circleId,
+    required String recipientUserId,
+    required CircleRole role,
+  }) async {
+    invitedRole = role;
+    invitedUserId = recipientUserId;
+    return CircleInvitation(
+      id: 'invitation-1',
+      circleId: circleId,
+      inviterUserId: _teacherID,
+      recipientUserId: recipientUserId,
+      role: role,
+      state: 'pending',
+      createdAt: DateTime.utc(2026, 11, 22),
+    );
+  }
 
   @override
   Future<void> removeMember({
@@ -146,6 +170,29 @@ void main() {
     expect(find.byKey(const Key('confirmCircleRoleChange')), findsOneWidget);
     expect(find.textContaining('أحمد'), findsWidgets);
     expect(find.textContaining('مشرف'), findsWidgets);
+  });
+
+  testWidgets(
+      'CircleManagementScreen: teacher promotion sends an invitation instead of changing the role',
+      (tester) async {
+    final apiClient = _StubCircleApiClient();
+    await tester.pumpWidget(_build(
+      currentUserID: _teacherID,
+      apiClient: apiClient,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('manageRole-student-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('circleRole-teacher')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('حتى يقبلها'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('confirmCircleRoleChange')));
+    await tester.pumpAndSettle();
+
+    expect(apiClient.invitedRole, CircleRole.teacher);
+    expect(apiClient.invitedUserId, _studentID);
   });
 
   testWidgets(

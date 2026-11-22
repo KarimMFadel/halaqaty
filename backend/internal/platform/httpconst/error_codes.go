@@ -85,6 +85,7 @@ const (
 	FieldCircleID          = "circle_id"
 	FieldUserID            = "user_id"
 	FieldRole              = "role"
+	FieldRecipientUserID   = "recipient_user_id"
 	FieldName              = "name"
 	FieldTeacherUserIDs    = "teacher_user_ids"
 	FieldBackupSupervisor  = "backup_supervisor_user_id"

@@ -114,6 +114,40 @@ func (r *Repository) ProjectCircleArchived(ctx context.Context, circleID string)
 	return nil
 }
 
+// ProjectCircleInvitation stores the addressed recipient's history and push intent atomically.
+func (r *Repository) ProjectCircleInvitation(ctx context.Context, invitation CircleInvitation) error {
+	if r.notifications == nil {
+		return nil
+	}
+	tx, ok := r.q.(pgx.Tx)
+	if !ok {
+		return fmt.Errorf("project circle invitation notification: requires a source transaction")
+	}
+	invitationID, err := uuid.Parse(invitation.ID)
+	if err != nil {
+		return fmt.Errorf("project circle invitation notification: parse invitation id: %w", err)
+	}
+	recipientID, err := uuid.Parse(invitation.RecipientUserID)
+	if err != nil {
+		return fmt.Errorf("project circle invitation notification: parse recipient id: %w", err)
+	}
+	now := time.Now().UTC()
+	input := notifications.CreateInput{
+		RecipientID:   recipientID,
+		Type:          notifications.EventCircleInvitation,
+		SourceEventID: "circle_invitation:" + invitationID.String(),
+		SourceRef:     notifications.SourceRef{Type: notifications.SourceInvitation, ID: invitationID},
+		Title:         "Circle invitation",
+		Body:          "You have a circle invitation. Open the app to review it.",
+		CreatedAt:     &now,
+		PushExpiresAt: now.Add(circleLifecycleNotificationTTL),
+	}
+	if _, _, err := notifications.CreateInTx(ctx, tx, input); err != nil {
+		return fmt.Errorf("project circle invitation notification: %w", err)
+	}
+	return nil
+}
+
 func scanCircleNotificationRecipients(rows pgx.Rows) ([]uuid.UUID, error) {
 	defer rows.Close()
 	var recipients []uuid.UUID

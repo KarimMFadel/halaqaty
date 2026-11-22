@@ -317,6 +317,17 @@ func (r *Router) registerRoutes() {
 		}
 		r.mux.Handle(routeUsersSearch, r.requireWithUserLimit(searchUsersHandler))
 
+		var myCircleInvitationsHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		acceptCircleInvitationHandler := myCircleInvitationsHandler
+		if rbacH != nil {
+			myCircleInvitationsHandler = http.HandlerFunc(rbacH.ListMyCircleInvitations)
+			acceptCircleInvitationHandler = http.HandlerFunc(rbacH.AcceptCircleInvitation)
+		}
+		r.mux.Handle(routeUserCircleInvitationsGet, r.requireWithUserLimit(myCircleInvitationsHandler))
+		r.mux.Handle(routeCircleInvitationAccept, r.requireWithUserLimit(acceptCircleInvitationHandler))
+
 		// F-008 notification history/read-state routes share one
 		// not-configured fallback, mirroring the profile pair above.
 		var listNotificationsHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -346,6 +357,21 @@ func (r *Router) registerRoutes() {
 			routeCircleAssignRole,
 			r.requireWithUserLimit(r.mw.Role.RequireAny(rbac.RoleSupervisor, rbac.RoleTeacher)(assignRoleHandler)),
 		)
+		var circleInvitationsListHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
+		})
+		createCircleInvitationHandler := circleInvitationsListHandler
+		revokeCircleInvitationHandler := circleInvitationsListHandler
+		if rbacH != nil {
+			circleInvitationsListHandler = http.HandlerFunc(rbacH.ListCircleInvitations)
+			createCircleInvitationHandler = http.HandlerFunc(rbacH.CreateCircleInvitation)
+			revokeCircleInvitationHandler = http.HandlerFunc(rbacH.RevokeCircleInvitation)
+		}
+		memberCircleRoles := r.mw.Role.RequireAny(rbac.RoleStudent, rbac.RoleSupervisor, rbac.RoleTeacher)
+		managerCircleRoles := r.mw.Role.RequireAny(rbac.RoleSupervisor, rbac.RoleTeacher)
+		r.mux.Handle(routeCircleInvitationsGet, r.requireWithUserLimit(memberCircleRoles(circleInvitationsListHandler)))
+		r.mux.Handle(routeCircleInvitationsPost, r.requireWithUserLimit(memberCircleRoles(createCircleInvitationHandler)))
+		r.mux.Handle(routeCircleInvitationDelete, r.requireWithUserLimit(managerCircleRoles(revokeCircleInvitationHandler)))
 		var refreshInviteHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageRBACHandlerNotConfigured, http.StatusInternalServerError)
 		})

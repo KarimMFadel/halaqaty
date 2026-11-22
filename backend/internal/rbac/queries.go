@@ -179,3 +179,62 @@ SET role = $3, updated_at = NOW()
 WHERE circle_id = $1::uuid
   AND user_id = $2::uuid
 `
+
+const setCircleTeacherIDQuery = `
+UPDATE circles
+SET teacher_id = $2::uuid, updated_at = NOW()
+WHERE id = $1::uuid
+`
+
+const supersedePendingCircleInvitationQuery = `
+UPDATE circle_invitations
+SET state = 'superseded', resolved_at = NOW()
+WHERE circle_id = $1::uuid
+  AND recipient_user_id = $2::uuid
+  AND state = 'pending'
+`
+
+const insertCircleInvitationQuery = `
+INSERT INTO circle_invitations (circle_id, inviter_user_id, recipient_user_id, role)
+VALUES ($1::uuid, $2::uuid, $3::uuid, $4)
+RETURNING id::text, circle_id::text, inviter_user_id::text, recipient_user_id::text,
+          role, state, created_at, resolved_at
+`
+
+const listPendingCircleInvitationsQuery = `
+SELECT id::text, circle_id::text, inviter_user_id::text, recipient_user_id::text,
+       role, state, created_at, resolved_at
+FROM circle_invitations
+WHERE circle_id = $1::uuid AND state = 'pending'
+ORDER BY created_at DESC, id DESC
+`
+
+const listPendingUserInvitationsQuery = `
+SELECT i.id::text, i.circle_id::text, i.inviter_user_id::text, i.recipient_user_id::text,
+       i.role, i.state, i.created_at, i.resolved_at
+FROM circle_invitations i
+JOIN circles c ON c.id = i.circle_id
+WHERE i.recipient_user_id = $1::uuid AND i.state = 'pending' AND c.is_archived = FALSE
+ORDER BY i.created_at DESC, i.id DESC
+`
+
+const findCircleInvitationQuery = `
+SELECT id::text, circle_id::text, inviter_user_id::text, recipient_user_id::text,
+       role, state, created_at, resolved_at
+FROM circle_invitations
+WHERE id = $1::uuid
+`
+
+const lockCircleInvitationQuery = `
+SELECT id::text, circle_id::text, inviter_user_id::text, recipient_user_id::text,
+       role, state, created_at, resolved_at
+FROM circle_invitations
+WHERE circle_id = $1::uuid AND id = $2::uuid
+FOR UPDATE
+`
+
+const setCircleInvitationStateQuery = `
+UPDATE circle_invitations
+SET state = $2, resolved_at = NOW()
+WHERE id = $1::uuid AND state = 'pending'
+`

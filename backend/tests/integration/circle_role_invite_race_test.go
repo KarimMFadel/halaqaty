@@ -40,8 +40,13 @@ func (a *recordedCircleAudit) count(action string) int {
 func TestCircleRoleInviteRace_ConcurrentRoleUpdatesPreserveTeacherAndEmitOneChangeEvent(t *testing.T) {
 	env := setupCircleRoleEnv(t)
 	audit := &recordedCircleAudit{}
+	circle := env.createCircle(t, "creator", `{"name":"Concurrent Role Updates"}`)
+	acceptCircleTeacher(t, env, circle.ID, "creator", "teacher_a")
+	acceptCircleTeacher(t, env, circle.ID, "creator", "teacher_b")
+	if _, err := env.svc.AssignRole(context.Background(), env.userIDs["teacher_a"], circle.ID, env.userIDs["creator"], rbac.RoleSupervisor); err != nil {
+		t.Fatalf("handoff creator to supervisor: %v", err)
+	}
 	svc := rbac.NewService(env.repo, audit)
-	circle := env.createCircle(t, "creator", `{"name":"Concurrent Role Updates","teacher_user_ids":["`+env.userIDs["teacher_a"]+`","`+env.userIDs["teacher_b"]+`"]}`)
 
 	results := make(chan error, 2)
 	var wg sync.WaitGroup

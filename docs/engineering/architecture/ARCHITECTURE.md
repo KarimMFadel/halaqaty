@@ -883,7 +883,7 @@ erDiagram
 
 ### 4.2 Table Definitions
 
-#### `circle_invitations` (approved F-002 remediation; migration pending)
+#### `circle_invitations` (F-002 remediation; migration `000022`)
 
 The [ADR-010](adr/ADR-010-circle-role-management.md) remediation adds a
 recipient-bound invitation record with UUID `id`, `circle_id`, `inviter_user_id`,
@@ -892,9 +892,9 @@ recipient-bound invitation record with UUID `id`, `circle_id`, `inviter_user_id`
 `resolved_at`. Circle and user IDs reference existing records. A partial unique
 index permits at most one pending invitation per circle and recipient; state and
 resolved time agree. Invitations have no expiry. Creation/replacement, revocation
-and acceptance must serialize with membership mutations and enforce the checks and
-notification transaction boundary in ADR-010. This schema is approved for the
-remediation and is not yet present in the current migration chain.
+and acceptance serialize with membership mutations and enforce the checks and
+notification transaction boundary in ADR-010. Migration `000022` adds the table;
+its down migration refuses to discard invitation history.
 
 #### `users`
 | Column | Type | Constraints | Description |
@@ -943,7 +943,7 @@ Invalid/unregistered tokens are removed through the authenticated device-token o
 | name | VARCHAR(100) | NOT NULL | Circle display name |
 | description | TEXT | | Circle description |
 | rules | TEXT | | Circle rules/guidelines |
-| teacher_id | UUID | FK → users.id NOT NULL | Circle owner |
+| teacher_id | UUID | FK → users.id NOT NULL | Current primary teacher reference; must point to an active teacher membership |
 | invite_code | VARCHAR(20) | UNIQUE NOT NULL | Join code (e.g., HLQ-7X2K) |
 | max_capacity | INTEGER | DEFAULT 50 | Maximum student capacity (min 2, max 200) |
 | is_private | BOOLEAN | DEFAULT FALSE | Whether circle requires invite to join |
@@ -1426,7 +1426,7 @@ receive warnings for their own calendar only. Current membership gates all reads
 - **Firebase token lifecycle:** Firebase ID tokens expire after 1 hour; the Flutter Firebase SDK refreshes them silently. Firebase owns refresh-token rotation and reuse detection.
 - **Backend session lifecycle:** The backend creates one opaque session per device after a verified Firebase sign-in. Every protected request includes its session ID; session activity extends the 30-day inactivity window. Current-device logout revokes only that session. A future logout-all-devices operation must revoke every session for the authenticated user. Backend sessions do not mint access or refresh tokens.
 - **Media credentials:** Generated exclusively by the Go backend through the LiveKit MVP adapter; never by the Flutter client, persisted client-side, logged, or broadcast. Authorized students receive non-admin audio-publish scope; video remains disabled. F-003 does not alter that scope.
-- **Circle role lifecycle:** Roles are stored only in `circle_members`. On creation, the creator may assign existing registered users as one or more teachers and one optional backup supervisor; if no teacher is selected, the creator becomes teacher, otherwise the creator is supervisor. Invite acceptance creates `student`. Any teacher or supervisor may change another member's role among `student`, `supervisor`, and `teacher`, but cannot change their own role or leave the circle without a teacher. See ADR-010.
+- **Circle role lifecycle:** Roles are stored only in `circle_members`. The creator starts as teacher. Another person becomes a teacher only after accepting a named invitation; once that teacher accepts, another manager may change the creator to supervisor. Additional teachers and supervisors are optional, and there is no distinct backup-teacher role. Demotion or removal of the current `teacher_id` reference transfers it to a remaining accepted teacher in the same transaction. Managers may change another member between student and supervisor but cannot change their own role or leave the circle without a teacher. See ADR-010.
 
 #### Circle permission matrix
 

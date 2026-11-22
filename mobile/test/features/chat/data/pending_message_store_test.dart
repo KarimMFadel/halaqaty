@@ -148,6 +148,37 @@ void main() {
     expect(own.single.content, 'from A');
   });
 
+  test('account key namespaces cannot overlap', () async {
+    final storage = _MemoryStorage();
+    await PendingMessageStore(storage, userId: 'a').save(
+      const PendingMessageEnvelope(
+        idempotencyKey: 'b.draft',
+        circleId: 'circle-a',
+        content: 'from A',
+      ),
+    );
+    await PendingMessageStore(storage, userId: 'a.b').save(
+      const PendingMessageEnvelope(
+        idempotencyKey: 'draft',
+        circleId: 'circle-b',
+        content: 'from B',
+      ),
+    );
+
+    expect(
+      (await PendingMessageStore(storage, userId: 'a').loadAll())
+          .single
+          .content,
+      'from A',
+    );
+    expect(
+      (await PendingMessageStore(storage, userId: 'a.b').loadAll())
+          .single
+          .content,
+      'from B',
+    );
+  });
+
   test('clear removes only the signing-out account drafts', () async {
     final storage = _MemoryStorage();
     await PendingMessageStore(storage, userId: 'user-a').save(
@@ -176,6 +207,39 @@ void main() {
         storage,
         userId: 'user-b',
       ).loadAll())
+          .single
+          .content,
+      'from B',
+    );
+  });
+
+  test('clear removes legacy drafts and preserves another account', () async {
+    final storage = _MemoryStorage();
+    await PendingMessageStore(storage, userId: 'user-a').save(
+      const PendingMessageEnvelope(
+        idempotencyKey: 'draft-a',
+        circleId: 'circle',
+        content: 'from A',
+      ),
+    );
+    await PendingMessageStore(storage, userId: 'user-b').save(
+      const PendingMessageEnvelope(
+        idempotencyKey: 'draft-b',
+        circleId: 'circle',
+        content: 'from B',
+      ),
+    );
+    storage.values['halaqaty.chat.pending.index'] = 'legacy';
+    storage.values['halaqaty.chat.pending.legacy'] = '{"content":"old"}';
+    storage.values['halaqaty_session_id'] = 'session';
+
+    await PendingMessageStore(storage, userId: 'user-a').clear();
+
+    expect(storage.values, contains('halaqaty_session_id'));
+    expect(storage.values, isNot(contains('halaqaty.chat.pending.index')));
+    expect(storage.values, isNot(contains('halaqaty.chat.pending.legacy')));
+    expect(
+      (await PendingMessageStore(storage, userId: 'user-b').loadAll())
           .single
           .content,
       'from B',

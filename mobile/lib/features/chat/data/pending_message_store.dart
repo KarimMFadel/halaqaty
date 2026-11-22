@@ -47,13 +47,18 @@ class PendingMessageEnvelope {
 /// relying on platform key enumeration.
 class PendingMessageStore {
   PendingMessageStore(this._storage, {required String userId})
-      : _indexKey = 'halaqaty.chat.pending.$userId.index',
-        _prefix = 'halaqaty.chat.pending.$userId.' {
+      : _indexKey =
+            '$_accountStoragePrefix${base64Url.encode(utf8.encode(userId))}.index',
+        _prefix =
+            '$_accountStoragePrefix${base64Url.encode(utf8.encode(userId))}.' {
     _queue = (_queues[_storage] ??= {}).putIfAbsent(_indexKey, _DraftQueue.new);
     _generation = _queue.generation;
   }
 
   static final _queues = Expando<Map<String, _DraftQueue>>();
+  static const _storagePrefix = 'halaqaty.chat.pending.';
+  static const _accountStoragePrefix = '${_storagePrefix}account.';
+  static const _legacyIndexKey = '${_storagePrefix}index';
   final String _indexKey;
   final String _prefix;
   final FlutterSecureStorage _storage;
@@ -132,6 +137,18 @@ class PendingMessageStore {
       await _storage.delete(key: '$_prefix$id');
     }
     await _storage.delete(key: _indexKey);
+
+    final legacyIds = (await _storage.read(key: _legacyIndexKey))
+            ?.split('\n')
+            .where((id) => id.isNotEmpty) ??
+        const <String>[];
+    for (final id in legacyIds) {
+      final key = '$_storagePrefix$id';
+      if (!key.startsWith(_accountStoragePrefix)) {
+        await _storage.delete(key: key);
+      }
+    }
+    await _storage.delete(key: _legacyIndexKey);
   }
 
   Future<void> discard(String idempotencyKey) =>

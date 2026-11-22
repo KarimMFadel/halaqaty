@@ -883,6 +883,19 @@ erDiagram
 
 ### 4.2 Table Definitions
 
+#### `circle_invitations` (approved F-002 remediation; migration pending)
+
+The [ADR-010](adr/ADR-010-circle-role-management.md) remediation adds a
+recipient-bound invitation record with UUID `id`, `circle_id`, `inviter_user_id`,
+`recipient_user_id`, immutable `role` (`teacher` or `student`), `state`
+(`pending`, `accepted`, `revoked`, `superseded`), `created_at`, and nullable
+`resolved_at`. Circle and user IDs reference existing records. A partial unique
+index permits at most one pending invitation per circle and recipient; state and
+resolved time agree. Invitations have no expiry. Creation/replacement, revocation
+and acceptance must serialize with membership mutations and enforce the checks and
+notification transaction boundary in ADR-010. This schema is approved for the
+remediation and is not yet present in the current migration chain.
+
 #### `users`
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|

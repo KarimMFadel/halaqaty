@@ -177,7 +177,7 @@ func NewDispatcher(store DispatchStore, sender PushSender, remover DeviceTokenRe
 }
 
 // DispatchDue expires stale intents, then claims and dispatches one bounded
-// batch. The first store failure aborts the batch; the next cycle retries.
+// batch. Individual failures are returned after the remaining intents are tried.
 func (d *Dispatcher) DispatchDue(ctx context.Context, limit int) error {
 	if d.store == nil || d.sender == nil || d.remover == nil {
 		return errors.New("notifications dispatcher requires store, sender, and token remover")
@@ -195,12 +195,16 @@ func (d *Dispatcher) DispatchDue(ctx context.Context, limit int) error {
 	if err != nil {
 		return fmt.Errorf("claim due notification intents: %w", err)
 	}
+	var errs []error
 	for _, intent := range intents {
+		if err := ctx.Err(); err != nil {
+			return errors.Join(append(errs, err)...)
+		}
 		if err := d.dispatchIntent(ctx, intent); err != nil {
-			return err
+			errs = append(errs, fmt.Errorf("dispatch notification %s: %w", intent.ID, err))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // Run drives periodic dispatch until ctx is canceled. Per-cycle failures are

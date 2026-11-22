@@ -43,6 +43,8 @@ type fakeDispatchStore struct {
 	settleState   notifications.DeliveryState
 	claimable     bool
 	suppressCalls int
+	failAttemptID uuid.UUID
+	attemptErr    error
 	// alreadyTerminal simulates a guarded suppression that matched zero rows.
 	alreadyTerminal bool
 }
@@ -58,7 +60,10 @@ func (s *fakeDispatchStore) ClaimDueIntents(_ context.Context, _ time.Time, _ in
 	return s.intents, nil
 }
 
-func (s *fakeDispatchStore) HasDeviceAttempts(_ context.Context, _ uuid.UUID) (bool, error) {
+func (s *fakeDispatchStore) HasDeviceAttempts(_ context.Context, id uuid.UUID) (bool, error) {
+	if id == s.failAttemptID && s.attemptErr != nil {
+		return false, s.attemptErr
+	}
 	return s.hasAttempts, nil
 }
 
@@ -527,5 +532,24 @@ func TestDispatchSendTimeoutSchedulesTransientRetry(t *testing.T) {
 	}
 	if got := metrics.Summary().Outcomes[notifications.DispatchRetried]; got != 1 {
 		t.Fatalf("retried metric=%d, want 1", got)
+	}
+}
+
+func TestDispatchDueContinuesAfterOneIntentFails(t *testing.T) {
+	first := testIntent()
+	second := testIntent()
+	failure := errors.New("source unavailable")
+	store := &fakeDispatchStore{
+		intents: []notifications.DispatchIntent{first, second}, claimable: true, failAttemptID: first.ID, attemptErr: failure,
+		gates:   notifications.DispatchGates{PreferenceEnabled: true, QuietHours: notifications.QuietHours{Enabled: false, StartLocal: "22:00", EndLocal: "07:00", Timezone: "UTC"}},
+		targets: []notifications.DeviceTarget{{DeviceTokenID: uuid.New(), Token: "fixture-token"}}, settleState: notifications.DeliveryAccepted,
+	}
+	sender := &fakePushSender{}
+	d := newTestDispatcher(store, sender, &fakeTokenRemover{}, &notifications.NotificationMetrics{}, time.Now())
+	if err := d.DispatchDue(context.Background(), 10); !errors.Is(err, failure) {
+		t.Fatalf("error = %v, want source failure", err)
+	}
+	if len(sender.sent) != 1 || sender.sent[0].NotificationID != second.ID {
+		t.Fatalf("sent = %v, want later intent", sender.sent)
 	}
 }

@@ -49,26 +49,6 @@ func TestPlanPreviewWindowUsesFirst31LocalDaysAndFiniteSelectedDates(t *testing.
 	}
 }
 
-func TestPlanPreviewWindowRejectsSelectedDatesBeyondLimits(t *testing.T) {
-	anchor := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
-	record := RevisionRecord{Revision: Revision{Version: 1, Mode: ModeSelectedDates, AnchorLocalDate: anchor, EffectiveLocalDate: anchor}, StartLocalTime: LocalClock{Hour: 9}, EndLocalTime: LocalClock{Hour: 10}, DurationMinutes: 60, Timezone: "Asia/Riyadh"}
-
-	overCount := record
-	overCount.SelectedDates = make([]time.Time, 367)
-	for i := range overCount.SelectedDates {
-		overCount.SelectedDates[i] = anchor.AddDate(0, 0, i)
-	}
-	if _, err := previewWindow(overCount); !errors.Is(err, ErrInvalidSelectedDates) {
-		t.Fatalf("367 selected dates preview: got %v, want ErrInvalidSelectedDates", err)
-	}
-
-	overSpan := record
-	overSpan.SelectedDates = []time.Time{anchor, anchor.AddDate(0, 0, 367)}
-	if _, err := previewWindow(overSpan); !errors.Is(err, ErrInvalidSelectedDates) {
-		t.Fatalf("367-day span preview: got %v, want ErrInvalidSelectedDates", err)
-	}
-}
-
 func TestPlanPreviewWindowSelectedDatesStayWithinRequestHorizon(t *testing.T) {
 	anchor := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
 	last := anchor.AddDate(0, 0, 366)

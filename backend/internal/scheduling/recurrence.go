@@ -22,20 +22,6 @@ const (
 // IntervalUnit identifies the stepping unit of ModeInterval.
 type IntervalUnit string
 
-// Selected-dates limits chosen at implementation time: specs/006 states no
-// numeric cap for explicitly selected dates, so these availability guards
-// bound the worst case per request — one occurrence per day for a leap year,
-// spanning at most one leap year from the anchor. They cap the count and span
-// of occurrences the preview/overlap expansion (previewWindow) generates and
-// the time spent under the global overlap advisory lock.
-const (
-	// maxSelectedDateCount caps how many dates one selected-dates revision may list.
-	maxSelectedDateCount = 366
-	// maxSelectedDateSpanDays caps the day distance between the earliest and
-	// latest selected date (the earliest must equal the anchor).
-	maxSelectedDateSpanDays = 366
-)
-
 const (
 	// IntervalUnitDay steps by IntervalCount days.
 	IntervalUnitDay IntervalUnit = "day"
@@ -139,12 +125,8 @@ func (r Revision) validateSelectedDates() error {
 	if len(r.SelectedDates) == 0 {
 		return fmt.Errorf("no selected dates: %w", ErrInvalidSelectedDates)
 	}
-	if len(r.SelectedDates) > maxSelectedDateCount {
-		return fmt.Errorf("%d selected dates exceed the %d limit: %w", len(r.SelectedDates), maxSelectedDateCount, ErrInvalidSelectedDates)
-	}
 	anchor := civilOf(r.AnchorLocalDate)
 	first := civilOf(r.SelectedDates[0])
-	last := first
 	for _, d := range r.SelectedDates {
 		day := civilOf(d)
 		if day.Before(anchor) {
@@ -156,15 +138,9 @@ func (r Revision) validateSelectedDates() error {
 		if day.Before(first) {
 			first = day
 		}
-		if day.After(last) {
-			last = day
-		}
 	}
 	if !first.Equal(anchor) {
 		return fmt.Errorf("first selected date must equal the anchor: %w", ErrInvalidSelectedDates)
-	}
-	if span := daysBetween(first, last); span > maxSelectedDateSpanDays {
-		return fmt.Errorf("selected dates span %d days, limit %d: %w", span, maxSelectedDateSpanDays, ErrInvalidSelectedDates)
 	}
 	return nil
 }

@@ -42,8 +42,8 @@ const (
 
 // rememberEvent records one deduplicated event ID, evicting an arbitrary entry
 // once the set reaches maxSeenEvents so a long-lived topic cannot grow without
-// bound. Eviction may let a very old ID re-deliver; dedup remains correct
-// within the capped window.
+// bound. Eviction makes deduplication best-effort; clients still handle the
+// documented at-least-once delivery semantics.
 func rememberEvent(seen map[string]struct{}, eventID string) {
 	for len(seen) >= maxSeenEvents {
 		for id := range seen {

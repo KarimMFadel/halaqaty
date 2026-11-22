@@ -10,6 +10,10 @@ import (
 	"github.com/google/uuid"
 )
 
+// maxTickets bounds the in-memory ticket store so tickets minted but never
+// validated cannot accumulate without bound.
+const maxTickets = 1024
+
 // CircleTopicReader supplies the caller's current active circle memberships.
 type CircleTopicReader interface {
 	ListCircleIDs(context.Context, string) ([]string, error)
@@ -50,8 +54,22 @@ func (s *TicketService) issue(ctx context.Context, userID, sessionID string) (Ti
 	if err != nil {
 		return Ticket{}, fmt.Errorf("list realtime circles: %w", err)
 	}
-	ticket := Ticket{Token: uuid.NewString(), UserID: userID, SessionID: sessionID, CircleIDs: circles, ExpiresAt: s.now().UTC().Add(TicketTTL)}
+	now := s.now().UTC()
+	ticket := Ticket{Token: uuid.NewString(), UserID: userID, SessionID: sessionID, CircleIDs: circles, ExpiresAt: now.Add(TicketTTL)}
 	s.mu.Lock()
+	// Sweep expired tickets so ones minted but never validated do not linger,
+	// then evict arbitrary entries if the store is still at its cap.
+	for token, existing := range s.tokens {
+		if existing.ExpiredAt(now) {
+			delete(s.tokens, token)
+		}
+	}
+	for len(s.tokens) >= maxTickets {
+		for token := range s.tokens {
+			delete(s.tokens, token)
+			break
+		}
+	}
 	s.tokens[ticket.Token] = ticket
 	s.mu.Unlock()
 	return ticket, nil

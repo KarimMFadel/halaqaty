@@ -41,3 +41,38 @@ func TestTicketServiceExpiresTickets(t *testing.T) {
 		t.Fatal("expired ticket accepted")
 	}
 }
+
+func TestTicketServiceSweepsExpiredTicketsOnIssue(t *testing.T) {
+	s := NewTicketService(ticketReader{})
+	now := time.Now()
+	s.now = func() time.Time { return now }
+	expired, err := s.Issue(context.Background(), "user-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(TicketTTL)
+	if _, err := s.Issue(context.Background(), "user-2"); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	_, stillStored := s.tokens[expired.Token]
+	s.mu.Unlock()
+	if stillStored {
+		t.Fatal("expired ticket retained after a later issue")
+	}
+}
+
+func TestTicketServiceBoundsTicketStore(t *testing.T) {
+	s := NewTicketService(ticketReader{})
+	for i := 0; i < maxTickets+10; i++ {
+		if _, err := s.Issue(context.Background(), "user-1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.mu.Lock()
+	n := len(s.tokens)
+	s.mu.Unlock()
+	if n > maxTickets {
+		t.Fatalf("ticket store holds %d entries, want <= %d", n, maxTickets)
+	}
+}

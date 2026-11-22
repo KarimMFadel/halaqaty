@@ -218,6 +218,31 @@ func TestHub_BroadcastDeduplicatesEventIDsPerTopic(t *testing.T) {
 	}
 }
 
+func TestHub_BoundsSeenEventsPerTopic(t *testing.T) {
+	hub := NewHub(nil, nil)
+	topic, err := NewCircleTopic("11111111-1111-1111-1111-111111111111")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < maxSeenEvents+10; i++ {
+		if err := hub.Broadcast(topic, fmt.Sprintf("event-%d", i), map[string]any{"type": "x"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	recent := fmt.Sprintf("event-%d", maxSeenEvents+9)
+	hub.mu.Lock()
+	seen := hub.seenEvents[topic.String()]
+	size := len(seen)
+	_, retained := seen[recent]
+	hub.mu.Unlock()
+	if size > maxSeenEvents {
+		t.Fatalf("seen-event set holds %d entries, want <= %d", size, maxSeenEvents)
+	}
+	if !retained {
+		t.Fatal("recently-seen event was evicted")
+	}
+}
+
 func TestHub_BroadcastDoesNotRaceWithConnectionReplies(t *testing.T) {
 	tickets := NewTicketService(hubTicketReader{circleID: "11111111-1111-1111-1111-111111111111"})
 	hub := NewHub(tickets, hubSessionAuthorizer{})

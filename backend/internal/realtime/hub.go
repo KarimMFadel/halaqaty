@@ -35,7 +35,24 @@ const (
 	// as a slow client instead of buffering unboundedly. Frames are never
 	// silently dropped.
 	realtimeSendBuffer = 256
+	// maxSeenEvents caps each deduplication set so long-lived topics cannot
+	// grow without bound.
+	maxSeenEvents = 1024
 )
+
+// rememberEvent records one deduplicated event ID, evicting an arbitrary entry
+// once the set reaches maxSeenEvents so a long-lived topic cannot grow without
+// bound. Eviction may let a very old ID re-deliver; dedup remains correct
+// within the capped window.
+func rememberEvent(seen map[string]struct{}, eventID string) {
+	for len(seen) >= maxSeenEvents {
+		for id := range seen {
+			delete(seen, id)
+			break
+		}
+	}
+	seen[eventID] = struct{}{}
+}
 
 // SessionTopicAuthorizer checks whether a user may subscribe to a live
 // session topic. Implementations must revalidate current membership/presence.
@@ -477,7 +494,7 @@ func (h *Hub) broadcast(ctx context.Context, topic Topic, eventID string, payloa
 			client.enqueue(encoded)
 		}
 		if eventID != "" {
-			h.seenEvents[topic.String()][eventID] = struct{}{}
+			rememberEvent(h.seenEvents[topic.String()], eventID)
 		}
 	}
 	h.mu.Lock()
@@ -571,7 +588,7 @@ func (h *Hub) SendToUsers(ctx context.Context, userIDs []string, delivery Author
 	}
 	if delivery.EventID != "" {
 		for userID := range targets {
-			h.seenEvents["direct:"+userID][delivery.EventID] = struct{}{}
+			rememberEvent(h.seenEvents["direct:"+userID], delivery.EventID)
 		}
 	}
 	return nil
@@ -599,7 +616,7 @@ func (h *Hub) SendToUser(topic Topic, userID, eventID string, payload any) error
 		if _, ok := seen[eventID]; ok {
 			return nil
 		}
-		seen[eventID] = struct{}{}
+		rememberEvent(seen, eventID)
 	}
 	for client := range h.clients {
 		if client.userID != userID {

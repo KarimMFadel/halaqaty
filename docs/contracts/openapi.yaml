@@ -330,7 +330,7 @@ paths:
         Create a new circle. The creator may assign existing registered users as one
         or more teachers and one optional backup supervisor. If no teacher is
         selected, the creator becomes teacher; otherwise the creator becomes
-        supervisor.
+        supervisor. This behavior is pending teacher-consent remediation in ADR-010.
       tags: [Circles]
       summary: Create a new circle
       requestBody:
@@ -3269,7 +3269,7 @@ components:
           default: required
         teacher_user_ids:
           type: array
-          description: Existing registered users to add as teachers. If omitted or empty, the creator becomes teacher.
+          description: Existing registered users to add as teachers. If omitted or empty, the creator becomes teacher. Pending teacher-consent remediation in ADR-010.
           items:
             type: string
             format: uuid
@@ -4080,7 +4080,7 @@ components:
         weekdays: { type: array, minItems: 1, uniqueItems: true, items: { type: integer, minimum: 0, maximum: 6 } }
         interval_count: { type: integer, minimum: 1 }
         interval_unit: { type: string, enum: [day, week] }
-        selected_dates: { type: array, items: { type: string, format: date } }
+        selected_dates: { type: array, maxItems: 366, items: { type: string, format: date } }
         confirm_overlaps: { type: boolean, default: false, description: Relevant on writes only; true also requires all current warning IDs in confirmed_warning_ids }
         confirmed_warning_ids: { $ref: '#/components/schemas/ConfirmedWarningIds' }
     ConfirmedWarningIds:

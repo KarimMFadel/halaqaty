@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Halaqaty System Map",
+    "subtitle": "Core app, backend, data and provider boundaries",
+    "output": "docs/engineering/architecture/diagrams/system-map.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "people", "type": "external", "label": "Teachers + Students", "sublabel": "iOS · Android · Web", "pos": [36, 270], "size": [150, 66] },
+    { "id": "mobile", "type": "frontend", "label": "Flutter App", "sublabel": "Riverpod · go_router", "pos": [250, 270], "size": [150, 66] },
+    { "id": "rest", "type": "backend", "label": "Go REST API", "sublabel": "auth · profiles · circles", "pos": [490, 190], "size": [166, 70] },
+    { "id": "realtime", "type": "backend", "label": "Realtime Hub", "sublabel": "chat · queue · presence", "pos": [490, 370], "size": [166, 70] },
+    { "id": "postgres", "type": "database", "label": "PostgreSQL", "sublabel": "application source of truth", "pos": [770, 270], "size": [170, 70] },
+    { "id": "firebase", "type": "cloud", "label": "Firebase", "sublabel": "identity · push delivery", "pos": [490, 40], "size": [166, 70] },
+    { "id": "minio", "type": "cloud", "label": "MinIO", "sublabel": "private chat attachments", "pos": [770, 70], "size": [170, 70] },
+    { "id": "media", "type": "cloud", "label": "LiveKit", "sublabel": "audio-only session media", "pos": [770, 470], "size": [170, 70] }
+  ],
+  "connections": [
+    { "id": "people-mobile", "from": "people", "to": "mobile", "label": "use Halaqaty", "variant": "emphasis" },
+    { "id": "mobile-rest", "from": "mobile", "to": "rest", "label": "HTTPS · REST", "variant": "emphasis" },
+    { "id": "mobile-realtime", "from": "mobile", "to": "realtime", "label": "WebSocket", "fromSide": "right", "toSide": "left" },
+    { "id": "mobile-media", "from": "mobile", "to": "media", "label": "WebRTC audio", "fromSide": "right", "toSide": "left", "variant": "dashed" },
+    { "id": "rest-db", "from": "rest", "to": "postgres", "label": "read / write" },
+    { "id": "realtime-db", "from": "realtime", "to": "postgres", "label": "authorized state", "fromSide": "right", "toSide": "bottom" },
+    { "id": "rest-firebase", "from": "rest", "to": "firebase", "label": "verify identity · send push", "fromSide": "top", "toSide": "right", "variant": "security" },
+    { "id": "rest-minio", "from": "rest", "to": "minio", "label": "authorize attachment access", "fromSide": "right", "toSide": "left" },
+    { "id": "rest-media", "from": "rest", "to": "media", "label": "session media adapter", "fromSide": "bottom", "toSide": "left", "variant": "security" }
+  ],
+  "cards": [
+    { "dot": "rose", "title": "Provider boundaries", "items": ["Backend owns identity validation, authorization, and LiveKit credentials.", "Session contracts use provider-neutral media connection names; LiveKit is the sole MVP media implementation."] },
+    { "dot": "cyan", "title": "How to read this map", "items": ["High-level runtime relationships only; feature modules and database tables are intentionally grouped.", "Use ARCHITECTURE.md, ADRs, OpenAPI, and WebSocket event catalog for authoritative details."] }
+  ]
+}

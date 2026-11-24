@@ -1,0 +1,194 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Halaqaty Core Learning Journey",
+    "subtitle": "Current core flow with approved work ahead marked",
+    "output": "docs/engineering/architecture/diagrams/core-learning-journey.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "teacher",
+      "label": "Teacher / Supervisor"
+    },
+    {
+      "id": "student",
+      "label": "Student"
+    },
+    {
+      "id": "platform",
+      "label": "Halaqaty Platform"
+    }
+  ],
+  "mainPath": [
+    "setup",
+    "join",
+    "schedule",
+    "prepare",
+    "start",
+    "participate",
+    "record",
+    "review"
+  ],
+  "nodes": [
+    {
+      "id": "setup",
+      "lane": "teacher",
+      "col": 0,
+      "type": "frontend",
+      "label": "Create circle",
+      "sublabel": "invite members",
+      "width": 142
+    },
+    {
+      "id": "join",
+      "lane": "student",
+      "col": 1,
+      "type": "frontend",
+      "label": "Join circle",
+      "sublabel": "view circle activity",
+      "width": 142
+    },
+    {
+      "id": "schedule",
+      "lane": "teacher",
+      "col": 2,
+      "type": "frontend",
+      "label": "Schedule session",
+      "sublabel": "approved F-006",
+      "tag": "Implemented",
+      "width": 142
+    },
+    {
+      "id": "prepare",
+      "lane": "teacher",
+      "col": 3,
+      "type": "frontend",
+      "label": "Prepare recitation",
+      "sublabel": "voluntary ordered queue",
+      "tag": "Implemented",
+      "width": 142
+    },
+    {
+      "id": "start",
+      "lane": "teacher",
+      "col": 4,
+      "type": "backend",
+      "label": "Start live session",
+      "sublabel": "audio via LiveKit",
+      "tag": "Implemented",
+      "width": 142
+    },
+    {
+      "id": "participate",
+      "lane": "student",
+      "col": 4,
+      "type": "frontend",
+      "label": "Attend and recite",
+      "sublabel": "audio is not queue-gated",
+      "tag": "Implemented",
+      "width": 142
+    },
+    {
+      "id": "record",
+      "lane": "platform",
+      "col": 5,
+      "type": "database",
+      "label": "Record outcomes",
+      "sublabel": "attendance + recitations",
+      "tag": "F-007 approved",
+      "width": 142
+    },
+    {
+      "id": "review",
+      "lane": "student",
+      "col": 5,
+      "type": "frontend",
+      "label": "Review progress",
+      "sublabel": "Quran map + summaries",
+      "tag": "F-007 approved",
+      "width": 142
+    },
+    {
+      "id": "notify",
+      "lane": "platform",
+      "col": 3,
+      "type": "messagebus",
+      "label": "Notify members",
+      "sublabel": "history, preferences, push",
+      "tag": "F-008 approved",
+      "width": 142
+    }
+  ],
+  "edges": [
+    {
+      "id": "setup-join",
+      "from": "setup",
+      "to": "join",
+      "label": "invite"
+    },
+    {
+      "id": "join-schedule",
+      "from": "join",
+      "to": "schedule",
+      "label": "member"
+    },
+    {
+      "id": "schedule-prepare",
+      "from": "schedule",
+      "to": "prepare",
+      "label": "planned session"
+    },
+    {
+      "id": "prepare-start",
+      "from": "prepare",
+      "to": "start",
+      "label": "session begins"
+    },
+    {
+      "id": "start-participate",
+      "from": "start",
+      "to": "participate",
+      "label": "authorized participant"
+    },
+    {
+      "id": "participate-record",
+      "from": "participate",
+      "to": "record",
+      "label": "attendance + completed turns"
+    },
+    {
+      "id": "record-review",
+      "from": "record",
+      "to": "review",
+      "label": "planned F-007 views",
+      "variant": "dashed"
+    },
+    {
+      "id": "record-notify",
+      "from": "record",
+      "to": "notify",
+      "label": "event notices",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Current behavior",
+      "items": [
+        "F-003 queue tracks displayed order and recitation outcomes; it does not grant or revoke audio.",
+        "Authorized students may publish audio throughout an active session; teacher and supervisor controls moderate explicitly."
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Status guide",
+      "items": [
+        "Green tags indicate existing core flows.",
+        "F-007 progress views and F-008 notification experience are approved work, not represented as complete."
+      ]
+    }
+  ]
+}

@@ -1,11 +1,9 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderContainer;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:halaqaty_mobile/features/auth/data/auth_api_client.dart';
 import 'package:halaqaty_mobile/features/notifications/data/notification_realtime_client.dart';
 import 'package:halaqaty_mobile/features/notifications/domain/notification_models.dart';
 
@@ -171,13 +169,11 @@ void main() {
         () async {
       final sockets = <WebSocket>[];
       var connections = 0;
-      var tickets = 0;
 
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) async {
         if (request.method == 'POST' &&
             request.uri.path == '/api/v1/realtime/tickets') {
-          tickets++;
           request.response.headers.contentType = ContentType.json;
           request.response.write(jsonEncode({'token': 'ticket-1'}));
           await request.response.close();

@@ -9,6 +9,7 @@ import 'package:halaqaty_mobile/features/circles/presentation/circle_name_text.d
 import 'package:halaqaty_mobile/features/circles/presentation/circle_load_error.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_ui_labels.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/create_circle_screen.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_invitation_inbox_screen.dart';
 
 class CircleDiscoveryScreen extends ConsumerStatefulWidget {
   const CircleDiscoveryScreen({super.key, this.onOpenInvite});
@@ -105,6 +106,17 @@ class _CircleDiscoveryScreenState extends ConsumerState<CircleDiscoveryScreen> {
                         label: Text(
                           rtl ? 'لديّ رابط دعوة' : 'I have an invite link',
                         ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        key: const Key('openCircleInvitations'),
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const CircleInvitationInboxScreen(),
+                          ),
+                        ),
+                        icon: const Icon(Icons.mail_outline),
+                        label: Text(rtl ? 'دعواتي' : 'My invitations'),
                       ),
                     ],
                   ),

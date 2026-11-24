@@ -67,3 +67,25 @@ final circleMembersProvider =
     ),
   );
 });
+
+final circleInvitationsProvider =
+    FutureProvider.family<List<CircleInvitation>, String>(
+  (ref, circleId) => _loadCircleResource(
+    ref,
+    (apiClient, credentials) => apiClient.listCircleInvitations(
+      firebaseIdToken: credentials.token,
+      sessionId: credentials.sessionId,
+      circleId: circleId,
+    ),
+  ),
+);
+
+final myCircleInvitationsProvider = FutureProvider<List<CircleInvitation>>(
+  (ref) => _loadCircleResource(
+    ref,
+    (apiClient, credentials) => apiClient.listMyCircleInvitations(
+      firebaseIdToken: credentials.token,
+      sessionId: credentials.sessionId,
+    ),
+  ),
+);

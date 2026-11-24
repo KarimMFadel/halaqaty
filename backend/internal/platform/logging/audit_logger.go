@@ -9,16 +9,19 @@ import (
 
 // Audit actions are standardized security-relevant event names.
 const (
-	ActionRegister      = "user.register"
-	ActionSessionCreate = "session.create"
-	ActionLogout        = "session.logout"
-	ActionProfileUpdate = "profile.update"
-	ActionCircleCreate  = "circle.create"
-	ActionCircleJoin    = "circle.join"
-	ActionRoleChange    = "circle.role_change"
-	ActionInviteRefresh = "circle.invite_refresh"
-	ActionMemberRemoval = "circle.member_remove"
-	ActionCircleArchive = "circle.archive"
+	ActionRegister                 = "user.register"
+	ActionSessionCreate            = "session.create"
+	ActionLogout                   = "session.logout"
+	ActionProfileUpdate            = "profile.update"
+	ActionCircleCreate             = "circle.create"
+	ActionCircleJoin               = "circle.join"
+	ActionRoleChange               = "circle.role_change"
+	ActionInviteRefresh            = "circle.invite_refresh"
+	ActionCircleInvitationSent     = "circle.invitation_sent"
+	ActionCircleInvitationAccepted = "circle.invitation_accepted"
+	ActionCircleInvitationRevoked  = "circle.invitation_revoked"
+	ActionMemberRemoval            = "circle.member_remove"
+	ActionCircleArchive            = "circle.archive"
 
 	// Queue audit actions carry redacted metadata only: no note text, no grade
 	// values, no student display names, no media/room references.
@@ -186,6 +189,21 @@ func CircleJoinEvent(actorUserID, circleID string) AuditEvent {
 // InviteRefreshEvent builds an invite-refresh audit event without logging the code.
 func InviteRefreshEvent(actorUserID, circleID string) AuditEvent {
 	return AuditEvent{Action: ActionInviteRefresh, ActorUserID: actorUserID, CircleID: circleID}
+}
+
+// CircleInvitationSentEvent records a named role offer without exposing its ID.
+func CircleInvitationSentEvent(actorUserID, targetUserID, circleID, role string) AuditEvent {
+	return AuditEvent{Action: ActionCircleInvitationSent, ActorUserID: actorUserID, TargetUser: targetUserID, CircleID: circleID, Metadata: map[string]any{"role": role}}
+}
+
+// CircleInvitationAcceptedEvent records a recipient's consent transition.
+func CircleInvitationAcceptedEvent(actorUserID, circleID, role string) AuditEvent {
+	return AuditEvent{Action: ActionCircleInvitationAccepted, ActorUserID: actorUserID, CircleID: circleID, Metadata: map[string]any{"role": role}}
+}
+
+// CircleInvitationRevokedEvent records manager revocation without exposing invite contents.
+func CircleInvitationRevokedEvent(actorUserID, circleID, invitationID string) AuditEvent {
+	return AuditEvent{Action: ActionCircleInvitationRevoked, ActorUserID: actorUserID, CircleID: circleID, Metadata: map[string]any{"invitation_id": invitationID}}
 }
 
 // MemberRemovalEvent builds a member-removal audit event.

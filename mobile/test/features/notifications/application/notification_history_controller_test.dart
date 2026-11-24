@@ -170,7 +170,7 @@ Future<void> _settle() => Future<void>.delayed(Duration.zero);
 /// watches the session id and must rebuild on transitions.
 class _MutableAuthController extends StateNotifier<AuthState>
     implements AuthController {
-  _MutableAuthController(AuthState initial) : super(initial);
+  _MutableAuthController(super.initial);
 
   @override
   void updateTimezone(String timezone) {}
@@ -383,7 +383,7 @@ void main() {
     ]);
     addTearDown(container.dispose);
     container.listen(
-        notificationHistoryControllerProvider, (_previous, _next) {});
+        notificationHistoryControllerProvider, (previous, next) {});
     await _settle();
 
     expect(
@@ -416,7 +416,7 @@ void main() {
     ]);
     addTearDown(container.dispose);
     container.listen(
-        notificationHistoryControllerProvider, (_previous, _next) {});
+        notificationHistoryControllerProvider, (previous, next) {});
     await _settle();
     expect(
         container.read(notificationHistoryControllerProvider).unreadCount, 5);

@@ -17,19 +17,24 @@ const (
 )
 
 const (
-	routeCirclesCreate       = "POST /api/v1/circles"
-	routeCirclesList         = "GET /api/v1/circles"
-	routeCirclesJoin         = "POST /api/v1/circles/join"
-	routeCirclesDiscover     = "GET /api/v1/circles/discover"
-	routeCircleJoin          = "POST /api/v1/circles/{circleId}/join"
-	routeCircleGet           = "GET /api/v1/circles/{circleId}"
-	routeCircleUpdate        = "PUT /api/v1/circles/{circleId}"
-	routeCircleMembersGet    = "GET /api/v1/circles/{circleId}/members"
-	routeCircleAssignRole    = "PUT /api/v1/circles/{circleId}/members/{userId}/role"
-	routeCircleRemoveMember  = "DELETE /api/v1/circles/{circleId}/members/{userId}"
-	routeCircleRefreshInvite = "POST /api/v1/circles/{circleId}/invite-code/refresh"
-	routeCircleArchive       = "DELETE /api/v1/circles/{circleId}"
-	routeUsersSearch         = "GET /api/v1/users/search"
+	routeCirclesCreate            = "POST /api/v1/circles"
+	routeCirclesList              = "GET /api/v1/circles"
+	routeCirclesJoin              = "POST /api/v1/circles/join"
+	routeCirclesDiscover          = "GET /api/v1/circles/discover"
+	routeCircleJoin               = "POST /api/v1/circles/{circleId}/join"
+	routeCircleGet                = "GET /api/v1/circles/{circleId}"
+	routeCircleUpdate             = "PUT /api/v1/circles/{circleId}"
+	routeCircleMembersGet         = "GET /api/v1/circles/{circleId}/members"
+	routeCircleAssignRole         = "PUT /api/v1/circles/{circleId}/members/{userId}/role"
+	routeCircleInvitationsGet     = "GET /api/v1/circles/{circleId}/invitations"
+	routeCircleInvitationsPost    = "POST /api/v1/circles/{circleId}/invitations"
+	routeCircleInvitationDelete   = "DELETE /api/v1/circles/{circleId}/invitations/{invitationId}"
+	routeCircleInvitationAccept   = "POST /api/v1/circle-invitations/{invitationId}/accept"
+	routeUserCircleInvitationsGet = "GET /api/v1/users/me/circle-invitations"
+	routeCircleRemoveMember       = "DELETE /api/v1/circles/{circleId}/members/{userId}"
+	routeCircleRefreshInvite      = "POST /api/v1/circles/{circleId}/invite-code/refresh"
+	routeCircleArchive            = "DELETE /api/v1/circles/{circleId}"
+	routeUsersSearch              = "GET /api/v1/users/search"
 )
 
 // F-005 live-session route patterns. Handler wiring arrives with T021/T034;

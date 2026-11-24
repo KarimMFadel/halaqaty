@@ -81,6 +81,29 @@ type AssignCircleRoleRequest struct {
 	Role string `json:"role"`
 }
 
+// CreateCircleInvitationRequest is the payload for creating a named invitation.
+type CreateCircleInvitationRequest struct {
+	RecipientUserID string `json:"recipient_user_id"`
+	Role            string `json:"role"`
+}
+
+// CircleInvitation is a recipient-bound, role-bound circle invitation.
+type CircleInvitation struct {
+	ID              string     `json:"id"`
+	CircleID        string     `json:"circle_id"`
+	InviterUserID   string     `json:"inviter_user_id"`
+	RecipientUserID string     `json:"recipient_user_id"`
+	Role            string     `json:"role"`
+	State           string     `json:"state"`
+	CreatedAt       time.Time  `json:"created_at"`
+	ResolvedAt      *time.Time `json:"resolved_at"`
+}
+
+// CircleInvitationListResponse is the list of invitations visible to the caller.
+type CircleInvitationListResponse struct {
+	Data []CircleInvitation `json:"data"`
+}
+
 // Circle is the persistence record for one circle.
 type Circle struct {
 	ID                string

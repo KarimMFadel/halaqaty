@@ -25,7 +25,6 @@ class CreateCircleRequest {
     this.isPrivate = false,
     this.genderRestriction = 'unspecified',
     this.language = 'ar',
-    this.teacherUserIds = const [],
     this.backupSupervisorUserId,
   });
 
@@ -36,7 +35,6 @@ class CreateCircleRequest {
   final bool isPrivate;
   final String genderRestriction;
   final String language;
-  final List<String> teacherUserIds;
   final String? backupSupervisorUserId;
 
   Map<String, dynamic> toJson() => {
@@ -47,7 +45,6 @@ class CreateCircleRequest {
         'is_private': isPrivate,
         'gender_restriction': genderRestriction,
         'language': language,
-        'teacher_user_ids': teacherUserIds,
         if (backupSupervisorUserId != null)
           'backup_supervisor_user_id': backupSupervisorUserId,
       };
@@ -208,6 +205,37 @@ class CircleInviteResponse {
       );
 }
 
+class CircleInvitation {
+  const CircleInvitation({
+    required this.id,
+    required this.circleId,
+    required this.inviterUserId,
+    required this.recipientUserId,
+    required this.role,
+    required this.state,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String circleId;
+  final String inviterUserId;
+  final String recipientUserId;
+  final CircleRole role;
+  final String state;
+  final DateTime createdAt;
+
+  factory CircleInvitation.fromJson(Map<String, dynamic> json) =>
+      CircleInvitation(
+        id: json['id'] as String,
+        circleId: json['circle_id'] as String,
+        inviterUserId: json['inviter_user_id'] as String,
+        recipientUserId: json['recipient_user_id'] as String,
+        role: CircleRole.values.byName(json['role'] as String),
+        state: json['state'] as String,
+        createdAt: DateTime.parse(json['created_at'] as String),
+      );
+}
+
 class CircleApiClient {
   CircleApiClient(this._dio);
 
@@ -337,6 +365,67 @@ class CircleApiClient {
     );
   }
 
+  Future<CircleInvitation> createCircleInvitation({
+    required String firebaseIdToken,
+    required String sessionId,
+    required String circleId,
+    required String recipientUserId,
+    required CircleRole role,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/circles/$circleId/invitations',
+      data: {'recipient_user_id': recipientUserId, 'role': role.name},
+      options: Options(headers: _authHeaders(firebaseIdToken, sessionId)),
+    );
+    return CircleInvitation.fromJson(response.data!);
+  }
+
+  Future<List<CircleInvitation>> listCircleInvitations({
+    required String firebaseIdToken,
+    required String sessionId,
+    required String circleId,
+  }) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/circles/$circleId/invitations',
+      options: Options(headers: _authHeaders(firebaseIdToken, sessionId)),
+    );
+    return _invitations(response.data?['data']);
+  }
+
+  Future<List<CircleInvitation>> listMyCircleInvitations({
+    required String firebaseIdToken,
+    required String sessionId,
+  }) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/users/me/circle-invitations',
+      options: Options(headers: _authHeaders(firebaseIdToken, sessionId)),
+    );
+    return _invitations(response.data?['data']);
+  }
+
+  Future<CircleInvitation> acceptCircleInvitation({
+    required String firebaseIdToken,
+    required String sessionId,
+    required String invitationId,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/circle-invitations/$invitationId/accept',
+      options: Options(headers: _authHeaders(firebaseIdToken, sessionId)),
+    );
+    return CircleInvitation.fromJson(response.data!);
+  }
+
+  Future<void> revokeCircleInvitation({
+    required String firebaseIdToken,
+    required String sessionId,
+    required String circleId,
+    required String invitationId,
+  }) =>
+      _dio.delete<void>(
+        '/circles/$circleId/invitations/$invitationId',
+        options: Options(headers: _authHeaders(firebaseIdToken, sessionId)),
+      );
+
   Future<void> removeMember({
     required String firebaseIdToken,
     required String sessionId,
@@ -402,6 +491,12 @@ class CircleApiClient {
       (payload as List<dynamic>? ?? const [])
           .whereType<Map<String, dynamic>>()
           .map(CircleSummary.fromJson)
+          .toList(growable: false);
+
+  List<CircleInvitation> _invitations(dynamic payload) =>
+      (payload as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(CircleInvitation.fromJson)
           .toList(growable: false);
 }
 

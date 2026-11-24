@@ -4,6 +4,7 @@
 /// `id, type, title, body, source_ref, created_at, is_read`; `NotificationPage`
 /// carries authoritative `unread_count` plus opaque `next_cursor`; the
 /// allowlisted types are mirrored from the OpenAPI enum.
+library;
 
 /// `NotificationSourceRef` — where the authorized source lives.
 class NotificationSourceRef {

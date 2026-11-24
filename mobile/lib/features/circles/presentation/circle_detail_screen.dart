@@ -7,6 +7,7 @@ import 'package:halaqaty_mobile/features/chat/presentation/group_chat_screen.dar
 import 'package:halaqaty_mobile/features/circles/application/circle_detail_controller.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_management_screen.dart';
+import 'package:halaqaty_mobile/features/circles/presentation/circle_invitation_management_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_members_screen.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_name_text.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_retirement_screen.dart';
@@ -188,6 +189,25 @@ class CircleDetailScreen extends ConsumerWidget {
                   );
                 },
               ),
+              if (!circle.isArchived && userId != null && currentRole != null)
+                ListTile(
+                  key: const Key('openCircleInvitations'),
+                  leading: const Icon(Icons.person_add_alt_1),
+                  title: Text(rtl ? 'دعوة عضو' : 'Invite a member'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => CircleInvitationManagementScreen(
+                        circleId: circle.id,
+                        canInviteTeacher: currentRole == CircleRole.teacher ||
+                            currentRole == CircleRole.supervisor,
+                        canRevokeInvitations:
+                            currentRole == CircleRole.teacher ||
+                                currentRole == CircleRole.supervisor,
+                      ),
+                    ),
+                  ),
+                ),
               // Archived circles keep their retained-read chat entry (US8 /
               // FR-032): the chat opens read-only, mutations are denied
               // server-side.

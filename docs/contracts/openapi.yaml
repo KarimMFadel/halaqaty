@@ -327,10 +327,9 @@ paths:
     post:
       operationId: createCircle
       description: |
-        Create a new circle. The creator may assign existing registered users as one
-        or more teachers and one optional backup supervisor. If no teacher is
-        selected, the creator becomes teacher; otherwise the creator becomes
-        supervisor. This behavior is pending teacher-consent remediation in ADR-010.
+        Create a circle with the creator as its first accepted teacher. A backup
+        supervisor may be selected. Other teachers must receive and accept a
+        named, role-bound invitation; direct teacher assignments are rejected.
       tags: [Circles]
       summary: Create a new circle
       requestBody:
@@ -402,6 +401,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
 
     put:
       operationId: updateCircle
@@ -583,9 +584,9 @@ paths:
       operationId: updateCircleMemberRole
       description: |
         An active teacher or supervisor may update another active member to student,
-        supervisor, or teacher. The actor cannot change their own role, this endpoint
-        cannot leave the circle without a teacher, and it never changes a role in
-        another circle.
+        or supervisor. Assigning teacher requires a named invitation accepted by the
+        target. The actor cannot change their own role, this endpoint cannot leave
+        the circle without a teacher, and it never changes a role in another circle.
       tags: [Circles]
       summary: Manage another circle member's role (teacher or supervisor)
       requestBody:
@@ -605,6 +606,144 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+
+  /circles/{circleId}/invitations:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+    get:
+      operationId: listCircleInvitations
+      description: |
+        List pending invitations visible to the current member. Teachers and
+        supervisors can see all pending invitations. Student inviters can see only
+        invitations they created. Invitations do not expire.
+      tags: [Circles]
+      summary: List pending circle invitations
+      responses:
+        '200':
+          description: Visible pending invitations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CircleInvitationListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: createCircleInvitation
+      description: |
+        Create a named student or teacher invitation. Students may invite students;
+        teachers and supervisors may invite either role. A new invitation for the
+        same recipient replaces that recipient's pending invitation. The role is
+        immutable, and invitations do not expire.
+      tags: [Circles]
+      summary: Invite a named circle recipient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCircleInvitationRequest'
+      responses:
+        '201':
+          description: Invitation created or replaced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CircleInvitation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /users/me/circle-invitations:
+    get:
+      operationId: listMyCircleInvitations
+      description: List pending named invitations addressed to the authenticated user.
+      tags: [Users]
+      summary: List my pending circle invitations
+      responses:
+        '200':
+          description: Pending invitations addressed to the user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CircleInvitationListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /circle-invitations/{invitationId}/accept:
+    parameters:
+      - name: invitationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: acceptCircleInvitation
+      description: |
+        Accept only an invitation addressed to the authenticated user. Acceptance is
+        single-use and atomically rechecks invitation state, current inviter
+        authority, circle archive state, membership eligibility, capacity and the
+        final-teacher invariant. Replays and stale invitations return conflict.
+      tags: [Circles]
+      summary: Accept a named circle invitation
+      responses:
+        '200':
+          description: Invitation accepted and membership updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CircleInvitation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /circles/{circleId}/invitations/{invitationId}:
+    parameters:
+      - $ref: '#/components/parameters/CircleId'
+      - name: invitationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      operationId: revokeCircleInvitation
+      description: Revoke a pending invitation as an active teacher or supervisor.
+      tags: [Circles]
+      summary: Revoke a pending circle invitation
+      responses:
+        '204':
+          description: Invitation revoked
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
 
   /circles/join:
     post:
@@ -3269,7 +3408,8 @@ components:
           default: required
         teacher_user_ids:
           type: array
-          description: Existing registered users to add as teachers. If omitted or empty, the creator becomes teacher. Pending teacher-consent remediation in ADR-010.
+          deprecated: true
+          description: Legacy field retained for compatibility; any non-empty value is rejected because each selected teacher must first accept a named invitation.
           items:
             type: string
             format: uuid
@@ -3277,7 +3417,7 @@ components:
         backup_supervisor_user_id:
           type: string
           format: uuid
-          description: Optional existing registered user to add as supervisor. Must not also be a selected teacher.
+          description: Optional existing registered user to add as supervisor. The creator is always the initial teacher.
 
     UpdateCircleRequest:
       type: object
@@ -3381,6 +3521,57 @@ components:
         joined_at:
           type: string
           format: date-time
+
+    CircleInvitation:
+      type: object
+      required: [id, circle_id, inviter_user_id, recipient_user_id, role, state, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        circle_id:
+          type: string
+          format: uuid
+        inviter_user_id:
+          type: string
+          format: uuid
+        recipient_user_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [teacher, student]
+          description: Immutable role assigned by the invitation creator.
+        state:
+          type: string
+          enum: [pending, accepted, revoked, superseded]
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    CircleInvitationListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CircleInvitation'
+
+    CreateCircleInvitationRequest:
+      type: object
+      required: [recipient_user_id, role]
+      properties:
+        recipient_user_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [teacher, student]
 
     UserSearchResult:
       type: object

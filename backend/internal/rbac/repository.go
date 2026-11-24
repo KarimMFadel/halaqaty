@@ -393,3 +393,99 @@ func (r *Repository) UpdateMemberRole(ctx context.Context, circleID, userID, rol
 	}
 	return nil
 }
+
+// SetPrimaryTeacher updates the legacy circle teacher reference.
+func (r *Repository) SetPrimaryTeacher(ctx context.Context, circleID, userID string) error {
+	if _, err := r.q.Exec(ctx, setCircleTeacherIDQuery, circleID, userID); err != nil {
+		return fmt.Errorf("update primary circle teacher: %w", err)
+	}
+	return nil
+}
+
+// ReplacePendingInvitation supersedes the prior pending invitation before inserting its replacement.
+func (r *Repository) ReplacePendingInvitation(ctx context.Context, circleID, inviterID, recipientID, role string) (CircleInvitation, error) {
+	if _, err := r.q.Exec(ctx, supersedePendingCircleInvitationQuery, circleID, recipientID); err != nil {
+		return CircleInvitation{}, fmt.Errorf("supersede pending circle invitation: %w", err)
+	}
+	invitation, err := scanCircleInvitation(r.q.QueryRow(ctx, insertCircleInvitationQuery, circleID, inviterID, recipientID, role))
+	if err != nil {
+		return CircleInvitation{}, fmt.Errorf("insert circle invitation: %w", err)
+	}
+	return invitation, nil
+}
+
+// ListPendingCircleInvitations returns pending invitations for one circle.
+func (r *Repository) ListPendingCircleInvitations(ctx context.Context, circleID string) ([]CircleInvitation, error) {
+	return r.listCircleInvitations(ctx, listPendingCircleInvitationsQuery, circleID)
+}
+
+// ListPendingUserInvitations returns active-circle invitations addressed to one user.
+func (r *Repository) ListPendingUserInvitations(ctx context.Context, userID string) ([]CircleInvitation, error) {
+	return r.listCircleInvitations(ctx, listPendingUserInvitationsQuery, userID)
+}
+
+func (r *Repository) listCircleInvitations(ctx context.Context, query, userID string) ([]CircleInvitation, error) {
+	rows, err := r.q.Query(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list pending circle invitations: %w", err)
+	}
+	defer rows.Close()
+	invitations := make([]CircleInvitation, 0)
+	for rows.Next() {
+		invitation, scanErr := scanCircleInvitation(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan circle invitation: %w", scanErr)
+		}
+		invitations = append(invitations, invitation)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate circle invitations: %w", err)
+	}
+	return invitations, nil
+}
+
+// FindInvitation returns an invitation by its opaque ID.
+func (r *Repository) FindInvitation(ctx context.Context, invitationID string) (CircleInvitation, error) {
+	invitation, err := scanCircleInvitation(r.q.QueryRow(ctx, findCircleInvitationQuery, invitationID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return CircleInvitation{}, ErrInvitationNotFound
+	}
+	if err != nil {
+		return CircleInvitation{}, fmt.Errorf("find circle invitation: %w", err)
+	}
+	return invitation, nil
+}
+
+// LockInvitation locks one invitation scoped to its circle.
+func (r *Repository) LockInvitation(ctx context.Context, circleID, invitationID string) (CircleInvitation, error) {
+	invitation, err := scanCircleInvitation(r.q.QueryRow(ctx, lockCircleInvitationQuery, circleID, invitationID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return CircleInvitation{}, ErrInvitationNotFound
+	}
+	if err != nil {
+		return CircleInvitation{}, fmt.Errorf("lock circle invitation: %w", err)
+	}
+	return invitation, nil
+}
+
+// SetInvitationState resolves one pending invitation.
+func (r *Repository) SetInvitationState(ctx context.Context, invitationID, state string) error {
+	result, err := r.q.Exec(ctx, setCircleInvitationStateQuery, invitationID, state)
+	if err != nil {
+		return fmt.Errorf("resolve circle invitation: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return ErrInvitationConflict
+	}
+	return nil
+}
+
+func scanCircleInvitation(row pgx.Row) (CircleInvitation, error) {
+	var invitation CircleInvitation
+	err := row.Scan(
+		&invitation.ID, &invitation.CircleID, &invitation.InviterUserID,
+		&invitation.RecipientUserID, &invitation.Role, &invitation.State,
+		&invitation.CreatedAt, &invitation.ResolvedAt,
+	)
+	return invitation, err
+}

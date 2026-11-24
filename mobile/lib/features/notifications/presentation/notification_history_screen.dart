@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/notifications/application/notification_history_controller.dart';
-import 'package:halaqaty_mobile/features/notifications/domain/notification_models.dart';
 import 'package:halaqaty_mobile/features/notifications/presentation/notification_copy.dart';
 
 /// Notification center: newest-first 30-day history with the exact server

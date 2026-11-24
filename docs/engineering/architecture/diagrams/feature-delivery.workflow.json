@@ -1,0 +1,209 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "1 · Scope and Planning",
+    "subtitle": "Halaqaty workflow guide · rules remain in the harness",
+    "output": "docs/engineering/architecture/diagrams/feature-delivery.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "scope",
+      "label": "Scope and Decisions"
+    },
+    {
+      "id": "spec",
+      "label": "Spec-Kit Definition"
+    },
+    {
+      "id": "design",
+      "label": "Design and Handoff"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "classify",
+      "lane": "scope",
+      "col": 0,
+      "label": "Classify change",
+      "type": "security",
+      "width": 140
+    },
+    {
+      "id": "approved",
+      "lane": "scope",
+      "col": 1,
+      "label": "Approve scope",
+      "type": "external",
+      "width": 140
+    },
+    {
+      "id": "resolve",
+      "lane": "scope",
+      "col": 2,
+      "label": "Resolve conflict",
+      "type": "security",
+      "width": 140
+    },
+    {
+      "id": "fix",
+      "lane": "scope",
+      "col": 3,
+      "label": "Reference task / bug",
+      "type": "backend",
+      "width": 140
+    },
+    {
+      "id": "specify",
+      "lane": "spec",
+      "col": 1,
+      "label": "1. Specify",
+      "type": "backend",
+      "width": 140
+    },
+    {
+      "id": "clarify",
+      "lane": "spec",
+      "col": 2,
+      "label": "2. Clarify",
+      "type": "backend",
+      "width": 140
+    },
+    {
+      "id": "check",
+      "lane": "spec",
+      "col": 3,
+      "label": "3. Checklist",
+      "type": "security",
+      "width": 140
+    },
+    {
+      "id": "plan",
+      "lane": "design",
+      "col": 1,
+      "label": "4. Plan",
+      "type": "backend",
+      "width": 140
+    },
+    {
+      "id": "tasks",
+      "lane": "design",
+      "col": 2,
+      "label": "5. Tasks",
+      "type": "database",
+      "width": 140
+    },
+    {
+      "id": "analyze",
+      "lane": "design",
+      "col": 3,
+      "label": "6. Analyze",
+      "type": "security",
+      "width": 140
+    },
+    {
+      "id": "handoff",
+      "lane": "design",
+      "col": 4,
+      "label": "Implementation below",
+      "type": "external",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "classify-approved",
+      "from": "classify",
+      "to": "approved",
+      "label": "new scope"
+    },
+    {
+      "id": "classify-fix",
+      "from": "classify",
+      "to": "fix",
+      "label": "within scope"
+    },
+    {
+      "id": "approved-specify",
+      "from": "approved",
+      "to": "specify"
+    },
+    {
+      "id": "specify-clarify",
+      "from": "specify",
+      "to": "clarify"
+    },
+    {
+      "id": "clarify-check",
+      "from": "clarify",
+      "to": "check"
+    },
+    {
+      "id": "clarify-resolve",
+      "from": "clarify",
+      "to": "resolve",
+      "label": "conflict"
+    },
+    {
+      "id": "resolve-clarify",
+      "from": "resolve",
+      "to": "clarify",
+      "label": "resolved"
+    },
+    {
+      "id": "check-plan",
+      "from": "check",
+      "to": "plan",
+      "role": "return"
+    },
+    {
+      "id": "plan-tasks",
+      "from": "plan",
+      "to": "tasks"
+    },
+    {
+      "id": "tasks-analyze",
+      "from": "tasks",
+      "to": "analyze"
+    },
+    {
+      "id": "analyze-handoff",
+      "from": "analyze",
+      "to": "handoff",
+      "label": "consistent"
+    },
+    {
+      "id": "fix-handoff",
+      "from": "fix",
+      "to": "handoff",
+      "label": "existing scope"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Scope routing",
+      "items": [
+        "New features follow all seven Spec-Kit phases. Phase 7, Implement, is in View 2.",
+        "Proposed clarification: fixes within approved scope link an existing task or finding. Changes to product behavior, schema, contracts or governing decisions return to the relevant Spec-Kit / ADR process."
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Who participates",
+      "items": [
+        "Team Leader coordinates specification and tasks. Architect leads planning with affected domain agents. Use only the roles needed.",
+        "Conflicting governing decisions pause dependent work for Karim; record accepted resolutions in the owning artifact."
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "What reference means",
+      "items": [
+        "Attach the existing task ID or recorded bug/security finding to the change so its scope and completion can be traced. A task is planned work; a finding is a documented problem.",
+        "This is an alternative route for a fix already inside approved scope, not a step after every new-feature approval. New scope follows the Spec-Kit path."
+      ]
+    }
+  ]
+}

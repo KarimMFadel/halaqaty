@@ -48,6 +48,7 @@ func (r *Repository) ClaimDueIntents(ctx context.Context, now time.Time, limit i
 			&intent.ID,
 			&intent.UserID,
 			&intent.Type,
+			&intent.SourceEventID,
 			&intent.SourceRef.Type,
 			&intent.SourceRef.ID,
 			&intent.Title,
@@ -135,10 +136,14 @@ func (r *Repository) ListDueDeviceTargets(ctx context.Context, notificationID, u
 	return targets, nil
 }
 
-// SuppressIntent terminally suppresses the occurrence and records the same
-// per-device suppression outcome for every currently registered device. The
-// guarded update never revives an already-terminal row, so re-enabling the
-// preference later cannot replay the occurrence. It reports whether the
+// SuppressIntent terminally suppresses the occurrence. Preference and
+// quiet-hours suppression also record the same per-device suppression outcome
+// for every currently registered device; a DeliveryExpired suppression (the
+// volatile source-eligibility recheck) leaves attempt rows untouched — exactly
+// like the expiry sweep, a terminal intent is never reclaimed and orphaned
+// pending attempt rows are removed by retention cleanup. The guarded update
+// never revives an already-terminal row, so re-enabling the preference or a
+// later source change cannot replay the occurrence. It reports whether the
 // notification row actually transitioned (false when it was already terminal),
 // so callers only count real suppressions.
 func (r *Repository) SuppressIntent(ctx context.Context, notificationID, userID uuid.UUID, state DeliveryState) (bool, error) {
@@ -147,8 +152,10 @@ func (r *Repository) SuppressIntent(ctx context.Context, notificationID, userID 
 		return false, fmt.Errorf("begin notification suppression: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, suppressDeviceAttemptsQuery, notificationID, string(state), userID); err != nil {
-		return false, fmt.Errorf("record per-device suppression: %w", err)
+	if state != DeliveryExpired {
+		if _, err := tx.Exec(ctx, suppressDeviceAttemptsQuery, notificationID, string(state), userID); err != nil {
+			return false, fmt.Errorf("record per-device suppression: %w", err)
+		}
 	}
 	tag, err := tx.Exec(ctx, suppressNotificationQuery, notificationID, string(state))
 	if err != nil {

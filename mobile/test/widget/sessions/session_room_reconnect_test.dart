@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:halaqaty_mobile/features/circles/data/circle_api_client.dart';
+import 'package:halaqaty_mobile/features/notifications/application/notification_permission_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/application/media_session.dart';
 import 'package:halaqaty_mobile/features/sessions/application/session_room_controller.dart';
 import 'package:halaqaty_mobile/features/sessions/data/realtime_session_client.dart';
@@ -107,6 +109,35 @@ void main() {
     await tester.pump();
 
     expect(find.text(SessionUiLabels.sessionEnded), findsOneWidget);
+  });
+
+  testWidgets(
+      'the first ended room feeds the notification permission prompt path '
+      '(F-008 T026 gentle denied-permission prompt seam)', (tester) async {
+    final realtime = RecordingRealtimeClient();
+    final permission = RecordingPermissionController();
+    await tester.pumpWidget(_app(
+      RecoverySessionApi(),
+      realtime: realtime,
+      permissionController: permission,
+    ));
+    await tester.tap(find.text('Join'));
+    await _pumpAsync(tester);
+    expect(permission.sessionEndTriggers, 0);
+
+    realtime.emit(const SessionEndedEvent(
+      sessionId: 'session-1',
+      endReason: 'manual',
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    expect(permission.sessionEndTriggers, 1);
+
+    // A repeated pump on the already-ended room never re-triggers.
+    await tester.pump();
+    await tester.pump();
+    expect(permission.sessionEndTriggers, 1);
   });
 
   testWidgets('participant removal is terminal for that participant',
@@ -243,6 +274,7 @@ Widget _app(
   TextDirection direction = TextDirection.ltr,
   bool isModerator = false,
   bool canStart = false,
+  RecordingPermissionController? permissionController,
 }) {
   return ProviderScope(
     overrides: [
@@ -254,6 +286,11 @@ Widget _app(
           realtime: realtime ?? RecordingRealtimeClient(),
           isModerator: isModerator,
         ),
+      ),
+      // Session-room tests must never touch real FCM plugin channels; the
+      // recording stand-in also lets the F-008 prompt seam be asserted.
+      notificationPermissionControllerProvider.overrideWith(
+        (ref) => permissionController ?? RecordingPermissionController(),
       ),
     ],
     child: MaterialApp(
@@ -283,6 +320,24 @@ class RecordingMediaSession implements MediaSession {
 
   @override
   Future<void> setMicrophoneEnabled(bool enabled) async {}
+}
+
+/// Stand-in for the F-008 permission controller: records room-end triggers
+/// without touching FCM plugin channels or secure storage.
+class RecordingPermissionController extends NotificationPermissionController {
+  RecordingPermissionController()
+      : super(
+          loadSettings: () => throw UnimplementedError(),
+          requestPermission: () => throw UnimplementedError(),
+          secureStorage: const FlutterSecureStorage(),
+        );
+
+  int sessionEndTriggers = 0;
+
+  @override
+  Future<void> onFirstSessionEnded() async {
+    sessionEndTriggers++;
+  }
 }
 
 class RecordingRealtimeClient implements RealtimeSessionClient {

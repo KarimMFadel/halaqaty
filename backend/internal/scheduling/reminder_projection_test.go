@@ -172,7 +172,15 @@ func TestReminderStillEligibleReturnsFalseForStaleSources(t *testing.T) {
 	superseding.EffectiveLocalDate = current
 	stoppedFrom := current // future stop boundary keeps earlier occurrences
 	tryReminder := func(revisions []RevisionRecord, cancelled bool, stoppedFrom *time.Time, date time.Time, version int) bool {
-		return ReminderStillEligible(revisions, cancelled, stoppedFrom, "sched-1", date, version, 5*time.Minute)
+		return ReminderStillEligible(StoredReminderOccurrence{
+			Revisions:            revisions,
+			ScheduleID:           "sched-1",
+			OriginalLocalDate:    date,
+			Version:              version,
+			Offset:               5 * time.Minute,
+			Cancelled:            cancelled,
+			StoppedFromLocalDate: stoppedFrom,
+		})
 	}
 
 	for name, tc := range map[string]struct {

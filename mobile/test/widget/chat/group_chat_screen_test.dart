@@ -496,7 +496,8 @@ void main() {
         () async =>
             (token: 'token', sessionId: 'backend-session', userId: _meId),
         realtime: _FakeChatRealtimeClient(),
-        pendingStore: PendingMessageStore(_MemorySecureStorage()),
+        pendingStore:
+            PendingMessageStore(_MemorySecureStorage(), userId: _meId),
       );
       await _pumpChat(tester, direction: direction, api: api, controller: chat);
 
@@ -539,7 +540,8 @@ void main() {
         () async =>
             (token: 'token', sessionId: 'backend-session', userId: _meId),
         realtime: _FakeChatRealtimeClient(),
-        pendingStore: PendingMessageStore(_MemorySecureStorage()),
+        pendingStore:
+            PendingMessageStore(_MemorySecureStorage(), userId: _meId),
       );
       await _pumpChat(tester, direction: direction, api: api, controller: chat);
 

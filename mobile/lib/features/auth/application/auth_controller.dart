@@ -7,15 +7,12 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../chat/data/pending_message_store.dart';
 import '../data/auth_api_client.dart';
 
 const _sessionIdKey = 'halaqaty_session_id';
 
-enum AuthStatus {
-  unknown,
-  authenticated,
-  unauthenticated,
-}
+enum AuthStatus { unknown, authenticated, unauthenticated }
 
 class AuthState {
   const AuthState({
@@ -171,10 +168,7 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> signIn({
-    required String email,
-    required String password,
-  }) async {
+  Future<void> signIn({required String email, required String password}) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       await _firebaseAuth.signInWithEmailAndPassword(
@@ -289,9 +283,19 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> _clearLocalSession() async {
-    await _secureStorage.delete(key: _sessionIdKey);
-    await _firebaseAuth.signOut();
+    final userId = state.user?.id;
     state = const AuthState(status: AuthStatus.unauthenticated);
+    try {
+      if (userId != null) {
+        await PendingMessageStore(_secureStorage, userId: userId).clear();
+      }
+    } finally {
+      try {
+        await _secureStorage.delete(key: _sessionIdKey);
+      } finally {
+        await _firebaseAuth.signOut();
+      }
+    }
   }
 
   Future<void> _handleDioError(DioException e) async {
@@ -359,12 +363,13 @@ final flutterSecureStorageProvider = Provider<FlutterSecureStorage>((ref) {
   );
 });
 
-final authControllerProvider =
-    StateNotifierProvider<AuthController, AuthState>((ref) {
-  return AuthController(
-    apiClient: ref.watch(authApiClientProvider),
-    firebaseAuth: ref.watch(firebaseAuthProvider),
-    firebaseMessaging: ref.watch(firebaseMessagingProvider),
-    secureStorage: ref.watch(flutterSecureStorageProvider),
-  );
-});
+final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
+  (ref) {
+    return AuthController(
+      apiClient: ref.watch(authApiClientProvider),
+      firebaseAuth: ref.watch(firebaseAuthProvider),
+      firebaseMessaging: ref.watch(firebaseMessagingProvider),
+      secureStorage: ref.watch(flutterSecureStorageProvider),
+    );
+  },
+);

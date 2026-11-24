@@ -7,6 +7,7 @@ import 'package:halaqaty_mobile/core/design/halaqaty_components.dart';
 import 'package:halaqaty_mobile/features/auth/application/auth_controller.dart';
 import 'package:halaqaty_mobile/features/auth/presentation/auth_screens.dart';
 import 'package:halaqaty_mobile/features/circles/presentation/circle_discovery_screen.dart';
+import 'package:halaqaty_mobile/features/notifications/presentation/notification_history_screen.dart';
 import 'package:halaqaty_mobile/features/profile/presentation/profile_screen.dart';
 import 'package:halaqaty_mobile/features/scheduling/presentation/calendar_screen.dart';
 
@@ -57,6 +58,11 @@ GoRouter buildHalaqatyRouter(AuthStatus status) {
       GoRoute(
         path: '/register',
         builder: (context, state) => const RegisterScreen(),
+      ),
+      // Pushes over the shell (full-screen center with its own app bar).
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationHistoryScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>

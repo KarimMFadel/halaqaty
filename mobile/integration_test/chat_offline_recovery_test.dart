@@ -19,7 +19,7 @@ void main() {
       'offline send survives restart and converges after REST and WebSocket redelivery',
       (tester) async {
     final storage = _MemoryStorage();
-    final store = PendingMessageStore(storage);
+    final store = PendingMessageStore(storage, userId: _userId);
     final sentKeys = <String>[];
 
     final offlineRealtime = _RecoveryRealtime();

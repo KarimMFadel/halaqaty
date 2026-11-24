@@ -21,6 +21,12 @@ func TestQueueTurnNoticeUsesStableEventAndSessionReference(t *testing.T) {
 	if !input.PushExpiresAt.Equal(now.Add(24*time.Hour)) || input.Title == "" || input.Body == "" {
 		t.Fatalf("queue notice display/expiry = %+v", input)
 	}
+	// Lock-screen copy must stay generic: no queue, student, or session
+	// identifiers may leak into the notice text.
+	titles := map[string]bool{"Your turn": true, "You're next": true}
+	if !titles[input.Title] || input.SourceEventID == input.Title || input.SourceEventID == input.Body {
+		t.Fatalf("queue notice copy = (%q, %q), want the approved generic template", input.Title, input.Body)
+	}
 }
 
 func TestQueueNextSoonNoticeUsesStableEventAndSessionReference(t *testing.T) {
@@ -50,5 +56,15 @@ func TestGradeNoticeRequiresGradeCompletionAndReferencesRecitationLog(t *testing
 	}
 	if input.Title == "" || input.Body == "" || !input.PushExpiresAt.Equal(now.Add(24*time.Hour)) {
 		t.Fatalf("grade notice display/expiry = %+v", input)
+	}
+	// FR-019/DeepLink boundary: the grade projection construction takes no
+	// grade value in — title and body are the approved generic copy, and the
+	// only source reference points at the recitation log (loaded after
+	// authorization in F-007).
+	if input.Title != "New grade" || input.Body != "A recitation grade is ready to view." {
+		t.Fatalf("grade notice copy = (%q, %q), want the approved generic template", input.Title, input.Body)
+	}
+	if input.SourceEventID == input.Title || input.SourceEventID == input.Body {
+		t.Fatalf("grade notice copy = (%q, %q), want no identifiers in text", input.Title, input.Body)
 	}
 }

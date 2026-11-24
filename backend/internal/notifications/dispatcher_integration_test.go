@@ -629,7 +629,7 @@ WHERE user_id = $1`, userID, now); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx,
-		"UPDATE notifications SET push_expires_at = $2::timestamptz + INTERVAL '24 hours' WHERE id = $1",
+		"UPDATE notifications SET next_attempt_at = $2::timestamptz - INTERVAL '5 minutes', push_expires_at = $2::timestamptz + INTERVAL '24 hours' WHERE id = $1",
 		riyadhIntent, now); err != nil {
 		t.Fatal(err)
 	}

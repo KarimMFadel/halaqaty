@@ -72,6 +72,19 @@ ORDER BY updated_at, id
 LIMIT $2
 `
 
+// listRecoveryCandidatesAfterIDQuery is the keyset page used by the recovery
+// sweep. Ordering by the immutable id lets a sweep advance past candidates
+// whose completion condition never holds; an empty cursor starts at the first
+// page.
+const listRecoveryCandidatesAfterIDQuery = `
+SELECT ` + sessionColumns + `
+FROM sessions
+WHERE status = $1
+  AND id > COALESCE(NULLIF($2, '')::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+ORDER BY id
+LIMIT $3
+`
+
 const lockSessionAdvisoryQuery = `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`
 const tryLockSessionAdvisoryQuery = `SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0))`
 

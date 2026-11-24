@@ -21,7 +21,6 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
   final _capacity = TextEditingController(text: '50');
   final _userSearch = TextEditingController();
   List<CircleUser> _results = const [];
-  final List<CircleUser> _teachers = [];
   CircleUser? _backupSupervisor;
   bool _isPrivate = false;
   String _gender = 'unspecified';
@@ -81,35 +80,23 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
                       spacing: 4,
                       children: [
                         TextButton(
-                          onPressed: () => _addTeacher(user),
-                          child: Text(rtl ? 'معلّم' : 'Teacher'),
-                        ),
-                        TextButton(
                           onPressed: () => _setSupervisor(user),
                           child: Text(rtl ? 'مشرف' : 'Supervisor'),
-                        ),
+                        )
                       ],
                     ),
                   ),
-                if (_teachers.isNotEmpty || _backupSupervisor != null)
+                if (_backupSupervisor != null)
                   Wrap(
                     spacing: 8,
                     children: [
-                      for (final teacher in _teachers)
-                        InputChip(
-                          label: Text(
-                              '${rtl ? 'معلّم' : 'Teacher'}: ${teacher.displayName}'),
-                          onDeleted: () =>
-                              setState(() => _teachers.remove(teacher)),
+                      InputChip(
+                        label: Text(
+                          '${rtl ? 'مشرف' : 'Supervisor'}: ${_backupSupervisor!.displayName}',
                         ),
-                      if (_backupSupervisor != null)
-                        InputChip(
-                          label: Text(
-                            '${rtl ? 'مشرف' : 'Supervisor'}: ${_backupSupervisor!.displayName}',
-                          ),
-                          onDeleted: () =>
-                              setState(() => _backupSupervisor = null),
-                        ),
+                        onDeleted: () =>
+                            setState(() => _backupSupervisor = null),
+                      )
                     ],
                   ),
                 TextFormField(
@@ -244,8 +231,6 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
                 isPrivate: _isPrivate,
                 genderRestriction: _gender,
                 language: _language,
-                teacherUserIds:
-                    _teachers.map((user) => user.id).toList(growable: false),
                 backupSupervisorUserId: _backupSupervisor?.id,
               ),
             );
@@ -269,20 +254,8 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
     }
   }
 
-  void _addTeacher(CircleUser user) {
-    setState(() {
-      if (!_teachers.any((teacher) => teacher.id == user.id)) {
-        _teachers.add(user);
-      }
-      if (_backupSupervisor?.id == user.id) _backupSupervisor = null;
-    });
-  }
-
   void _setSupervisor(CircleUser user) {
-    setState(() {
-      _backupSupervisor = user;
-      _teachers.removeWhere((teacher) => teacher.id == user.id);
-    });
+    setState(() => _backupSupervisor = user);
   }
 
   Future<void> _copyInviteLink(String link) async {

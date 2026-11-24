@@ -49,6 +49,25 @@ func TestPlanPreviewWindowUsesFirst31LocalDaysAndFiniteSelectedDates(t *testing.
 	}
 }
 
+func TestPlanPreviewWindowSelectedDatesStayWithinRequestHorizon(t *testing.T) {
+	anchor := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	last := anchor.AddDate(0, 0, 366)
+	record := RevisionRecord{Revision: Revision{Version: 1, Mode: ModeSelectedDates, AnchorLocalDate: anchor, EffectiveLocalDate: anchor, SelectedDates: []time.Time{anchor, last}}, StartLocalTime: LocalClock{Hour: 9}, EndLocalTime: LocalClock{Hour: 10}, DurationMinutes: 60, Timezone: "Asia/Riyadh"}
+
+	window, err := previewWindow(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(window) != 2 || !window[0].OriginalLocalDate.Equal(anchor) || !window[1].OriginalLocalDate.Equal(last) {
+		t.Fatalf("selected-date preview = %#v, want exactly the two selected dates %s..%s", window, anchor, last)
+	}
+	for _, interval := range window {
+		if interval.OriginalLocalDate.After(last) {
+			t.Fatalf("preview generated %s beyond the selected-date horizon %s", interval.OriginalLocalDate, last)
+		}
+	}
+}
+
 func TestPlanPreviewWindowStartsAtLateEffectiveDate(t *testing.T) {
 	anchor := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
 	effective := anchor.AddDate(0, 2, 0)

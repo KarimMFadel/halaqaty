@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/KarimMFadel/halaqaty/backend/internal/notifications"
 	"github.com/KarimMFadel/halaqaty/backend/internal/realtime"
 )
 
@@ -15,12 +16,18 @@ import (
 // authorized realtime clients through the shared F-005 hub. The chat package
 // imports realtime only; realtime never imports chat.
 type RealtimeProjector struct {
-	membership   MembershipReader
-	hub          *realtime.Hub
-	tickets      *realtime.TicketService
-	sessionValid func(context.Context, string, string) (bool, error)
-	dmEligible   func(context.Context, uuid.UUID, uuid.UUID) (bool, error)
-	readReceipt  func(context.Context, uuid.UUID, uuid.UUID) (MessageRead, error)
+	membership     MembershipReader
+	hub            *realtime.Hub
+	tickets        *realtime.TicketService
+	sessionValid   func(context.Context, string, string) (bool, error)
+	dmEligible     func(context.Context, uuid.UUID, uuid.UUID) (bool, error)
+	readReceipt    func(context.Context, uuid.UUID, uuid.UUID) (MessageRead, error)
+	notifications  notificationCreator
+	listRecipients func(context.Context, uuid.UUID, uuid.UUID, time.Time) ([]uuid.UUID, error)
+}
+
+type notificationCreator interface {
+	Create(context.Context, notifications.CreateInput) (uuid.UUID, bool, error)
 }
 
 type SessionValidator func(context.Context, string, string) (bool, error)
@@ -48,6 +55,14 @@ func (p *RealtimeProjector) SetDMEligibilityChecker(checker func(context.Context
 // the projector derives the sender target from the message itself.
 func (p *RealtimeProjector) SetReadReceiptLoader(loader func(context.Context, uuid.UUID, uuid.UUID) (MessageRead, error)) {
 	p.readReceipt = loader
+}
+
+// SetNotificationProjection configures durable history projection and the
+// source-owned lookup for currently eligible group recipients.
+func (p *RealtimeProjector) SetNotificationProjection(creator interface {
+	Create(context.Context, notifications.CreateInput) (uuid.UUID, bool, error)
+}, listRecipients func(context.Context, uuid.UUID, uuid.UUID, time.Time) ([]uuid.UUID, error)) {
+	p.notifications, p.listRecipients = creator, listRecipients
 }
 
 // ProjectMessage projects one reloaded group chat.message event through the
@@ -88,6 +103,9 @@ func (p *RealtimeProjector) ProjectMessage(ctx context.Context, event OutboxEven
 		"payload":     chatMessagePayload(msg),
 	}
 	delivery := realtime.AuthorizedDelivery{EventID: eventID, Payload: envelope, Authorize: p.authorizeCircleDelivery(*msg.CircleID, msg.SentAt)}
+	if err := p.createGroupMessageNotifications(ctx, event, msg); err != nil {
+		return err
+	}
 	if err := p.hub.BroadcastAuthorized(ctx, topic, delivery); err != nil {
 		return fmt.Errorf("broadcast chat message: %w", err)
 	}
@@ -176,6 +194,9 @@ func (p *RealtimeProjector) authorizeReadDelivery(msg Message) realtime.Delivery
 }
 
 func (p *RealtimeProjector) projectDirectMessage(ctx context.Context, event OutboxEvent, msg Message) error {
+	if err := p.createDirectMessageNotification(ctx, event, msg); err != nil {
+		return err
+	}
 	eventID := event.EventID.String()
 	envelope := map[string]any{
 		"type":        realtime.EventChatMessage,
@@ -209,6 +230,50 @@ func (p *RealtimeProjector) projectDirectMessage(ctx context.Context, event Outb
 		return fmt.Errorf("send direct chat message: %w", err)
 	}
 	return nil
+}
+
+func (p *RealtimeProjector) createGroupMessageNotifications(ctx context.Context, event OutboxEvent, msg Message) error {
+	if p.notifications == nil || p.listRecipients == nil || msg.CircleID == nil {
+		return nil
+	}
+	recipients, err := p.listRecipients(ctx, *msg.CircleID, msg.SenderID, msg.SentAt)
+	if err != nil {
+		return fmt.Errorf("list eligible group notification recipients: %w", err)
+	}
+	for _, recipientID := range recipients {
+		if _, _, err := p.notifications.Create(ctx, chatMessageNoticeInput(event.EventID.String(), recipientID, msg.ID, msg.SentAt, false)); err != nil {
+			return fmt.Errorf("create group message notification: %w", err)
+		}
+	}
+	return nil
+}
+
+func (p *RealtimeProjector) createDirectMessageNotification(ctx context.Context, event OutboxEvent, msg Message) error {
+	if p.notifications == nil || event.RecipientID == nil || event.RecipientID.String() == msg.SenderID.String() || msg.DMRecipientID == nil {
+		return nil
+	}
+	eligible, err := p.dmEligible(ctx, msg.SenderID, *msg.DMRecipientID)
+	if err != nil {
+		return fmt.Errorf("check direct notification eligibility: %w", err)
+	}
+	if !eligible {
+		return nil
+	}
+	if _, _, err := p.notifications.Create(ctx, chatMessageNoticeInput(event.EventID.String(), *event.RecipientID, msg.ID, msg.SentAt, true)); err != nil {
+		return fmt.Errorf("create direct message notification: %w", err)
+	}
+	return nil
+}
+
+func chatMessageNoticeInput(sourceEventID string, recipientID, messageID uuid.UUID, sentAt time.Time, direct bool) notifications.CreateInput {
+	eventType, title, body := notifications.EventGroupMessage, "New group message", "Open the app to view the message."
+	if direct {
+		eventType, title, body = notifications.EventPrivateMessage, "New private message", "Open the app to view the message."
+	}
+	expires := sentAt.UTC().Add(24 * time.Hour)
+	created := sentAt.UTC()
+	return notifications.CreateInput{RecipientID: recipientID, Type: eventType, SourceEventID: sourceEventID,
+		SourceRef: notifications.SourceRef{Type: notifications.SourceMessage, ID: messageID}, Title: title, Body: body, CreatedAt: &created, PushExpiresAt: expires}
 }
 
 func (p *RealtimeProjector) authorizeSession(ctx context.Context, connection realtime.ConnectionIdentity) (bool, error) {

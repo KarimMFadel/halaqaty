@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/KarimMFadel/halaqaty/backend/internal/notifications"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -132,6 +133,126 @@ func TestRepository_RoleInCircle_ReturnsRoleForMembersOnly(t *testing.T) {
 	role, err = repo.RoleInCircle(ctx, circle, outsider)
 	if err != nil || role != "" {
 		t.Fatalf("non-member role: got (%q, %v) want (\"\", nil)", role, err)
+	}
+}
+
+// TestRepository_ActiveRoleInCircle_ArchivedCircle pins the archived predicate
+// against real PostgreSQL: RoleInCircle keeps answering for a retained member
+// of an archived circle (membership-only reads and moderation), while
+// ActiveRoleInCircle answers "" so new-activity authorization fails closed
+// (ADR-011).
+func TestRepository_ActiveRoleInCircle_ArchivedCircle(t *testing.T) {
+	repo := newIntegrationRepository(t)
+	ctx := context.Background()
+	teacher := seedIntegrationUser(t, repo, "active-role-teacher")
+	outsider := seedIntegrationUser(t, repo, "active-role-outsider")
+	circle := seedIntegrationCircle(t, repo, "Active Role Circle", teacher, "HLQ-ACTR1")
+	seedIntegrationMember(t, repo, circle, teacher, RoleTeacher)
+
+	if _, err := repo.pool.Exec(ctx, `UPDATE circles SET is_archived = TRUE WHERE id = $1::uuid`, circle); err != nil {
+		t.Fatalf("archive circle: %v", err)
+	}
+
+	role, err := repo.RoleInCircle(ctx, circle, teacher)
+	if err != nil || role != RoleTeacher {
+		t.Fatalf("archived member RoleInCircle: got (%q, %v) want (%q, nil)", role, err, RoleTeacher)
+	}
+	role, err = repo.ActiveRoleInCircle(ctx, circle, teacher)
+	if err != nil || role != "" {
+		t.Fatalf("archived member ActiveRoleInCircle: got (%q, %v) want (\"\", nil)", role, err)
+	}
+	role, err = repo.ActiveRoleInCircle(ctx, circle, outsider)
+	if err != nil || role != "" {
+		t.Fatalf("non-member ActiveRoleInCircle: got (%q, %v) want (\"\", nil)", role, err)
+	}
+}
+
+func TestCircleJoinAndArchiveNotificationsUseCommittedEligibleRecipients(t *testing.T) {
+	repo := newIntegrationRepository(t)
+	ctx := context.Background()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locate integration test")
+	}
+	migration, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "migrations", "000021_notification_system.up.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.pool.Exec(ctx, string(migration)); err != nil {
+		t.Fatalf("apply F-008 migration: %v", err)
+	}
+	notificationRepo := notifications.NewRepository(repo.pool)
+	repo.SetNotificationRepository(notificationRepo)
+	teacher := seedIntegrationUser(t, repo, "notification-teacher")
+	student := seedIntegrationUser(t, repo, "notification-student")
+	outsider := seedIntegrationUser(t, repo, "notification-outsider")
+	formerMember := seedIntegrationUser(t, repo, "notification-former")
+	circle := seedIntegrationCircle(t, repo, "Notification Circle", teacher, "HLQ-NOTI1")
+	seedIntegrationMember(t, repo, circle, teacher, RoleTeacher)
+	seedIntegrationMember(t, repo, circle, formerMember, RoleStudent)
+	if _, err := repo.pool.Exec(ctx, `UPDATE users SET deleted_at = NOW() WHERE id = $1::uuid`, formerMember); err != nil {
+		t.Fatalf("soft-delete former member: %v", err)
+	}
+	service := NewService(repo, nil)
+	if _, err := service.JoinPublicCircle(ctx, student, circle); err != nil {
+		t.Fatalf("join public circle: %v", err)
+	}
+	page, err := notificationRepo.List(ctx, teacher, nil, 10)
+	if err != nil || len(page.Items) != 1 || page.Items[0].Type != notifications.EventStudentJoinedCircle {
+		t.Fatalf("teacher join notifications = %+v, error=%v", page, err)
+	}
+	if page.UnreadCount != 1 {
+		t.Fatalf("teacher join unread=%d, want 1", page.UnreadCount)
+	}
+	// The soft-deleted former member is not an eligible recipient at commit
+	// time: the projection must exclude them from the join AND archive sets.
+	formerPage, err := notificationRepo.List(ctx, formerMember, nil, 10)
+	if err != nil || len(formerPage.Items) != 0 {
+		t.Fatalf("former member notices after join = %+v, error=%v; want none", formerPage.Items, err)
+	}
+	if err := service.ArchiveCircle(ctx, teacher, circle); err != nil {
+		t.Fatalf("archive circle: %v", err)
+	}
+	for _, userID := range []string{teacher, student} {
+		page, err := notificationRepo.List(ctx, userID, nil, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := map[notifications.EventType]bool{notifications.EventCircleArchived: false}
+		if userID == teacher {
+			want[notifications.EventStudentJoinedCircle] = false
+		}
+		for _, item := range page.Items {
+			if _, exists := want[item.Type]; exists {
+				want[item.Type] = item.SourceRef.ID.String() == circle
+			}
+		}
+		for eventType, found := range want {
+			if !found {
+				t.Errorf("user %s missing %s notification: %+v", userID, eventType, page.Items)
+			}
+		}
+	}
+	// The soft-deleted former member is ineligible for the archive projection
+	// as well: zero notices across both lifecycle events.
+	formerPage, err = notificationRepo.List(ctx, formerMember, nil, 10)
+	if err != nil || len(formerPage.Items) != 0 {
+		t.Fatalf("former member notices after archive = %+v, error=%v; want none", formerPage.Items, err)
+	}
+	// Push-intent channel fact: history rows for push-enabled matrix rows
+	// start as live dispatch intents awaiting a device.
+	var pushState string
+	if err := repo.pool.QueryRow(ctx, `
+SELECT delivery_state FROM notifications
+WHERE user_id = $1::uuid AND type = 'circle_archived'`, student).Scan(&pushState); err != nil {
+		t.Fatal(err)
+	}
+	if pushState != "pending_no_device" {
+		t.Fatalf("archived push intent state=%q, want pending_no_device", pushState)
+	}
+	page, err = notificationRepo.List(ctx, outsider, nil, 10)
+	if err != nil || len(page.Items) != 0 {
+		t.Fatalf("outsider received circle notices: %+v, error=%v", page, err)
 	}
 }
 
@@ -418,5 +539,111 @@ func TestRepository_CancelledContext_WrapsOperationContext(t *testing.T) {
 				t.Fatalf("error must carry operation context %q, got %v", tc.wantPrefix, err)
 			}
 		})
+	}
+}
+
+func TestInvitationNotificationTransactionAndEligibility(t *testing.T) {
+	repo := newIntegrationRepository(t)
+	ctx := context.Background()
+	_, file, _, _ := runtime.Caller(0)
+	for _, name := range []string{"000021_notification_system.up.sql", "000022_circle_invitations.up.sql"} {
+		migration, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "migrations", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repo.pool.Exec(ctx, string(migration)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repo.SetNotificationRepository(notifications.NewRepository(repo.pool))
+	teacher := seedIntegrationUser(t, repo, "invite-notice-teacher")
+	recipient := seedIntegrationUser(t, repo, "invite-notice-recipient")
+	outsider := seedIntegrationUser(t, repo, "invite-notice-outsider")
+	circle := seedIntegrationCircle(t, repo, "Invitation", teacher, "HLQ-INV01")
+	seedIntegrationMember(t, repo, circle, teacher, RoleTeacher)
+	service := NewService(repo, nil)
+	request := CreateCircleInvitationRequest{RecipientUserID: recipient, Role: RoleStudent}
+	invitation, err := service.CreateCircleInvitation(ctx, teacher, circle, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	intent := notifications.DispatchIntent{Type: notifications.EventCircleInvitation, UserID: uuid.MustParse(recipient), SourceRef: notifications.SourceRef{Type: notifications.SourceInvitation, ID: uuid.MustParse(invitation.ID)}}
+	check := func(want bool) {
+		t.Helper()
+		got, err := repo.InvitationEligibilityRecheck(ctx, intent)
+		if err != nil || got != want {
+			t.Fatalf("eligible=%v err=%v want=%v", got, err, want)
+		}
+	}
+	check(true)
+	var count int
+	if err := repo.pool.QueryRow(ctx, `SELECT count(*) FROM notifications WHERE type='circle_invitation' AND user_id=$1 AND source_ref_id=$2 AND delivery_state='pending_no_device'`, recipient, invitation.ID).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("recipient push intents=%d err=%v", count, err)
+	}
+	if err := repo.pool.QueryRow(ctx, `SELECT count(*) FROM notifications WHERE type='circle_invitation' AND user_id=$1`, outsider).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("outsider notices=%d err=%v", count, err)
+	}
+	if err := repo.WithinTransaction(ctx, func(tx Store) error { return tx.(*Repository).ProjectCircleInvitation(ctx, invitation) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.pool.QueryRow(ctx, `SELECT count(*) FROM notifications WHERE type='circle_invitation' AND source_ref_id=$1`, invitation.ID).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("deduplicated notices=%d err=%v", count, err)
+	}
+	intent.UserID = uuid.MustParse(outsider)
+	check(false)
+	intent.UserID = uuid.MustParse(recipient)
+	if _, err := repo.pool.Exec(ctx, `DELETE FROM circle_members WHERE circle_id=$1 AND user_id=$2`, circle, teacher); err != nil {
+		t.Fatal(err)
+	}
+	check(false)
+	seedIntegrationMember(t, repo, circle, teacher, RoleTeacher)
+	check(true)
+	if _, err := repo.pool.Exec(ctx, `UPDATE circle_invitations SET role='teacher' WHERE id=$1`, invitation.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.pool.Exec(ctx, `UPDATE circle_members SET role='student' WHERE circle_id=$1 AND user_id=$2`, circle, teacher); err != nil {
+		t.Fatal(err)
+	}
+	check(false)
+	if _, err := repo.pool.Exec(ctx, `UPDATE circle_members SET role='teacher' WHERE circle_id=$1 AND user_id=$2`, circle, teacher); err != nil {
+		t.Fatal(err)
+	}
+	check(true)
+	if _, err := repo.pool.Exec(ctx, `UPDATE users SET deleted_at=now() WHERE id=$1`, teacher); err != nil {
+		t.Fatal(err)
+	}
+	check(false)
+	if _, err := repo.pool.Exec(ctx, `UPDATE users SET deleted_at=NULL WHERE id=$1`, teacher); err != nil {
+		t.Fatal(err)
+	}
+	check(true)
+	for _, state := range []string{"revoked", "superseded", "accepted"} {
+		if _, err := repo.pool.Exec(ctx, `UPDATE circle_invitations SET state=$2, resolved_at=now() WHERE id=$1`, invitation.ID, state); err != nil {
+			t.Fatal(err)
+		}
+		check(false)
+	}
+	if _, err := repo.pool.Exec(ctx, `UPDATE circle_invitations SET state='pending', resolved_at=NULL WHERE id=$1`, invitation.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.pool.Exec(ctx, `UPDATE circles SET is_archived=true WHERE id=$1`, circle); err != nil {
+		t.Fatal(err)
+	}
+	check(false)
+	if _, err := repo.pool.Exec(ctx, `UPDATE circles SET is_archived=false WHERE id=$1`, circle); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.pool.Exec(ctx, `CREATE FUNCTION reject_invitation_notice() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'projection failed'; END $$; CREATE TRIGGER reject_invitation_notice BEFORE INSERT ON notifications FOR EACH ROW EXECUTE FUNCTION reject_invitation_notice()`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CreateCircleInvitation(ctx, teacher, circle, request); err == nil {
+		t.Fatal("expected projection failure")
+	}
+	var state string
+	if err := repo.pool.QueryRow(ctx, `SELECT state FROM circle_invitations WHERE id=$1`, invitation.ID).Scan(&state); err != nil || state != "pending" {
+		t.Fatalf("prior state=%s err=%v", state, err)
+	}
+	if err := repo.pool.QueryRow(ctx, `SELECT count(*) FROM circle_invitations WHERE circle_id=$1`, circle).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("invitations after rollback=%d err=%v", count, err)
 	}
 }

@@ -1,5 +1,16 @@
 # Data Model: Circle Management
 
+## 2026-11-22 remediation: named invitations (migration pending)
+
+`circle_invitations` has UUID primary key `id`; foreign keys `circle_id`,
+`inviter_user_id`, and `recipient_user_id`; immutable role `teacher` or `student`;
+state `pending`, `accepted`, `revoked`, or `superseded`; `created_at`; and nullable
+`resolved_at` required exactly for non-pending states. A partial unique index on
+`(circle_id, recipient_user_id)` for pending rows permits replacement without
+multiple live offers. There is no expiration field. See ADR-010 for transaction,
+authorization and notification invariants. This new design supersedes historical
+direct teacher-assignment statements below; it is not implemented yet.
+
 ## Existing tables to extend
 
 ### `circles`

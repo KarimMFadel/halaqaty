@@ -6,28 +6,35 @@ const (
 )
 
 const (
-	routeAuthRegister = "POST /api/v1/auth/register"
-	routeAuthSessions = "POST /api/v1/auth/sessions"
-	routeAuthLogout   = "POST /api/v1/auth/logout"
-	routeAuthMeGet    = "GET /api/v1/auth/me"
-	routeAuthMePut    = "PUT /api/v1/auth/me"
-	routeAuthMeDelete = "DELETE /api/v1/auth/me"
+	routeAuthRegister       = "POST /api/v1/auth/register"
+	routeAuthSessions       = "POST /api/v1/auth/sessions"
+	routeAuthLogout         = "POST /api/v1/auth/logout"
+	routeAuthMeGet          = "GET /api/v1/auth/me"
+	routeAuthMePut          = "PUT /api/v1/auth/me"
+	routeAuthMeDelete       = "DELETE /api/v1/auth/me"
+	routeAuthFcmTokenPost   = "POST /api/v1/auth/fcm-token"
+	routeAuthFcmTokenDelete = "DELETE /api/v1/auth/fcm-token"
 )
 
 const (
-	routeCirclesCreate       = "POST /api/v1/circles"
-	routeCirclesList         = "GET /api/v1/circles"
-	routeCirclesJoin         = "POST /api/v1/circles/join"
-	routeCirclesDiscover     = "GET /api/v1/circles/discover"
-	routeCircleJoin          = "POST /api/v1/circles/{circleId}/join"
-	routeCircleGet           = "GET /api/v1/circles/{circleId}"
-	routeCircleUpdate        = "PUT /api/v1/circles/{circleId}"
-	routeCircleMembersGet    = "GET /api/v1/circles/{circleId}/members"
-	routeCircleAssignRole    = "PUT /api/v1/circles/{circleId}/members/{userId}/role"
-	routeCircleRemoveMember  = "DELETE /api/v1/circles/{circleId}/members/{userId}"
-	routeCircleRefreshInvite = "POST /api/v1/circles/{circleId}/invite-code/refresh"
-	routeCircleArchive       = "DELETE /api/v1/circles/{circleId}"
-	routeUsersSearch         = "GET /api/v1/users/search"
+	routeCirclesCreate            = "POST /api/v1/circles"
+	routeCirclesList              = "GET /api/v1/circles"
+	routeCirclesJoin              = "POST /api/v1/circles/join"
+	routeCirclesDiscover          = "GET /api/v1/circles/discover"
+	routeCircleJoin               = "POST /api/v1/circles/{circleId}/join"
+	routeCircleGet                = "GET /api/v1/circles/{circleId}"
+	routeCircleUpdate             = "PUT /api/v1/circles/{circleId}"
+	routeCircleMembersGet         = "GET /api/v1/circles/{circleId}/members"
+	routeCircleAssignRole         = "PUT /api/v1/circles/{circleId}/members/{userId}/role"
+	routeCircleInvitationsGet     = "GET /api/v1/circles/{circleId}/invitations"
+	routeCircleInvitationsPost    = "POST /api/v1/circles/{circleId}/invitations"
+	routeCircleInvitationDelete   = "DELETE /api/v1/circles/{circleId}/invitations/{invitationId}"
+	routeCircleInvitationAccept   = "POST /api/v1/circle-invitations/{invitationId}/accept"
+	routeUserCircleInvitationsGet = "GET /api/v1/users/me/circle-invitations"
+	routeCircleRemoveMember       = "DELETE /api/v1/circles/{circleId}/members/{userId}"
+	routeCircleRefreshInvite      = "POST /api/v1/circles/{circleId}/invite-code/refresh"
+	routeCircleArchive            = "DELETE /api/v1/circles/{circleId}"
+	routeUsersSearch              = "GET /api/v1/users/search"
 )
 
 // F-005 live-session route patterns. Handler wiring arrives with T021/T034;
@@ -78,6 +85,17 @@ const (
 	routeSessionQueuePolicy         = "PATCH /api/v1/sessions/{sessionId}/queue/policy"
 	routeSessionQueueOptOut         = "POST /api/v1/sessions/{sessionId}/queue/opt-out"
 	routeSessionQueueOptOutDecision = "POST /api/v1/sessions/{sessionId}/queue/opt-out-requests/{requestId}/decision"
+)
+
+// F-008 notification history/read-state route patterns. The read-all literal
+// segment is more specific than {notificationId}/read, so the Go mux
+// registers both without conflict.
+const (
+	routeNotificationPreferencesGet = "GET /api/v1/notifications/preferences"
+	routeNotificationPreferencesPut = "PUT /api/v1/notifications/preferences"
+	routeNotificationsGet           = "GET /api/v1/notifications"
+	routeNotificationRead           = "PUT /api/v1/notifications/{notificationId}/read"
+	routeNotificationsReadAll       = "PUT /api/v1/notifications/read-all"
 )
 
 // F-004 chat route patterns (US1 group list/send). The remaining F-004

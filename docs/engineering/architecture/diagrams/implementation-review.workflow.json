@@ -1,0 +1,198 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "2 · Implementation and Review",
+    "subtitle": "Halaqaty workflow guide · rules remain in the harness",
+    "output": "docs/engineering/architecture/diagrams/implementation-review.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "build",
+      "label": "Backend / Mobile + Coordination"
+    },
+    {
+      "id": "quality",
+      "label": "Quality Guards + Tech Lead"
+    },
+    {
+      "id": "owner",
+      "label": "Karim and PR"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "task",
+      "lane": "build",
+      "col": 0,
+      "label": "Approved work",
+      "type": "database",
+      "width": 140
+    },
+    {
+      "id": "build",
+      "lane": "build",
+      "col": 1,
+      "label": "7. Backend / Mobile",
+      "type": "backend",
+      "width": 140
+    },
+    {
+      "id": "fix",
+      "lane": "build",
+      "col": 3,
+      "label": "Fix findings",
+      "type": "backend",
+      "width": 140
+    },
+    {
+      "id": "focused",
+      "lane": "quality",
+      "col": 1,
+      "label": "Tests + guards",
+      "type": "security",
+      "width": 140
+    },
+    {
+      "id": "review",
+      "lane": "quality",
+      "col": 2,
+      "label": "Lead reviews",
+      "type": "security",
+      "width": 140
+    },
+    {
+      "id": "gates",
+      "lane": "quality",
+      "col": 3,
+      "label": "Final gates",
+      "type": "security",
+      "width": 140
+    },
+    {
+      "id": "sensitive",
+      "lane": "owner",
+      "col": 3,
+      "label": "Sensitive change?",
+      "type": "security",
+      "width": 140
+    },
+    {
+      "id": "manual",
+      "lane": "owner",
+      "col": 4,
+      "label": "Karim deep review",
+      "type": "external",
+      "width": 140
+    },
+    {
+      "id": "merge",
+      "lane": "owner",
+      "col": 5,
+      "label": "PR + merge",
+      "type": "external",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "task-build",
+      "from": "task",
+      "to": "build"
+    },
+    {
+      "id": "build-focused",
+      "from": "build",
+      "to": "focused"
+    },
+    {
+      "id": "focused-review",
+      "from": "focused",
+      "to": "review",
+      "label": "pass"
+    },
+    {
+      "id": "review-gates",
+      "from": "review",
+      "to": "gates",
+      "label": "accepted"
+    },
+    {
+      "id": "review-fix",
+      "from": "review",
+      "to": "fix",
+      "label": "findings"
+    },
+    {
+      "id": "fix-build",
+      "from": "fix",
+      "to": "build",
+      "label": "repair",
+      "role": "return"
+    },
+    {
+      "id": "focused-fix",
+      "from": "focused",
+      "to": "fix",
+      "label": "failed"
+    },
+    {
+      "id": "gates-fix",
+      "from": "gates",
+      "to": "fix",
+      "label": "failed"
+    },
+    {
+      "id": "gates-sensitive",
+      "from": "gates",
+      "to": "sensitive",
+      "label": "pass"
+    },
+    {
+      "id": "sensitive-manual",
+      "from": "sensitive",
+      "to": "manual",
+      "label": "yes"
+    },
+    {
+      "id": "sensitive-merge",
+      "from": "sensitive",
+      "to": "merge",
+      "label": "no"
+    },
+    {
+      "id": "manual-merge",
+      "from": "manual",
+      "to": "merge",
+      "label": "approved"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Implementation and distinct reviews",
+      "items": [
+        "Backend: senior-golang-developer. Mobile / frontend: senior-flutter-mobile-engineer. Each owns its affected slice; a cross-stack feature uses both as needed.",
+        "Architect, database, UX/UI, DevOps and SRE agents participate where their domain is affected. Agents do not all run for every change.",
+        "After implementation: tests and applicable clean-code, test and docs guards; Tech Lead reviews code/security. Team Leader checks task coverage, handoffs and evidence before final gates. Findings return to the implementer."
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Exit and evidence",
+      "items": [
+        "Full applicable gates run against the final change; unavailable checks are never passing evidence.",
+        "Karim manual deep review is required for auth, RBAC, deletion, Firebase Auth and upload controls. Merge requires applicable gates and required review."
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Proposals from the other session",
+      "items": [
+        "Proposed PR evidence summary: task IDs, changed boundaries, reviewer, final revision, exact gate results, unavailable checks and risk.",
+        "Required CI / protected merge checks are follow-up proposals, not verified current enforcement. F-008 can pilot with existing tasks; keep F-002 remediation separate."
+      ]
+    }
+  ]
+}

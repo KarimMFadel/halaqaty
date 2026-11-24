@@ -151,4 +151,9 @@ var (
 	// ErrModeratorRoleRequired means the user is a circle member but only
 	// teachers and supervisors may perform the operation (US1 lifecycle).
 	ErrModeratorRoleRequired = errors.New("operation requires the teacher or supervisor role")
+	// ErrCircleArchived means the session's circle has been retired (ADR-011):
+	// new activity — creating, starting, joining, or subscribing to a session
+	// topic — is denied, while moderation and reads of a lingering active
+	// session keep membership-only authorization.
+	ErrCircleArchived = errors.New("circle is archived")
 )

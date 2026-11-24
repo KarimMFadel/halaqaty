@@ -83,7 +83,8 @@ class CircleDiscoveryController extends StateNotifier<CircleDiscoveryState> {
         _logout = logout,
         super(const CircleDiscoveryState());
 
-  static final _inviteCode = RegExp(r'^HLQ-[A-HJ-NP-Z2-9]{4}$');
+  static final _inviteCode =
+      RegExp(r'^HLQ-[A-HJ-NP-Z2-9]{4}([A-HJ-NP-Z2-9]{8})?$');
 
   final CircleApiClient _apiClient;
   final Future<String?> Function() _loadFirebaseIdToken;

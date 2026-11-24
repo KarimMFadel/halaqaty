@@ -50,6 +50,8 @@ For engineers, architects, and technical leads.
 - **[Collaboration](./engineering/collaboration/)** — Agent coordination
   - [`AGENT_COLLABORATION_GUIDE.md`](./engineering/collaboration/AGENT_COLLABORATION_GUIDE.md) — How 5 engineering agents work together
 
+- **[Diagrams & Explainers](#-visualizations-archify)** — On-demand visualization tooling (below)
+
 - **[System Design](./engineering/system-design/)** *(future)* — Detailed system design docs
 - **[API Documentation](./engineering/api-docs/)** *(future)* — API reference & endpoints
 - **[Guides](./engineering/guides/)** *(future)* — How-to guides & walkthroughs
@@ -58,6 +60,17 @@ For engineers, architects, and technical leads.
   - [`ENHANCEMENT_TRACKER.md`](./plan_review/ENHANCEMENT_TRACKER.md) — Living list of all detected enhancements with priority, status, and amendment history
   - [`project_plan_review.md`](./plan_review/project_plan_review.md) — Original A- plan review (23 findings, 18 resolved)
   - [`docs_content_audit.md`](./plan_review/docs_content_audit.md) — Docs content audit (18 findings, D-01 through D-18)
+
+---
+
+## 🛠 Visualizations (Archify)
+
+The **Archify** agent skill (installed locally at `.agents/skills/archify/`, git-ignored) can be used **at any time** to generate diagrams and one-page explainers as standalone HTML files.
+
+Just ask any agent, e.g. *"generate an architecture diagram of the notification dispatcher"* or *"turn this answer into a one-page explainer"*. Ten diagram types are supported: architecture, workflow, sequence, dataflow, lifecycle/state, ERD, class, tree, timeline, and waterfall — plus a one-page explainer mode.
+
+- Outputs are standalone HTML (no server needed) — put them under a `docs/` subfolder if they should be tracked, or treat them as scratch output.
+- Useful for visualizing ARCHITECTURE.md flows, ERDs matching the DB schema, session/notification lifecycles, and API/data flows.
 
 ---
 

@@ -27,6 +27,7 @@ dependencies:
   # ^12.2.0 conflicts with flutter_secure_storage ^9.2.2 through win32.
   # Karim approved the compatible ^10.3.10 resolution on 2026-09-11.
   file_picker: ^10.3.10
+  firebase_messaging: ^15.1.0
 
 dev_dependencies:
   flutter_test:

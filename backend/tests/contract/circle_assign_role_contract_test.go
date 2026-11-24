@@ -46,7 +46,7 @@ func TestCircleAssignRoleContract(t *testing.T) {
 		wantField  string
 	}{
 		{
-			name: "teacher changes another member returns 200",
+			name: "teacher promotion requires recipient acceptance",
 			setup: func(s *circleStoreStub) {
 				s.actorRole = rbac.RoleTeacher
 				seedCircle(s, map[string]string{testLocalUserID: rbac.RoleTeacher, contractStudentID: rbac.RoleStudent})
@@ -56,7 +56,8 @@ func TestCircleAssignRoleContract(t *testing.T) {
 			body:       `{"role":"teacher"}`,
 			authHeader: bearerValid,
 			sessionID:  testSessionID,
-			wantStatus: http.StatusOK,
+			wantStatus: http.StatusConflict,
+			wantCode:   httpconst.ErrorCodeConflict,
 		},
 		{
 			name: "supervisor changes another member returns 200",

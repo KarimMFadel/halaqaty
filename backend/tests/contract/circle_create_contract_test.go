@@ -323,13 +323,13 @@ func TestCircleCreateContract(t *testing.T) {
 			wantField:  httpconst.FieldTeacherUserIDs,
 		},
 		{
-			name:       "overlapping backup supervisor returns 400",
-			body:       `{"name":"Quran Circle","teacher_user_ids":["` + contractTeacherAID + `"],"backup_supervisor_user_id":"` + contractTeacherAID + `"}`,
+			name:       "teacher assignment requires consent regardless of supervisor selection",
+			body:       `{"name":"Quran Circle","teacher_user_ids":["` + contractTeacherAID + `"],"backup_supervisor_user_id":"` + contractSupervisorID + `"}`,
 			authHeader: bearerValid,
 			sessionID:  testSessionID,
 			wantStatus: http.StatusBadRequest,
 			wantCode:   httpconst.ErrorCodeValidationFailed,
-			wantField:  httpconst.FieldBackupSupervisor,
+			wantField:  httpconst.FieldTeacherUserIDs,
 		},
 		{
 			name:       "unknown teacher returns 400",
@@ -359,14 +359,7 @@ func TestCircleCreateContract(t *testing.T) {
 			wantField:  httpconst.FieldBackupSupervisor,
 		},
 		{
-			name:       "multiple teachers and backup supervisor return 201",
-			body:       `{"name":"Quran Circle","teacher_user_ids":["` + contractTeacherAID + `","` + contractTeacherBID + `"],"backup_supervisor_user_id":"` + contractSupervisorID + `"}`,
-			authHeader: bearerValid,
-			sessionID:  testSessionID,
-			wantStatus: http.StatusCreated,
-		},
-		{
-			name:       "no teachers returns 201 with creator fallback",
+			name:       "no named teachers returns 201 with creator accepted as teacher",
 			body:       `{"name":"Solo Circle"}`,
 			authHeader: bearerValid,
 			sessionID:  testSessionID,
@@ -438,11 +431,6 @@ func TestCircleCreateContract_CreatorRoleFallback(t *testing.T) {
 			name:            "no teachers selected assigns creator as teacher",
 			body:            `{"name":"Solo Circle"}`,
 			wantCreatorRole: rbac.RoleTeacher,
-		},
-		{
-			name:            "teachers selected assigns creator as supervisor",
-			body:            `{"name":"Group Circle","teacher_user_ids":["` + contractTeacherAID + `"]}`,
-			wantCreatorRole: rbac.RoleSupervisor,
 		},
 	}
 

@@ -46,6 +46,18 @@ Use this order when deciding what governs work:
 
 Do not silently resolve a contradiction between levels 1–4. Stop, quote the conflicting paths and requirements concisely, and ask Karim which artifact must change. If a current instruction changes constitution-governed or frozen behavior, update the governing artifact through its required approval or amendment process before implementation. Lower-level workflow guidance must never rewrite higher-level scope.
 
+### Resolving Ambiguity and Agent Disagreement
+
+Apply this process to material ambiguity or conflict anywhere in project work, including requirements, UX, architecture, contracts, implementation, and review:
+
+1. Identify the decision and consult only the smallest set of roles whose expertise is relevant. Give each the same concise context and ask for a recommendation, evidence/source paths, and whether they agree with the other relevant recommendations.
+2. Separate technical constraints grounded in governing artifacts from product choices and unsupported assumptions. Agent opinions are advisory and cannot override the authority order above.
+3. Present recommendations that align and comply with approved scope/policy as one concise set for Karim to accept or change. Do not treat agent agreement alone as approval to change product behavior or canonical artifacts.
+4. Bring Karim only unresolved questions: materially different recommendations, missing evidence, a choice reserved to the product owner, or a conflict with a governing/approved artifact. State each side's recommendation and evidence, then ask which direction or artifact should govern.
+5. Record accepted resolutions in the artifact that owns the decision. Do not advance dependent work while a material conflict or required product decision remains open.
+
+Use this process without dispatching every role: consult only relevant agents, and report unavailable or non-returning opinions as unreviewed rather than implying consensus.
+
 Ponytail is a restraint layer, not an authority layer. If Ponytail suggests skipping work that Spec-Kit, the constitution, security requirements, accessibility, contracts, or tests require, build the required work. If Ponytail can reduce code without weakening those requirements, prefer the smaller path.
 
 ## 3. Spec-Kit Cycle With Agents and Skills
@@ -162,6 +174,7 @@ Rules:
 - Ask only questions that materially change scope, architecture, contracts, security, or user-visible behavior.
 - Batch questions that share one decision context, while keeping the final request concise.
 - Do not make every agent ask its own version of the same question; the Team Leader consolidates cross-domain clarification.
+- For material ambiguity or conflict, follow **Resolving Ambiguity and Agent Disagreement** above: show aligned, evidence-backed recommendations together for Karim's acceptance, then surface only unresolved or conflicting questions with each relevant position.
 - Status updates should report only new evidence, decisions, blockers, or completed boundaries.
 - Agent returns should be compact: status, changed paths, verification command/result, commit if any, and unresolved concerns.
 

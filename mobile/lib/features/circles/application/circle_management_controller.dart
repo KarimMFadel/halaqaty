@@ -24,6 +24,60 @@ class CircleManagementController {
         );
       });
 
+  Future<bool> inviteMember(
+    String circleId,
+    String userId,
+    CircleRole role,
+  ) =>
+      _mutate(circleId, (apiClient, credentials) async {
+        await apiClient.createCircleInvitation(
+          firebaseIdToken: credentials.token,
+          sessionId: credentials.sessionId,
+          circleId: circleId,
+          recipientUserId: userId,
+          role: role,
+        );
+      });
+
+  Future<List<CircleUser>> searchUsers(String query) async {
+    try {
+      final credentials = await _ref.read(circleCredentialsProvider.future);
+      return await _ref.read(circleApiClientProvider).searchUsers(
+            firebaseIdToken: credentials.token,
+            sessionId: credentials.sessionId,
+            query: query,
+          );
+    } on DioException catch (error) {
+      if (error.response?.statusCode == 401) {
+        await _ref.read(circleSessionLogoutProvider)();
+      }
+      return const [];
+    } on FirebaseAuthException {
+      return const [];
+    } on StateError {
+      return const [];
+    }
+  }
+
+  Future<bool> revokeInvitation(String circleId, String invitationId) =>
+      _mutate(circleId, (apiClient, credentials) async {
+        await apiClient.revokeCircleInvitation(
+          firebaseIdToken: credentials.token,
+          sessionId: credentials.sessionId,
+          circleId: circleId,
+          invitationId: invitationId,
+        );
+      });
+
+  Future<bool> acceptInvitation(String circleId, String invitationId) =>
+      _mutate(circleId, (apiClient, credentials) async {
+        await apiClient.acceptCircleInvitation(
+          firebaseIdToken: credentials.token,
+          sessionId: credentials.sessionId,
+          invitationId: invitationId,
+        );
+      });
+
   Future<bool> removeMember(String circleId, String userId) =>
       _mutate(circleId, (apiClient, credentials) async {
         await apiClient.removeMember(
@@ -67,6 +121,8 @@ class CircleManagementController {
   void _refresh(String circleId) {
     _ref.invalidate(circleDetailProvider(circleId));
     _ref.invalidate(circleMembersProvider(circleId));
+    _ref.invalidate(circleInvitationsProvider(circleId));
+    _ref.invalidate(myCircleInvitationsProvider);
   }
 }
 

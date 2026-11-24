@@ -397,7 +397,6 @@ func generateLiveKitToken(
         CanPublish:     canPublishAudio, // microphone publish only in MVP turns
         CanPublishVideo: false,          // MVP hard-stop; enable post-MVP via feature flag
         CanSubscribe:   true,
-        CanPublishData: isTeacher, // only teachers send data messages
     }
     
     // Teachers get additional permissions
@@ -884,6 +883,19 @@ erDiagram
 
 ### 4.2 Table Definitions
 
+#### `circle_invitations` (F-002 remediation; migration `000022`)
+
+The [ADR-010](adr/ADR-010-circle-role-management.md) remediation adds a
+recipient-bound invitation record with UUID `id`, `circle_id`, `inviter_user_id`,
+`recipient_user_id`, immutable `role` (`teacher` or `student`), `state`
+(`pending`, `accepted`, `revoked`, `superseded`), `created_at`, and nullable
+`resolved_at`. Circle and user IDs reference existing records. A partial unique
+index permits at most one pending invitation per circle and recipient; state and
+resolved time agree. Invitations have no expiry. Creation/replacement, revocation
+and acceptance serialize with membership mutations and enforce the checks and
+notification transaction boundary in ADR-010. Migration `000022` adds the table;
+its down migration refuses to discard invitation history.
+
 #### `users`
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -897,17 +909,19 @@ erDiagram
 
 `profiles` (created by F-001 migrations) is the 1:1 extension keyed by `user_id` with `display_name`, `full_name`, `country`, `phone`, `bio`, `avatar_url`, `preferred_language`, and completion/audit timestamps. F-006 adds a stored IANA `timezone` there, with `UTC` backfill for existing profiles and additive `/auth/me` read/update; the viewer's stored zone determines the calendar month and local display. Account deletion retains `display_name` for authorized history attribution, clears all non-retained profile fields, resets the language preference, and resets timezone to `UTC`. `users.id` remains for historical foreign keys. The deletion migration/worker protocol is defined by [ADR-024](adr/ADR-024-account-deletion-tombstone-and-firebase-cleanup.md); `DELETE /auth/me` is implemented for eligible student accounts.
 
-#### `device_tokens`
+#### `device_tokens` (F-008 / ADR-027; schema in migration 000021)
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| id | UUID | PK, DEFAULT gen_random_uuid() | |
-| user_id | UUID | FK → users.id NOT NULL ON DELETE CASCADE | Token owner |
-| token | TEXT | NOT NULL | FCM device token |
-| platform | VARCHAR(10) | CHECK IN ('ios','android','web') NOT NULL | Device platform |
-| device_name | VARCHAR(100) | | Optional human-readable label |
+| id | UUID | PK, DEFAULT gen_random_uuid() | Device-token row ID |
+| user_id | UUID | FK → users.id NOT NULL | Authenticated token owner |
+| token | TEXT | NOT NULL | FCM registration token; write-only and redacted from logs |
+| platform | VARCHAR(10) | CHECK IN ('ios','android') NOT NULL | Supported mobile target |
+| device_name | VARCHAR(100) | | Optional non-sensitive label |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | |
-| last_seen_at | TIMESTAMPTZ | DEFAULT NOW() | Updated on each successful FCM delivery |
-| UNIQUE | (user_id, token) | | One entry per device per user |
+| last_seen_at | TIMESTAMPTZ | DEFAULT NOW() | Refreshed on registration/token refresh |
+| UNIQUE | (user_id, token) | | Idempotent registration |
+
+Invalid/unregistered tokens are removed through the authenticated device-token owner boundary. The migration removes all rows transactionally when a user's account is tombstoned. The authenticated `/auth/fcm-token` handler is pending; see [ADR-027](adr/ADR-027-notification-history-and-fcm-delivery.md).
 
 #### `user_sessions`
 | Column | Type | Constraints | Description |
@@ -929,7 +943,7 @@ erDiagram
 | name | VARCHAR(100) | NOT NULL | Circle display name |
 | description | TEXT | | Circle description |
 | rules | TEXT | | Circle rules/guidelines |
-| teacher_id | UUID | FK → users.id NOT NULL | Circle owner |
+| teacher_id | UUID | FK → users.id NOT NULL | Current primary teacher reference; must point to an active teacher membership |
 | invite_code | VARCHAR(20) | UNIQUE NOT NULL | Join code (e.g., HLQ-7X2K) |
 | max_capacity | INTEGER | DEFAULT 50 | Maximum student capacity (min 2, max 200) |
 | is_private | BOOLEAN | DEFAULT FALSE | Whether circle requires invite to join |
@@ -1166,17 +1180,14 @@ ended session.
 
 > **Usage:** Pre-populated with all 240 Medina Mushaf Rub' boundaries. Never modified by the application. Enables teacher grading UI to offer a Rub'/Hizb/Juz picker and powers Surah coverage segment bars for long Surahs (e.g., Al-Baqarah spans 3 Juz and 6 Hizb).
 
-#### `notifications`
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| user_id | UUID | FK → users.id NOT NULL | Recipient |
-| type | VARCHAR(50) | NOT NULL | e.g., 'session_reminder', 'queue_turn' |
-| title | VARCHAR(200) | NOT NULL | Notification title |
-| body | TEXT | NOT NULL | Notification body |
-| data_json | JSONB | | Extra data (session_id, etc.) |
-| is_read | BOOLEAN | DEFAULT FALSE | |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+#### `notifications` (F-008 / ADR-027; schema in migration 000021)
+One row is the recipient-scoped history item and durable push intent for one approved source event. It has a UUID, recipient FK, allowlisted event type, stable source-event ID and typed source reference, generic lock-screen-safe display projection, created/read timestamps, preference-override marker, and bounded dispatch state. Unique `(user_id, type, source_event_id)` prevents duplicate history on replay. Source content is loaded only after normal source authorization; FCM acceptance is not delivery/read proof. A rolling 30-day history view is enforced independently from pending required dispatch retention.
+
+#### `notification_device_attempts` (F-008 / ADR-027; schema in migration 000021)
+Per-device dispatch status references a notification and device-token row, not a copied raw token. It records bounded attempt count, next attempt, provider acceptance/suppression/exhaustion state, and a safe error class for partial multi-device outcomes. No provider payload or token is logged.
+
+#### `notification_preferences` (F-008 / ADR-027; schema in migration 000021)
+Stores only explicit user overrides for configurable notification types, unique by user and type, defaulting to enabled when absent. Quiet-hours start/end use local wall-clock times and the profile's existing IANA timezone at evaluation. Always-on types are not mutable to false. See [F-008 data model](../../../specs/008-notification-system/data-model.md).
 
 #### `schedules`
 
@@ -1415,7 +1426,7 @@ receive warnings for their own calendar only. Current membership gates all reads
 - **Firebase token lifecycle:** Firebase ID tokens expire after 1 hour; the Flutter Firebase SDK refreshes them silently. Firebase owns refresh-token rotation and reuse detection.
 - **Backend session lifecycle:** The backend creates one opaque session per device after a verified Firebase sign-in. Every protected request includes its session ID; session activity extends the 30-day inactivity window. Current-device logout revokes only that session. A future logout-all-devices operation must revoke every session for the authenticated user. Backend sessions do not mint access or refresh tokens.
 - **Media credentials:** Generated exclusively by the Go backend through the LiveKit MVP adapter; never by the Flutter client, persisted client-side, logged, or broadcast. Authorized students receive non-admin audio-publish scope; video remains disabled. F-003 does not alter that scope.
-- **Circle role lifecycle:** Roles are stored only in `circle_members`. On creation, the creator may assign existing registered users as one or more teachers and one optional backup supervisor; if no teacher is selected, the creator becomes teacher, otherwise the creator is supervisor. Invite acceptance creates `student`. Any teacher or supervisor may change another member's role among `student`, `supervisor`, and `teacher`, but cannot change their own role or leave the circle without a teacher. See ADR-010.
+- **Circle role lifecycle:** Roles are stored only in `circle_members`. The creator starts as teacher. Another person becomes a teacher only after accepting a named invitation; once that teacher accepts, another manager may change the creator to supervisor. Additional teachers and supervisors are optional, and there is no distinct backup-teacher role. Demotion or removal of the current `teacher_id` reference transfers it to a remaining accepted teacher in the same transaction. Managers may change another member between student and supervisor but cannot change their own role or leave the circle without a teacher. See ADR-010.
 
 #### Circle permission matrix
 

@@ -7,6 +7,9 @@ import (
 	"errors"
 	"log/slog"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +17,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
+	"github.com/KarimMFadel/halaqaty/backend/internal/notifications"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/logging"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
 	"github.com/KarimMFadel/halaqaty/backend/internal/rbac"
@@ -91,8 +95,22 @@ func TestOutboxIntegration_DispatchDueProjectsToAuthorizedSubscriber(t *testing.
 	repo, service, membership, _ := newOutboxIntegration(t)
 	ctx := context.Background()
 	teacher := seedUser(t, repo, "ob-live-teacher")
+	student := seedUser(t, repo, "ob-live-student")
 	circle := seedCircle(t, repo, "Outbox Live Circle", teacher)
-	seedMember(t, repo, circle, teacher, "teacher", time.Now().UTC().Add(-time.Hour))
+	joinedAt := time.Now().UTC().Add(-time.Hour)
+	seedMember(t, repo, circle, teacher, "teacher", joinedAt)
+	seedMember(t, repo, circle, student, "student", joinedAt)
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locate integration test")
+	}
+	notificationMigration, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "migrations", "000021_notification_system.up.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.pool.Exec(ctx, string(notificationMigration)); err != nil {
+		t.Fatalf("apply F-008 migration: %v", err)
+	}
 
 	tickets := realtime.NewTicketService(membership)
 	hub := realtime.NewHub(tickets, nil)
@@ -102,13 +120,13 @@ func TestOutboxIntegration_DispatchDueProjectsToAuthorizedSubscriber(t *testing.
 	sessionID := uuid.NewString()
 	if err := sessionRepo.CreateSession(ctx, auth.Session{
 		ID:             sessionID,
-		UserID:         teacher.String(),
+		UserID:         student.String(),
 		LastActivityAt: time.Now().UTC(),
 		ExpiresAt:      time.Now().UTC().Add(time.Hour),
 	}); err != nil {
 		t.Fatalf("create backend session: %v", err)
 	}
-	ticket, err := tickets.IssueForSession(ctx, teacher.String(), sessionID)
+	ticket, err := tickets.IssueForSession(ctx, student.String(), sessionID)
 	if err != nil {
 		t.Fatalf("issue ticket: %v", err)
 	}
@@ -127,6 +145,8 @@ func TestOutboxIntegration_DispatchDueProjectsToAuthorizedSubscriber(t *testing.
 		}
 		return session.RevokedAt == nil && time.Now().Before(session.ExpiresAt), nil
 	})
+	notificationRepo := notifications.NewRepository(repo.pool)
+	projector.SetNotificationProjection(notificationRepo, repo.ListNotificationRecipients)
 	dispatcher := NewOutboxDispatcher(NewPGOutboxStore(repo), projector, nil, nil, nil, nil)
 	if err := dispatcher.DispatchDue(ctx, 10); err != nil {
 		t.Fatalf("dispatch due: %v", err)
@@ -147,15 +167,30 @@ func TestOutboxIntegration_DispatchDueProjectsToAuthorizedSubscriber(t *testing.
 	if envelope["event_id"] != eventID {
 		t.Fatalf("projected event id = %v, want %s", envelope["event_id"], eventID)
 	}
+	page, err := notificationRepo.List(ctx, student.String(), nil, 10)
+	if err != nil || len(page.Items) != 1 || page.Items[0].Type != notifications.EventGroupMessage || page.Items[0].SourceRef.ID != sent.ID {
+		t.Fatalf("recipient history after first dispatch = %+v, error=%v; want one message notice", page.Items, err)
+	}
 	delivered, _, _ := outboxRowState(t, repo, eventID)
 	if !delivered {
 		t.Fatal("delivered event must be marked delivered")
 	}
-	rewindDueOutbox(t, repo)
-	if err := dispatcher.DispatchDue(ctx, 10); err != nil {
-		t.Fatalf("second dispatch: %v", err)
+	// Simulate a process crash after the socket and notification side effects but
+	// before the outbox acknowledgement reaches PostgreSQL.
+	if _, err := repo.pool.Exec(ctx, `UPDATE chat_event_outbox SET delivered_at = NULL, available_at = NOW() - INTERVAL '1 second' WHERE event_id = $1::uuid`, eventID); err != nil {
+		t.Fatalf("re-arm delivered event for crash replay: %v", err)
+	}
+	if err := dispatcher.Replay(ctx, 10); err != nil {
+		t.Fatalf("replay dispatched event: %v", err)
 	}
 	assertNoProjectorEvent(t, conn)
+	page, err = notificationRepo.List(ctx, student.String(), nil, 10)
+	if err != nil || len(page.Items) != 1 || page.Items[0].Type != notifications.EventGroupMessage {
+		t.Fatalf("recipient history after replay = %+v, error=%v; want one idempotent notice", page.Items, err)
+	}
+	if n := countRows(t, repo, `SELECT COUNT(*) FROM messages WHERE id = $1`, sent.ID); n != 1 {
+		t.Fatalf("durable chat message rows after replay = %d, want 1", n)
+	}
 }
 
 // TestOutboxIntegration_BoundedRetriesParkEventAfterFiveAttempts drives five

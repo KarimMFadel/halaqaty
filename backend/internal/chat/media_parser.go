@@ -17,8 +17,19 @@ import (
 
 const (
 	// maxMediaPixels bounds the decoded pixel count before image.Decode is
-	// allowed to allocate (ADR-022).
-	maxMediaPixels = 100_000_000
+	// allowed to allocate (ADR-022). 20 megapixels caps the worst-case RGBA
+	// allocation at ~80 MB per accepted image; the encoded payload is
+	// already budgeted to 5 MiB (FR-021), and no product requirement needs
+	// larger chat photos, so a bigger ceiling only multiplies the peak
+	// memory a hostile highly-compressed header can force.
+	maxMediaPixels = 20_000_000
+	// maxConcurrentImageDecodes bounds simultaneous full image decodes
+	// across all upload requests: four ceiling-sized decodes peak at
+	// ~320 MB RGBA in the worst case, while unbounded concurrency would
+	// stack one allocation per racing upload. A buffered channel is the
+	// standard stdlib semaphore; DecodeConfig stays outside because it
+	// reads only the header and allocates no pixels.
+	maxConcurrentImageDecodes = 4
 	// maxParserOutputBytes caps how many ffprobe/qpdf stdout and stderr
 	// bytes are retained per pipe, so a hostile file cannot OOM the
 	// API through unbounded parser diagnostics (ADR-022 bounded output).
@@ -26,6 +37,14 @@ const (
 	// parserTimeout bounds each external parser invocation (ADR-022).
 	parserTimeout = 10 * time.Second
 )
+
+// decodeSlots is the bounded semaphore limiting full image decodes; acquire
+// with a send, release with a receive (maxConcurrentImageDecodes capacity).
+var decodeSlots = make(chan struct{}, maxConcurrentImageDecodes)
+
+// decodeFullImage is the full-pixel decode seam: validateImage is the only
+// production caller, and tests substitute a fake to count or block decodes.
+var decodeFullImage = image.Decode
 
 // allowedAudioFormats is the ffprobe demuxer-name (format_name) allowlist
 // for voice notes. Derivation: detectMIME admits exactly four audio
@@ -65,13 +84,17 @@ func validateMediaPayload(ctx context.Context, kind MessageType, mime string, da
 
 // validateImage decodes the full pixel data so a truncated or corrupt body
 // behind a valid header is rejected (FR-022). DecodeConfig enforces the
-// pixel ceiling first, so image.Decode can never allocate beyond it.
+// pixel ceiling first, so image.Decode can never allocate beyond it, and
+// every full decode holds one bounded decodeSlots slot so concurrent
+// uploads cannot stack unbounded allocations.
 func validateImage(data []byte) (int, error) {
 	config, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil || config.Width < 1 || config.Height < 1 || int64(config.Width)*int64(config.Height) > maxMediaPixels {
 		return 0, ErrMalformedMedia
 	}
-	if _, _, err := image.Decode(bytes.NewReader(data)); err != nil {
+	decodeSlots <- struct{}{}
+	defer func() { <-decodeSlots }()
+	if _, _, err := decodeFullImage(bytes.NewReader(data)); err != nil {
 		return 0, ErrMalformedMedia
 	}
 	return 0, nil

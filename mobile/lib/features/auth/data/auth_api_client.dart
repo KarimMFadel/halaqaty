@@ -138,6 +138,29 @@ class AuthApiClient {
     );
   }
 
+  Future<void> registerFcmToken({
+    required String firebaseIdToken,
+    required String token,
+    required String platform,
+  }) async {
+    await _dio.post<void>(
+      '/auth/fcm-token',
+      data: {'token': token, 'platform': platform},
+      options: Options(headers: _bearerHeader(firebaseIdToken)),
+    );
+  }
+
+  Future<void> unregisterFcmToken({
+    required String firebaseIdToken,
+    required String token,
+  }) async {
+    await _dio.delete<void>(
+      '/auth/fcm-token',
+      data: {'token': token},
+      options: Options(headers: _bearerHeader(firebaseIdToken)),
+    );
+  }
+
   /// Loads the backend user for a persisted authenticated session.
   Future<BackendUser> getMe({
     required String firebaseIdToken,

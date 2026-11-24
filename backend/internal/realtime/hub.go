@@ -25,7 +25,34 @@ const (
 	realtimeErrorInvalid      = "INVALID_PAYLOAD"
 	realtimeErrorUnauthorized = "UNAUTHORIZED"
 	realtimeErrorSessionEnded = "SESSION_ENDED"
+	// realtimeWriteTimeout bounds every outbound frame write. A consumer that
+	// cannot accept a frame within this window is closed as a slow client so
+	// one stalled connection can never wedge the hub's fan-out.
+	realtimeWriteTimeout = 10 * time.Second
+	// realtimeSendBuffer is the per-connection outbound queue depth. It is
+	// deep enough to absorb legitimate enqueue bursts while the write pump
+	// drains at wire speed; a consumer that falls this far behind is closed
+	// as a slow client instead of buffering unboundedly. Frames are never
+	// silently dropped.
+	realtimeSendBuffer = 256
+	// maxSeenEvents caps each deduplication set so long-lived topics cannot
+	// grow without bound.
+	maxSeenEvents = 1024
 )
+
+// rememberEvent records one deduplicated event ID, evicting an arbitrary entry
+// once the set reaches maxSeenEvents so a long-lived topic cannot grow without
+// bound. Eviction makes deduplication best-effort; clients still handle the
+// documented at-least-once delivery semantics.
+func rememberEvent(seen map[string]struct{}, eventID string) {
+	for len(seen) >= maxSeenEvents {
+		for id := range seen {
+			delete(seen, id)
+			break
+		}
+	}
+	seen[eventID] = struct{}{}
+}
 
 // SessionTopicAuthorizer checks whether a user may subscribe to a live
 // session topic. Implementations must revalidate current membership/presence.
@@ -71,10 +98,11 @@ type Hub struct {
 	chat     ChatCommandHandler
 	events   []SessionEventProvider
 
-	mu         sync.Mutex
-	clients    map[*hubClient]struct{}
-	userCounts map[string]int
-	seenEvents map[string]map[string]struct{}
+	mu           sync.Mutex
+	clients      map[*hubClient]struct{}
+	userCounts   map[string]int
+	seenEvents   map[string]map[string]struct{}
+	writeTimeout time.Duration
 }
 
 type hubClient struct {
@@ -82,14 +110,18 @@ type hubClient struct {
 	userID string
 	token  string
 	topics map[string]struct{}
+	send   chan []byte
+	closed bool
 	mu     sync.Mutex
 	window time.Time
 	count  int
+
+	writeTimeout time.Duration
 }
 
 // NewHub constructs a realtime WebSocket hub.
 func NewHub(tickets *TicketService, sessions SessionTopicAuthorizer) *Hub {
-	return &Hub{tickets: tickets, sessions: sessions, upgrader: websocket.Upgrader{}, clients: map[*hubClient]struct{}{}, userCounts: map[string]int{}, seenEvents: map[string]map[string]struct{}{}}
+	return &Hub{tickets: tickets, sessions: sessions, upgrader: websocket.Upgrader{}, writeTimeout: realtimeWriteTimeout, clients: map[*hubClient]struct{}{}, userCounts: map[string]int{}, seenEvents: map[string]map[string]struct{}{}}
 }
 
 // SetSessionSnapshotProvider configures the sessions-owned snapshot callback.
@@ -135,7 +167,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	client := &hubClient{userID: ticket.UserID, token: r.URL.Query().Get("token"), topics: map[string]struct{}{}, window: time.Now()}
+	client := &hubClient{userID: ticket.UserID, token: r.URL.Query().Get("token"), topics: map[string]struct{}{}, send: make(chan []byte, realtimeSendBuffer), window: time.Now(), writeTimeout: h.writeTimeout}
 	h.mu.Lock()
 	if h.userCounts[client.userID] >= maxConnectionsPerUser {
 		h.mu.Unlock()
@@ -152,6 +184,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.userCounts[client.userID]++
 	h.mu.Unlock()
 	defer h.remove(client)
+	go client.writePump()
 	conn.SetReadLimit(64 * 1024)
 	_ = conn.SetReadDeadline(time.Now().Add(90 * time.Second))
 	conn.SetPongHandler(func(string) error { return conn.SetReadDeadline(time.Now().Add(90 * time.Second)) })
@@ -286,34 +319,64 @@ func writeRealtimeError(client *hubClient, code, message string) {
 	_ = client.writeJSON(map[string]any{"type": realtimeTypeError, "payload": map[string]any{"code": code, "message": message}})
 }
 
-// writeJSON serializes one value to the client connection. It must be used
-// for every client-bound write so concurrent Broadcast calls cannot interleave
-// frames with replies written from the connection's read loop.
+// writeJSON queues one JSON reply frame on the connection's outbound pump.
+// Every client-bound write shares that queue, so reply frames from the
+// connection's read loop and broadcast frames keep strict per-connection FIFO
+// order and no goroutine ever writes to the transport concurrently.
 func (c *hubClient) writeJSON(v any) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.conn.WriteJSON(v)
-}
-
-// writeText writes a pre-encoded text frame under the same lock used by
-// writeJSON, keeping all outbound traffic on one connection serializable.
-func (c *hubClient) writeText(data []byte) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.conn.WriteMessage(websocket.TextMessage, data)
-}
-
-func (c *hubClient) writeTextAuthorized(ctx context.Context, data []byte, authorize DeliveryAuthorizer) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	allowed, err := authorize(ctx, c.identity())
+	data, err := json.Marshal(v)
 	if err != nil {
-		return fmt.Errorf("authorize realtime delivery: %w", err)
+		return fmt.Errorf("marshal realtime reply: %w", err)
 	}
-	if !allowed {
-		return nil
+	c.enqueue(data)
+	return nil
+}
+
+// enqueue queues one pre-encoded frame for the connection's write pump. A
+// full queue closes the connection as a slow client — queued frames go with
+// it — instead of buffering unboundedly or blocking the caller.
+func (c *hubClient) enqueue(frame []byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return
 	}
-	return c.conn.WriteMessage(websocket.TextMessage, data)
+	select {
+	case c.send <- frame:
+	default:
+		c.closed = true
+		close(c.send)
+		_ = c.conn.Close()
+	}
+}
+
+// closeOutbound releases the connection's write pump: it stops new enqueues,
+// closes the queue so the pump drains and exits, and closes the transport.
+// It is safe to call more than once.
+func (c *hubClient) closeOutbound() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return
+	}
+	c.closed = true
+	close(c.send)
+	_ = c.conn.Close()
+}
+
+// writePump is the connection's sole frame writer. It drains the outbound
+// queue in enqueue order — broadcast order per connection — so fan-out never
+// writes while the hub mutex is held. Every frame write is bounded by the
+// connection's write timeout; a stalled or failing write closes the transport
+// and the read loop then unregisters the client through remove.
+func (c *hubClient) writePump() {
+	for frame := range c.send {
+		_ = c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
+		if err := c.conn.WriteMessage(websocket.TextMessage, frame); err != nil {
+			_ = c.conn.Close()
+			return
+		}
+	}
 }
 
 func (c *hubClient) identity() ConnectionIdentity {
@@ -342,7 +405,7 @@ func (c *hubClient) allowMessage() bool {
 }
 
 func (h *Hub) remove(client *hubClient) {
-	_ = client.conn.Close()
+	client.closeOutbound()
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	delete(h.clients, client)
@@ -356,12 +419,52 @@ func (h *Hub) Broadcast(topic Topic, eventID string, payload any) error {
 }
 
 // BroadcastAuthorized sends one redacted event to currently subscribed
-// clients that pass the injected authorization immediately before write.
+// clients that pass the injected authorization immediately before delivery.
 func (h *Hub) BroadcastAuthorized(ctx context.Context, topic Topic, delivery AuthorizedDelivery) error {
 	if delivery.Authorize == nil {
 		return errors.New("realtime delivery authorizer is not configured")
 	}
 	return h.broadcast(ctx, topic, delivery.EventID, delivery.Payload, delivery.Authorize)
+}
+
+// subscribedTargets snapshots the clients currently subscribed to the topic
+// under the hub mutex, without holding it across any delivery work.
+func (h *Hub) subscribedTargets(topic Topic) []*hubClient {
+	targets := make([]*hubClient, 0, len(h.clients))
+	for client := range h.clients {
+		client.mu.Lock()
+		_, subscribed := client.topics[topic.String()]
+		client.mu.Unlock()
+		if subscribed {
+			targets = append(targets, client)
+		}
+	}
+	return targets
+}
+
+// authorizeTargets verifies every candidate connection outside the hub mutex
+// so a slow membership read cannot stall other deliveries. Verifying all
+// targets before any enqueue aborts the whole delivery on a verification
+// failure — callers retry it and deduplication stays unmarked — while denials
+// suppress only their own connection.
+func authorizeTargets(ctx context.Context, targets []*hubClient, authorize DeliveryAuthorizer) ([]*hubClient, error) {
+	allowed := make(map[*hubClient]struct{}, len(targets))
+	for _, client := range targets {
+		ok, err := authorize(ctx, client.identity())
+		if err != nil {
+			return nil, fmt.Errorf("authorize realtime delivery: %w", err)
+		}
+		if ok {
+			allowed[client] = struct{}{}
+		}
+	}
+	verified := targets[:0]
+	for _, client := range targets {
+		if _, ok := allowed[client]; ok {
+			verified = append(verified, client)
+		}
+	}
+	return verified, nil
 }
 
 func (h *Hub) broadcast(ctx context.Context, topic Topic, eventID string, payload any, authorize DeliveryAuthorizer) error {
@@ -372,46 +475,55 @@ func (h *Hub) broadcast(ctx context.Context, topic Topic, eventID string, payloa
 	if err != nil {
 		return err
 	}
+	// deliver enqueues and marks deduplication atomically under the hub mutex,
+	// never holding it across a transport write, so a slow consumer cannot
+	// block fan-out to other users or upgrade handshakes. Enqueue order under
+	// h.mu keeps per-connection frame order equal to broadcast order.
+	deliver := func(targets []*hubClient) {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		if eventID != "" {
+			if _, alreadySeen := h.seenEvents[topic.String()][eventID]; alreadySeen {
+				return
+			}
+		}
+		for _, client := range targets {
+			if _, registered := h.clients[client]; !registered {
+				continue
+			}
+			client.enqueue(encoded)
+		}
+		if eventID != "" {
+			rememberEvent(h.seenEvents[topic.String()], eventID)
+		}
+	}
 	h.mu.Lock()
-	defer h.mu.Unlock()
-	alreadySeen := false
 	if eventID != "" {
 		seen := h.seenEvents[topic.String()]
 		if seen == nil {
 			seen = map[string]struct{}{}
 			h.seenEvents[topic.String()] = seen
 		}
-		_, alreadySeen = seen[eventID]
-		if alreadySeen {
+		if _, alreadySeen := seen[eventID]; alreadySeen {
+			h.mu.Unlock()
 			return nil
 		}
 	}
-	for client := range h.clients {
-		client.mu.Lock()
-		_, subscribed := client.topics[topic.String()]
-		client.mu.Unlock()
-		if !subscribed {
-			continue
-		}
-		var err error
-		if authorize == nil {
-			err = client.writeText(encoded)
-		} else {
-			err = client.writeTextAuthorized(ctx, encoded, authorize)
-		}
+	targets := h.subscribedTargets(topic)
+	h.mu.Unlock()
+	if authorize != nil {
+		targets, err = authorizeTargets(ctx, targets, authorize)
 		if err != nil {
 			return err
 		}
 	}
-	if eventID != "" {
-		h.seenEvents[topic.String()][eventID] = struct{}{}
-	}
+	deliver(targets)
 	return nil
 }
 
 // SendToUsers sends one redacted event directly to every authenticated
 // connection of the listed users, independent of circle subscriptions. Each
-// connection must pass the injected authorization immediately before write.
+// connection must pass the injected authorization immediately before delivery.
 func (h *Hub) SendToUsers(ctx context.Context, userIDs []string, delivery AuthorizedDelivery) error {
 	if h == nil {
 		return errors.New("realtime hub is not configured")
@@ -430,7 +542,6 @@ func (h *Hub) SendToUsers(ctx context.Context, userIDs []string, delivery Author
 		}
 	}
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	if delivery.EventID != "" {
 		for userID := range targets {
 			key := "direct:" + userID
@@ -441,21 +552,43 @@ func (h *Hub) SendToUsers(ctx context.Context, userIDs []string, delivery Author
 			}
 			if _, ok := seen[delivery.EventID]; ok {
 				delete(targets, userID)
-				continue
 			}
 		}
 	}
+	clients := make([]*hubClient, 0, len(h.clients))
 	for client := range h.clients {
-		if _, ok := targets[client.userID]; !ok {
-			continue
+		if _, ok := targets[client.userID]; ok {
+			clients = append(clients, client)
 		}
-		if err := client.writeTextAuthorized(ctx, encoded, delivery.Authorize); err != nil {
+	}
+	h.mu.Unlock()
+	if len(targets) > 0 && len(clients) > 0 {
+		clients, err = authorizeTargets(ctx, clients, delivery.Authorize)
+		if err != nil {
 			return err
 		}
 	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	if delivery.EventID != "" {
 		for userID := range targets {
-			h.seenEvents["direct:"+userID][delivery.EventID] = struct{}{}
+			if _, alreadySeen := h.seenEvents["direct:"+userID][delivery.EventID]; alreadySeen {
+				delete(targets, userID)
+			}
+		}
+	}
+	for _, client := range clients {
+		if _, registered := h.clients[client]; !registered {
+			continue
+		}
+		if _, ok := targets[client.userID]; !ok {
+			continue
+		}
+		client.enqueue(encoded)
+	}
+	if delivery.EventID != "" {
+		for userID := range targets {
+			rememberEvent(h.seenEvents["direct:"+userID], delivery.EventID)
 		}
 	}
 	return nil
@@ -483,7 +616,7 @@ func (h *Hub) SendToUser(topic Topic, userID, eventID string, payload any) error
 		if _, ok := seen[eventID]; ok {
 			return nil
 		}
-		seen[eventID] = struct{}{}
+		rememberEvent(seen, eventID)
 	}
 	for client := range h.clients {
 		if client.userID != userID {
@@ -493,9 +626,7 @@ func (h *Hub) SendToUser(topic Topic, userID, eventID string, payload any) error
 		_, subscribed := client.topics[topic.String()]
 		client.mu.Unlock()
 		if subscribed {
-			if err := client.writeText(encoded); err != nil {
-				return err
-			}
+			client.enqueue(encoded)
 		}
 	}
 	return nil

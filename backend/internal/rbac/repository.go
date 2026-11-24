@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/KarimMFadel/halaqaty/backend/internal/notifications"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,8 +19,10 @@ type querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-// RoleInCircle returns the active membership role, or an empty string when
-// the user is not a member. It implements the sessions authorization port.
+// RoleInCircle returns the current membership role, or an empty string when
+// the user is not a member. Archived circles still answer for retained
+// members; this backs membership-only authorization (reads and moderation of
+// a lingering active session). It implements the sessions authorization port.
 func (r *Repository) RoleInCircle(ctx context.Context, circleID, userID string) (string, error) {
 	var role string
 	err := r.q.QueryRow(ctx, circleMemberRoleQuery, circleID, userID).Scan(&role)
@@ -28,6 +31,22 @@ func (r *Repository) RoleInCircle(ctx context.Context, circleID, userID string) 
 	}
 	if err != nil {
 		return "", fmt.Errorf("read circle role: %w", err)
+	}
+	return role, nil
+}
+
+// ActiveRoleInCircle returns the membership role only when the circle has not
+// been archived, or an empty string when the user is not a member or the
+// circle is archived. It backs new-activity authorization: session
+// create/start/join and realtime session-topic subscription (ADR-011).
+func (r *Repository) ActiveRoleInCircle(ctx context.Context, circleID, userID string) (string, error) {
+	var role string
+	err := r.q.QueryRow(ctx, activeCircleMemberRoleQuery, circleID, userID).Scan(&role)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read active circle role: %w", err)
 	}
 	return role, nil
 }
@@ -221,13 +240,19 @@ func (r *Repository) ListMembers(ctx context.Context, circleID string) ([]Circle
 
 // Repository is the PostgreSQL persistence boundary for circle RBAC data.
 type Repository struct {
-	pool *pgxpool.Pool
-	q    querier
+	pool          *pgxpool.Pool
+	q             querier
+	notifications *notifications.Repository
 }
 
 // NewRepository constructs a circle RBAC repository.
 func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool, q: pool}
+}
+
+// SetNotificationRepository enables atomic circle lifecycle notice projections.
+func (r *Repository) SetNotificationRepository(repository *notifications.Repository) {
+	r.notifications = repository
 }
 
 // WithinTransaction runs fn against a transaction-scoped store and commits on
@@ -239,7 +264,7 @@ func (r *Repository) WithinTransaction(ctx context.Context, fn func(Store) error
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := fn(&Repository{q: tx}); err != nil {
+	if err := fn(&Repository{q: tx, notifications: r.notifications}); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -367,4 +392,100 @@ func (r *Repository) UpdateMemberRole(ctx context.Context, circleID, userID, rol
 		return fmt.Errorf("update circle member role: %w", err)
 	}
 	return nil
+}
+
+// SetPrimaryTeacher updates the legacy circle teacher reference.
+func (r *Repository) SetPrimaryTeacher(ctx context.Context, circleID, userID string) error {
+	if _, err := r.q.Exec(ctx, setCircleTeacherIDQuery, circleID, userID); err != nil {
+		return fmt.Errorf("update primary circle teacher: %w", err)
+	}
+	return nil
+}
+
+// ReplacePendingInvitation supersedes the prior pending invitation before inserting its replacement.
+func (r *Repository) ReplacePendingInvitation(ctx context.Context, circleID, inviterID, recipientID, role string) (CircleInvitation, error) {
+	if _, err := r.q.Exec(ctx, supersedePendingCircleInvitationQuery, circleID, recipientID); err != nil {
+		return CircleInvitation{}, fmt.Errorf("supersede pending circle invitation: %w", err)
+	}
+	invitation, err := scanCircleInvitation(r.q.QueryRow(ctx, insertCircleInvitationQuery, circleID, inviterID, recipientID, role))
+	if err != nil {
+		return CircleInvitation{}, fmt.Errorf("insert circle invitation: %w", err)
+	}
+	return invitation, nil
+}
+
+// ListPendingCircleInvitations returns pending invitations for one circle.
+func (r *Repository) ListPendingCircleInvitations(ctx context.Context, circleID string) ([]CircleInvitation, error) {
+	return r.listCircleInvitations(ctx, listPendingCircleInvitationsQuery, circleID)
+}
+
+// ListPendingUserInvitations returns active-circle invitations addressed to one user.
+func (r *Repository) ListPendingUserInvitations(ctx context.Context, userID string) ([]CircleInvitation, error) {
+	return r.listCircleInvitations(ctx, listPendingUserInvitationsQuery, userID)
+}
+
+func (r *Repository) listCircleInvitations(ctx context.Context, query, userID string) ([]CircleInvitation, error) {
+	rows, err := r.q.Query(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list pending circle invitations: %w", err)
+	}
+	defer rows.Close()
+	invitations := make([]CircleInvitation, 0)
+	for rows.Next() {
+		invitation, scanErr := scanCircleInvitation(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan circle invitation: %w", scanErr)
+		}
+		invitations = append(invitations, invitation)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate circle invitations: %w", err)
+	}
+	return invitations, nil
+}
+
+// FindInvitation returns an invitation by its opaque ID.
+func (r *Repository) FindInvitation(ctx context.Context, invitationID string) (CircleInvitation, error) {
+	invitation, err := scanCircleInvitation(r.q.QueryRow(ctx, findCircleInvitationQuery, invitationID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return CircleInvitation{}, ErrInvitationNotFound
+	}
+	if err != nil {
+		return CircleInvitation{}, fmt.Errorf("find circle invitation: %w", err)
+	}
+	return invitation, nil
+}
+
+// LockInvitation locks one invitation scoped to its circle.
+func (r *Repository) LockInvitation(ctx context.Context, circleID, invitationID string) (CircleInvitation, error) {
+	invitation, err := scanCircleInvitation(r.q.QueryRow(ctx, lockCircleInvitationQuery, circleID, invitationID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return CircleInvitation{}, ErrInvitationNotFound
+	}
+	if err != nil {
+		return CircleInvitation{}, fmt.Errorf("lock circle invitation: %w", err)
+	}
+	return invitation, nil
+}
+
+// SetInvitationState resolves one pending invitation.
+func (r *Repository) SetInvitationState(ctx context.Context, invitationID, state string) error {
+	result, err := r.q.Exec(ctx, setCircleInvitationStateQuery, invitationID, state)
+	if err != nil {
+		return fmt.Errorf("resolve circle invitation: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return ErrInvitationConflict
+	}
+	return nil
+}
+
+func scanCircleInvitation(row pgx.Row) (CircleInvitation, error) {
+	var invitation CircleInvitation
+	err := row.Scan(
+		&invitation.ID, &invitation.CircleID, &invitation.InviterUserID,
+		&invitation.RecipientUserID, &invitation.Role, &invitation.State,
+		&invitation.CreatedAt, &invitation.ResolvedAt,
+	)
+	return invitation, err
 }

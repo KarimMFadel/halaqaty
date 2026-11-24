@@ -69,4 +69,4 @@ docs/engineering/architecture/ARCHITECTURE.md
 
 - ADR-026 and the spec were approved by Karim on 2026-09-27. The corresponding migration and feature handlers are implemented; current fix-wave gates remain to be recorded in [quickstart.md](quickstart.md).
 - Canonical and feature-local REST shapes are synchronized; repeat contract verification after the current fixes. No new WebSocket event is proposed.
-- F-008 is Proposed; SC-009 blocks full F-006 completion, but not a clearly labelled partial pilot.
+- F-008 is approved but its delivery remains unimplemented/unverified; SC-009 blocks full F-006 completion, but not a clearly labelled partial pilot.

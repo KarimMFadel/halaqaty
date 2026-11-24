@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -24,8 +25,14 @@ const (
 	publicCirclePageSize = 20
 	// inviteCodeAlphabet excludes visually ambiguous characters; 32 symbols
 	// divide 256 exactly, so byte-to-symbol mapping stays uniform.
+	//
+	// inviteCodeLength sets the keyspace for newly generated codes:
+	// 32^12 ≈ 2^60, which defeats brute-force invite guessing even with
+	// rate limiting as a backstop. Circles created before this change keep
+	// their stored 4-symbol codes; isInviteCode still accepts that legacy
+	// length so existing invite links keep working.
 	inviteCodeAlphabet       = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-	inviteCodeLength         = 4
+	inviteCodeLength         = 12
 	inviteCodePrefix         = "HLQ-"
 	inviteGenerationAttempts = 3
 	// inviteLinkBase is the public join-link origin shared by all invite responses.
@@ -44,11 +51,14 @@ var (
 	// ErrForbidden is returned when the actor may not manage roles in the circle.
 	ErrForbidden = errors.New("forbidden")
 	// ErrAlreadyMember is returned when a user joins a circle they already belong to.
-	ErrAlreadyMember  = errors.New("user is already a circle member")
-	ErrCircleArchived = errors.New("circle is archived")
-	ErrCircleFull     = errors.New("circle is full")
-	ErrCircleLimit    = errors.New("user has reached the circle limit")
-	ErrCirclePrivate  = errors.New("circle is private")
+	ErrAlreadyMember             = errors.New("user is already a circle member")
+	ErrCircleArchived            = errors.New("circle is archived")
+	ErrCircleFull                = errors.New("circle is full")
+	ErrCircleLimit               = errors.New("user has reached the circle limit")
+	ErrCirclePrivate             = errors.New("circle is private")
+	ErrInvitationNotFound        = errors.New("circle invitation not found")
+	ErrInvitationConflict        = errors.New("circle invitation is no longer pending")
+	ErrTeacherInvitationRequired = errors.New("teacher role requires recipient acceptance")
 )
 
 // ValidationError carries field-level circle validation failures.
@@ -84,6 +94,28 @@ type Store interface {
 	CountActiveMemberships(ctx context.Context, userID string) (int, error)
 	UpdateMemberRole(ctx context.Context, circleID, userID, role string) error
 	SearchUsers(ctx context.Context, query string, limit int) ([]UserSearchResult, error)
+}
+
+type circleInvitationStore interface {
+	ReplacePendingInvitation(ctx context.Context, circleID, inviterID, recipientID, role string) (CircleInvitation, error)
+	ListPendingCircleInvitations(ctx context.Context, circleID string) ([]CircleInvitation, error)
+	ListPendingUserInvitations(ctx context.Context, userID string) ([]CircleInvitation, error)
+	FindInvitation(ctx context.Context, invitationID string) (CircleInvitation, error)
+	LockInvitation(ctx context.Context, circleID, invitationID string) (CircleInvitation, error)
+	SetInvitationState(ctx context.Context, invitationID, state string) error
+}
+
+type circleTeacherStore interface {
+	SetPrimaryTeacher(ctx context.Context, circleID, userID string) error
+}
+
+type circleNotificationProjector interface {
+	ProjectStudentJoinedCircle(context.Context, string, string) error
+	ProjectCircleArchived(context.Context, string) error
+}
+
+type circleInvitationNotificationProjector interface {
+	ProjectCircleInvitation(context.Context, CircleInvitation) error
 }
 
 // ListCircles returns the authenticated user's active circle memberships.
@@ -166,6 +198,11 @@ func (s *Service) joinCircle(ctx context.Context, userID string, find func(Store
 		}
 		if err := tx.InsertMember(ctx, found.ID, userID, RoleStudent); err != nil {
 			return err
+		}
+		if projector, ok := tx.(circleNotificationProjector); ok {
+			if err := projector.ProjectStudentJoinedCircle(ctx, found.ID, userID); err != nil {
+				return fmt.Errorf("project student circle-join notification: %w", err)
+			}
 		}
 		circle = found
 		return nil
@@ -262,14 +299,14 @@ func (s *Service) DiscoverPublicCircles(ctx context.Context, query, cursor strin
 
 // CreateCircle creates a circle and its initial memberships in one transaction.
 func (s *Service) CreateCircle(ctx context.Context, creatorID string, req CreateCircleRequest) (CircleResponse, error) {
-	name, teacherIDs, backupSupervisorID, fields := validateCreateCircleRequest(creatorID, req)
+	name, backupSupervisorID, fields := validateCreateCircleRequest(creatorID, req)
 	settings, settingFields := normalizeCircleSettings(req)
 	for field, message := range settingFields {
 		fields[field] = message
 	}
 
 	if len(fields) == 0 {
-		existenceFields, err := s.validateAssigneesExist(ctx, teacherIDs, backupSupervisorID)
+		existenceFields, err := s.validateBackupSupervisorExists(ctx, backupSupervisorID)
 		if err != nil {
 			return CircleResponse{}, fmt.Errorf("validate circle assignees: %w", err)
 		}
@@ -287,30 +324,17 @@ func (s *Service) CreateCircle(ctx context.Context, creatorID string, req Create
 			return CircleResponse{}, generationErr
 		}
 		err = s.store.WithinTransaction(ctx, func(tx Store) error {
-			legacyTeacherID := creatorID
-			if len(teacherIDs) > 0 {
-				legacyTeacherID = teacherIDs[0]
-			}
-			created, insertErr := tx.InsertCircle(ctx, name, legacyTeacherID, inviteCode, settings)
+			created, insertErr := tx.InsertCircle(ctx, name, creatorID, inviteCode, settings)
 			if insertErr != nil {
 				return insertErr
 			}
 			circle = created
-			for _, teacherID := range teacherIDs {
-				if insertErr := tx.InsertMember(ctx, circle.ID, teacherID, RoleTeacher); insertErr != nil {
-					return insertErr
-				}
-			}
 			if backupSupervisorID != "" {
 				if insertErr := tx.InsertMember(ctx, circle.ID, backupSupervisorID, RoleSupervisor); insertErr != nil {
 					return insertErr
 				}
 			}
-			creatorRole := RoleSupervisor
-			if len(teacherIDs) == 0 {
-				creatorRole = RoleTeacher
-			}
-			return tx.InsertMember(ctx, circle.ID, creatorID, creatorRole)
+			return tx.InsertMember(ctx, circle.ID, creatorID, RoleTeacher)
 		})
 		if !isUniqueViolation(err) {
 			break
@@ -320,11 +344,7 @@ func (s *Service) CreateCircle(ctx context.Context, creatorID string, req Create
 		return CircleResponse{}, fmt.Errorf("create circle: %w", err)
 	}
 
-	teacherCount := len(teacherIDs)
-	if teacherCount == 0 {
-		teacherCount = 1
-	}
-	s.audit.Log(ctx, logging.CircleCreateEvent(creatorID, circle.ID, teacherCount, len(teacherIDs) > 0 || backupSupervisorID != ""))
+	s.audit.Log(ctx, logging.CircleCreateEvent(creatorID, circle.ID, 1, backupSupervisorID != ""))
 
 	return CircleResponse{
 		ID:                circle.ID,
@@ -412,7 +432,7 @@ func mergeCircleUpdate(circle Circle, req UpdateCircleRequest) (string, CircleSe
 		create.GradingPolicy = *req.GradingPolicy
 	}
 
-	_, _, _, fields := validateCreateCircleRequest("", create)
+	_, _, fields := validateCreateCircleRequest("", create)
 	settings, settingFields := normalizeCircleSettings(create)
 	for field, message := range settingFields {
 		fields[field] = message
@@ -509,9 +529,17 @@ func (s *Service) AssignRole(ctx context.Context, actorID, circleID, targetUserI
 		if targetRole == role {
 			return nil
 		}
+		if role == RoleTeacher {
+			return ErrTeacherInvitationRequired
+		}
 
 		if targetRole == RoleTeacher && role != RoleTeacher && countTeachers(members) <= 1 {
 			return ErrFinalTeacher
+		}
+		if targetRole == RoleTeacher && role != RoleTeacher && circle.TeacherID == targetUserID {
+			if err := setPrimaryTeacher(ctx, tx, circleID, members, targetUserID); err != nil {
+				return err
+			}
 		}
 		return tx.UpdateMemberRole(ctx, circleID, targetUserID, role)
 	})
@@ -523,6 +551,285 @@ func (s *Service) AssignRole(ctx context.Context, actorID, circleID, targetUserI
 		s.audit.Log(ctx, logging.RoleChangeEvent(actorID, targetUserID, circleID, oldRole, role))
 	}
 	return RoleAssignment{CircleID: circleID, UserID: targetUserID, Role: role}, nil
+}
+
+// CreateCircleInvitation records a recipient-bound role offer and its notification atomically.
+func (s *Service) CreateCircleInvitation(ctx context.Context, actorID, circleID string, request CreateCircleInvitationRequest) (CircleInvitation, error) {
+	fields := validateCircleInvitationRequest(actorID, circleID, request)
+	if len(fields) > 0 {
+		return CircleInvitation{}, &ValidationError{Fields: fields}
+	}
+	var invitation CircleInvitation
+	err := s.store.WithinTransaction(ctx, func(tx Store) error {
+		circle, err := tx.FindCircleByIDForUpdate(ctx, circleID)
+		if err != nil {
+			return err
+		}
+		if circle.IsArchived {
+			return ErrCircleArchived
+		}
+		members, err := tx.LockMembers(ctx, circleID)
+		if err != nil {
+			return err
+		}
+		actorRole, ok := memberRole(members, actorID)
+		if !ok || !canInviteRole(actorRole, request.Role) {
+			return ErrForbidden
+		}
+		existing, err := tx.UsersExist(ctx, []string{request.RecipientUserID})
+		if err != nil {
+			return fmt.Errorf("check invitation recipient: %w", err)
+		}
+		if !existing[request.RecipientUserID] {
+			return &ValidationError{Fields: map[string]string{httpconst.FieldRecipientUserID: httpconst.ErrorMessageCircleAssigneeUnknown}}
+		}
+		invitationStore, ok := tx.(circleInvitationStore)
+		if !ok {
+			return errors.New("circle invitation store is not configured")
+		}
+		invitation, err = invitationStore.ReplacePendingInvitation(ctx, circleID, actorID, request.RecipientUserID, request.Role)
+		if err != nil {
+			return err
+		}
+		if projector, ok := tx.(circleInvitationNotificationProjector); ok {
+			if err := projector.ProjectCircleInvitation(ctx, invitation); err != nil {
+				return fmt.Errorf("project circle invitation notification: %w", err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return CircleInvitation{}, fmt.Errorf("create circle invitation: %w", err)
+	}
+	s.audit.Log(ctx, logging.CircleInvitationSentEvent(actorID, invitation.RecipientUserID, circleID, invitation.Role))
+	return invitation, nil
+}
+
+// ListCircleInvitations returns pending invitations visible to an active member.
+func (s *Service) ListCircleInvitations(ctx context.Context, actorID, circleID string) (CircleInvitationListResponse, error) {
+	if !isUUID(circleID) {
+		return CircleInvitationListResponse{}, ErrCircleNotFound
+	}
+	if _, err := s.store.FindCircleByID(ctx, circleID); err != nil {
+		return CircleInvitationListResponse{}, fmt.Errorf("find circle for invitations: %w", err)
+	}
+	members, err := s.store.LockMembers(ctx, circleID)
+	if err != nil {
+		return CircleInvitationListResponse{}, fmt.Errorf("list circle invitation members: %w", err)
+	}
+	role, ok := memberRole(members, actorID)
+	if !ok {
+		return CircleInvitationListResponse{}, ErrForbidden
+	}
+	invitationStore, ok := s.store.(circleInvitationStore)
+	if !ok {
+		return CircleInvitationListResponse{}, errors.New("circle invitation store is not configured")
+	}
+	invitations, err := invitationStore.ListPendingCircleInvitations(ctx, circleID)
+	if err != nil {
+		return CircleInvitationListResponse{}, fmt.Errorf("list circle invitations: %w", err)
+	}
+	if role == RoleStudent {
+		visible := invitations[:0]
+		for _, invitation := range invitations {
+			if invitation.InviterUserID == actorID {
+				visible = append(visible, invitation)
+			}
+		}
+		invitations = visible
+	}
+	return CircleInvitationListResponse{Data: invitations}, nil
+}
+
+// ListMyCircleInvitations returns only pending invitations addressed to the caller.
+func (s *Service) ListMyCircleInvitations(ctx context.Context, userID string) (CircleInvitationListResponse, error) {
+	invitationStore, ok := s.store.(circleInvitationStore)
+	if !ok {
+		return CircleInvitationListResponse{}, errors.New("circle invitation store is not configured")
+	}
+	invitations, err := invitationStore.ListPendingUserInvitations(ctx, userID)
+	if err != nil {
+		return CircleInvitationListResponse{}, fmt.Errorf("list invitations addressed to user: %w", err)
+	}
+	return CircleInvitationListResponse{Data: invitations}, nil
+}
+
+// AcceptCircleInvitation grants the stored role only to the named recipient.
+func (s *Service) AcceptCircleInvitation(ctx context.Context, userID, invitationID string) (CircleInvitation, error) {
+	if !isUUID(invitationID) {
+		return CircleInvitation{}, ErrInvitationNotFound
+	}
+	invitationStore, ok := s.store.(circleInvitationStore)
+	if !ok {
+		return CircleInvitation{}, errors.New("circle invitation store is not configured")
+	}
+	initial, err := invitationStore.FindInvitation(ctx, invitationID)
+	if err != nil {
+		return CircleInvitation{}, fmt.Errorf("find circle invitation: %w", err)
+	}
+	if initial.RecipientUserID != userID {
+		return CircleInvitation{}, ErrInvitationNotFound
+	}
+	var accepted CircleInvitation
+	err = s.store.WithinTransaction(ctx, func(tx Store) error {
+		circle, err := tx.FindCircleByIDForUpdate(ctx, initial.CircleID)
+		if err != nil {
+			return err
+		}
+		if circle.IsArchived {
+			return ErrCircleArchived
+		}
+		transactionInvitationStore, ok := tx.(circleInvitationStore)
+		if !ok {
+			return errors.New("circle invitation store is not configured")
+		}
+		invitation, err := transactionInvitationStore.LockInvitation(ctx, initial.CircleID, invitationID)
+		if err != nil {
+			return err
+		}
+		if invitation.RecipientUserID != userID {
+			return ErrInvitationNotFound
+		}
+		if invitation.State != "pending" {
+			return ErrInvitationConflict
+		}
+		members, err := tx.LockMembers(ctx, invitation.CircleID)
+		if err != nil {
+			return err
+		}
+		inviterRole, ok := memberRole(members, invitation.InviterUserID)
+		if !ok || !canInviteRole(inviterRole, invitation.Role) {
+			return ErrInvitationConflict
+		}
+		if err := s.acceptInvitationMembership(ctx, tx, circle, members, invitation); err != nil {
+			return err
+		}
+		if invitation.Role == RoleTeacher && !memberRoleIsTeacher(members, circle.TeacherID) {
+			teacherStore, ok := tx.(circleTeacherStore)
+			if !ok {
+				return errors.New("circle teacher store is not configured")
+			}
+			if err := teacherStore.SetPrimaryTeacher(ctx, circle.ID, invitation.RecipientUserID); err != nil {
+				return err
+			}
+		}
+		if err := transactionInvitationStore.SetInvitationState(ctx, invitation.ID, "accepted"); err != nil {
+			return err
+		}
+		invitation.State = "accepted"
+		now := time.Now().UTC()
+		invitation.ResolvedAt = &now
+		accepted = invitation
+		return nil
+	})
+	if err != nil {
+		return CircleInvitation{}, fmt.Errorf("accept circle invitation: %w", err)
+	}
+	s.audit.Log(ctx, logging.CircleInvitationAcceptedEvent(userID, accepted.CircleID, accepted.Role))
+	return accepted, nil
+}
+
+func (s *Service) acceptInvitationMembership(ctx context.Context, tx Store, circle Circle, members []Member, invitation CircleInvitation) error {
+	currentRole, isMember := memberRole(members, invitation.RecipientUserID)
+	if invitation.Role == RoleTeacher {
+		if isMember {
+			if currentRole != RoleTeacher {
+				return tx.UpdateMemberRole(ctx, invitation.CircleID, invitation.RecipientUserID, RoleTeacher)
+			}
+			return nil
+		}
+		return s.insertInvitedMember(ctx, tx, circle, members, invitation, RoleTeacher)
+	}
+	if isMember {
+		return nil
+	}
+	if countTeachers(members) == 0 {
+		return ErrFinalTeacher
+	}
+	capacity := circle.MaxCapacity
+	if capacity == 0 {
+		capacity = 50
+	}
+	if countStudents(members) >= capacity {
+		return ErrCircleFull
+	}
+	return s.insertInvitedMember(ctx, tx, circle, members, invitation, RoleStudent)
+}
+
+func (s *Service) insertInvitedMember(ctx context.Context, tx Store, circle Circle, members []Member, invitation CircleInvitation, role string) error {
+	if err := tx.LockUser(ctx, invitation.RecipientUserID); err != nil {
+		return err
+	}
+	count, err := tx.CountActiveMemberships(ctx, invitation.RecipientUserID)
+	if err != nil {
+		return fmt.Errorf("count recipient memberships: %w", err)
+	}
+	if count >= 5 {
+		return ErrCircleLimit
+	}
+	return tx.InsertMember(ctx, circle.ID, invitation.RecipientUserID, role)
+}
+
+// RevokeCircleInvitation revokes a pending invitation as an active manager.
+func (s *Service) RevokeCircleInvitation(ctx context.Context, actorID, circleID, invitationID string) error {
+	if !isUUID(circleID) || !isUUID(invitationID) {
+		return ErrInvitationNotFound
+	}
+	err := s.store.WithinTransaction(ctx, func(tx Store) error {
+		circle, err := tx.FindCircleByIDForUpdate(ctx, circleID)
+		if err != nil {
+			return err
+		}
+		if circle.IsArchived {
+			return ErrCircleArchived
+		}
+		members, err := tx.LockMembers(ctx, circleID)
+		if err != nil {
+			return err
+		}
+		actorRole, ok := memberRole(members, actorID)
+		if !ok || (actorRole != RoleTeacher && actorRole != RoleSupervisor) {
+			return ErrForbidden
+		}
+		invitationStore, ok := tx.(circleInvitationStore)
+		if !ok {
+			return errors.New("circle invitation store is not configured")
+		}
+		invitation, err := invitationStore.LockInvitation(ctx, circleID, invitationID)
+		if err != nil {
+			return err
+		}
+		if invitation.State != "pending" {
+			return ErrInvitationConflict
+		}
+		return invitationStore.SetInvitationState(ctx, invitation.ID, "revoked")
+	})
+	if err != nil {
+		return fmt.Errorf("revoke circle invitation: %w", err)
+	}
+	s.audit.Log(ctx, logging.CircleInvitationRevokedEvent(actorID, circleID, invitationID))
+	return nil
+}
+
+func validateCircleInvitationRequest(actorID, circleID string, request CreateCircleInvitationRequest) map[string]string {
+	fields := make(map[string]string)
+	if !isUUID(circleID) {
+		fields[httpconst.FieldCircleID] = httpconst.ErrorMessageCircleIDInvalid
+	}
+	if request.Role != RoleStudent && request.Role != RoleTeacher {
+		fields[httpconst.FieldRole] = httpconst.ErrorMessageCircleInvitationRoleInvalid
+	}
+	if !isUUID(request.RecipientUserID) || request.RecipientUserID == actorID {
+		fields[httpconst.FieldRecipientUserID] = httpconst.ErrorMessageCircleInvitationRecipientInvalid
+	}
+	return fields
+}
+
+func canInviteRole(actorRole, inviteRole string) bool {
+	if inviteRole == RoleStudent {
+		return actorRole == RoleStudent || actorRole == RoleSupervisor || actorRole == RoleTeacher
+	}
+	return inviteRole == RoleTeacher && (actorRole == RoleSupervisor || actorRole == RoleTeacher)
 }
 
 // AddStudentMember inserts a student membership idempotently (invite acceptance).
@@ -639,12 +946,42 @@ func (s *Service) RemoveMember(ctx context.Context, actorID, circleID, targetID 
 		if targetRole == RoleTeacher && countTeachers(members) <= 1 {
 			return ErrFinalTeacher
 		}
+		if targetRole == RoleTeacher && circle.TeacherID == targetID {
+			if err := setPrimaryTeacher(ctx, tx, circleID, members, targetID); err != nil {
+				return err
+			}
+		}
 		return tx.RemoveMember(ctx, circleID, targetID)
 	})
 	if err != nil {
 		return fmt.Errorf("remove circle member: %w", err)
 	}
 	s.audit.Log(ctx, logging.MemberRemovalEvent(actorID, targetID, circleID))
+	return nil
+}
+
+func memberRoleIsTeacher(members []Member, userID string) bool {
+	role, ok := memberRole(members, userID)
+	return ok && role == RoleTeacher
+}
+
+func setPrimaryTeacher(ctx context.Context, tx Store, circleID string, members []Member, excludingID string) error {
+	store, ok := tx.(circleTeacherStore)
+	if !ok {
+		return errors.New("circle teacher store is not configured")
+	}
+	replacement := ""
+	for _, member := range members {
+		if member.Role == RoleTeacher && member.UserID != excludingID && (replacement == "" || member.UserID < replacement) {
+			replacement = member.UserID
+		}
+	}
+	if replacement == "" {
+		return ErrFinalTeacher
+	}
+	if err := store.SetPrimaryTeacher(ctx, circleID, replacement); err != nil {
+		return fmt.Errorf("set primary circle teacher: %w", err)
+	}
 	return nil
 }
 
@@ -673,6 +1010,11 @@ func (s *Service) ArchiveCircle(ctx context.Context, actorID, circleID string) e
 		if err := tx.ArchiveCircle(ctx, circleID); err != nil {
 			return err
 		}
+		if projector, ok := tx.(circleNotificationProjector); ok {
+			if err := projector.ProjectCircleArchived(ctx, circleID); err != nil {
+				return fmt.Errorf("project circle archive notifications: %w", err)
+			}
+		}
 		archived = true
 		return nil
 	})
@@ -692,7 +1034,7 @@ func isUniqueViolation(err error) bool {
 
 // validateCreateCircleRequest checks shape-level rules: name bounds, duplicate
 // teachers, creator inclusion, and teacher/supervisor overlap.
-func validateCreateCircleRequest(creatorID string, req CreateCircleRequest) (string, []string, string, map[string]string) {
+func validateCreateCircleRequest(creatorID string, req CreateCircleRequest) (string, string, map[string]string) {
 	fields := make(map[string]string)
 	backupSupervisorID := ""
 
@@ -701,24 +1043,8 @@ func validateCreateCircleRequest(creatorID string, req CreateCircleRequest) (str
 		fields[httpconst.FieldName] = httpconst.ErrorMessageCircleNameInvalid
 	}
 
-	seen := make(map[string]struct{}, len(req.TeacherUserIDs))
-	teacherIDs := make([]string, 0, len(req.TeacherUserIDs))
-	for _, rawID := range req.TeacherUserIDs {
-		id := strings.TrimSpace(rawID)
-		if !isUUID(id) {
-			fields[httpconst.FieldTeacherUserIDs] = httpconst.ErrorMessageCircleAssigneeUnknown
-			continue
-		}
-		if id == creatorID {
-			fields[httpconst.FieldTeacherUserIDs] = httpconst.ErrorMessageCircleAssigneeConflict
-			continue
-		}
-		if _, dup := seen[id]; dup {
-			fields[httpconst.FieldTeacherUserIDs] = httpconst.ErrorMessageCircleAssigneeConflict
-			continue
-		}
-		seen[id] = struct{}{}
-		teacherIDs = append(teacherIDs, id)
+	if len(req.TeacherUserIDs) > 0 {
+		fields[httpconst.FieldTeacherUserIDs] = httpconst.ErrorMessageTeacherConsentRequired
 	}
 
 	if req.BackupSupervisorUserID != nil {
@@ -729,42 +1055,26 @@ func validateCreateCircleRequest(creatorID string, req CreateCircleRequest) (str
 		case backupID == creatorID:
 			fields[httpconst.FieldBackupSupervisor] = httpconst.ErrorMessageCircleAssigneeConflict
 		default:
-			if _, isTeacher := seen[backupID]; isTeacher {
-				fields[httpconst.FieldBackupSupervisor] = httpconst.ErrorMessageCircleAssigneeConflict
-			} else {
-				backupSupervisorID = backupID
-			}
+			backupSupervisorID = backupID
 		}
 	}
 
-	return name, teacherIDs, backupSupervisorID, fields
+	return name, backupSupervisorID, fields
 }
 
-// validateAssigneesExist rejects assignees that are not registered users.
-func (s *Service) validateAssigneesExist(ctx context.Context, teacherIDs []string, backupID string) (map[string]string, error) {
+// validateBackupSupervisorExists rejects an unknown optional supervisor.
+func (s *Service) validateBackupSupervisorExists(ctx context.Context, backupID string) (map[string]string, error) {
 	fields := make(map[string]string)
-
-	candidates := make([]string, 0, len(teacherIDs)+1)
-	candidates = append(candidates, teacherIDs...)
-	if backupID != "" {
-		candidates = append(candidates, backupID)
-	}
-	if len(candidates) == 0 {
+	if backupID == "" {
 		return fields, nil
 	}
 
-	existing, err := s.store.UsersExist(ctx, candidates)
+	existing, err := s.store.UsersExist(ctx, []string{backupID})
 	if err != nil {
 		return nil, fmt.Errorf("query assignee existence: %w", err)
 	}
 
-	for _, id := range teacherIDs {
-		if !existing[id] {
-			fields[httpconst.FieldTeacherUserIDs] = httpconst.ErrorMessageCircleAssigneeUnknown
-			break
-		}
-	}
-	if backupID != "" && !existing[backupID] {
+	if !existing[backupID] {
 		fields[httpconst.FieldBackupSupervisor] = httpconst.ErrorMessageCircleAssigneeUnknown
 	}
 	return fields, nil
@@ -812,8 +1122,16 @@ func generateInviteCode() (string, error) {
 	return code.String(), nil
 }
 
+// legacyInviteCodeLength is the symbol count of codes generated before the
+// 12-symbol format; existing circles keep these codes until refreshed.
+const legacyInviteCodeLength = 4
+
 func isInviteCode(value string) bool {
-	if len(value) != len(inviteCodePrefix)+inviteCodeLength || !strings.HasPrefix(value, inviteCodePrefix) {
+	symbolCount := len(value) - len(inviteCodePrefix)
+	if symbolCount != inviteCodeLength && symbolCount != legacyInviteCodeLength {
+		return false
+	}
+	if !strings.HasPrefix(value, inviteCodePrefix) {
 		return false
 	}
 	for _, char := range value[len(inviteCodePrefix):] {

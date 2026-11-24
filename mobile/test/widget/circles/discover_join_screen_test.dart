@@ -352,6 +352,22 @@ void main() {
     expect(find.text('تم الانضمام إلى الحلقة'), findsNothing);
   });
 
+  testWidgets('CircleJoinScreen: accepts a new 12-symbol invite code',
+      (tester) async {
+    final apiClient = _StubCircleApiClient();
+    await tester.pumpWidget(
+      _buildThemed(const CircleDiscoveryScreen(), _controller(apiClient)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('openInviteJoinButton')));
+    await tester.pumpAndSettle();
+    await _submitInvite(tester, 'HLQ-7X2KABCDEFGH');
+
+    expect(apiClient.joinedInviteCode, 'HLQ-7X2KABCDEFGH');
+    expect(find.text('رابط الدعوة غير صالح'), findsNothing);
+  });
+
   testWidgets('CircleDiscoveryScreen: does not repeat joined circles publicly',
       (tester) async {
     final apiClient = _StubCircleApiClient()

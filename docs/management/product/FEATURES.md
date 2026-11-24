@@ -49,7 +49,7 @@ This is a **living document**. It tracks every feature from proposal through del
 | [F-005](#f-005-live-sessions-livekit) | Live Sessions (Audio-only, LiveKit) | P0 | 🟢 Done† | 2 | Full Stack |
 | [F-006](#f-006-schedule--calendar) | Schedule & Calendar | P0 | 🟢 Done† | 2 | Full Stack |
 | [F-007](#f-007-enhanced-student-progress-tracking) | Enhanced Student Progress Tracking | P1 | 🟡 Approved | 3 | Full Stack |
-| [F-008](#f-008-notification-system) | Notification System | P1 | 🔵 Proposed | 2 | Backend |
+| [F-008](#f-008-notification-system) | Notification System | P1 | 🟡 Approved | 2 | Backend |
 | [F-009](#f-009-built-in-digital-mushaf) | Built-in Digital Mushaf | P2 | 🔵 Proposed | 4 | Mobile |
 | [F-010](#f-010-student--teacher-dashboards) | Student & Teacher Dashboards | P2 | 🔵 Proposed | 3 | Full Stack |
 | [F-011](#f-011-reports--statistics) | Reports & Statistics (PDF) | P2 | 🔵 Proposed | 3 | Backend |
@@ -459,8 +459,9 @@ Owns circle recurring schedules, one-off planned sessions, each member's combine
 **Status — 🟢 Done (owner-directed administrative closure, 2026-09-30):**
 Karim directed the implemented F-006 feature to be marked Done. The recorded
 device run passed its runnable journeys but skipped required fixture-dependent
-real-stack checks; T063 and T067 remain open. F-008 is still Proposed, so
-reminder delivery and full SC-009 acceptance remain open under T066. These
+real-stack checks; T063 and T067 remain open. F-008 is approved, but its
+reminder delivery is not yet implemented or verified, so full SC-009 remains
+open under T066. These
 exceptions are not represented as passed verification.
 
 **Gap-batch closure — 2026-09-27:** Karim marked the `019-gap-completion` shared batch done after its integration into `main` (`5231a49`, PR #23; branch-tip file contents match). F-006 continues in `006-schedule-calendar-attendance` using its existing Spec-Kit directory. This closes the shared branch batch, not the outstanding F-006/F-008 delivery criteria; F-019 remains Done.
@@ -626,11 +627,11 @@ Owns student session history, recitation history, the Quran Map, progress summar
 
 ### F-008: Notification System
 
-**Priority:** P1 | **Status:** 🔵 Proposed | **Phase:** 2
+**Priority:** P1 | **Status:** 🟡 Approved | **Phase:** 2
 
 #### Description
 
-Owns foreground notification history/preferences and background or closed-app delivery through FCM for approved product events, including session reminders, messages, grades, invitations, and queue turns. Circle-member notices required before manager-account deletion are also an F-008 dependency. F-008 remains proposed and requires feature approval before implementation; this gap batch only clarifies its definition.
+Approved by Karim on 2026-09-30. Owns foreground notification history/preferences and background or closed-app delivery through FCM for approved product events, including notification obligations identified across F-001–F-007: session reminders, messages, grades, invitations, queue turns, circle/member notices, and other events already defined by their owning features. F-008 also owns circle-member notices required before manager-account deletion. The notification matrix, quiet hours, global per-type controls, 30-day history, unread behavior, and deletion-notice override are clarified in `specs/008-notification-system/spec.md`; technical design is in its plan and ADR-027. Source-feature eligibility and event authority stay with their owning features. The role-bound Circle invitation notification is active F-008 scope, including recipient history and delivery, and fires when the invitation is sent to its named recipient. The F-008 source integration follows OQ-036/ADR-010 and F-002 authorization; it will not infer a trigger from invite-code sharing or circle joining.
 
 #### Notification Matrix
 
@@ -640,19 +641,25 @@ Owns foreground notification history/preferences and background or closed-app de
 | New group message | ✅ | ✅ | ✅ |
 | New private message | ✅ | ✅ | ❌ (always on) |
 | Grade posted | ✅ | ✅ | ✅ |
-| Circle invitation | ✅ | ✅ | ❌ |
+| Circle invitation (role-bound, addressed recipient) | ✅ | ✅ | ❌ |
 | Queue: "You're next!" | ✅ | ✅ | ❌ |
 | Queue: "Your turn!" | ✅ | ✅ | ❌ |
 | Student joined session (→ teacher) | ❌ | ✅ | ✅ |
+| Student joined circle (→ eligible teacher) | ✅ | ✅ | ✅ (default ON; global) |
+| Circle archived (→ eligible members) | ✅ | ✅ | ✅ (default ON; global) |
+| Session started (→ authorized subscribers) | ✅ | ✅ | ✅ (default ON; global) |
+| Session ended (→ joined participants) | ✅ | ✅ | ✅ (default ON; global) |
 
 #### Acceptance Criteria
 
 - [ ] FCM integration for background/closed state
 - [ ] WebSocket-based in-app notification bell for foreground state
-- [ ] Per-notification-type preferences in Settings
-- [ ] Quiet hours: no notifications between user-defined hours (default: 10pm–7am)
-- [ ] Notification history page in app (last 30 days)
-- [ ] Unread notification count badge on app icon
+- [ ] Configurable types default ON; turning one OFF mutes F-008 push and foreground alerts while retaining history/unread; always-on types cannot be disabled
+- [ ] Quiet hours default to 10pm–7am in the profile IANA timezone; quiet hours suppress push/sound but retain in-app history and unread state
+- [ ] Notification history shows the last 30 days; opening one notice marks only that item read, while opening the list does not
+- [ ] Unread count is server-authoritative in the app; native app-icon badges synchronize where supported and enabled
+- [ ] FCM registration supports Android, iOS, and web tokens; authenticated logout/account switch detaches only the current device token before local sign-out, and raw tokens are never returned or logged
+- [ ] Manager-deletion notices are durably written with circle archival/account closure, bypass ordinary archive preference, and remain subject to quiet hours
 
 ---
 

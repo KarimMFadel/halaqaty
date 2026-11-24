@@ -14,6 +14,7 @@ import (
 	"github.com/KarimMFadel/halaqaty/backend/internal/auth"
 	"github.com/KarimMFadel/halaqaty/backend/internal/chat"
 	"github.com/KarimMFadel/halaqaty/backend/internal/middleware"
+	"github.com/KarimMFadel/halaqaty/backend/internal/notifications"
 	phttp "github.com/KarimMFadel/halaqaty/backend/internal/platform/http"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/httpconst"
 	"github.com/KarimMFadel/halaqaty/backend/internal/platform/metrics"
@@ -173,6 +174,9 @@ func fullWiringMiddlewareSet(authMW *middleware.AuthMiddleware, extras ...func(*
 		ScheduleHandler:   scheduling.NewScheduleHandler(nil),
 		CalendarHandler:   scheduling.NewCalendarHandler(nil, nil, nil),
 		AttendanceHandler: attendance.NewHandler(wiringAttendanceCommands{}),
+		// Nil store: the handler still registers the routes; the store
+		// guard inside each method serves the not-configured 500.
+		NotificationHandler: notifications.NewHandler(nil, nil),
 	}
 	for _, apply := range extras {
 		apply(&mw)
@@ -250,6 +254,9 @@ func TestRegisterRoutes_EveryProtectedRouteRejectsUnauthenticatedRequests(t *tes
 		{http.MethodPost, "/api/v1/circles/" + wiringCircleID + "/planned-sessions"},
 		{http.MethodPatch, "/api/v1/sessions/" + wiringSessionIDPath + "/planned-details"},
 		{http.MethodGet, "/api/v1/calendar/me?month=2030-01"},
+		{http.MethodGet, "/api/v1/notifications"},
+		{http.MethodPut, "/api/v1/notifications/" + wiringEntryID + "/read"},
+		{http.MethodPut, "/api/v1/notifications/read-all"},
 	}
 
 	for _, route := range sessionRoutes {
@@ -280,6 +287,26 @@ func TestRegisterRoutes_AttendanceUsesAuthenticatedPerUserLimit(t *testing.T) {
 	for i, want := range []int{http.StatusOK, http.StatusTooManyRequests} {
 		rec := httptest.NewRecorder()
 		router.Handler().ServeHTTP(rec, wiringAuthenticatedRequest(http.MethodGet, path, ""))
+		if rec.Code != want {
+			t.Fatalf("request %d status = %d, want %d body=%s", i+1, rec.Code, want, rec.Body.String())
+		}
+	}
+}
+
+// TestRegisterRoutes_CircleInviteJoinUsesAuthenticatedPerUserLimit pins the
+// invite-guessing defence: POST /api/v1/circles/join must sit behind the same
+// authenticated per-user budget as user search, so a principal cannot hammer
+// invite codes beyond one-minute-window budget. The not-configured RBAC
+// fallback returns 500 for the first (within-budget) request; the second
+// request must be the limiter's 429.
+func TestRegisterRoutes_CircleInviteJoinUsesAuthenticatedPerUserLimit(t *testing.T) {
+	mw := fullWiringMiddlewareSet(wiringAuthMiddleware(), func(mw *MiddlewareSet) {
+		mw.RateLimit = middleware.NewRateLimitMiddleware(100, 1)
+	})
+	router := NewRouter(mw)
+	for i, want := range []int{http.StatusInternalServerError, http.StatusTooManyRequests} {
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, wiringAuthenticatedRequest(http.MethodPost, "/api/v1/circles/join", `{"invite_code":"HLQ-7X2K"}`))
 		if rec.Code != want {
 			t.Fatalf("request %d status = %d, want %d body=%s", i+1, rec.Code, want, rec.Body.String())
 		}
@@ -320,6 +347,7 @@ func TestRegisterRoutes_UnconfiguredHandlersReturnTypedInternalErrors(t *testing
 		mw.RBACHandler = nil
 		mw.AuthHandler = nil
 		mw.SessionHandler = nil
+		mw.NotificationHandler = nil
 	}))
 
 	cases := []struct {
@@ -365,6 +393,18 @@ func TestRegisterRoutes_UnconfiguredHandlersReturnTypedInternalErrors(t *testing
 			method:      http.MethodPost,
 			path:        "/api/v1/messages/" + wiringSessionIDPath + "/media-url",
 			wantMessage: httpconst.ErrorMessageInternalServerError,
+		},
+		{
+			name:        "notification history without handler reports notification handler not configured",
+			method:      http.MethodGet,
+			path:        "/api/v1/notifications",
+			wantMessage: httpconst.ErrorMessageNotificationHandlerNotConfigured,
+		},
+		{
+			name:        "notification read-all without handler reports notification handler not configured",
+			method:      http.MethodPut,
+			path:        "/api/v1/notifications/read-all",
+			wantMessage: httpconst.ErrorMessageNotificationHandlerNotConfigured,
 		},
 	}
 
@@ -551,11 +591,15 @@ func TestRouter_MetricsHandler_RequiresBearerToken(t *testing.T) {
 	queueMetrics.RecordOutboxParked()
 	chatMetrics := new(metrics.ChatMetrics)
 	chatMetrics.RecordOutbox(metrics.ChatOutboxDelivered)
+	notificationMetrics := new(notifications.NotificationMetrics)
+	notificationMetrics.RecordDispatch(notifications.DispatchParked)
+	notificationMetrics.RecordCleanupDeleted(2, 3)
 	router := NewRouter(MiddlewareSet{
-		Metrics:      authMetrics,
-		QueueMetrics: queueMetrics,
-		ChatMetrics:  chatMetrics,
-		MetricsToken: "wiring-metrics-token",
+		Metrics:             authMetrics,
+		QueueMetrics:        queueMetrics,
+		ChatMetrics:         chatMetrics,
+		NotificationMetrics: notificationMetrics,
+		MetricsToken:        "wiring-metrics-token",
 	})
 
 	t.Run("missing or wrong token is rejected", func(t *testing.T) {
@@ -580,7 +624,7 @@ func TestRouter_MetricsHandler_RequiresBearerToken(t *testing.T) {
 		}
 	})
 
-	t.Run("valid token returns auth, queue, and chat summaries", func(t *testing.T) {
+	t.Run("valid token returns auth, queue, chat, and notification summaries", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 		req.Header.Set(httpconst.HeaderAuthorization, "Bearer wiring-metrics-token")
 		rec := httptest.NewRecorder()
@@ -591,8 +635,9 @@ func TestRouter_MetricsHandler_RequiresBearerToken(t *testing.T) {
 		}
 		var summary struct {
 			metrics.MetricsSummary
-			Queue metrics.QueueMetricsSummary `json:"queue"`
-			Chat  metrics.ChatMetricsSummary  `json:"chat"`
+			Queue         metrics.QueueMetricsSummary              `json:"queue"`
+			Chat          metrics.ChatMetricsSummary               `json:"chat"`
+			Notifications notifications.NotificationMetricsSummary `json:"notifications"`
 		}
 		if err := json.Unmarshal(rec.Body.Bytes(), &summary); err != nil {
 			t.Fatalf("decode metrics response: %v", err)
@@ -605,6 +650,13 @@ func TestRouter_MetricsHandler_RequiresBearerToken(t *testing.T) {
 		}
 		if summary.Chat.Outbox[metrics.ChatOutboxDelivered] != 1 {
 			t.Fatalf("chat delivered total: got %d, want 1", summary.Chat.Outbox[metrics.ChatOutboxDelivered])
+		}
+		if summary.Notifications.Outcomes[notifications.DispatchParked] != 1 {
+			t.Fatalf("notification parked total: got %d, want 1", summary.Notifications.Outcomes[notifications.DispatchParked])
+		}
+		if summary.Notifications.CleanupAttemptsDeleted != 2 || summary.Notifications.CleanupHistoryDeleted != 3 {
+			t.Fatalf("notification cleanup totals: got (%d, %d), want (2, 3)",
+				summary.Notifications.CleanupAttemptsDeleted, summary.Notifications.CleanupHistoryDeleted)
 		}
 	})
 

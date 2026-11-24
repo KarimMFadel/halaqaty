@@ -255,8 +255,10 @@ void main() {
 
       await tester.tap(retry);
       await tester.pumpAndSettle();
-      await _revealSessions(tester);
-
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('circleSession-session-1')),
+        -200,
+      );
       expect(sessions.loadCalls, 2);
       expect(find.byKey(const Key('circleSession-session-1')), findsOneWidget);
     });

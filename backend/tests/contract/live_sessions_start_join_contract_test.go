@@ -195,12 +195,22 @@ func (g *sessionGatewayStub) IssueConnection(_ context.Context, _ sessions.Media
 	}, nil
 }
 
-// sessionRoleStub satisfies sessions.CircleRoleReader.
+// sessionRoleStub satisfies sessions.CircleRoleReader. Archived circles deny
+// ActiveRoleInCircle while RoleInCircle keeps answering for membership-only
+// authorization.
 type sessionRoleStub struct {
-	roles map[string]map[string]string
+	roles    map[string]map[string]string
+	archived map[string]bool
 }
 
 func (r *sessionRoleStub) RoleInCircle(_ context.Context, circleID, userID string) (string, error) {
+	return r.roles[circleID][userID], nil
+}
+
+func (r *sessionRoleStub) ActiveRoleInCircle(_ context.Context, circleID, userID string) (string, error) {
+	if r.archived[circleID] {
+		return "", nil
+	}
 	return r.roles[circleID][userID], nil
 }
 
@@ -277,6 +287,8 @@ func sessionHTTPError(err error) (code string, status int) {
 	case err == sessions.ErrSessionLocked:
 		return httpconst.ErrorCodeConflict, http.StatusConflict
 	case err == sessions.ErrParticipantRemoved:
+		return httpconst.ErrorCodeForbidden, http.StatusForbidden
+	case err == sessions.ErrCircleArchived:
 		return httpconst.ErrorCodeForbidden, http.StatusForbidden
 	default:
 		return httpconst.ErrorCodeInternalServerError, http.StatusInternalServerError
@@ -464,23 +476,30 @@ func TestSessionErrorEnvelopes(t *testing.T) {
 		target     string
 		wantStatus int
 		wantCode   string
+		archived   bool
 	}{
 		{"start not found → 404", scTeacher, nil,
-			"/api/v1/sessions/missing/start?sessionId=missing", http.StatusNotFound, httpconst.ErrorCodeNotFound},
+			"/api/v1/sessions/missing/start?sessionId=missing", http.StatusNotFound, httpconst.ErrorCodeNotFound, false},
 		{"start ended → 409", scTeacher, func(s *sessionStoreStub) {
 			s.sessions["e1"] = &sessions.Session{ID: "e1", CircleID: scCircleID, Status: sessions.SessionStatusEnded, MediaMode: sessions.MediaModeAudioOnly}
-		}, "/api/v1/sessions/e1/start?sessionId=e1", http.StatusConflict, httpconst.ErrorCodeConflict},
+		}, "/api/v1/sessions/e1/start?sessionId=e1", http.StatusConflict, httpconst.ErrorCodeConflict, false},
 		{"join not found → 404", scStudent, nil,
-			"/api/v1/sessions/missing/join?sessionId=missing", http.StatusNotFound, httpconst.ErrorCodeNotFound},
+			"/api/v1/sessions/missing/join?sessionId=missing", http.StatusNotFound, httpconst.ErrorCodeNotFound, false},
 		{"join scheduled → 409", scStudent, func(s *sessionStoreStub) {
 			s.sessions["s1"] = &sessions.Session{ID: "s1", CircleID: scCircleID, Status: sessions.SessionStatusScheduled, MediaMode: sessions.MediaModeAudioOnly}
-		}, "/api/v1/sessions/s1/join?sessionId=s1", http.StatusConflict, httpconst.ErrorCodeConflict},
+		}, "/api/v1/sessions/s1/join?sessionId=s1", http.StatusConflict, httpconst.ErrorCodeConflict, false},
 		{"non-member start → 403", scOutsider, func(s *sessionStoreStub) {
 			s.sessions["n1"] = &sessions.Session{ID: "n1", CircleID: scCircleID, Status: sessions.SessionStatusScheduled, MediaMode: sessions.MediaModeAudioOnly}
-		}, "/api/v1/sessions/n1/start?sessionId=n1", http.StatusForbidden, httpconst.ErrorCodeForbidden},
+		}, "/api/v1/sessions/n1/start?sessionId=n1", http.StatusForbidden, httpconst.ErrorCodeForbidden, false},
 		{"non-member join → 403", scOutsider, func(s *sessionStoreStub) {
 			s.sessions["n2"] = &sessions.Session{ID: "n2", CircleID: scCircleID, Status: sessions.SessionStatusActive, MediaMode: sessions.MediaModeAudioOnly}
-		}, "/api/v1/sessions/n2/join?sessionId=n2", http.StatusForbidden, httpconst.ErrorCodeForbidden},
+		}, "/api/v1/sessions/n2/join?sessionId=n2", http.StatusForbidden, httpconst.ErrorCodeForbidden, false},
+		{"archived start → 403", scTeacher, func(s *sessionStoreStub) {
+			s.sessions["a1"] = &sessions.Session{ID: "a1", CircleID: scCircleID, Status: sessions.SessionStatusScheduled, MediaMode: sessions.MediaModeAudioOnly}
+		}, "/api/v1/sessions/a1/start?sessionId=a1", http.StatusForbidden, httpconst.ErrorCodeForbidden, true},
+		{"archived join → 403", scStudent, func(s *sessionStoreStub) {
+			s.sessions["a2"] = &sessions.Session{ID: "a2", CircleID: scCircleID, Status: sessions.SessionStatusActive, MediaMode: sessions.MediaModeAudioOnly}
+		}, "/api/v1/sessions/a2/join?sessionId=a2", http.StatusForbidden, httpconst.ErrorCodeForbidden, true},
 	}
 
 	for _, tc := range cases {
@@ -489,6 +508,9 @@ func TestSessionErrorEnvelopes(t *testing.T) {
 			store, gw, roles, svc := newSessionFixture()
 			if tc.setup != nil {
 				tc.setup(store)
+			}
+			if tc.archived {
+				roles.archived = map[string]bool{scCircleID: true}
 			}
 			handler := buildSessionRoute(store, gw, roles, svc)
 			rec := doSessionReq(handler, tc.actor, http.MethodPost, tc.target, "")

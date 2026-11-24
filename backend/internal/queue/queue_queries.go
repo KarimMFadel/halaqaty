@@ -479,6 +479,11 @@ VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, $10, $11, $1
 ON CONFLICT (queue_entry_id) DO UPDATE
 SET grade = EXCLUDED.grade, notes = EXCLUDED.notes, updated_at = NOW()`
 
+const findProgressIDByQueueEntryQuery = `
+SELECT id
+FROM memorization_progress
+WHERE queue_entry_id = $1::uuid`
+
 // --- Opt-out requests -------------------------------------------------------
 
 // findOwnEntryForSessionQuery resolves a student's own entry in the session's

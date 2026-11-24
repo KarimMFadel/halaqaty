@@ -7,6 +7,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
+	"sync"
 	"time"
 )
 
@@ -16,6 +18,9 @@ const (
 	RecoveryCandidateLimit = 25
 	// RecoveryProviderTimeout bounds one provider operation in the worker.
 	RecoveryProviderTimeout = 3 * time.Second
+	// maxRecoveryPages bounds one keyset walk so a persistently failing page
+	// cannot spin the worker forever.
+	maxRecoveryPages = 100
 )
 
 // RecoveryStore is the small persistence port used by the bounded recovery
@@ -25,6 +30,13 @@ const (
 type RecoveryStore interface {
 	ListRecoveryCandidates(context.Context, SessionStatus, int) ([]Session, error)
 	TrySessionLock(context.Context, string, func(context.Context) error) (bool, error)
+}
+
+// recoveryCandidatePager is an optional RecoveryStore extension. Keyset
+// pagination lets a sweep advance past candidates that never reach their
+// completion condition instead of re-reading the same first page.
+type recoveryCandidatePager interface {
+	ListRecoveryCandidatesAfterID(ctx context.Context, status SessionStatus, afterID string, limit int) ([]Session, error)
 }
 
 type recoverySessionReader interface {
@@ -44,6 +56,8 @@ type Reconciler struct {
 	roomKey    []byte
 	clock      func() time.Time
 	attendance attendanceRecovery
+	mu         sync.Mutex
+	cursors    map[SessionStatus]string
 }
 
 // SetAttendanceFinalizer enables recovery of ended sessions whose attendance was not finalized.
@@ -60,7 +74,7 @@ func NewReconciler(store RecoveryStore, gateway SessionMediaGateway, roomKey []b
 	if len(roomKey) == 0 {
 		return nil, errors.New("reconciler room key is required")
 	}
-	return &Reconciler{store: store, gateway: gateway, roomKey: append([]byte(nil), roomKey...), clock: time.Now}, nil
+	return &Reconciler{store: store, gateway: gateway, roomKey: append([]byte(nil), roomKey...), clock: time.Now, cursors: make(map[SessionStatus]string)}, nil
 }
 
 // StableMediaRoomRef derives the stable opaque provider room reference for a
@@ -77,33 +91,69 @@ func StableMediaRoomRef(sessionID string, roomKey []byte) (MediaRoomRef, error) 
 	return MediaRoomRef("hlq-" + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))), nil
 }
 
-// Sweep performs one startup/periodic reconciliation pass. It returns the
-// first operational error while continuing to process other candidates.
+// Sweep performs one startup/periodic reconciliation pass. Phase and candidate
+// failures are aggregated and returned while every remaining phase and
+// candidate is still processed.
 func (r *Reconciler) Sweep(ctx context.Context) error {
-	var firstErr error
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var errs []error
 	for _, status := range []SessionStatus{SessionStatusScheduled, SessionStatusActive, SessionStatusEnded} {
-		candidates, err := r.store.ListRecoveryCandidates(ctx, status, RecoveryCandidateLimit)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = fmt.Errorf("list %s recovery candidates: %w", status, err)
-			}
-			continue
-		}
-		for _, sess := range candidates {
-			if err := r.reconcileCandidate(ctx, sess); err != nil && firstErr == nil {
-				firstErr = fmt.Errorf("reconcile session: %w", err)
-			}
+		if err := r.sweepStatus(ctx, status); err != nil {
+			errs = append(errs, err)
 		}
 	}
-	return firstErr
+	return errors.Join(errs...)
+}
+
+// sweepStatus reconciles one lifecycle state. When the store supports keyset
+// pagination it resumes after the last completed page across bounded sweeps,
+// then wraps after exhaustion so all candidates are revisited.
+func (r *Reconciler) sweepStatus(ctx context.Context, status SessionStatus) error {
+	pager, paginated := r.store.(recoveryCandidatePager)
+	var errs []error
+	afterID := r.cursors[status]
+	for page := 0; page < maxRecoveryPages; page++ {
+		if err := ctx.Err(); err != nil {
+			return errors.Join(append(errs, err)...)
+		}
+		var candidates []Session
+		var err error
+		if paginated {
+			candidates, err = pager.ListRecoveryCandidatesAfterID(ctx, status, afterID, RecoveryCandidateLimit)
+		} else {
+			candidates, err = r.store.ListRecoveryCandidates(ctx, status, RecoveryCandidateLimit)
+		}
+		if err != nil {
+			errs = append(errs, fmt.Errorf("list %s recovery candidates: %w", status, err))
+			break
+		}
+		for _, sess := range candidates {
+			if err := ctx.Err(); err != nil {
+				return errors.Join(append(errs, err)...)
+			}
+			if err := r.reconcileCandidate(ctx, sess); err != nil {
+				errs = append(errs, fmt.Errorf("reconcile session %s: %w", sess.ID, err))
+			}
+		}
+		if !paginated || len(candidates) < RecoveryCandidateLimit {
+			r.cursors[status] = ""
+			break
+		}
+		afterID = candidates[len(candidates)-1].ID
+		r.cursors[status] = afterID
+	}
+	return errors.Join(errs...)
 }
 
 // Run performs the startup sweep and then repeats it every 30 seconds until
-// ctx is cancelled. The caller owns the goroutine and shutdown lifecycle.
+// ctx is cancelled. The caller owns the goroutine and shutdown lifecycle. A
+// failing sweep is logged and retried rather than disabling the worker, so
+// persistent cleanup failures stay visible without stopping recovery.
 func (r *Reconciler) Run(ctx context.Context) error {
-	// Startup failures are transient recovery work, not a reason to disable
-	// the periodic worker; the next bounded sweep retries them.
-	_ = r.Sweep(ctx)
+	if err := r.Sweep(ctx); err != nil {
+		slog.ErrorContext(ctx, "session reconciliation sweep failed", "error", err)
+	}
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -111,9 +161,9 @@ func (r *Reconciler) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			// A transient provider or database failure is retried on the next
-			// bounded sweep; it must not permanently disable recovery.
-			_ = r.Sweep(ctx)
+			if err := r.Sweep(ctx); err != nil {
+				slog.ErrorContext(ctx, "session reconciliation sweep failed", "error", err)
+			}
 		}
 	}
 }

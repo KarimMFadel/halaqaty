@@ -335,11 +335,17 @@ func (r *Router) registerRoutes() {
 		})
 		markNotificationReadHandler := listNotificationsHandler
 		markAllNotificationsReadHandler := listNotificationsHandler
+		getNotificationPreferencesHandler := listNotificationsHandler
+		updateNotificationPreferencesHandler := listNotificationsHandler
 		if r.mw.NotificationHandler != nil {
 			listNotificationsHandler = http.HandlerFunc(r.mw.NotificationHandler.List)
 			markNotificationReadHandler = http.HandlerFunc(r.mw.NotificationHandler.MarkRead)
 			markAllNotificationsReadHandler = http.HandlerFunc(r.mw.NotificationHandler.MarkAllRead)
+			getNotificationPreferencesHandler = http.HandlerFunc(r.mw.NotificationHandler.GetPreferences)
+			updateNotificationPreferencesHandler = http.HandlerFunc(r.mw.NotificationHandler.UpdatePreferences)
 		}
+		r.mux.Handle(routeNotificationPreferencesGet, r.requireWithUserLimit(getNotificationPreferencesHandler))
+		r.mux.Handle(routeNotificationPreferencesPut, r.requireWithUserLimit(updateNotificationPreferencesHandler))
 		r.mux.Handle(routeNotificationsGet, r.requireWithUserLimit(listNotificationsHandler))
 		r.mux.Handle(routeNotificationRead, r.requireWithUserLimit(markNotificationReadHandler))
 		r.mux.Handle(routeNotificationsReadAll, r.requireWithUserLimit(markAllNotificationsReadHandler))

@@ -91,9 +91,11 @@ const (
 // segment is more specific than {notificationId}/read, so the Go mux
 // registers both without conflict.
 const (
-	routeNotificationsGet     = "GET /api/v1/notifications"
-	routeNotificationRead     = "PUT /api/v1/notifications/{notificationId}/read"
-	routeNotificationsReadAll = "PUT /api/v1/notifications/read-all"
+	routeNotificationPreferencesGet = "GET /api/v1/notifications/preferences"
+	routeNotificationPreferencesPut = "PUT /api/v1/notifications/preferences"
+	routeNotificationsGet           = "GET /api/v1/notifications"
+	routeNotificationRead           = "PUT /api/v1/notifications/{notificationId}/read"
+	routeNotificationsReadAll       = "PUT /api/v1/notifications/read-all"
 )
 
 // F-004 chat route patterns (US1 group list/send). The remaining F-004

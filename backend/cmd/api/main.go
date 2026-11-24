@@ -326,10 +326,16 @@ func main() {
 		nil,
 	)
 	// F-006 reminder staleness gate (ADR-027 §3): session reminders recheck
-	// their source eligibility immediately before the first send attempt; a
+	// their source eligibility before every send attempt; a
 	// stale reminder is suppressed with DeliveryExpired while its history row
 	// stays retained and unread.
-	notificationDispatcher.EligibilityRecheck = scheduling.ReminderEligibilityRecheck(scheduleRepo)
+	reminderRecheck := scheduling.ReminderEligibilityRecheck(scheduleRepo)
+	notificationDispatcher.EligibilityRecheck = func(ctx context.Context, intent notifications.DispatchIntent) (bool, error) {
+		if intent.Type == notifications.EventCircleInvitation {
+			return rbacRepo.InvitationEligibilityRecheck(ctx, intent)
+		}
+		return reminderRecheck(ctx, intent)
+	}
 	notificationCleaner := notifications.NewCleaner(notificationRepo, notificationMetrics)
 	// The REST handler serves history/read-state; the notifier publishes
 	// best-effort unread-count hints over the user-targeted hub seam while

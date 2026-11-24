@@ -163,3 +163,15 @@ func scanCircleNotificationRecipients(rows pgx.Rows) ([]uuid.UUID, error) {
 	}
 	return recipients, nil
 }
+
+// InvitationEligibilityRecheck checks the current source authorization before push delivery.
+func (r *Repository) InvitationEligibilityRecheck(ctx context.Context, intent notifications.DispatchIntent) (bool, error) {
+	if intent.SourceRef.Type != notifications.SourceInvitation || intent.SourceRef.ID == uuid.Nil {
+		return false, nil
+	}
+	var eligible bool
+	if err := r.q.QueryRow(ctx, invitationNotificationEligibleQuery, intent.SourceRef.ID, intent.UserID).Scan(&eligible); err != nil {
+		return false, fmt.Errorf("check invitation notification eligibility: %w", err)
+	}
+	return eligible, nil
+}

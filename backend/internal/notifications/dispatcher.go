@@ -164,7 +164,7 @@ type Dispatcher struct {
 	jitter  func(time.Duration) time.Duration
 
 	// EligibilityRecheck is an optional volatile-source gate: when claimed,
-	// session reminders are rechecked against their source feature on every
+	// session reminders and circle invitations are rechecked against their source on every
 	// attempt before the gates are evaluated (ADR-027 §3), so a cancellation
 	// or supersession arriving between backoff attempts still suppresses the
 	// occurrence. Returning false suppresses the intent terminally with
@@ -248,15 +248,15 @@ func (d *Dispatcher) dispatchIntent(ctx context.Context, intent DispatchIntent) 
 	if err != nil {
 		return fmt.Errorf("check notification device attempts: %w", err)
 	}
-	// Volatile source eligibility (F-006 reminder staleness) is rechecked on
+	// Volatile source eligibility is rechecked on
 	// every claimed attempt before gates are evaluated, so a cancellation or
 	// supersession arriving between backoff attempts still suppresses the
 	// occurrence before its next stale send. Suppression is terminal and is
 	// never replayed by later changes.
-	if d.EligibilityRecheck != nil && intent.Type == EventSessionReminder {
+	if d.EligibilityRecheck != nil && (intent.Type == EventSessionReminder || intent.Type == EventCircleInvitation) {
 		eligible, err := d.EligibilityRecheck(ctx, intent)
 		if err != nil {
-			return fmt.Errorf("recheck reminder source eligibility: %w", err)
+			return fmt.Errorf("recheck source eligibility: %w", err)
 		}
 		if !eligible {
 			return d.suppress(ctx, intent, DeliveryExpired)

@@ -223,3 +223,119 @@ func decodeHistoryCursor(raw string) (Cursor, error) {
 	}
 	return Cursor{CreatedAt: createdAt.UTC(), ID: id}, nil
 }
+
+// PreferenceStore supplies effective notification settings for a recipient.
+type PreferenceStore interface {
+	GetPreferences(context.Context, string) (Preferences, error)
+	UpdatePreferences(context.Context, string, []TypeSettingUpdate, *QuietHoursUpdate) error
+}
+
+type preferenceUpdateRequest struct {
+	Types *[]struct {
+		Type    *EventType `json:"type"`
+		Enabled *bool      `json:"enabled"`
+	} `json:"types"`
+	QuietHours *struct {
+		Enabled    *bool   `json:"enabled"`
+		StartLocal *string `json:"start_local"`
+		EndLocal   *string `json:"end_local"`
+	} `json:"quiet_hours"`
+}
+
+// GetPreferences handles GET /api/v1/notifications/preferences.
+func (h *Handler) GetPreferences(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.preferenceStore(w)
+	if !ok {
+		return
+	}
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	result, err := store.GetPreferences(r.Context(), principal.UserID)
+	if err != nil {
+		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusOK, result)
+}
+
+// UpdatePreferences handles PUT /api/v1/notifications/preferences.
+func (h *Handler) UpdatePreferences(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.preferenceStore(w)
+	if !ok {
+		return
+	}
+	principal, ok := auth.CurrentPrincipal(r.Context())
+	if !ok || principal.UserID == "" {
+		phttp.WriteError(w, httpconst.ErrorCodeUnauthorized, httpconst.ErrorMessageUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	var req *preferenceUpdateRequest
+	if r.Body == nil || r.Body == http.NoBody {
+		writePreferenceInvalid(w)
+		return
+	}
+	if !phttp.DecodeJSONBody(w, r, &req) {
+		return
+	}
+	if req == nil {
+		writePreferenceInvalid(w)
+		return
+	}
+	var updates []TypeSettingUpdate
+	seen := map[EventType]bool{}
+	if req.Types != nil {
+		for _, item := range *req.Types {
+			if item.Type == nil || item.Enabled == nil || !isConfigurable(*item.Type) || seen[*item.Type] {
+				writePreferenceInvalid(w)
+				return
+			}
+			seen[*item.Type] = true
+			updates = append(updates, TypeSettingUpdate{Type: *item.Type, Enabled: *item.Enabled})
+		}
+	}
+	var quiet *QuietHoursUpdate
+	if req.QuietHours != nil {
+		q := req.QuietHours
+		if q.Enabled == nil || q.StartLocal == nil || q.EndLocal == nil {
+			writePreferenceInvalid(w)
+			return
+		}
+		_, startErr := parseLocalClock(*q.StartLocal)
+		_, endErr := parseLocalClock(*q.EndLocal)
+		if startErr != nil || endErr != nil || *q.StartLocal == *q.EndLocal {
+			writePreferenceInvalid(w)
+			return
+		}
+		quiet = &QuietHoursUpdate{Enabled: *q.Enabled, StartLocal: *q.StartLocal, EndLocal: *q.EndLocal}
+	}
+	if err := store.UpdatePreferences(r.Context(), principal.UserID, updates, quiet); err != nil {
+		if errors.Is(err, ErrPreferenceNotConfigurable) || errors.Is(err, ErrInvalidQuietHours) {
+			writePreferenceInvalid(w)
+			return
+		}
+		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
+		return
+	}
+	result, err := store.GetPreferences(r.Context(), principal.UserID)
+	if err != nil {
+		phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageInternalServerError, http.StatusInternalServerError)
+		return
+	}
+	phttp.WriteJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) preferenceStore(w http.ResponseWriter) (PreferenceStore, bool) {
+	if h != nil {
+		if store, ok := h.store.(PreferenceStore); ok && store != nil {
+			return store, true
+		}
+	}
+	phttp.WriteError(w, httpconst.ErrorCodeInternalServerError, httpconst.ErrorMessageNotificationHandlerNotConfigured, http.StatusInternalServerError)
+	return nil, false
+}
+func writePreferenceInvalid(w http.ResponseWriter) {
+	phttp.WriteValidationError(w, httpconst.ErrorMessageValidationFailed, map[string]string{httpconst.FieldBody: httpconst.ErrorMessageRequestBodyInvalid})
+}

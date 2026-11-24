@@ -732,3 +732,19 @@ func TestDispatchDueContinuesAfterOneIntentFails(t *testing.T) {
 		t.Fatalf("sent = %v, want later intent", sender.sent)
 	}
 }
+
+func TestDispatchInvitationRecheckSuppressesRetry(t *testing.T) {
+	intent := testIntent()
+	intent.Type = notifications.EventCircleInvitation
+	store := &fakeDispatchStore{intents: []notifications.DispatchIntent{intent}, claimable: true, hasAttempts: true}
+	sender := &fakePushSender{}
+	seam := &recheckSeam{eligible: false}
+	d := newTestDispatcher(store, sender, &fakeTokenRemover{}, &notifications.NotificationMetrics{}, time.Now())
+	d.EligibilityRecheck = seam.recheck
+	if err := d.DispatchDue(context.Background(), 10); err != nil {
+		t.Fatal(err)
+	}
+	if len(seam.calls) != 1 || len(store.suppressed) != 1 || store.suppressed[0] != notifications.DeliveryExpired || len(sender.sent) != 0 {
+		t.Fatalf("calls=%d suppressed=%v sent=%d; want recheck and expiry without send", len(seam.calls), store.suppressed, len(sender.sent))
+	}
+}

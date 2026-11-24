@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -480,5 +481,152 @@ func TestRepositoryListExactLimitReturnsNoNextCursor(t *testing.T) {
 	}
 	if page.NextCursor != nil {
 		t.Fatalf("NextCursor=%+v, want nil when exactly limit rows remain", page.NextCursor)
+	}
+}
+
+func TestRepositoryListCursorOrdersEqualTimestampsByIDDescending(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	userID := createNotificationTestUser(t, ctx, pool)
+	t.Cleanup(func() {
+		if _, err := pool.Exec(context.Background(), "DELETE FROM users WHERE id = $1", userID); err != nil {
+			t.Errorf("delete equal-timestamp history user: %v", err)
+		}
+		pool.Close()
+	})
+
+	createdAt := time.Now().UTC().Truncate(time.Microsecond)
+	olderID := uuid.MustParse("00000000-0000-4000-8000-000000000001")
+	newerID := uuid.MustParse("00000000-0000-4000-8000-000000000002")
+	for id, eventID := range map[uuid.UUID]string{
+		olderID: "equal-time-older-id",
+		newerID: "equal-time-newer-id",
+	} {
+		if _, err := pool.Exec(ctx, `
+INSERT INTO notifications (
+    id, user_id, type, source_event_id, source_ref_type, source_ref_id,
+    title, body, created_at, push_expires_at
+) VALUES ($1, $2, 'group_message', $3, 'message', $4,
+			'New message', 'Open the app to view it', $5, $6)`,
+			id, userID, eventID, uuid.New(), createdAt, createdAt.Add(24*time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	repo := notifications.NewRepository(pool)
+	first, err := repo.List(ctx, userID.String(), nil, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Items) != 1 || first.Items[0].ID != newerID || first.NextCursor == nil {
+		t.Fatalf("first equal-time page=%+v, want newer UUID %s and cursor", first, newerID)
+	}
+	second, err := repo.List(ctx, userID.String(), first.NextCursor, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Items) != 1 || second.Items[0].ID != olderID || second.NextCursor != nil {
+		t.Fatalf("second equal-time page=%+v, want older UUID %s and no cursor", second, olderID)
+	}
+}
+
+func TestRepositoryListHonorsNearThirtyDayBoundary(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	userID := createNotificationTestUser(t, ctx, pool)
+	t.Cleanup(func() {
+		if _, err := pool.Exec(context.Background(), "DELETE FROM users WHERE id = $1", userID); err != nil {
+			t.Errorf("delete history-boundary integration user: %v", err)
+		}
+		pool.Close()
+	})
+
+	insideWindowID := insertTestNotification(t, ctx, pool, userID, "inside-window", time.Now().Add(-30*24*time.Hour+time.Minute))
+	insertTestNotification(t, ctx, pool, userID, "outside-window", time.Now().Add(-30*24*time.Hour-time.Minute))
+
+	page, err := notifications.NewRepository(pool).List(ctx, userID.String(), nil, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 || page.UnreadCount != 1 || page.Items[0].ID != insideWindowID {
+		t.Fatalf("near-boundary page = %#v, want only the row newer than 30 days", page)
+	}
+}
+
+func TestRepositoryListKeepsPageAndUnreadCountOnOneConcurrentSnapshot(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	userID := createNotificationTestUser(t, ctx, pool)
+	t.Cleanup(func() {
+		if _, err := pool.Exec(context.Background(), "DELETE FROM users WHERE id = $1", userID); err != nil {
+			t.Errorf("delete history-concurrency integration user: %v", err)
+		}
+		pool.Close()
+	})
+
+	start := make(chan struct{})
+	errors := make(chan error, 2)
+	var workers sync.WaitGroup
+	workers.Add(2)
+	go func() {
+		defer workers.Done()
+		<-start
+		for i := 0; i < 20; i++ {
+			_, err := pool.Exec(ctx, `
+INSERT INTO notifications (
+    user_id, type, source_event_id, source_ref_type, source_ref_id,
+    title, body, push_expires_at
+) VALUES ($1, 'group_message', $2, 'message', $3, 'New message', 'Open the app to view it', NOW() + INTERVAL '24 hours')`,
+				userID, fmt.Sprintf("snapshot-%d", i), uuid.New())
+			if err != nil {
+				errors <- fmt.Errorf("insert concurrent history row: %w", err)
+				return
+			}
+		}
+	}()
+	go func() {
+		defer workers.Done()
+		<-start
+		repo := notifications.NewRepository(pool)
+		for i := 0; i < 40; i++ {
+			page, err := repo.List(ctx, userID.String(), nil, 50)
+			if err != nil {
+				errors <- err
+				return
+			}
+			if int64(len(page.Items)) != page.UnreadCount {
+				errors <- fmt.Errorf("page size %d disagrees with unread snapshot %d", len(page.Items), page.UnreadCount)
+				return
+			}
+		}
+	}()
+	close(start)
+	workers.Wait()
+	close(errors)
+	for err := range errors {
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }
